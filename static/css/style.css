@@ -288,7 +288,10 @@ html, body {
 
 .node.selected {
     border-color: var(--selection-color);
-    box-shadow: var(--shadow-lg), 0 0 0 3px var(--selection-bg);
+    border-width: 3px;
+    box-shadow: var(--shadow-lg), 0 0 0 4px rgba(34, 139, 230, 0.3);
+    outline: 2px dashed var(--selection-color);
+    outline-offset: 4px;
 }
 
 .node.context-ancestor {
