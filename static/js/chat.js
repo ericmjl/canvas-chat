@@ -93,6 +93,9 @@ class Chat {
 
                 buffer += decoder.decode(value, { stream: true });
                 
+                // Normalize CRLF to LF before parsing (SSE uses CRLF per HTTP spec)
+                buffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                
                 // Process SSE events
                 // SSE format: events are separated by double newlines
                 // Each event can have multiple "data:" lines (for content with newlines)

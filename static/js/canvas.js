@@ -874,42 +874,12 @@ class Canvas {
     renderMarkdown(text) {
         if (!text) return '';
         
-        // Normalize spurious newlines that may have been introduced by SSE streaming
-        // This handles cases where each token was stored with a newline after it
-        
-        // Step 1: Normalize line endings
-        text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        
-        // Step 2: Extract and preserve fenced code blocks before normalization
-        const codeBlocks = [];
-        text = text.replace(/```[\s\S]*?```/g, (match) => {
-            codeBlocks.push(match);
-            return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
-        });
-        
-        // Step 3: Collapse 3+ newlines to exactly 2 (paragraph break)
-        text = text.replace(/\n{3,}/g, '\n\n');
-        
-        // Step 4: For single newlines NOT followed by markdown syntax,
-        // replace with space (fixes mid-sentence breaks from SSE tokens)
-        // Keep newlines before: # (headings), - * + (lists), 1. (numbered lists), 
-        // > (blockquotes), | (tables), empty lines
-        text = text.replace(/\n(?=[^#\-*+>\d|\n])/g, ' ');
-        
-        // Step 5: Clean up multiple spaces (but preserve indentation at line start)
-        text = text.replace(/([^\n]) {2,}/g, '$1 ');
-        
-        // Step 6: Restore code blocks
-        text = text.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
-            return codeBlocks[parseInt(index)];
-        });
-        
         // Check if marked is available
         if (typeof marked !== 'undefined') {
             try {
                 // Configure marked for safety
                 marked.setOptions({
-                    breaks: false,  // Don't convert \n to <br> - use proper paragraphs
+                    breaks: true,   // Convert \n to <br> within paragraphs
                     gfm: true,      // GitHub Flavored Markdown
                 });
                 return marked.parse(text);
