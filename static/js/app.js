@@ -218,6 +218,17 @@ class App {
         const content = this.chatInput.value.trim();
         if (!content) return;
         
+        // Check for /search command
+        if (content.startsWith('/search ')) {
+            const query = content.slice(8).trim();
+            if (query) {
+                this.chatInput.value = '';
+                this.chatInput.style.height = 'auto';
+                await this.handleSearch(query);
+            }
+            return;
+        }
+        
         // Get selected nodes or use last node
         let parentIds = this.canvas.getSelectedNodeIds();
         
@@ -306,6 +317,107 @@ class App {
                 this.saveSession();
             }
         );
+    }
+
+    async handleSearch(query) {
+        // Get Exa API key
+        const exaKey = storage.getExaApiKey();
+        if (!exaKey) {
+            alert('Please set your Exa API key in Settings to use search.');
+            this.showSettingsModal();
+            return;
+        }
+        
+        // Get selected nodes for positioning
+        let parentIds = this.canvas.getSelectedNodeIds();
+        if (parentIds.length === 0) {
+            const leaves = this.graph.getLeafNodes();
+            if (leaves.length > 0) {
+                leaves.sort((a, b) => b.created_at - a.created_at);
+                parentIds = [leaves[0].id];
+            }
+        }
+        
+        // Create search node
+        const searchNode = createNode(NodeType.SEARCH, `Searching: "${query}"`, {
+            position: this.graph.autoPosition(parentIds)
+        });
+        
+        this.graph.addNode(searchNode);
+        this.canvas.renderNode(searchNode);
+        
+        // Create edges from parents
+        for (const parentId of parentIds) {
+            const edge = createEdge(parentId, searchNode.id, EdgeType.REFERENCE);
+            this.graph.addEdge(edge);
+            const parentNode = this.graph.getNode(parentId);
+            this.canvas.renderEdge(edge, parentNode.position, searchNode.position);
+        }
+        
+        this.canvas.clearSelection();
+        this.saveSession();
+        this.updateEmptyState();
+        
+        // Center on search node
+        this.canvas.centerOn(
+            searchNode.position.x + 160,
+            searchNode.position.y + 100
+        );
+        
+        try {
+            // Call Exa API
+            const response = await fetch('/api/exa/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: query,
+                    api_key: exaKey,
+                    num_results: 5
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Search failed: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            // Update search node with result count
+            const searchContent = `**Search:** "${query}"\n\n*Found ${data.num_results} results*`;
+            this.canvas.updateNodeContent(searchNode.id, searchContent, false);
+            this.graph.updateNode(searchNode.id, { content: searchContent });
+            
+            // Create reference nodes for each result
+            let offsetY = 0;
+            for (const result of data.results) {
+                const resultContent = `**[${result.title}](${result.url})**\n\n${result.snippet}${result.published_date ? `\n\n*${result.published_date}*` : ''}`;
+                
+                const resultNode = createNode(NodeType.REFERENCE, resultContent, {
+                    position: {
+                        x: searchNode.position.x + 400,
+                        y: searchNode.position.y + offsetY
+                    }
+                });
+                
+                this.graph.addNode(resultNode);
+                this.canvas.renderNode(resultNode);
+                
+                // Edge from search to result
+                const edge = createEdge(searchNode.id, resultNode.id, EdgeType.SEARCH_RESULT);
+                this.graph.addEdge(edge);
+                this.canvas.renderEdge(edge, searchNode.position, resultNode.position);
+                
+                offsetY += 200; // Space between result nodes
+            }
+            
+            this.saveSession();
+            
+        } catch (err) {
+            const errorContent = `**Search:** "${query}"\n\n*Error: ${err.message}*`;
+            this.canvas.updateNodeContent(searchNode.id, errorContent, false);
+            this.graph.updateNode(searchNode.id, { content: errorContent });
+            this.saveSession();
+        }
     }
 
     handleNodeReply(nodeId) {
@@ -576,6 +688,7 @@ class App {
         document.getElementById('google-key').value = keys.google || '';
         document.getElementById('groq-key').value = keys.groq || '';
         document.getElementById('github-key').value = keys.github || '';
+        document.getElementById('exa-key').value = keys.exa || '';
     }
 
     hideSettingsModal() {
@@ -589,6 +702,7 @@ class App {
             google: document.getElementById('google-key').value.trim(),
             groq: document.getElementById('groq-key').value.trim(),
             github: document.getElementById('github-key').value.trim(),
+            exa: document.getElementById('exa-key').value.trim(),
         };
         
         storage.saveApiKeys(keys);

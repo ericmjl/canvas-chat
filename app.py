@@ -5,6 +5,7 @@
 #     "litellm>=1.50.0",
 #     "sse-starlette>=2.0.0",
 #     "pydantic>=2.0.0",
+#     "exa-py>=1.0.0",
 # ]
 # ///
 """
@@ -18,6 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 import litellm
+from exa_py import Exa
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -69,6 +71,26 @@ class ModelInfo(BaseModel):
     name: str
     provider: str
     context_window: int
+
+
+class ExaSearchRequest(BaseModel):
+    """Request body for Exa search endpoint."""
+
+    query: str
+    api_key: str
+    num_results: int = 5
+    use_autoprompt: bool = True
+    search_type: str = "auto"  # "auto", "neural", "keyword"
+
+
+class ExaSearchResult(BaseModel):
+    """A single Exa search result."""
+
+    title: str
+    url: str
+    snippet: str
+    published_date: Optional[str] = None
+    author: Optional[str] = None
 
 
 # --- Model Registry ---
@@ -348,6 +370,48 @@ async def estimate_tokens(text: str, model: str = "openai/gpt-4o"):
     except Exception:
         # Fallback: rough estimate (4 chars per token)
         return {"tokens": len(text) // 4, "model": model, "estimated": True}
+
+
+@app.post("/api/exa/search")
+async def exa_search(request: ExaSearchRequest):
+    """
+    Search the web using Exa's neural search API.
+
+    Returns search results that can be displayed as nodes on the canvas.
+    """
+    try:
+        exa = Exa(api_key=request.api_key)
+
+        # Perform search with text content
+        results = exa.search_and_contents(
+            request.query,
+            type=request.search_type,
+            use_autoprompt=request.use_autoprompt,
+            num_results=request.num_results,
+            text={"max_characters": 1500},
+        )
+
+        # Format results
+        formatted_results = []
+        for result in results.results:
+            formatted_results.append(
+                ExaSearchResult(
+                    title=result.title or "Untitled",
+                    url=result.url,
+                    snippet=result.text[:500] if result.text else "",
+                    published_date=result.published_date,
+                    author=result.author,
+                )
+            )
+
+        return {
+            "query": request.query,
+            "results": formatted_results,
+            "num_results": len(formatted_results),
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

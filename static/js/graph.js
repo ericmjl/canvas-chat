@@ -10,7 +10,8 @@ const NodeType = {
     AI: 'ai',
     NOTE: 'note',
     SUMMARY: 'summary',
-    REFERENCE: 'reference'
+    REFERENCE: 'reference',
+    SEARCH: 'search'  // Web search query node
 };
 
 /**
@@ -20,7 +21,8 @@ const EdgeType = {
     REPLY: 'reply',      // Normal reply to a node
     BRANCH: 'branch',    // Branch from text selection
     MERGE: 'merge',      // Multi-select merge
-    REFERENCE: 'reference' // Reference link
+    REFERENCE: 'reference', // Reference link
+    SEARCH_RESULT: 'search_result'  // Link from search to results
 };
 
 /**

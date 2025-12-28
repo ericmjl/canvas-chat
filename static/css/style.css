@@ -27,6 +27,8 @@
     --node-summary-border: #a5d6a7;
     --node-reference: #fff3e0;
     --node-reference-border: #ffcc80;
+    --node-search: #e0f7fa;
+    --node-search-border: #4dd0e1;
     
     /* UI colors */
     --edge-color: #495057;
@@ -79,6 +81,8 @@
         --node-summary-border: #16a34a;
         --node-reference: #3d2e1f;
         --node-reference-border: #ea580c;
+        --node-search: #1a3d3d;
+        --node-search-border: #0891b2;
         
         --edge-color: #9ca3af;
         --edge-color-light: #4b5563;
@@ -329,6 +333,11 @@ html, body {
 .node.reference {
     background: var(--node-reference);
     border-color: var(--node-reference-border);
+}
+
+.node.search {
+    background: var(--node-search);
+    border-color: var(--node-search-border);
 }
 
 /* Node Header */

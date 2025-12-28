@@ -215,10 +215,19 @@ class Storage {
             'google': 'google',
             'groq': 'groq',
             'github': 'github',
-            'github_copilot': 'github'  // Copilot uses the same GitHub token
+            'github_copilot': 'github',  // Copilot uses the same GitHub token
+            'exa': 'exa'
         };
         const key = providerMap[provider.toLowerCase()] || provider.toLowerCase();
         return keys[key] || null;
+    }
+
+    /**
+     * Get Exa API key
+     */
+    getExaApiKey() {
+        const keys = this.getApiKeys();
+        return keys.exa || null;
     }
 
     /**

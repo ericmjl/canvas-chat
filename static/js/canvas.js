@@ -857,7 +857,8 @@ class Canvas {
             [NodeType.AI]: 'AI',
             [NodeType.NOTE]: 'Note',
             [NodeType.SUMMARY]: 'Summary',
-            [NodeType.REFERENCE]: 'Reference'
+            [NodeType.REFERENCE]: 'Reference',
+            [NodeType.SEARCH]: 'Search'
         };
         return labels[type] || type;
     }
