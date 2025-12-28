@@ -349,6 +349,28 @@ html, body {
     font-family: var(--font-mono);
 }
 
+.node-header .delete-btn {
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+    background: transparent;
+    border: none;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.node:hover .node-header .delete-btn {
+    opacity: 0.6;
+}
+
+.node-header .delete-btn:hover {
+    opacity: 1;
+    background: rgba(250, 82, 82, 0.15);
+    color: var(--danger);
+}
+
 /* Node Content */
 .node-content {
     padding: 12px;

@@ -34,6 +34,7 @@ class App {
         this.canvas.onNodeReply = this.handleNodeReply.bind(this);
         this.canvas.onNodeBranch = this.handleNodeBranch.bind(this);
         this.canvas.onNodeSummarize = this.handleNodeSummarize.bind(this);
+        this.canvas.onNodeDelete = this.handleNodeDelete.bind(this);
         
         // Load models
         await this.loadModels();
@@ -393,6 +394,30 @@ class App {
     handleNodeResize(nodeId, width, height) {
         this.graph.updateNode(nodeId, { width, height });
         this.saveSession();
+    }
+
+    handleNodeDelete(nodeId) {
+        if (!confirm('Delete this node? This cannot be undone.')) {
+            return;
+        }
+        
+        // Remove from graph (this also removes edges)
+        this.graph.removeNode(nodeId);
+        
+        // Remove from canvas
+        this.canvas.removeNode(nodeId);
+        
+        // Remove orphaned edges from canvas
+        for (const [edgeId, path] of this.canvas.edgeElements) {
+            const sourceId = path.getAttribute('data-source');
+            const targetId = path.getAttribute('data-target');
+            if (!this.graph.getNode(sourceId) || !this.graph.getNode(targetId)) {
+                this.canvas.removeEdge(edgeId);
+            }
+        }
+        
+        this.saveSession();
+        this.updateEmptyState();
     }
 
     deleteSelectedNodes() {

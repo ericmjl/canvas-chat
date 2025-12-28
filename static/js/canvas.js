@@ -38,6 +38,7 @@ class Canvas {
         this.onNodeReply = null;
         this.onNodeBranch = null;
         this.onNodeSummarize = null;
+        this.onNodeDelete = null;
         
         this.init();
     }
@@ -447,6 +448,7 @@ class Canvas {
             <div class="node-header">
                 <span class="node-type">${this.getNodeTypeLabel(node.type)}</span>
                 <span class="node-model">${node.model || ''}</span>
+                <button class="node-action delete-btn" title="Delete node">🗑️</button>
             </div>
             <div class="node-content">${this.renderMarkdown(node.content)}</div>
             <div class="node-actions">
@@ -594,6 +596,7 @@ class Canvas {
         const replyBtn = div.querySelector('.reply-btn');
         const branchBtn = div.querySelector('.branch-btn');
         const summarizeBtn = div.querySelector('.summarize-btn');
+        const deleteBtn = div.querySelector('.delete-btn');
         
         if (replyBtn) {
             replyBtn.addEventListener('click', (e) => {
@@ -617,6 +620,13 @@ class Canvas {
             summarizeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onNodeSummarize) this.onNodeSummarize(node.id);
+            });
+        }
+        
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.onNodeDelete) this.onNodeDelete(node.id);
             });
         }
     }
