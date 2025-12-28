@@ -317,35 +317,95 @@ class Graph {
     }
 
     /**
-     * Auto-position a new node relative to its parents
+     * Auto-position a new node relative to its parents, avoiding overlaps
      */
-    autoPosition(parentIds, existingNodePositions = null) {
+    autoPosition(parentIds) {
+        const NODE_WIDTH = 320;
+        const NODE_HEIGHT = 200;  // Estimated default height
+        const HORIZONTAL_GAP = 80;
+        const VERTICAL_GAP = 30;
+        
+        let initialX, initialY;
+        
         if (parentIds.length === 0) {
             // First node - center of viewport
-            return { x: 100, y: 100 };
+            initialX = 100;
+            initialY = 100;
+        } else {
+            const parents = parentIds.map(id => this.getNode(id)).filter(Boolean);
+            
+            if (parents.length === 1) {
+                // Single parent - position to the right
+                const parent = parents[0];
+                const parentWidth = parent.width || NODE_WIDTH;
+                initialX = parent.position.x + parentWidth + HORIZONTAL_GAP;
+                initialY = parent.position.y;
+            } else {
+                // Multiple parents (merge) - position to the right of rightmost parent
+                const rightmost = parents.reduce((max, p) => {
+                    const pRight = p.position.x + (p.width || NODE_WIDTH);
+                    const maxRight = max.position.x + (max.width || NODE_WIDTH);
+                    return pRight > maxRight ? p : max;
+                }, parents[0]);
+                const avgY = parents.reduce((sum, p) => sum + p.position.y, 0) / parents.length;
+                
+                initialX = rightmost.position.x + (rightmost.width || NODE_WIDTH) + HORIZONTAL_GAP;
+                initialY = avgY;
+            }
         }
-
-        const parents = parentIds.map(id => this.getNode(id)).filter(Boolean);
         
-        if (parents.length === 1) {
-            // Single parent - position to the right and slightly down
-            const parent = parents[0];
-            const siblings = this.getChildren(parent.id);
-            const verticalOffset = siblings.length * 150; // Stack siblings vertically
-            return {
-                x: parent.position.x + 400,
-                y: parent.position.y + verticalOffset
-            };
+        // Now check for overlaps and adjust position
+        const candidatePos = { x: initialX, y: initialY };
+        const allNodes = this.getAllNodes();
+        
+        // Try to find a non-overlapping position
+        let attempts = 0;
+        const maxAttempts = 20;
+        
+        while (attempts < maxAttempts && this.wouldOverlap(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+            // Move down to find free space
+            candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
+            attempts++;
         }
-
-        // Multiple parents (merge) - position to the right of rightmost parent
-        const rightmost = parents.reduce((max, p) => p.position.x > max.position.x ? p : max, parents[0]);
-        const avgY = parents.reduce((sum, p) => sum + p.position.y, 0) / parents.length;
         
-        return {
-            x: rightmost.position.x + 400,
-            y: avgY
-        };
+        // If still overlapping after max attempts, try moving right
+        if (this.wouldOverlap(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+            candidatePos.x += NODE_WIDTH + HORIZONTAL_GAP;
+            candidatePos.y = initialY;
+            
+            attempts = 0;
+            while (attempts < maxAttempts && this.wouldOverlap(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+                candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
+                attempts++;
+            }
+        }
+        
+        return candidatePos;
+    }
+
+    /**
+     * Check if a position would overlap with existing nodes
+     */
+    wouldOverlap(pos, width, height, nodes) {
+        const PADDING = 20;  // Minimum gap between nodes
+        
+        for (const node of nodes) {
+            const nodeWidth = node.width || 320;
+            const nodeHeight = node.height || 200;
+            
+            // Check bounding box overlap
+            const noOverlap = 
+                pos.x + width + PADDING < node.position.x ||  // new is left of existing
+                pos.x > node.position.x + nodeWidth + PADDING ||  // new is right of existing
+                pos.y + height + PADDING < node.position.y ||  // new is above existing
+                pos.y > node.position.y + nodeHeight + PADDING;   // new is below existing
+            
+            if (!noOverlap) {
+                return true;  // There is overlap
+            }
+        }
+        
+        return false;  // No overlap with any node
     }
 
     /**
