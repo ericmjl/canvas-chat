@@ -49,20 +49,42 @@ class Canvas {
     }
 
     setupEventListeners() {
-        // Pan
+        // Mouse pan (click and drag)
         this.container.addEventListener('mousedown', this.handleMouseDown.bind(this));
         this.container.addEventListener('mousemove', this.handleMouseMove.bind(this));
         this.container.addEventListener('mouseup', this.handleMouseUp.bind(this));
         this.container.addEventListener('mouseleave', this.handleMouseUp.bind(this));
         
-        // Zoom
+        // Wheel events: pinch-to-zoom (ctrlKey) or two-finger pan
         this.container.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
+        
+        // Touch events for mobile/tablet
+        this.container.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+        this.container.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
+        this.container.addEventListener('touchend', this.handleTouchEnd.bind(this));
+        
+        // Gesture events (Safari)
+        this.container.addEventListener('gesturestart', this.handleGestureStart.bind(this), { passive: false });
+        this.container.addEventListener('gesturechange', this.handleGestureChange.bind(this), { passive: false });
+        this.container.addEventListener('gestureend', this.handleGestureEnd.bind(this));
         
         // Resize
         window.addEventListener('resize', this.handleResize.bind(this));
         
         // Double-click to fit
         this.container.addEventListener('dblclick', this.handleDoubleClick.bind(this));
+        
+        // Initialize touch state
+        this.touchState = {
+            touches: [],
+            lastDistance: 0,
+            lastCenter: { x: 0, y: 0 },
+            isPinching: false
+        };
+        this.gestureState = {
+            startScale: 1,
+            isGesturing: false
+        };
     }
 
     handleResize() {
@@ -157,28 +179,39 @@ class Canvas {
         e.preventDefault();
         
         const rect = this.container.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
         
-        // Calculate zoom (slower: ~5% per scroll step)
-        const delta = e.deltaY > 0 ? 0.95 : 1.05;
-        const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * delta));
-        
-        if (newScale === this.scale) return;
-        
-        // Zoom towards mouse position
-        const pointBefore = this.clientToSvg(e.clientX, e.clientY);
-        
-        this.scale = newScale;
-        this.viewBox.width = rect.width / this.scale;
-        this.viewBox.height = rect.height / this.scale;
-        
-        const pointAfter = this.clientToSvg(e.clientX, e.clientY);
-        
-        this.viewBox.x += pointBefore.x - pointAfter.x;
-        this.viewBox.y += pointBefore.y - pointAfter.y;
-        
-        this.updateViewBox();
+        // Check if this is a pinch-to-zoom gesture (ctrlKey is set by trackpad pinch)
+        if (e.ctrlKey || e.metaKey) {
+            // Pinch to zoom
+            // deltaY is negative when zooming in (fingers spreading)
+            const zoomFactor = 1 - e.deltaY * 0.01;
+            const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * zoomFactor));
+            
+            if (newScale === this.scale) return;
+            
+            // Zoom towards mouse/gesture position
+            const pointBefore = this.clientToSvg(e.clientX, e.clientY);
+            
+            this.scale = newScale;
+            this.viewBox.width = rect.width / this.scale;
+            this.viewBox.height = rect.height / this.scale;
+            
+            const pointAfter = this.clientToSvg(e.clientX, e.clientY);
+            
+            this.viewBox.x += pointBefore.x - pointAfter.x;
+            this.viewBox.y += pointBefore.y - pointAfter.y;
+            
+            this.updateViewBox();
+        } else {
+            // Two-finger pan (regular scroll)
+            const dx = e.deltaX / this.scale;
+            const dy = e.deltaY / this.scale;
+            
+            this.viewBox.x += dx;
+            this.viewBox.y += dy;
+            
+            this.updateViewBox();
+        }
     }
 
     handleDoubleClick(e) {
@@ -186,6 +219,141 @@ class Canvas {
         if (e.target === this.svg || e.target.closest('#edges-layer')) {
             this.fitToContent();
         }
+    }
+
+    // --- Touch Event Handlers (for mobile/tablet) ---
+
+    handleTouchStart(e) {
+        if (e.target.closest('.node')) return;
+        
+        const touches = Array.from(e.touches);
+        this.touchState.touches = touches.map(t => ({ x: t.clientX, y: t.clientY }));
+        
+        if (touches.length === 2) {
+            // Two fingers - prepare for pinch/pan
+            e.preventDefault();
+            this.touchState.isPinching = true;
+            this.touchState.lastDistance = this.getTouchDistance(touches);
+            this.touchState.lastCenter = this.getTouchCenter(touches);
+        } else if (touches.length === 1) {
+            // Single finger - could be pan
+            this.touchState.lastCenter = { x: touches[0].clientX, y: touches[0].clientY };
+        }
+    }
+
+    handleTouchMove(e) {
+        if (e.target.closest('.node')) return;
+        
+        const touches = Array.from(e.touches);
+        
+        if (touches.length === 2 && this.touchState.isPinching) {
+            e.preventDefault();
+            
+            const currentDistance = this.getTouchDistance(touches);
+            const currentCenter = this.getTouchCenter(touches);
+            
+            // Pinch zoom
+            const scaleFactor = currentDistance / this.touchState.lastDistance;
+            const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * scaleFactor));
+            
+            if (newScale !== this.scale) {
+                const rect = this.container.getBoundingClientRect();
+                const pointBefore = this.clientToSvg(currentCenter.x, currentCenter.y);
+                
+                this.scale = newScale;
+                this.viewBox.width = rect.width / this.scale;
+                this.viewBox.height = rect.height / this.scale;
+                
+                const pointAfter = this.clientToSvg(currentCenter.x, currentCenter.y);
+                this.viewBox.x += pointBefore.x - pointAfter.x;
+                this.viewBox.y += pointBefore.y - pointAfter.y;
+            }
+            
+            // Pan while pinching
+            const dx = (currentCenter.x - this.touchState.lastCenter.x) / this.scale;
+            const dy = (currentCenter.y - this.touchState.lastCenter.y) / this.scale;
+            this.viewBox.x -= dx;
+            this.viewBox.y -= dy;
+            
+            this.touchState.lastDistance = currentDistance;
+            this.touchState.lastCenter = currentCenter;
+            this.updateViewBox();
+            
+        } else if (touches.length === 1 && !this.touchState.isPinching) {
+            // Single finger pan (if not on a node)
+            e.preventDefault();
+            
+            const dx = (touches[0].clientX - this.touchState.lastCenter.x) / this.scale;
+            const dy = (touches[0].clientY - this.touchState.lastCenter.y) / this.scale;
+            
+            this.viewBox.x -= dx;
+            this.viewBox.y -= dy;
+            
+            this.touchState.lastCenter = { x: touches[0].clientX, y: touches[0].clientY };
+            this.updateViewBox();
+        }
+    }
+
+    handleTouchEnd(e) {
+        const touches = Array.from(e.touches);
+        this.touchState.touches = touches.map(t => ({ x: t.clientX, y: t.clientY }));
+        
+        if (touches.length < 2) {
+            this.touchState.isPinching = false;
+        }
+        if (touches.length === 1) {
+            this.touchState.lastCenter = { x: touches[0].clientX, y: touches[0].clientY };
+        }
+    }
+
+    getTouchDistance(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    getTouchCenter(touches) {
+        return {
+            x: (touches[0].clientX + touches[1].clientX) / 2,
+            y: (touches[0].clientY + touches[1].clientY) / 2
+        };
+    }
+
+    // --- Safari Gesture Event Handlers ---
+
+    handleGestureStart(e) {
+        e.preventDefault();
+        this.gestureState.startScale = this.scale;
+        this.gestureState.isGesturing = true;
+    }
+
+    handleGestureChange(e) {
+        e.preventDefault();
+        if (!this.gestureState.isGesturing) return;
+        
+        const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.gestureState.startScale * e.scale));
+        
+        if (newScale !== this.scale) {
+            const rect = this.container.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            const pointBefore = this.clientToSvg(centerX, centerY);
+            
+            this.scale = newScale;
+            this.viewBox.width = rect.width / this.scale;
+            this.viewBox.height = rect.height / this.scale;
+            
+            const pointAfter = this.clientToSvg(centerX, centerY);
+            this.viewBox.x += pointBefore.x - pointAfter.x;
+            this.viewBox.y += pointBefore.y - pointAfter.y;
+            
+            this.updateViewBox();
+        }
+    }
+
+    handleGestureEnd(e) {
+        this.gestureState.isGesturing = false;
     }
 
     /**
