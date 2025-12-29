@@ -843,6 +843,22 @@ class Canvas {
     getSelectedNodeIds() {
         return Array.from(this.selectedNodes);
     }
+    
+    /**
+     * Get actual rendered dimensions for all nodes
+     * Returns Map of nodeId -> { width, height }
+     */
+    getNodeDimensions() {
+        const dimensions = new Map();
+        
+        for (const [nodeId, wrapper] of this.nodeElements) {
+            const width = parseFloat(wrapper.getAttribute('width')) || 320;
+            const height = parseFloat(wrapper.getAttribute('height')) || 200;
+            dimensions.set(nodeId, { width, height });
+        }
+        
+        return dimensions;
+    }
 
     /**
      * Highlight context ancestors

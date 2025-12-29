@@ -468,10 +468,11 @@ class Graph {
     /**
      * Auto-layout all nodes using topological sort and greedy placement.
      * Parents are always positioned before children.
+     * @param {Map} dimensions - Optional map of nodeId -> { width, height } from canvas
      */
-    autoLayout() {
-        const NODE_WIDTH = 360;
-        const NODE_HEIGHT = 220;
+    autoLayout(dimensions = new Map()) {
+        const DEFAULT_WIDTH = 360;
+        const DEFAULT_HEIGHT = 220;
         const HORIZONTAL_GAP = 120;
         const VERTICAL_GAP = 40;
         const START_X = 100;
@@ -479,6 +480,18 @@ class Graph {
 
         const allNodes = this.getAllNodes();
         if (allNodes.length === 0) return;
+        
+        // Helper to get node dimensions
+        const getNodeSize = (node) => {
+            const dim = dimensions.get(node.id);
+            if (dim) {
+                return { width: dim.width, height: dim.height };
+            }
+            return { 
+                width: node.width || DEFAULT_WIDTH, 
+                height: node.height || DEFAULT_HEIGHT 
+            };
+        };
 
         // Step 1: Topological sort using Kahn's algorithm
         const sorted = this.topologicalSort();
@@ -495,15 +508,32 @@ class Graph {
                 layers.set(node.id, maxParentLayer + 1);
             }
         }
+        
+        // Step 3: Calculate max width per layer for proper horizontal spacing
+        const layerMaxWidth = new Map();
+        for (const node of sorted) {
+            const layer = layers.get(node.id);
+            const { width } = getNodeSize(node);
+            const current = layerMaxWidth.get(layer) || 0;
+            layerMaxWidth.set(layer, Math.max(current, width));
+        }
+        
+        // Calculate X offset for each layer
+        const layerX = new Map();
+        let currentX = START_X;
+        const maxLayer = Math.max(...layers.values());
+        for (let l = 0; l <= maxLayer; l++) {
+            layerX.set(l, currentX);
+            currentX += (layerMaxWidth.get(l) || DEFAULT_WIDTH) + HORIZONTAL_GAP;
+        }
 
-        // Step 3: Greedy placement - position each node avoiding overlaps
+        // Step 4: Greedy placement - position each node avoiding overlaps
         const positioned = []; // Array of { x, y, width, height }
         
         for (const node of sorted) {
             const layer = layers.get(node.id);
-            const x = START_X + layer * (NODE_WIDTH + HORIZONTAL_GAP);
-            const nodeHeight = node.height || NODE_HEIGHT;
-            const nodeWidth = node.width || NODE_WIDTH;
+            const x = layerX.get(layer);
+            const { width: nodeWidth, height: nodeHeight } = getNodeSize(node);
             
             // Determine ideal Y based on parents
             let idealY = START_Y;
@@ -520,9 +550,9 @@ class Graph {
             
             // Try the ideal position first, then search up and down
             const searchOffsets = [0];
-            for (let i = 1; i <= 20; i++) {
-                searchOffsets.push(i * (NODE_HEIGHT + VERTICAL_GAP));
-                searchOffsets.push(-i * (NODE_HEIGHT + VERTICAL_GAP));
+            for (let i = 1; i <= 30; i++) {
+                searchOffsets.push(i * (DEFAULT_HEIGHT / 2 + VERTICAL_GAP));
+                searchOffsets.push(-i * (DEFAULT_HEIGHT / 2 + VERTICAL_GAP));
             }
             
             for (const offset of searchOffsets) {
@@ -531,7 +561,7 @@ class Graph {
                 // Check if this position overlaps with any positioned node
                 let hasOverlap = false;
                 for (const pos of positioned) {
-                    // Check bounding box overlap
+                    // Check bounding box overlap with padding
                     const horizontalOverlap = !(x + nodeWidth + 20 < pos.x || x > pos.x + pos.width + 20);
                     const verticalOverlap = !(testY + nodeHeight + VERTICAL_GAP < pos.y || testY > pos.y + pos.height + VERTICAL_GAP);
                     

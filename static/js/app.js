@@ -615,6 +615,9 @@ class App {
         // Get selected nodes
         const selectedIds = this.canvas.getSelectedNodeIds();
         
+        console.log('handleMatrix called with context:', matrixContext);
+        console.log('Selected node IDs:', selectedIds);
+        
         if (selectedIds.length === 0) {
             alert('Please select 1 or 2 nodes to create a matrix.\n\n• 1 node: Will extract two lists from it\n• 2 nodes: First = rows, second = columns');
             return;
@@ -630,8 +633,10 @@ class App {
         
         // Show loading state
         const loadingModal = document.getElementById('matrix-modal');
+        console.log('Matrix modal element:', loadingModal);
         document.getElementById('matrix-context').value = matrixContext;
         loadingModal.style.display = 'flex';
+        console.log('Modal should now be visible');
         
         try {
             let rowItems, colItems, rowNodeId, colNodeId;
@@ -1017,8 +1022,11 @@ class App {
     handleAutoLayout() {
         if (this.graph.isEmpty()) return;
         
-        // Run auto-layout algorithm
-        this.graph.autoLayout();
+        // Get actual node dimensions from the canvas before layout
+        const dimensions = this.canvas.getNodeDimensions();
+        
+        // Run auto-layout algorithm with actual dimensions
+        this.graph.autoLayout(dimensions);
         
         // Re-render the entire graph with new positions
         this.canvas.renderGraph(this.graph);
