@@ -15,6 +15,8 @@ Conversations are nodes on an infinite canvas, allowing branching,
 merging, and exploration of topics as a DAG.
 """
 
+import logging
+import traceback
 from pathlib import Path
 from typing import Optional
 
@@ -25,6 +27,10 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Configure litellm
 litellm.drop_params = True  # Drop unsupported params gracefully
@@ -79,7 +85,6 @@ class ExaSearchRequest(BaseModel):
     query: str
     api_key: str
     num_results: int = 5
-    use_autoprompt: bool = True
     search_type: str = "auto"  # "auto", "neural", "keyword"
 
 
@@ -91,6 +96,14 @@ class ExaSearchResult(BaseModel):
     snippet: str
     published_date: Optional[str] = None
     author: Optional[str] = None
+
+
+class ExaResearchRequest(BaseModel):
+    """Request body for Exa research endpoint."""
+
+    instructions: str
+    api_key: str
+    model: str = "exa-research"  # "exa-research" or "exa-research-pro"
 
 
 # --- Model Registry ---
@@ -379,21 +392,29 @@ async def exa_search(request: ExaSearchRequest):
 
     Returns search results that can be displayed as nodes on the canvas.
     """
+    logger.info(
+        f"Exa search request: query='{request.query}', num_results={request.num_results}"
+    )
+
     try:
         exa = Exa(api_key=request.api_key)
 
         # Perform search with text content
+        logger.info("Calling Exa search_and_contents...")
         results = exa.search_and_contents(
             request.query,
             type=request.search_type,
-            use_autoprompt=request.use_autoprompt,
             num_results=request.num_results,
             text={"max_characters": 1500},
         )
+        logger.info(f"Exa returned {len(results.results)} results")
 
         # Format results
         formatted_results = []
-        for result in results.results:
+        for i, result in enumerate(results.results):
+            logger.debug(
+                f"Processing result {i}: title={result.title}, url={result.url}"
+            )
             formatted_results.append(
                 ExaSearchResult(
                     title=result.title or "Untitled",
@@ -404,6 +425,7 @@ async def exa_search(request: ExaSearchRequest):
                 )
             )
 
+        logger.info(f"Successfully formatted {len(formatted_results)} results")
         return {
             "query": request.query,
             "results": formatted_results,
@@ -411,7 +433,60 @@ async def exa_search(request: ExaSearchRequest):
         }
 
     except Exception as e:
+        logger.error(f"Exa search failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/exa/research")
+async def exa_research(request: ExaResearchRequest):
+    """
+    Perform deep research using Exa's Research API.
+
+    Returns an SSE stream with research progress and final report.
+    """
+    logger.info(
+        f"Exa research request: instructions='{request.instructions[:100]}...', model={request.model}"
+    )
+
+    async def generate():
+        try:
+            exa = Exa(api_key=request.api_key)
+
+            # Create research task
+            logger.info("Creating Exa research task...")
+            research = exa.research.create(
+                instructions=request.instructions,
+                model=request.model,
+            )
+            logger.info(f"Research task created: {research.research_id}")
+
+            # Stream the research results
+            yield {"event": "status", "data": "Research started..."}
+
+            for event in exa.research.get(research.research_id, stream=True):
+                # The event object contains progress updates and final results
+                if hasattr(event, "status"):
+                    yield {"event": "status", "data": event.status}
+                if hasattr(event, "output") and event.output:
+                    yield {"event": "content", "data": event.output}
+                if hasattr(event, "sources") and event.sources:
+                    # Send sources as JSON
+                    import json
+
+                    sources_data = [
+                        {"title": s.title, "url": s.url} for s in event.sources
+                    ]
+                    yield {"event": "sources", "data": json.dumps(sources_data)}
+
+            yield {"event": "done", "data": ""}
+
+        except Exception as e:
+            logger.error(f"Exa research failed: {e}")
+            logger.error(traceback.format_exc())
+            yield {"event": "error", "data": str(e)}
+
+    return EventSourceResponse(generate())
 
 
 if __name__ == "__main__":

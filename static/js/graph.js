@@ -11,18 +11,21 @@ const NodeType = {
     NOTE: 'note',
     SUMMARY: 'summary',
     REFERENCE: 'reference',
-    SEARCH: 'search'  // Web search query node
+    SEARCH: 'search',      // Web search query node
+    RESEARCH: 'research',  // Exa deep research node
+    HIGHLIGHT: 'highlight' // Excerpted text from another node
 };
 
 /**
  * Edge types
  */
 const EdgeType = {
-    REPLY: 'reply',      // Normal reply to a node
-    BRANCH: 'branch',    // Branch from text selection
-    MERGE: 'merge',      // Multi-select merge
-    REFERENCE: 'reference', // Reference link
-    SEARCH_RESULT: 'search_result'  // Link from search to results
+    REPLY: 'reply',           // Normal reply to a node
+    BRANCH: 'branch',         // Branch from text selection
+    MERGE: 'merge',           // Multi-select merge
+    REFERENCE: 'reference',   // Reference link
+    SEARCH_RESULT: 'search_result', // Link from search to results
+    HIGHLIGHT: 'highlight'    // Link from source to highlighted excerpt
 };
 
 /**
@@ -408,6 +411,149 @@ class Graph {
         }
         
         return false;  // No overlap with any node
+    }
+
+    /**
+     * Auto-layout all nodes using topological sort and greedy placement.
+     * Parents are always positioned before children.
+     */
+    autoLayout() {
+        const NODE_WIDTH = 360;
+        const NODE_HEIGHT = 220;
+        const HORIZONTAL_GAP = 120;
+        const VERTICAL_GAP = 40;
+        const START_X = 100;
+        const START_Y = 100;
+
+        const allNodes = this.getAllNodes();
+        if (allNodes.length === 0) return;
+
+        // Step 1: Topological sort using Kahn's algorithm
+        const sorted = this.topologicalSort();
+        
+        // Step 2: Assign layers (depth from roots)
+        const layers = new Map(); // nodeId -> layer
+        for (const node of sorted) {
+            const parents = this.getParents(node.id);
+            if (parents.length === 0) {
+                layers.set(node.id, 0);
+            } else {
+                // Layer is max parent layer + 1
+                const maxParentLayer = Math.max(...parents.map(p => layers.get(p.id) || 0));
+                layers.set(node.id, maxParentLayer + 1);
+            }
+        }
+
+        // Step 3: Greedy placement - position each node avoiding overlaps
+        const positioned = []; // Array of { x, y, width, height }
+        
+        for (const node of sorted) {
+            const layer = layers.get(node.id);
+            const x = START_X + layer * (NODE_WIDTH + HORIZONTAL_GAP);
+            const nodeHeight = node.height || NODE_HEIGHT;
+            const nodeWidth = node.width || NODE_WIDTH;
+            
+            // Determine ideal Y based on parents
+            let idealY = START_Y;
+            const parents = this.getParents(node.id);
+            if (parents.length > 0) {
+                // Average Y of parents
+                const avgParentY = parents.reduce((sum, p) => sum + p.position.y, 0) / parents.length;
+                idealY = avgParentY;
+            }
+            
+            // Find a Y position that doesn't overlap with existing nodes
+            let y = idealY;
+            let foundPosition = false;
+            
+            // Try the ideal position first, then search up and down
+            const searchOffsets = [0];
+            for (let i = 1; i <= 20; i++) {
+                searchOffsets.push(i * (NODE_HEIGHT + VERTICAL_GAP));
+                searchOffsets.push(-i * (NODE_HEIGHT + VERTICAL_GAP));
+            }
+            
+            for (const offset of searchOffsets) {
+                const testY = Math.max(START_Y, idealY + offset);
+                
+                // Check if this position overlaps with any positioned node
+                let hasOverlap = false;
+                for (const pos of positioned) {
+                    // Check bounding box overlap
+                    const horizontalOverlap = !(x + nodeWidth + 20 < pos.x || x > pos.x + pos.width + 20);
+                    const verticalOverlap = !(testY + nodeHeight + VERTICAL_GAP < pos.y || testY > pos.y + pos.height + VERTICAL_GAP);
+                    
+                    if (horizontalOverlap && verticalOverlap) {
+                        hasOverlap = true;
+                        break;
+                    }
+                }
+                
+                if (!hasOverlap) {
+                    y = testY;
+                    foundPosition = true;
+                    break;
+                }
+            }
+            
+            // Fallback: just place at bottom of all positioned nodes
+            if (!foundPosition) {
+                const maxY = positioned.reduce((max, pos) => Math.max(max, pos.y + pos.height), START_Y);
+                y = maxY + VERTICAL_GAP;
+            }
+            
+            node.position = { x, y };
+            positioned.push({ x, y, width: nodeWidth, height: nodeHeight });
+        }
+    }
+
+    /**
+     * Topological sort using Kahn's algorithm.
+     * Returns nodes in order where parents come before children.
+     */
+    topologicalSort() {
+        const allNodes = this.getAllNodes();
+        const inDegree = new Map();
+        const result = [];
+        
+        // Calculate in-degree for each node
+        for (const node of allNodes) {
+            const incoming = this.incomingEdges.get(node.id) || [];
+            inDegree.set(node.id, incoming.length);
+        }
+        
+        // Start with nodes that have no incoming edges (roots)
+        const queue = allNodes.filter(n => inDegree.get(n.id) === 0);
+        
+        // Sort initial queue by creation time for consistent ordering
+        queue.sort((a, b) => a.created_at - b.created_at);
+        
+        while (queue.length > 0) {
+            const node = queue.shift();
+            result.push(node);
+            
+            // Reduce in-degree of children
+            const children = this.getChildren(node.id);
+            // Sort children by creation time for consistent ordering
+            children.sort((a, b) => a.created_at - b.created_at);
+            
+            for (const child of children) {
+                const newDegree = inDegree.get(child.id) - 1;
+                inDegree.set(child.id, newDegree);
+                if (newDegree === 0) {
+                    queue.push(child);
+                }
+            }
+        }
+        
+        // Handle any remaining nodes (cycles - shouldn't happen in a DAG)
+        for (const node of allNodes) {
+            if (!result.includes(node)) {
+                result.push(node);
+            }
+        }
+        
+        return result;
     }
 
     /**

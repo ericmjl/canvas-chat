@@ -446,6 +446,11 @@ class Canvas {
         div.style.minHeight = '100%';
         div.innerHTML = `
             <div class="node-header">
+                <div class="drag-handle" title="Drag to move">
+                    <span class="grip-dot"></span><span class="grip-dot"></span>
+                    <span class="grip-dot"></span><span class="grip-dot"></span>
+                    <span class="grip-dot"></span><span class="grip-dot"></span>
+                </div>
                 <span class="node-type">${this.getNodeTypeLabel(node.type)}</span>
                 <span class="node-model">${node.model || ''}</span>
                 <button class="node-action delete-btn" title="Delete node">🗑️</button>
@@ -505,25 +510,25 @@ class Canvas {
             }
         });
         
-        // Drag to move
-        div.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.node-action')) return;
-            if (e.target.closest('.resize-handle')) return;
-            if (e.target.closest('.node-content') && window.getSelection().toString()) return;
-            
-            e.stopPropagation();
-            
-            this.isDraggingNode = true;
-            this.draggedNode = node;
-            
-            const point = this.clientToSvg(e.clientX, e.clientY);
-            this.dragOffset = {
-                x: point.x - node.position.x,
-                y: point.y - node.position.y
-            };
-            
-            div.classList.add('dragging');
-        });
+        // Drag to move - only via drag handle
+        const dragHandle = div.querySelector('.drag-handle');
+        if (dragHandle) {
+            dragHandle.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                
+                this.isDraggingNode = true;
+                this.draggedNode = node;
+                
+                const point = this.clientToSvg(e.clientX, e.clientY);
+                this.dragOffset = {
+                    x: point.x - node.position.x,
+                    y: point.y - node.position.y
+                };
+                
+                div.classList.add('dragging');
+            });
+        }
         
         // Resize handles
         const resizeHandles = div.querySelectorAll('.resize-handle');
@@ -858,7 +863,9 @@ class Canvas {
             [NodeType.NOTE]: 'Note',
             [NodeType.SUMMARY]: 'Summary',
             [NodeType.REFERENCE]: 'Reference',
-            [NodeType.SEARCH]: 'Search'
+            [NodeType.SEARCH]: 'Search',
+            [NodeType.RESEARCH]: 'Research',
+            [NodeType.HIGHLIGHT]: 'Highlight'
         };
         return labels[type] || type;
     }

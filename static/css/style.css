@@ -29,6 +29,10 @@
     --node-reference-border: #ffcc80;
     --node-search: #e0f7fa;
     --node-search-border: #4dd0e1;
+    --node-research: #ede7f6;
+    --node-research-border: #b39ddb;
+    --node-highlight: #fffde7;
+    --node-highlight-border: #ffd54f;
     
     /* UI colors */
     --edge-color: #495057;
@@ -83,6 +87,10 @@
         --node-reference-border: #ea580c;
         --node-search: #1a3d3d;
         --node-search-border: #0891b2;
+        --node-research: #2d2445;
+        --node-research-border: #7c3aed;
+        --node-highlight: #3d3a20;
+        --node-highlight-border: #fbc02d;
         
         --edge-color: #9ca3af;
         --edge-color-light: #4b5563;
@@ -260,6 +268,12 @@ html, body {
     stroke-linecap: round;
 }
 
+.edge.highlight {
+    stroke: var(--node-highlight-border);
+    stroke-width: 2;
+    stroke-dasharray: 8, 4;
+}
+
 .edge.context-highlight {
     stroke: var(--selection-color);
     stroke-width: 3;
@@ -340,15 +354,61 @@ html, body {
     border-color: var(--node-search-border);
 }
 
+.node.research {
+    background: var(--node-research);
+    border-color: var(--node-research-border);
+}
+
+.node.highlight {
+    background: var(--node-highlight);
+    border-color: var(--node-highlight-border);
+    border-style: dashed;
+}
+
 /* Node Header */
 .node-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 8px;
     padding: 8px 12px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
     font-size: 11px;
     color: var(--text-muted);
+}
+
+/* Drag Handle */
+.drag-handle {
+    display: grid;
+    grid-template-columns: repeat(2, 5px);
+    grid-template-rows: repeat(3, 5px);
+    gap: 2px;
+    padding: 4px;
+    margin: -4px;
+    margin-right: 4px;
+    cursor: grab;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+}
+
+.drag-handle:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.grip-dot {
+    width: 3px;
+    height: 3px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    opacity: 0.6;
+}
+
+.drag-handle:hover .grip-dot {
+    opacity: 1;
 }
 
 .node-type {

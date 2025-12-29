@@ -185,6 +185,11 @@ class App {
             }
         });
         
+        // Auto Layout button
+        document.getElementById('auto-layout-btn').addEventListener('click', () => {
+            this.handleAutoLayout();
+        });
+        
         // Sessions modal
         document.getElementById('sessions-btn').addEventListener('click', () => {
             this.showSessionsModal();
@@ -225,6 +230,17 @@ class App {
                 this.chatInput.value = '';
                 this.chatInput.style.height = 'auto';
                 await this.handleSearch(query);
+            }
+            return;
+        }
+        
+        // Check for /research command
+        if (content.startsWith('/research ')) {
+            const instructions = content.slice(10).trim();
+            if (instructions) {
+                this.chatInput.value = '';
+                this.chatInput.style.height = 'auto';
+                await this.handleResearch(instructions);
             }
             return;
         }
@@ -420,6 +436,154 @@ class App {
         }
     }
 
+    async handleResearch(instructions) {
+        // Get Exa API key
+        const exaKey = storage.getExaApiKey();
+        if (!exaKey) {
+            alert('Please set your Exa API key in Settings to use research.');
+            this.showSettingsModal();
+            return;
+        }
+        
+        // Get selected nodes for positioning
+        let parentIds = this.canvas.getSelectedNodeIds();
+        if (parentIds.length === 0) {
+            const leaves = this.graph.getLeafNodes();
+            if (leaves.length > 0) {
+                leaves.sort((a, b) => b.created_at - a.created_at);
+                parentIds = [leaves[0].id];
+            }
+        }
+        
+        // Create research node
+        const researchNode = createNode(NodeType.RESEARCH, `**Research:** ${instructions}\n\n*Starting research...*`, {
+            position: this.graph.autoPosition(parentIds),
+            width: 500  // Research nodes are wider for markdown reports
+        });
+        
+        this.graph.addNode(researchNode);
+        this.canvas.renderNode(researchNode);
+        
+        // Create edges from parents
+        for (const parentId of parentIds) {
+            const edge = createEdge(parentId, researchNode.id, EdgeType.REFERENCE);
+            this.graph.addEdge(edge);
+            const parentNode = this.graph.getNode(parentId);
+            this.canvas.renderEdge(edge, parentNode.position, researchNode.position);
+        }
+        
+        this.canvas.clearSelection();
+        this.saveSession();
+        this.updateEmptyState();
+        
+        // Center on research node
+        this.canvas.centerOn(
+            researchNode.position.x + 250,
+            researchNode.position.y + 100
+        );
+        
+        try {
+            // Call Exa Research API (SSE stream)
+            const response = await fetch('/api/exa/research', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    instructions: instructions,
+                    api_key: exaKey,
+                    model: 'exa-research'
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Research failed: ${response.statusText}`);
+            }
+            
+            // Parse SSE stream
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let reportContent = `**Research:** ${instructions}\n\n`;
+            let sources = [];
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                buffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                
+                for (const line of lines) {
+                    if (line.startsWith('event:')) {
+                        // Store event type for next data line
+                        this._currentEvent = line.slice(6).trim();
+                    } else if (line.startsWith('data:')) {
+                        const data = line.slice(5).trim();
+                        const eventType = this._currentEvent || 'content';
+                        
+                        if (eventType === 'status') {
+                            // Update status
+                            const statusContent = `**Research:** ${instructions}\n\n*${data}*`;
+                            this.canvas.updateNodeContent(researchNode.id, statusContent, true);
+                        } else if (eventType === 'content') {
+                            // Append content to report
+                            reportContent += data;
+                            this.canvas.updateNodeContent(researchNode.id, reportContent, true);
+                            this.graph.updateNode(researchNode.id, { content: reportContent });
+                        } else if (eventType === 'sources') {
+                            // Parse sources JSON
+                            try {
+                                sources = JSON.parse(data);
+                            } catch (e) {
+                                console.error('Failed to parse sources:', e);
+                            }
+                        } else if (eventType === 'done') {
+                            // Add sources to the report if available
+                            if (sources.length > 0) {
+                                reportContent += '\n\n---\n**Sources:**\n';
+                                for (const source of sources) {
+                                    reportContent += `- [${source.title}](${source.url})\n`;
+                                }
+                            }
+                            this.canvas.updateNodeContent(researchNode.id, reportContent, false);
+                            this.graph.updateNode(researchNode.id, { content: reportContent });
+                        } else if (eventType === 'error') {
+                            throw new Error(data);
+                        }
+                        
+                        this._currentEvent = null;
+                    }
+                }
+            }
+            
+            this.saveSession();
+            
+        } catch (err) {
+            const errorContent = `**Research:** ${instructions}\n\n*Error: ${err.message}*`;
+            this.canvas.updateNodeContent(researchNode.id, errorContent, false);
+            this.graph.updateNode(researchNode.id, { content: errorContent });
+            this.saveSession();
+        }
+    }
+
+    handleAutoLayout() {
+        if (this.graph.isEmpty()) return;
+        
+        // Run auto-layout algorithm
+        this.graph.autoLayout();
+        
+        // Re-render the entire graph with new positions
+        this.canvas.renderGraph(this.graph);
+        
+        // Fit to content
+        setTimeout(() => this.canvas.fitToContent(), 100);
+        
+        // Save the new positions
+        this.saveSession();
+    }
+
     handleNodeReply(nodeId) {
         // Select the node and focus input
         this.canvas.clearSelection();
@@ -428,18 +592,38 @@ class App {
     }
 
     handleNodeBranch(nodeId, selectedText) {
-        // If text was selected, create a branch from that selection
+        // If text was selected, create a highlight node with that excerpt
         if (selectedText) {
-            // Select the node
-            this.canvas.clearSelection();
-            this.canvas.selectNode(nodeId);
+            const sourceNode = this.graph.getNode(nodeId);
+            if (!sourceNode) return;
             
-            // Pre-fill input with context
-            this.chatInput.value = `Regarding: "${selectedText}"\n\n`;
+            // Create highlight node with the selected text
+            const highlightNode = createNode(NodeType.HIGHLIGHT, `> ${selectedText}`, {
+                position: {
+                    x: sourceNode.position.x + 400,
+                    y: sourceNode.position.y
+                }
+            });
+            
+            this.graph.addNode(highlightNode);
+            this.canvas.renderNode(highlightNode);
+            
+            // Create highlight edge (dashed connection)
+            const edge = createEdge(nodeId, highlightNode.id, EdgeType.HIGHLIGHT);
+            this.graph.addEdge(edge);
+            this.canvas.renderEdge(edge, sourceNode.position, highlightNode.position);
+            
+            // Select the new highlight node for easy follow-up
+            this.canvas.clearSelection();
+            this.canvas.selectNode(highlightNode.id);
+            
+            this.saveSession();
+            this.updateEmptyState();
+            
+            // Focus input for follow-up conversation
             this.chatInput.focus();
-            this.chatInput.setSelectionRange(this.chatInput.value.length, this.chatInput.value.length);
         } else {
-            // Just select the node
+            // No selection - just select the node for reply
             this.canvas.clearSelection();
             this.canvas.selectNode(nodeId);
             this.chatInput.focus();
