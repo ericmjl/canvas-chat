@@ -1054,11 +1054,18 @@ class Canvas {
         // Check if marked is available
         if (typeof marked !== 'undefined') {
             try {
-                // Configure marked for safety
-                marked.setOptions({
+                // Configure marked with custom link renderer to open in new tab
+                marked.use({
                     breaks: true,   // Convert \n to <br> within paragraphs
                     gfm: true,      // GitHub Flavored Markdown
+                    renderer: {
+                        link({ href, title, text }) {
+                            const titleAttr = title ? ` title="${title}"` : '';
+                            return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+                        }
+                    }
                 });
+                
                 return marked.parse(text);
             } catch (e) {
                 console.error('Markdown parsing error:', e);
