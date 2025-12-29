@@ -830,7 +830,9 @@ html, body {
     box-shadow: var(--shadow-lg);
     width: 90%;
     max-width: 480px;
-    max-height: 80vh;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
 }
 
@@ -869,6 +871,8 @@ html, body {
 .modal-body {
     padding: 20px;
     overflow-y: auto;
+    flex: 1;
+    min-height: 0;
 }
 
 /* Settings Modal */
