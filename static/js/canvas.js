@@ -466,6 +466,7 @@ class Canvas {
                     <button class="node-action reply-btn" title="Reply">↩️ Reply</button>
                     ${node.type !== NodeType.NOTE ? '<button class="node-action branch-btn" title="Branch">🌿 Branch</button>' : ''}
                     ${node.type === NodeType.AI ? '<button class="node-action summarize-btn" title="Summarize">📝 Summarize</button>' : ''}
+                    <button class="node-action copy-btn" title="Copy content">📋 Copy</button>
                 </div>
                 <div class="resize-handle resize-e" data-resize="e"></div>
                 <div class="resize-handle resize-s" data-resize="s"></div>
@@ -639,6 +640,25 @@ class Canvas {
             deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onNodeDelete) this.onNodeDelete(node.id);
+            });
+        }
+        
+        // Copy button
+        const copyBtn = div.querySelector('.copy-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                try {
+                    await navigator.clipboard.writeText(node.content);
+                    // Visual feedback
+                    const originalText = copyBtn.textContent;
+                    copyBtn.textContent = '✓ Copied';
+                    setTimeout(() => {
+                        copyBtn.textContent = originalText;
+                    }, 1500);
+                } catch (err) {
+                    console.error('Failed to copy:', err);
+                }
             });
         }
         
