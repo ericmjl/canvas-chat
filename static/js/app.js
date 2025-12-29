@@ -114,6 +114,7 @@ class App {
             updated_at: Date.now(),
             nodes: [],
             edges: [],
+            tags: {},
             viewport: { x: 0, y: 0, scale: 1 }
         };
         
@@ -232,6 +233,14 @@ class App {
         });
         document.getElementById('cell-pin-btn').addEventListener('click', () => {
             this.pinCellToCanvas();
+        });
+        
+        // Tag drawer
+        document.getElementById('tags-btn').addEventListener('click', () => {
+            this.toggleTagDrawer();
+        });
+        document.getElementById('tag-drawer-close').addEventListener('click', () => {
+            this.closeTagDrawer();
         });
         
         // Keyboard shortcuts
@@ -1136,12 +1145,23 @@ class App {
         this.updateSelectedIndicator(selectedIds);
         this.updateContextHighlight(selectedIds);
         this.updateContextBudget(selectedIds);
+        
+        // Auto-open tag drawer when 2+ nodes selected
+        if (selectedIds.length >= 2) {
+            this.openTagDrawer();
+        }
+        
+        // Update tag drawer state
+        this.updateTagDrawer();
     }
 
     handleNodeDeselect(selectedIds) {
         this.updateSelectedIndicator(selectedIds);
         this.updateContextHighlight(selectedIds);
         this.updateContextBudget(selectedIds);
+        
+        // Update tag drawer state
+        this.updateTagDrawer();
     }
 
     handleNodeMove(nodeId, newPos) {
@@ -1412,6 +1432,219 @@ class App {
 
     hideSessionsModal() {
         document.getElementById('session-modal').style.display = 'none';
+    }
+    
+    // --- Tag Management ---
+    
+    toggleTagDrawer() {
+        const drawer = document.getElementById('tag-drawer');
+        const btn = document.getElementById('tags-btn');
+        drawer.classList.toggle('open');
+        btn.classList.toggle('active');
+        
+        if (drawer.classList.contains('open')) {
+            this.renderTagSlots();
+        }
+    }
+    
+    openTagDrawer() {
+        const drawer = document.getElementById('tag-drawer');
+        const btn = document.getElementById('tags-btn');
+        if (!drawer.classList.contains('open')) {
+            drawer.classList.add('open');
+            btn.classList.add('active');
+            this.renderTagSlots();
+        }
+    }
+    
+    closeTagDrawer() {
+        const drawer = document.getElementById('tag-drawer');
+        const btn = document.getElementById('tags-btn');
+        drawer.classList.remove('open');
+        btn.classList.remove('active');
+    }
+    
+    renderTagSlots() {
+        const slotsEl = document.getElementById('tag-slots');
+        const tags = this.graph.getAllTags();
+        const selectedIds = this.canvas.getSelectedNodeIds();
+        
+        slotsEl.innerHTML = '';
+        
+        for (const color of TAG_COLORS) {
+            const tag = tags[color];
+            const slot = document.createElement('div');
+            slot.className = 'tag-slot';
+            slot.dataset.color = color;
+            
+            // Check if selected nodes have this tag
+            if (tag && selectedIds.length > 0) {
+                const nodesWithTag = selectedIds.filter(id => this.graph.nodeHasTag(id, color));
+                if (nodesWithTag.length === selectedIds.length) {
+                    slot.classList.add('active');
+                } else if (nodesWithTag.length > 0) {
+                    slot.classList.add('partial');
+                }
+            }
+            
+            slot.innerHTML = `
+                <div class="tag-color-dot" style="background: ${color}"></div>
+                <div class="tag-slot-content">
+                    ${tag 
+                        ? `<span class="tag-slot-name">${this.escapeHtml(tag.name)}</span>` 
+                        : `<span class="tag-slot-empty">+ Add tag</span>`
+                    }
+                </div>
+                ${tag ? `
+                    <div class="tag-slot-actions">
+                        <button class="tag-slot-btn edit" title="Edit">✏️</button>
+                        <button class="tag-slot-btn delete" title="Delete">✕</button>
+                    </div>
+                ` : ''}
+            `;
+            
+            // Click to apply/create tag
+            slot.addEventListener('click', (e) => {
+                if (e.target.closest('.tag-slot-btn')) return;
+                this.handleTagSlotClick(color);
+            });
+            
+            // Edit button
+            const editBtn = slot.querySelector('.tag-slot-btn.edit');
+            if (editBtn) {
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.startEditingTag(color);
+                });
+            }
+            
+            // Delete button
+            const deleteBtn = slot.querySelector('.tag-slot-btn.delete');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.deleteTag(color);
+                });
+            }
+            
+            slotsEl.appendChild(slot);
+        }
+    }
+    
+    handleTagSlotClick(color) {
+        const tag = this.graph.getTag(color);
+        const selectedIds = this.canvas.getSelectedNodeIds();
+        
+        if (!tag) {
+            // Create new tag
+            this.startEditingTag(color, true);
+        } else if (selectedIds.length > 0) {
+            // Toggle tag on selected nodes
+            this.toggleTagOnNodes(color, selectedIds);
+        }
+    }
+    
+    startEditingTag(color, isNew = false) {
+        const slot = document.querySelector(`.tag-slot[data-color="${color}"]`);
+        if (!slot) return;
+        
+        const contentEl = slot.querySelector('.tag-slot-content');
+        const currentName = this.graph.getTag(color)?.name || '';
+        
+        contentEl.innerHTML = `
+            <input type="text" class="tag-slot-input" 
+                value="${this.escapeHtml(currentName)}" 
+                placeholder="Tag name..."
+                maxlength="20">
+        `;
+        
+        const input = contentEl.querySelector('input');
+        input.focus();
+        input.select();
+        
+        const finishEdit = () => {
+            const name = input.value.trim();
+            if (name) {
+                if (isNew) {
+                    this.graph.createTag(color, name);
+                } else {
+                    this.graph.updateTag(color, name);
+                }
+                this.saveSession();
+                this.canvas.renderGraph(this.graph); // Re-render to show updated tags
+            }
+            this.renderTagSlots();
+        };
+        
+        input.addEventListener('blur', finishEdit);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                input.blur();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.renderTagSlots();
+            }
+        });
+    }
+    
+    deleteTag(color) {
+        const tag = this.graph.getTag(color);
+        if (!tag) return;
+        
+        if (confirm(`Delete tag "${tag.name}"? It will be removed from all nodes.`)) {
+            this.graph.deleteTag(color);
+            this.saveSession();
+            this.canvas.renderGraph(this.graph);
+            this.renderTagSlots();
+        }
+    }
+    
+    toggleTagOnNodes(color, nodeIds) {
+        // Check current state
+        const nodesWithTag = nodeIds.filter(id => this.graph.nodeHasTag(id, color));
+        const allHaveTag = nodesWithTag.length === nodeIds.length;
+        
+        if (allHaveTag) {
+            // Remove from all
+            for (const nodeId of nodeIds) {
+                this.graph.removeTagFromNode(nodeId, color);
+            }
+        } else {
+            // Add to all
+            for (const nodeId of nodeIds) {
+                this.graph.addTagToNode(nodeId, color);
+            }
+        }
+        
+        this.saveSession();
+        this.canvas.renderGraph(this.graph);
+        this.renderTagSlots();
+    }
+    
+    updateTagDrawer() {
+        const drawer = document.getElementById('tag-drawer');
+        if (!drawer.classList.contains('open')) return;
+        
+        const selectedIds = this.canvas.getSelectedNodeIds();
+        const footer = document.getElementById('tag-drawer-footer');
+        const status = document.getElementById('tag-selection-status');
+        
+        if (selectedIds.length > 0) {
+            footer.classList.add('has-selection');
+            status.textContent = `${selectedIds.length} node${selectedIds.length > 1 ? 's' : ''} selected`;
+        } else {
+            footer.classList.remove('has-selection');
+            status.textContent = 'Select nodes to apply tags';
+        }
+        
+        this.renderTagSlots();
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }
 

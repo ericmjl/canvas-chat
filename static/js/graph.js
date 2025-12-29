@@ -32,6 +32,20 @@ const EdgeType = {
 };
 
 /**
+ * Excalidraw color palette for tags (8 colors max)
+ */
+const TAG_COLORS = [
+    '#ffc9c9',  // light red
+    '#ffd8a8',  // light orange
+    '#fff3bf',  // light yellow
+    '#c0eb75',  // light green
+    '#a5d8ff',  // light blue
+    '#d0bfff',  // light purple
+    '#fcc2d7',  // light pink
+    '#e9ecef',  // light gray
+];
+
+/**
  * Create a new node
  */
 function createNode(type, content, options = {}) {
@@ -43,6 +57,7 @@ function createNode(type, content, options = {}) {
         created_at: Date.now(),
         model: options.model || null,
         selection: options.selection || null, // For branch-from-selection
+        tags: options.tags || [],  // Array of color keys
         ...options
     };
 }
@@ -115,6 +130,10 @@ class Graph {
         this.nodes = new Map();
         this.edges = [];
         
+        // Tag definitions: color -> { name, color }
+        // Max 8 tags, one per color
+        this.tags = {};
+        
         // Indexes for fast lookups
         this.outgoingEdges = new Map(); // nodeId -> [edges where node is source]
         this.incomingEdges = new Map(); // nodeId -> [edges where node is target]
@@ -122,6 +141,8 @@ class Graph {
         // Load from data if provided
         if (data.nodes) {
             for (const node of data.nodes) {
+                // Ensure tags array exists for older nodes
+                if (!node.tags) node.tags = [];
                 this.nodes.set(node.id, node);
             }
         }
@@ -131,6 +152,104 @@ class Graph {
             }
             this.edges = data.edges;
         }
+        if (data.tags) {
+            this.tags = data.tags;
+        }
+    }
+    
+    // --- Tag Management ---
+    
+    /**
+     * Create or update a tag for a color
+     * @param {string} color - The color hex code (must be in TAG_COLORS)
+     * @param {string} name - The tag name
+     */
+    createTag(color, name) {
+        if (!TAG_COLORS.includes(color)) {
+            throw new Error(`Invalid tag color: ${color}`);
+        }
+        this.tags[color] = { name, color };
+    }
+    
+    /**
+     * Update a tag's name
+     * @param {string} color - The color hex code
+     * @param {string} name - The new tag name
+     */
+    updateTag(color, name) {
+        if (this.tags[color]) {
+            this.tags[color].name = name;
+        }
+    }
+    
+    /**
+     * Delete a tag and remove it from all nodes
+     * @param {string} color - The color hex code
+     */
+    deleteTag(color) {
+        delete this.tags[color];
+        
+        // Remove from all nodes
+        for (const node of this.nodes.values()) {
+            if (node.tags) {
+                node.tags = node.tags.filter(t => t !== color);
+            }
+        }
+    }
+    
+    /**
+     * Get a tag by color
+     * @param {string} color - The color hex code
+     * @returns {Object|null} The tag or null
+     */
+    getTag(color) {
+        return this.tags[color] || null;
+    }
+    
+    /**
+     * Get all defined tags
+     * @returns {Object} Map of color -> tag
+     */
+    getAllTags() {
+        return this.tags;
+    }
+    
+    /**
+     * Add a tag to a node
+     * @param {string} nodeId - The node ID
+     * @param {string} color - The tag color
+     */
+    addTagToNode(nodeId, color) {
+        const node = this.nodes.get(nodeId);
+        if (node && this.tags[color]) {
+            if (!node.tags) node.tags = [];
+            if (!node.tags.includes(color)) {
+                node.tags.push(color);
+            }
+        }
+    }
+    
+    /**
+     * Remove a tag from a node
+     * @param {string} nodeId - The node ID
+     * @param {string} color - The tag color
+     */
+    removeTagFromNode(nodeId, color) {
+        const node = this.nodes.get(nodeId);
+        if (node && node.tags) {
+            node.tags = node.tags.filter(t => t !== color);
+        }
+    }
+    
+    /**
+     * Check if a node has a tag
+     * @param {string} nodeId - The node ID
+     * @param {string} color - The tag color
+     * @returns {boolean}
+     */
+    nodeHasTag(nodeId, color) {
+        const node = this.nodes.get(nodeId);
+        return node && node.tags && node.tags.includes(color);
     }
 
     /**
@@ -922,11 +1041,23 @@ class Graph {
     isEmpty() {
         return this.nodes.size === 0;
     }
+    
+    /**
+     * Serialize graph to JSON-compatible object
+     */
+    toJSON() {
+        return {
+            nodes: this.getAllNodes(),
+            edges: this.getAllEdges(),
+            tags: this.tags
+        };
+    }
 }
 
 // Export for use in other modules
 window.Graph = Graph;
 window.NodeType = NodeType;
 window.EdgeType = EdgeType;
+window.TAG_COLORS = TAG_COLORS;
 window.createNode = createNode;
 window.createEdge = createEdge;

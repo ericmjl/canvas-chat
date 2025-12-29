@@ -450,7 +450,11 @@ class Canvas {
         if (isMatrix) {
             div.innerHTML = this.renderMatrixNodeContent(node);
         } else {
+            // Render tags if present
+            const tagsHtml = this.renderNodeTags(node);
+            
             div.innerHTML = `
+                ${tagsHtml}
                 <div class="node-header">
                     <div class="drag-handle" title="Drag to move">
                         <span class="grip-dot"></span><span class="grip-dot"></span>
@@ -850,11 +854,18 @@ class Canvas {
      */
     getNodeDimensions() {
         const dimensions = new Map();
+        const TAG_WIDTH = 100; // Approximate width of tag labels on the left
         
         for (const [nodeId, wrapper] of this.nodeElements) {
             const width = parseFloat(wrapper.getAttribute('width')) || 320;
             const height = parseFloat(wrapper.getAttribute('height')) || 200;
-            dimensions.set(nodeId, { width, height });
+            
+            // Check if node has tags - if so, add tag width to bounding box
+            const tagsEl = wrapper.querySelector('.node-tags');
+            const tagCount = tagsEl ? tagsEl.querySelectorAll('.node-tag').length : 0;
+            const effectiveWidth = tagCount > 0 ? width + TAG_WIDTH : width;
+            
+            dimensions.set(nodeId, { width: effectiveWidth, height });
         }
         
         return dimensions;
@@ -1009,6 +1020,29 @@ class Canvas {
         if (!text) return '';
         if (text.length <= maxLength) return text;
         return text.slice(0, maxLength - 1) + '…';
+    }
+    
+    /**
+     * Render tags for a node (left side, post-it style with arrows)
+     */
+    renderNodeTags(node) {
+        if (!node.tags || node.tags.length === 0) {
+            return '';
+        }
+        
+        // Get tag definitions from the graph (accessed via app.graph)
+        const graph = window.app?.graph;
+        if (!graph) return '';
+        
+        const tagsHtml = node.tags.map(color => {
+            const tag = graph.getTag(color);
+            if (!tag) return '';
+            return `<div class="node-tag" data-color="${color}">${this.escapeHtml(tag.name)}</div>`;
+        }).filter(h => h).join('');
+        
+        if (!tagsHtml) return '';
+        
+        return `<div class="node-tags">${tagsHtml}</div>`;
     }
     
     /**

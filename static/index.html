@@ -35,6 +35,7 @@
                 </select>
                 <button id="auto-layout-btn" class="icon-btn" title="Apply Layout">🔀</button>
             </div>
+            <button id="tags-btn" class="icon-btn" title="Tags">🏷️</button>
             <button id="new-canvas-btn" class="icon-btn" title="New Canvas">📄</button>
             <button id="sessions-btn" class="icon-btn" title="Sessions">📚</button>
             <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
@@ -69,6 +70,22 @@
                 </div>
             </foreignObject>
         </template>
+    </div>
+    
+    <!-- Tag Drawer (Right Side) -->
+    <div id="tag-drawer" class="tag-drawer">
+        <div class="tag-drawer-header">
+            <h3>Tags</h3>
+            <button id="tag-drawer-close" class="icon-btn" title="Close">✕</button>
+        </div>
+        <div class="tag-drawer-content">
+            <div id="tag-slots" class="tag-slots">
+                <!-- Tag slots will be populated by JS -->
+            </div>
+        </div>
+        <div class="tag-drawer-footer" id="tag-drawer-footer">
+            <span id="tag-selection-status">Select nodes to apply tags</span>
+        </div>
     </div>
 
     <!-- Chat Input (floating at bottom) -->
