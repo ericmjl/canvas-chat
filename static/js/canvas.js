@@ -773,7 +773,10 @@ class Canvas {
         const wrapper = this.nodeElements.get(nodeId);
         if (wrapper) {
             wrapper.querySelector('.node')?.classList.add('selected');
+            wrapper.querySelector('.node')?.classList.remove('faded');
         }
+        
+        this.updateFadedState();
         
         if (this.onNodeSelect) {
             this.onNodeSelect(Array.from(this.selectedNodes));
@@ -789,6 +792,8 @@ class Canvas {
         if (wrapper) {
             wrapper.querySelector('.node')?.classList.remove('selected');
         }
+        
+        this.updateFadedState();
         
         if (this.onNodeDeselect) {
             this.onNodeDeselect(Array.from(this.selectedNodes));
@@ -807,8 +812,28 @@ class Canvas {
         }
         this.selectedNodes.clear();
         
+        this.updateFadedState();
+        
         if (this.onNodeDeselect) {
             this.onNodeDeselect([]);
+        }
+    }
+    
+    /**
+     * Update faded state for all nodes based on selection
+     */
+    updateFadedState() {
+        const hasSelection = this.selectedNodes.size > 0;
+        
+        for (const [nodeId, wrapper] of this.nodeElements) {
+            const node = wrapper.querySelector('.node');
+            if (!node) continue;
+            
+            if (hasSelection && !this.selectedNodes.has(nodeId)) {
+                node.classList.add('faded');
+            } else {
+                node.classList.remove('faded');
+            }
         }
     }
 

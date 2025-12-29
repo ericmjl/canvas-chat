@@ -312,6 +312,11 @@ html, body {
     outline-offset: 4px;
 }
 
+.node.faded {
+    opacity: 0.65;
+    transition: opacity 0.2s ease;
+}
+
 .node.context-ancestor {
     border-color: var(--selection-color);
     background: var(--context-highlight);
