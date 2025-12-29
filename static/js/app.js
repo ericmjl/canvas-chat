@@ -615,46 +615,64 @@ class App {
         // Get selected nodes
         const selectedIds = this.canvas.getSelectedNodeIds();
         
-        if (selectedIds.length < 2) {
-            alert('Please select exactly 2 nodes to create a matrix (one for rows, one for columns)');
+        if (selectedIds.length === 0) {
+            alert('Please select 1 or 2 nodes to create a matrix.\n\n• 1 node: Will extract two lists from it\n• 2 nodes: First = rows, second = columns');
             return;
         }
         
         if (selectedIds.length > 2) {
-            alert('Please select exactly 2 nodes. The first will be rows, the second will be columns.');
+            alert('Please select at most 2 nodes. The first will be rows, the second will be columns.');
             return;
         }
         
         const model = this.modelPicker.value;
         const apiKey = this.getApiKeyForModel(model);
         
-        // Parse list items from both nodes
+        // Show loading state
+        const loadingModal = document.getElementById('matrix-modal');
+        document.getElementById('matrix-context').value = matrixContext;
+        loadingModal.style.display = 'flex';
+        
         try {
-            const node1 = this.graph.getNode(selectedIds[0]);
-            const node2 = this.graph.getNode(selectedIds[1]);
+            let rowItems, colItems, rowNodeId, colNodeId;
             
-            // Show loading state
-            const loadingModal = document.getElementById('matrix-modal');
-            document.getElementById('matrix-context').value = matrixContext;
-            loadingModal.style.display = 'flex';
-            
-            // Parse both nodes in parallel
-            const [result1, result2] = await Promise.all([
-                this.parseListItems(node1.content, model, apiKey),
-                this.parseListItems(node2.content, model, apiKey)
-            ]);
+            if (selectedIds.length === 1) {
+                // Single node: extract two lists from it
+                const node = this.graph.getNode(selectedIds[0]);
+                const result = await this.parseTwoLists(node.content, matrixContext, model, apiKey);
+                
+                rowItems = result.rows;
+                colItems = result.columns;
+                rowNodeId = selectedIds[0];
+                colNodeId = selectedIds[0]; // Same node for both
+                
+            } else {
+                // Two nodes: parse each separately
+                const node1 = this.graph.getNode(selectedIds[0]);
+                const node2 = this.graph.getNode(selectedIds[1]);
+                
+                const [result1, result2] = await Promise.all([
+                    this.parseListItems(node1.content, model, apiKey),
+                    this.parseListItems(node2.content, model, apiKey)
+                ]);
+                
+                rowItems = result1.items;
+                colItems = result2.items;
+                rowNodeId = selectedIds[0];
+                colNodeId = selectedIds[1];
+            }
             
             // Check for max items warning
-            const hasWarning = result1.items.length > 10 || result2.items.length > 10;
+            const hasWarning = rowItems.length > 10 || colItems.length > 10;
             document.getElementById('matrix-warning').style.display = hasWarning ? 'block' : 'none';
             
             // Store parsed data for modal
             this._matrixData = {
                 context: matrixContext,
-                rowNodeId: selectedIds[0],
-                colNodeId: selectedIds[1],
-                rowItems: result1.items.slice(0, 10),
-                colItems: result2.items.slice(0, 10)
+                rowNodeId,
+                colNodeId,
+                rowItems: rowItems.slice(0, 10),
+                colItems: colItems.slice(0, 10)
             };
             
             // Populate axis items in modal
@@ -668,6 +686,25 @@ class App {
             alert(`Failed to parse list items: ${err.message}`);
             document.getElementById('matrix-modal').style.display = 'none';
         }
+    }
+    
+    async parseTwoLists(content, context, model, apiKey) {
+        const response = await fetch('/api/parse-two-lists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content,
+                context,
+                model,
+                api_key: apiKey
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to parse lists: ${response.statusText}`);
+        }
+        
+        return response.json();
     }
     
     async parseListItems(content, model, apiKey) {

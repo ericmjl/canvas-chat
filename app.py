@@ -576,6 +576,90 @@ Example output: ["Item one full text", "Item two full text", "Item three full te
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ParseTwoListsRequest(BaseModel):
+    """Request body for parsing two lists from a single node content."""
+
+    content: str
+    context: str  # User-provided matrix context to help identify the two lists
+    model: str = "openai/gpt-4o-mini"
+    api_key: Optional[str] = None
+
+
+@app.post("/api/parse-two-lists")
+async def parse_two_lists(request: ParseTwoListsRequest):
+    """
+    Use LLM to extract two separate lists from a single piece of content.
+
+    Returns two lists: one for rows, one for columns (max 10 each).
+    """
+    logger.info(
+        f"Parse two lists request: content length={len(request.content)}, context={request.context[:50]}..."
+    )
+
+    provider = extract_provider(request.model)
+
+    system_prompt = f"""The user wants to create a matrix/table for: {request.context}
+
+Extract TWO separate lists from the following text that could serve as rows and columns for this matrix.
+
+Rules:
+- Return ONLY a JSON object with "rows" and "columns" arrays, no other text
+- Each array should contain distinct items from the text
+- Look for two naturally separate categories (e.g., ideas vs criteria, features vs users, options vs factors)
+- If the text has numbered/bulleted lists, those are likely the items
+- If only one list is clearly present, put it in "rows" and infer reasonable column headers from the context
+- Maximum 10 items per list - pick the most distinct ones if there are more
+- Preserve the full text of each item (don't truncate)
+
+Example output: {{"rows": ["Row item 1", "Row item 2"], "columns": ["Column A", "Column B"]}}"""
+
+    try:
+        kwargs = {
+            "model": request.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request.content},
+            ],
+            "temperature": 0.3,
+        }
+
+        api_key = get_api_key_for_provider(provider, request.api_key)
+        if api_key:
+            kwargs["api_key"] = api_key
+
+        response = await litellm.acompletion(**kwargs)
+        content = response.choices[0].message.content.strip()
+
+        # Handle potential markdown code blocks
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+            content = content.strip()
+
+        result = json.loads(content)
+
+        # Validate structure
+        if not isinstance(result, dict):
+            raise ValueError("Response is not an object")
+        if "rows" not in result or "columns" not in result:
+            raise ValueError("Response missing 'rows' or 'columns'")
+
+        rows = [str(item) for item in result["rows"][:10]]
+        columns = [str(item) for item in result["columns"][:10]]
+
+        logger.info(f"Parsed {len(rows)} rows and {len(columns)} columns from content")
+        return {"rows": rows, "columns": columns}
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse LLM response as JSON: {e}")
+        raise HTTPException(status_code=500, detail="Failed to parse lists")
+    except Exception as e:
+        logger.error(f"Parse two lists failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/matrix/fill")
 async def matrix_fill(request: MatrixFillRequest):
     """
