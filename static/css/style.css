@@ -420,6 +420,45 @@ html, body {
     border-style: dashed;
 }
 
+/* Source text highlight - shown in parent node when a highlight excerpt is selected */
+.source-highlight {
+    background: var(--node-highlight);
+    color: inherit;
+    padding: 2px 0;
+    /* Use box-decoration-break to make multi-element highlights appear contiguous */
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    animation: sourceHighlightPulse 2s ease-in-out infinite;
+}
+
+/* Apply border-radius and padding only to first/last marks for seamless look */
+.node-content .source-highlight:first-of-type {
+    padding-left: 4px;
+    border-top-left-radius: 3px;
+    border-bottom-left-radius: 3px;
+}
+
+.node-content .source-highlight:last-of-type {
+    padding-right: 4px;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+
+/* When there's only one highlight, it gets both rounded ends */
+.node-content .source-highlight:only-of-type {
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+@keyframes sourceHighlightPulse {
+    0%, 100% { 
+        background: var(--node-highlight);
+    }
+    50% { 
+        background: color-mix(in srgb, var(--node-highlight) 70%, var(--node-highlight-border));
+    }
+}
+
 /* Node Summary Overlay (for semantic zoom) */
 .node-summary {
     display: flex;

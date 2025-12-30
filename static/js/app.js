@@ -1211,11 +1211,19 @@ class App {
         // Clear any previous matrix cell highlights
         this.canvas.clearMatrixCellHighlights();
         
+        // Clear any previous source text highlights
+        this.canvas.clearSourceTextHighlights();
+        
         // If a cell node is selected, highlight its source cell in the matrix
         if (selectedIds.length === 1) {
             const node = this.graph.getNode(selectedIds[0]);
             if (node && node.type === NodeType.CELL && node.matrixId) {
                 this.canvas.highlightMatrixCell(node.matrixId, node.rowIndex, node.colIndex);
+            }
+            
+            // If a highlight node is selected, highlight the source text in the parent node
+            if (node && node.type === NodeType.HIGHLIGHT) {
+                this.highlightSourceTextInParent(node);
             }
         }
         
@@ -1235,6 +1243,9 @@ class App {
         
         // Clear matrix cell highlights when deselecting
         this.canvas.clearMatrixCellHighlights();
+        
+        // Clear source text highlights when deselecting
+        this.canvas.clearSourceTextHighlights();
         
         // Update tag drawer state
         this.updateTagDrawer();
@@ -1297,6 +1308,30 @@ class App {
             
             this.saveSession();
         }
+    }
+    
+    /**
+     * Highlight the source text in the parent node when a highlight excerpt is selected
+     * @param {Object} highlightNode - The highlight node that was selected
+     */
+    highlightSourceTextInParent(highlightNode) {
+        // Get the parent node (source of the excerpt)
+        const parents = this.graph.getParents(highlightNode.id);
+        if (parents.length === 0) return;
+        
+        const parentNode = parents[0];
+        
+        // Extract the excerpted text from the highlight node content
+        // The content is stored as "> {selectedText}"
+        let excerptText = highlightNode.content || '';
+        if (excerptText.startsWith('> ')) {
+            excerptText = excerptText.slice(2);
+        }
+        
+        if (!excerptText.trim()) return;
+        
+        // Highlight the text in the parent node
+        this.canvas.highlightTextInNode(parentNode.id, excerptText);
     }
 
     deleteSelectedNodes() {

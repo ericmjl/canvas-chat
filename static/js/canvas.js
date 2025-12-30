@@ -949,6 +949,146 @@ class Canvas {
         const highlightedCells = this.nodesLayer.querySelectorAll('.matrix-cell.highlighted');
         highlightedCells.forEach(cell => cell.classList.remove('highlighted'));
     }
+    
+    /**
+     * Highlight specific text within a node's content
+     * @param {string} nodeId - The node to highlight text in
+     * @param {string} text - The text to highlight
+     */
+    highlightTextInNode(nodeId, text) {
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper || !text) return;
+        
+        const contentEl = wrapper.querySelector('.node-content');
+        if (!contentEl) return;
+        
+        // Store original HTML if not already stored
+        if (!contentEl.dataset.originalHtml) {
+            contentEl.dataset.originalHtml = contentEl.innerHTML;
+        }
+        
+        // Get the text content and find the match
+        const originalHtml = contentEl.dataset.originalHtml;
+        
+        // Create a case-insensitive regex to find the text
+        // Escape special regex characters in the search text
+        const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(${escapedText})`, 'gi');
+        
+        // Replace matching text with highlighted version
+        // We need to be careful not to break HTML tags
+        const highlightedHtml = this.highlightTextInHtml(originalHtml, text);
+        contentEl.innerHTML = highlightedHtml;
+        
+        // Scroll the highlight into view within the node if needed
+        const mark = contentEl.querySelector('.source-highlight');
+        if (mark) {
+            mark.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }
+    
+    /**
+     * Helper to highlight text within HTML without breaking tags.
+     * Handles text that spans across multiple HTML elements (e.g., across <strong> boundaries).
+     * @param {string} html - Original HTML content
+     * @param {string} text - Text to highlight
+     * @returns {string} HTML with highlighted text
+     */
+    highlightTextInHtml(html, text) {
+        if (!text || !html) return html;
+        
+        // Create a temporary element to parse the HTML
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        
+        // Use TreeWalker to collect all text nodes
+        const walker = document.createTreeWalker(temp, NodeFilter.SHOW_TEXT);
+        const textNodes = [];
+        let node;
+        while (node = walker.nextNode()) {
+            textNodes.push(node);
+        }
+        
+        if (textNodes.length === 0) return html;
+        
+        // Combine all text and find the match position
+        const fullText = textNodes.map(n => n.textContent).join('');
+        const lowerFull = fullText.toLowerCase();
+        const lowerSearch = text.toLowerCase();
+        const matchStart = lowerFull.indexOf(lowerSearch);
+        
+        if (matchStart === -1) return html;
+        
+        const matchEnd = matchStart + text.length;
+        
+        // Walk through text nodes and wrap the matching portions
+        let currentPos = 0;
+        const nodesToProcess = [];
+        
+        for (const textNode of textNodes) {
+            const nodeStart = currentPos;
+            const nodeEnd = currentPos + textNode.textContent.length;
+            
+            // Check if this node overlaps with the match
+            if (nodeEnd > matchStart && nodeStart < matchEnd) {
+                // Calculate overlap within this node
+                const overlapStart = Math.max(0, matchStart - nodeStart);
+                const overlapEnd = Math.min(textNode.textContent.length, matchEnd - nodeStart);
+                
+                nodesToProcess.push({
+                    node: textNode,
+                    overlapStart,
+                    overlapEnd
+                });
+            }
+            
+            currentPos = nodeEnd;
+        }
+        
+        // Process nodes in reverse order to avoid invalidating positions
+        for (let i = nodesToProcess.length - 1; i >= 0; i--) {
+            const { node: textNode, overlapStart, overlapEnd } = nodesToProcess[i];
+            const content = textNode.textContent;
+            
+            const before = content.slice(0, overlapStart);
+            const match = content.slice(overlapStart, overlapEnd);
+            const after = content.slice(overlapEnd);
+            
+            const fragment = document.createDocumentFragment();
+            
+            if (before) {
+                fragment.appendChild(document.createTextNode(before));
+            }
+            
+            const mark = document.createElement('mark');
+            mark.className = 'source-highlight';
+            mark.textContent = match;
+            fragment.appendChild(mark);
+            
+            if (after) {
+                fragment.appendChild(document.createTextNode(after));
+            }
+            
+            textNode.parentNode.replaceChild(fragment, textNode);
+        }
+        
+        return temp.innerHTML;
+    }
+    
+    /**
+     * Clear all source text highlights from nodes
+     */
+    clearSourceTextHighlights() {
+        // Find all nodes with stored original HTML and restore them
+        const wrappers = this.nodesLayer.querySelectorAll('.node-wrapper');
+        for (const wrapper of wrappers) {
+            const contentEl = wrapper.querySelector('.node-content');
+            if (contentEl && contentEl.dataset.originalHtml) {
+                contentEl.innerHTML = contentEl.dataset.originalHtml;
+                delete contentEl.dataset.originalHtml;
+            }
+        }
+    }
 
     /**
      * Remove a node from the canvas
