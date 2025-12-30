@@ -1334,71 +1334,45 @@ class App {
         this.chatInput.focus();
     }
 
-    handleNodeBranch(nodeId, selectedText, replyText) {
-        // Create highlight node from selected text, optionally with user reply
-        if (!selectedText) {
-            // No selection - just select the node for reply
-            this.canvas.clearSelection();
-            this.canvas.selectNode(nodeId);
-            this.chatInput.focus();
-            return;
-        }
-        
-        const sourceNode = this.graph.getNode(nodeId);
-        if (!sourceNode) return;
-        
-        // Position the new nodes in the visible viewport area
-        const viewportCenter = this.canvas.getViewportCenter();
-        
-        // Create highlight node with the selected text
-        const highlightNode = createNode(NodeType.HIGHLIGHT, `> ${selectedText}`, {
-            position: {
-                x: viewportCenter.x + 50,
-                y: viewportCenter.y - 100
-            }
-        });
-        
-        this.graph.addNode(highlightNode);
-        this.canvas.renderNode(highlightNode);
-        
-        // Create highlight edge (dashed connection)
-        const highlightEdge = createEdge(nodeId, highlightNode.id, EdgeType.HIGHLIGHT);
-        this.graph.addEdge(highlightEdge);
-        this.canvas.renderEdge(highlightEdge, sourceNode.position, highlightNode.position);
-        
-        // If user provided a reply, create user node and trigger LLM response
-        if (replyText) {
-            // Create user message node
-            const userNode = createNode(NodeType.USER, replyText, {
+    handleNodeBranch(nodeId, selectedText) {
+        // If text was selected, create a highlight node with that excerpt
+        if (selectedText) {
+            const sourceNode = this.graph.getNode(nodeId);
+            if (!sourceNode) return;
+            
+            // Position the new node in the visible viewport area
+            // Get the center of the current viewport and offset slightly
+            const viewportCenter = this.canvas.getViewportCenter();
+            
+            // Create highlight node with the selected text, positioned in view
+            const highlightNode = createNode(NodeType.HIGHLIGHT, `> ${selectedText}`, {
                 position: {
-                    x: highlightNode.position.x + 50,
-                    y: highlightNode.position.y + highlightNode.height + 80
+                    x: viewportCenter.x + 50,  // Slight offset from center
+                    y: viewportCenter.y - 100  // Above center for visibility
                 }
             });
             
-            this.graph.addNode(userNode);
-            this.canvas.renderNode(userNode);
+            this.graph.addNode(highlightNode);
+            this.canvas.renderNode(highlightNode);
             
-            // Connect user node to highlight node
-            const userEdge = createEdge(highlightNode.id, userNode.id, EdgeType.REPLY);
-            this.graph.addEdge(userEdge);
-            this.canvas.renderEdge(userEdge, highlightNode.position, userNode.position);
+            // Create highlight edge (dashed connection)
+            const edge = createEdge(nodeId, highlightNode.id, EdgeType.HIGHLIGHT);
+            this.graph.addEdge(edge);
+            this.canvas.renderEdge(edge, sourceNode.position, highlightNode.position);
             
-            // Select the user node
-            this.canvas.clearSelection();
-            this.canvas.selectNode(userNode.id);
-            
-            this.saveSession();
-            this.updateEmptyState();
-            
-            // Trigger LLM response
-            this.sendMessage(replyText, [userNode.id]);
-        } else {
-            // No reply text - just select the highlight node for manual follow-up
+            // Select the new highlight node for easy follow-up
             this.canvas.clearSelection();
             this.canvas.selectNode(highlightNode.id);
+            
             this.saveSession();
             this.updateEmptyState();
+            
+            // Focus input for follow-up conversation
+            this.chatInput.focus();
+        } else {
+            // No selection - just select the node for reply
+            this.canvas.clearSelection();
+            this.canvas.selectNode(nodeId);
             this.chatInput.focus();
         }
     }

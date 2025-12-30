@@ -41,10 +41,9 @@ class Canvas {
         this.onNodeDelete = null;
         this.onNodeTitleEdit = null;  // For editing node title in semantic zoom
         
-        // Reply tooltip state
+        // Branch tooltip state
         this.branchTooltip = null;
         this.activeSelectionNodeId = null;
-        this.pendingSelectedText = null;  // Store selected text when tooltip opens
         
         this.init();
     }
@@ -57,95 +56,45 @@ class Canvas {
     }
     
     /**
-     * Create the floating reply tooltip element with input field
+     * Create the floating branch tooltip element
      */
     createBranchTooltip() {
         this.branchTooltip = document.createElement('div');
-        this.branchTooltip.className = 'reply-tooltip';
-        this.branchTooltip.innerHTML = `
-            <div class="reply-tooltip-header">
-                <span class="reply-tooltip-label">💬 Reply to selection</span>
-            </div>
-            <div class="reply-tooltip-input-row">
-                <input type="text" class="reply-tooltip-input" placeholder="Type your reply..." />
-                <button class="reply-tooltip-btn" title="Send (Enter)">→</button>
-            </div>
-        `;
+        this.branchTooltip.className = 'branch-tooltip';
+        this.branchTooltip.innerHTML = '<button class="branch-tooltip-btn">🌿 Branch</button>';
         this.branchTooltip.style.display = 'none';
         document.body.appendChild(this.branchTooltip);
         
-        const input = this.branchTooltip.querySelector('.reply-tooltip-input');
-        const btn = this.branchTooltip.querySelector('.reply-tooltip-btn');
-        
-        // Handle submit via button click
-        btn.addEventListener('click', (e) => {
+        // Handle branch button click
+        this.branchTooltip.querySelector('.branch-tooltip-btn').addEventListener('click', (e) => {
             e.stopPropagation();
-            this.submitReplyTooltip();
-        });
-        
-        // Handle submit via Enter key
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.submitReplyTooltip();
-            } else if (e.key === 'Escape') {
-                this.hideBranchTooltip();
+            const selection = window.getSelection();
+            const selectedText = selection.toString().trim();
+            
+            if (selectedText && this.activeSelectionNodeId && this.onNodeBranch) {
+                this.onNodeBranch(this.activeSelectionNodeId, selectedText);
             }
-        });
-        
-        // Prevent click inside tooltip from closing it
-        this.branchTooltip.addEventListener('click', (e) => {
-            e.stopPropagation();
+            
+            this.hideBranchTooltip();
+            selection.removeAllRanges();
         });
     }
     
     /**
-     * Submit the reply from the tooltip
-     */
-    submitReplyTooltip() {
-        const input = this.branchTooltip.querySelector('.reply-tooltip-input');
-        const replyText = input.value.trim();
-        const selection = window.getSelection();
-        const selectedText = this.pendingSelectedText || selection.toString().trim();
-        
-        if (selectedText && this.activeSelectionNodeId && this.onNodeBranch) {
-            // Pass both the selected text and the user's reply
-            this.onNodeBranch(this.activeSelectionNodeId, selectedText, replyText);
-        }
-        
-        this.hideBranchTooltip();
-        selection.removeAllRanges();
-        input.value = '';
-    }
-    
-    /**
-     * Show the reply tooltip near the selection
+     * Show the branch tooltip near the selection
      */
     showBranchTooltip(x, y) {
-        // Store the selected text before showing (selection may change)
-        const selection = window.getSelection();
-        this.pendingSelectedText = selection.toString().trim();
-        
         this.branchTooltip.style.display = 'block';
         this.branchTooltip.style.left = `${x}px`;
         this.branchTooltip.style.top = `${y}px`;
-        
-        // Focus the input field
-        const input = this.branchTooltip.querySelector('.reply-tooltip-input');
-        // Use setTimeout to ensure the tooltip is visible before focusing
-        setTimeout(() => input.focus(), 10);
     }
     
     /**
-     * Hide the reply tooltip
+     * Hide the branch tooltip
      */
     hideBranchTooltip() {
         this.branchTooltip.style.display = 'none';
         this.activeSelectionNodeId = null;
-        this.pendingSelectedText = null;
-        // Clear the input
-        const input = this.branchTooltip.querySelector('.reply-tooltip-input');
-        if (input) input.value = '';
     }
     
     /**
@@ -184,11 +133,11 @@ class Canvas {
         // Double-click to fit
         this.container.addEventListener('dblclick', this.handleDoubleClick.bind(this));
         
-        // Text selection handling for reply tooltip
+        // Text selection handling for branch tooltip
         document.addEventListener('selectionchange', this.handleSelectionChange.bind(this));
         document.addEventListener('mousedown', (e) => {
             // Hide tooltip when clicking outside of it
-            if (!e.target.closest('.reply-tooltip')) {
+            if (!e.target.closest('.branch-tooltip')) {
                 this.hideBranchTooltip();
             }
         });

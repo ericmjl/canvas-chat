@@ -580,16 +580,15 @@ html, body {
     pointer-events: none;
 }
 
-/* Reply Tooltip - floating tooltip on text selection */
-.reply-tooltip {
+/* Branch Tooltip - floating tooltip on text selection */
+.branch-tooltip {
     position: fixed;
     z-index: 10000;
     background: var(--bg-primary);
     border: 1px solid var(--edge-color-light);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
-    padding: 8px;
-    min-width: 280px;
+    padding: 4px;
     animation: tooltipFadeIn 0.15s ease-out;
 }
 
@@ -604,63 +603,29 @@ html, body {
     }
 }
 
-.reply-tooltip-header {
-    margin-bottom: 8px;
-}
-
-.reply-tooltip-label {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-muted);
-}
-
-.reply-tooltip-input-row {
-    display: flex;
-    gap: 6px;
-}
-
-.reply-tooltip-input {
-    flex: 1;
-    padding: 8px 10px;
-    border: 1px solid var(--bg-secondary);
-    border-radius: var(--radius-sm);
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 13px;
-    outline: none;
-}
-
-.reply-tooltip-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--selection-bg);
-}
-
-.reply-tooltip-input::placeholder {
-    color: var(--text-muted);
-}
-
-.reply-tooltip-btn {
+.branch-tooltip-btn {
     display: flex;
     align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    background: var(--accent);
-    border: none;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--node-highlight);
+    border: 1px solid var(--node-highlight-border);
     border-radius: var(--radius-sm);
-    font-size: 16px;
-    color: white;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
     cursor: pointer;
     transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
 }
 
-.reply-tooltip-btn:hover {
-    background: var(--accent-hover, #4a90d9);
-    transform: scale(1.05);
+.branch-tooltip-btn:hover {
+    background: var(--node-highlight-border);
+    transform: scale(1.02);
 }
 
-.reply-tooltip-btn:active {
-    transform: scale(0.95);
+.branch-tooltip-btn:active {
+    transform: scale(0.98);
 }
 
 /* Node Header */
