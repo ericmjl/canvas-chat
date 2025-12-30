@@ -237,6 +237,7 @@ class App {
         this.canvas.onNodeReply = this.handleNodeReply.bind(this);
         this.canvas.onNodeBranch = this.handleNodeBranch.bind(this);
         this.canvas.onNodeSummarize = this.handleNodeSummarize.bind(this);
+        this.canvas.onNodeFetchSummarize = this.handleNodeFetchSummarize.bind(this);
         this.canvas.onNodeDelete = this.handleNodeDelete.bind(this);
         this.canvas.onNodeTitleEdit = this.handleNodeTitleEdit.bind(this);
         
@@ -1726,6 +1727,103 @@ class App {
             this.canvas.updateNodeContent(summaryNode.id, `Error: ${err.message}`, false);
             this.graph.updateNode(summaryNode.id, { content: `Error: ${err.message}` });
         }
+    }
+
+    /**
+     * Handle fetching full content from a Reference node URL and summarizing it
+     */
+    async handleNodeFetchSummarize(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node || node.type !== NodeType.REFERENCE) return;
+        
+        // Extract URL from the node content (format: **[Title](url)**)
+        const url = this.extractUrlFromReferenceNode(node.content);
+        if (!url) {
+            alert('Could not extract URL from this reference node.');
+            return;
+        }
+        
+        // Check for Exa API key
+        const exaKey = storage.getExaApiKey();
+        if (!exaKey) {
+            alert('Please set your Exa API key in Settings to fetch content.');
+            this.showSettingsModal();
+            return;
+        }
+        
+        const model = this.modelPicker.value;
+        
+        // Create summary node
+        const summaryNode = createNode(NodeType.SUMMARY, 'Fetching content...', {
+            position: {
+                x: node.position.x + 400,
+                y: node.position.y
+            }
+        });
+        
+        this.graph.addNode(summaryNode);
+        this.canvas.renderNode(summaryNode);
+        
+        const edge = createEdge(nodeId, summaryNode.id, EdgeType.REFERENCE);
+        this.graph.addEdge(edge);
+        this.canvas.renderEdge(edge, node.position, summaryNode.position);
+        
+        try {
+            // Fetch content from URL via Exa
+            this.canvas.updateNodeContent(summaryNode.id, 'Fetching content from URL...', true);
+            
+            const response = await fetch('/api/exa/get-contents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: url,
+                    api_key: exaKey
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to fetch content');
+            }
+            
+            const contentData = await response.json();
+            
+            if (!contentData.text || contentData.text.trim().length === 0) {
+                throw new Error('No text content found at this URL');
+            }
+            
+            // Now summarize the content with LLM
+            this.canvas.updateNodeContent(summaryNode.id, 'Summarizing content...', true);
+            
+            const messages = [
+                { role: 'user', content: `Please provide a comprehensive summary of the following article:\n\n**${contentData.title}**\n\n${contentData.text}` }
+            ];
+            
+            const summary = await chat.summarize(messages, model);
+            
+            // Add source attribution
+            const fullSummary = `**Summary of: [${contentData.title}](${url})**\n\n${summary}`;
+            
+            this.canvas.updateNodeContent(summaryNode.id, fullSummary, false);
+            this.graph.updateNode(summaryNode.id, { content: fullSummary });
+            this.saveSession();
+            
+        } catch (err) {
+            this.canvas.updateNodeContent(summaryNode.id, `Error: ${err.message}`, false);
+            this.graph.updateNode(summaryNode.id, { content: `Error: ${err.message}` });
+        }
+    }
+
+    /**
+     * Extract URL from Reference node content (format: **[Title](url)**)
+     */
+    extractUrlFromReferenceNode(content) {
+        // Match markdown link pattern: [text](url)
+        const match = content.match(/\[([^\]]+)\]\(([^)]+)\)/);
+        if (match && match[2]) {
+            return match[2];
+        }
+        return null;
     }
 
     handleNodeSelect(selectedIds) {

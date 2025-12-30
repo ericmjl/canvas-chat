@@ -110,6 +110,23 @@ class ExaResearchRequest(BaseModel):
     model: str = "exa-research"  # "exa-research" or "exa-research-pro"
 
 
+class ExaGetContentsRequest(BaseModel):
+    """Request body for Exa get-contents endpoint."""
+
+    url: str
+    api_key: str
+
+
+class ExaContentsResult(BaseModel):
+    """Result from Exa get-contents."""
+
+    title: str
+    url: str
+    text: str
+    published_date: Optional[str] = None
+    author: Optional[str] = None
+
+
 class ProviderModelsRequest(BaseModel):
     """Request body for fetching models from a provider."""
 
@@ -861,6 +878,47 @@ async def exa_research(request: ExaResearchRequest):
             yield {"event": "error", "data": str(e)}
 
     return EventSourceResponse(generate())
+
+
+@app.post("/api/exa/get-contents")
+async def exa_get_contents(request: ExaGetContentsRequest):
+    """
+    Fetch the full page contents from a URL using Exa's get-contents API.
+
+    Returns the page text, title, and metadata.
+    """
+    logger.info(f"Exa get-contents request: url='{request.url}'")
+
+    try:
+        exa = Exa(api_key=request.api_key)
+
+        # Fetch contents for the URL
+        logger.info("Calling Exa get_contents...")
+        results = exa.get_contents(
+            urls=[request.url],
+            text={"max_characters": 10000},  # Get substantial text for summarization
+        )
+
+        if not results.results:
+            raise HTTPException(status_code=404, detail="No content found for URL")
+
+        result = results.results[0]
+        logger.info(f"Got content for: {result.title}")
+
+        return ExaContentsResult(
+            title=result.title or "Untitled",
+            url=result.url,
+            text=result.text or "",
+            published_date=result.published_date,
+            author=result.author,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Exa get-contents failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # --- Matrix Endpoints ---

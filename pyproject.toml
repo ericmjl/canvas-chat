@@ -10,7 +10,7 @@ dependencies = [
     "litellm>=1.50.0",
     "llamabot>=0.17.0",
     "pydantic>=2.0.0",
-    "sse-starlette>=2.0.0", "exa-py>=2.0.2,<3", "modal>=1.3.0.post1,<2", "httpx>=0.28.1,<0.29",
+    "sse-starlette>=2.0.0", "exa-py>=2.0.2,<3", "modal>=1.3.0.post1,<2", "httpx>=0.28.1,<0.29", "pytest>=9.0.2,<10",
 ]
 
 [project.optional-dependencies]
@@ -38,3 +38,5 @@ canvas-chat = { path = ".", editable = true }
 dev = "uvicorn app:app --reload --port 7865"
 modal-serve = "modal serve modal_app.py"
 modal-deploy = "modal deploy modal_app.py"
+test = "pytest tests/ -v"
+test-js = "node tests/test_utils.js"

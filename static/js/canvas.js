@@ -38,6 +38,7 @@ class Canvas {
         this.onNodeReply = null;
         this.onNodeBranch = null;
         this.onNodeSummarize = null;
+        this.onNodeFetchSummarize = null;
         this.onNodeDelete = null;
         this.onNodeTitleEdit = null;  // For editing node title in semantic zoom
         
@@ -708,6 +709,7 @@ class Canvas {
                 <div class="node-actions">
                     <button class="node-action reply-btn" title="Reply">↩️ Reply</button>
                     ${node.type === NodeType.AI ? '<button class="node-action summarize-btn" title="Summarize">📝 Summarize</button>' : ''}
+                    ${node.type === NodeType.REFERENCE ? '<button class="node-action fetch-summarize-btn" title="Fetch full content and summarize">📄 Fetch & Summarize</button>' : ''}
                     <button class="node-action copy-btn" title="Copy content">📋 Copy</button>
                 </div>
                 <div class="resize-handle resize-e" data-resize="e"></div>
@@ -854,6 +856,7 @@ class Canvas {
         // Action buttons
         const replyBtn = div.querySelector('.reply-btn');
         const summarizeBtn = div.querySelector('.summarize-btn');
+        const fetchSummarizeBtn = div.querySelector('.fetch-summarize-btn');
         const deleteBtn = div.querySelector('.delete-btn');
         
         if (replyBtn) {
@@ -867,6 +870,13 @@ class Canvas {
             summarizeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onNodeSummarize) this.onNodeSummarize(node.id);
+            });
+        }
+        
+        if (fetchSummarizeBtn) {
+            fetchSummarizeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.onNodeFetchSummarize) this.onNodeFetchSummarize(node.id);
             });
         }
         

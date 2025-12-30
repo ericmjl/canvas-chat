@@ -44,6 +44,15 @@ Run the dev server with `pixi run dev` before testing UI changes.
 **Important:** Never kill the dev server process. The developer runs it in reload mode,
 so code changes are automatically picked up. Just make your edits and the server will reload.
 
+### Unit tests
+
+Write unit tests for logic that does not require API calls:
+
+- **Python**: Test pure functions, data transformations, parsing logic
+- **JavaScript**: Test graph algorithms, node/edge operations, utility functions
+
+Do not write tests that require external API calls (LLM, Exa, etc.) - these are tested manually.
+
 ## Modal Deployment
 
 ### Architecture: Bring Your Own Keys
