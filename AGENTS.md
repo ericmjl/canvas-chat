@@ -31,3 +31,51 @@ Do not mix documentation types. Each document should serve one purpose.
 ## Testing
 
 Run the dev server with `pixi run dev` before testing UI changes.
+
+## Modal Deployment
+
+### Architecture: Bring Your Own Keys
+
+This app uses a **local-first architecture** where users provide their own API keys
+via the settings panel in the UI. Keys are stored in the browser's localStorage and
+sent with each request. **No server-side secrets are required for deployment.**
+
+### Automatic Deployment (CI/CD)
+
+The app is automatically deployed to Modal on every push to `main` via GitHub Actions.
+The workflow is defined in `.github/workflows/modal-deploy.yaml`.
+
+### GitHub Actions Secrets Required
+
+The CI/CD workflow requires these secrets in GitHub Actions:
+
+- `MODAL_TOKEN_ID` - Modal token ID
+- `MODAL_TOKEN_SECRET` - Modal token secret
+
+Set them using the GitHub CLI:
+
+```bash
+gh secret set MODAL_TOKEN_ID --body "$MODAL_TOKEN_ID"
+gh secret set MODAL_TOKEN_SECRET --body "$MODAL_TOKEN_SECRET"
+```
+
+### Important: API Keys Policy
+
+**Do NOT store API keys in Modal secrets for this app.**
+Users bring their own keys via the UI settings panel. This design:
+
+- Prevents unauthorized usage of personal API quotas
+- Keeps the deployment simple (no secrets to manage)
+- Gives users full control over their API usage
+
+### Manual Deployment
+
+For local testing or manual deployment:
+
+```bash
+# Test locally with live reload
+pixi run modal serve modal_app.py
+
+# Deploy to Modal
+pixi run modal deploy modal_app.py
+```

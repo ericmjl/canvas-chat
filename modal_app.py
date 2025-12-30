@@ -1,0 +1,49 @@
+"""
+Modal deployment for Canvas Chat.
+
+Deploy with:
+    modal deploy modal_app.py
+
+Run locally with Modal:
+    modal serve modal_app.py
+
+Note: This app uses a local-first architecture where users provide their own
+API keys via the UI. No server-side secrets are required.
+"""
+
+import modal
+
+# Create the Modal app
+app = modal.App("canvas-chat")
+
+# Define the image with all dependencies
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install(
+        "fastapi[standard]>=0.115.0",
+        "uvicorn>=0.32.0",
+        "litellm>=1.50.0",
+        "sse-starlette>=2.0.0",
+        "pydantic>=2.0.0",
+        "exa-py>=1.0.0",
+    )
+    .add_local_dir("static", remote_path="/app/static")
+    .add_local_file("app.py", remote_path="/app/app.py")
+)
+
+
+@app.function(
+    image=image,
+    scaledown_window=300,
+)
+@modal.concurrent(max_inputs=100)
+@modal.asgi_app()
+def fastapi_app():
+    """Serve the FastAPI application."""
+    import sys
+
+    sys.path.insert(0, "/app")
+
+    from app import app as canvas_app
+
+    return canvas_app
