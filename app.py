@@ -778,6 +778,85 @@ async def estimate_tokens(text: str, model: str = "openai/gpt-4o"):
         return {"tokens": len(text) // 4, "model": model, "estimated": True}
 
 
+class GenerateSearchQueryRequest(BaseModel):
+    """Request body for generating a contextual search query."""
+
+    user_query: str  # What the user typed (e.g., "how does this work?")
+    context: str  # The context from selected text or parent nodes
+    model: str = "openai/gpt-4o-mini"
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+
+
+@app.post("/api/generate-search-query")
+async def generate_search_query(request: GenerateSearchQueryRequest):
+    """
+    Use an LLM to generate an effective search query from user input and context.
+
+    This resolves pronouns and vague references like "how does this work?"
+    into specific, searchable queries based on the surrounding context.
+    """
+    logger.info(
+        f"Generate search query: user_query='{request.user_query}', context_length={len(request.context)}"
+    )
+
+    provider = extract_provider(request.model)
+
+    system_prompt = """You are a search query optimizer. Given a user's question and the context it refers to, generate an effective web search query.
+
+Rules:
+- Return ONLY the search query text, nothing else
+- Resolve any pronouns or vague references (like "this", "it", "that") using the context
+- Make the query specific and searchable
+- Include key technical terms from the context
+- Keep it concise (under 15 words typically)
+- Do not include quotes around the query
+
+Examples:
+- User: "how does this work?" Context: "Toffoli Gate (CCNOT)..." → "how Toffoli gate CCNOT quantum computing works"
+- User: "explain this better" Context: "gradient descent optimization..." → "gradient descent optimization algorithm explained"
+- User: "what are alternatives?" Context: "React framework..." → "React framework alternatives comparison" """
+
+    try:
+        kwargs = {
+            "model": request.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": f"User query: {request.user_query}\n\nContext:\n{request.context[:2000]}",
+                },
+            ],
+            "temperature": 0.3,
+            "max_tokens": 100,
+        }
+
+        # Add API key if provided
+        if request.api_key:
+            kwargs["api_key"] = request.api_key
+        if request.base_url:
+            kwargs["base_url"] = request.base_url
+
+        response = await litellm.acompletion(**kwargs)
+        search_query = response.choices[0].message.content.strip()
+
+        # Remove quotes if the LLM wrapped the query in them
+        if search_query.startswith('"') and search_query.endswith('"'):
+            search_query = search_query[1:-1]
+
+        logger.info(f"Generated search query: '{search_query}'")
+        return {"original_query": request.user_query, "search_query": search_query}
+
+    except Exception as e:
+        logger.error(f"Failed to generate search query: {e}")
+        logger.error(traceback.format_exc())
+        # Fall back to the original query if LLM fails
+        return {
+            "original_query": request.user_query,
+            "search_query": request.user_query,
+        }
+
+
 @app.post("/api/exa/search")
 async def exa_search(request: ExaSearchRequest):
     """

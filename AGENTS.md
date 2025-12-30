@@ -19,6 +19,49 @@ Do not mix documentation types. Each document should serve one purpose.
 - Prefer simple, greedy algorithms over complex optimal solutions
 - Local-first: no server-side user data storage
 
+## Architecture patterns
+
+### API key access
+
+Always use `chat.getApiKeyForModel(model)` to get API keys for LLM calls.
+Do NOT use `storage.getApiKey()` - it doesn't exist.
+
+```javascript
+const model = this.modelPicker.value;
+const apiKey = chat.getApiKeyForModel(model);
+```
+
+For Exa API key specifically, use `storage.getExaApiKey()`.
+
+### Canvas callbacks
+
+The Canvas class uses a callback pattern for node interactions.
+To add a new node action:
+
+1. Add callback property in `canvas.js` constructor: `this.onNodeXxx = null;`
+2. Add button in `renderNode()` template (conditionally by node type if needed)
+3. Add event listener in `setupNodeEvents()` that calls `this.onNodeXxx`
+4. Bind handler in `app.js`: `this.canvas.onNodeXxx = this.handleNodeXxx.bind(this);`
+5. Implement `handleNodeXxx(nodeId)` method in App class
+
+### Slash commands
+
+Slash commands are defined in `SLASH_COMMANDS` array and handled by `tryHandleSlashCommand()`.
+
+To add a new slash command:
+
+1. Add to `SLASH_COMMANDS` array with `command`, `description`, `placeholder`
+2. Add handler check in `tryHandleSlashCommand(content, context)`
+3. Implement `handleXxx()` method
+
+The `context` parameter provides surrounding text for contextual commands (e.g., selected text).
+This enables the LLM to resolve vague references like "how does this work?" into specific queries.
+
+### Variable naming in handleSend
+
+The `handleSend()` method uses `context` for LLM conversation context (line ~748).
+If you need a variable for slash command context, use `slashContext` to avoid collision.
+
 ## Design standards
 
 - New features must be coherent with existing design patterns and visual language
@@ -52,6 +95,25 @@ Write unit tests for logic that does not require API calls:
 - **JavaScript**: Test graph algorithms, node/edge operations, utility functions
 
 Do not write tests that require external API calls (LLM, Exa, etc.) - these are tested manually.
+
+Run tests with:
+
+```bash
+pixi run test      # Python tests
+pixi run test-js   # JavaScript tests
+```
+
+### Syntax checking
+
+Always check JavaScript for syntax errors before considering a change complete:
+
+```bash
+node --check static/js/app.js
+```
+
+Common issues to watch for:
+- Variable name collisions (e.g., reusing `context` in different scopes)
+- Missing imports or incorrect function names
 
 ## Modal Deployment
 

@@ -627,13 +627,15 @@ class App {
     /**
      * Try to handle content as a slash command.
      * Returns true if it was a slash command and was handled, false otherwise.
+     * @param {string} content - The user input
+     * @param {string} context - Optional context for contextual commands (e.g., selected text)
      */
-    async tryHandleSlashCommand(content) {
+    async tryHandleSlashCommand(content, context = null) {
         // Check for /search command
         if (content.startsWith('/search ')) {
             const query = content.slice(8).trim();
             if (query) {
-                await this.handleSearch(query);
+                await this.handleSearch(query, context);
                 return true;
             }
         }
@@ -663,8 +665,19 @@ class App {
         const content = this.chatInput.value.trim();
         if (!content) return;
         
-        // Try slash commands first
-        if (await this.tryHandleSlashCommand(content)) {
+        // Try slash commands first, with context from selected nodes if any
+        const selectedIds = this.canvas.getSelectedNodeIds();
+        let slashContext = null;
+        if (selectedIds.length > 0) {
+            // Gather content from selected nodes as context
+            const contextParts = selectedIds.map(id => {
+                const node = this.graph.getNode(id);
+                return node ? node.content : '';
+            }).filter(c => c);
+            slashContext = contextParts.join('\n\n');
+        }
+        
+        if (await this.tryHandleSlashCommand(content, slashContext)) {
             this.chatInput.value = '';
             this.chatInput.style.height = 'auto';
             return;
@@ -763,7 +776,12 @@ class App {
         );
     }
 
-    async handleSearch(query) {
+    /**
+     * Handle search command.
+     * @param {string} query - The user's search query
+     * @param {string} context - Optional context to help refine the query (e.g., selected text)
+     */
+    async handleSearch(query, context = null) {
         // Get Exa API key
         const exaKey = storage.getExaApiKey();
         if (!exaKey) {
@@ -782,7 +800,7 @@ class App {
             }
         }
         
-        // Create search node
+        // Create search node with original query initially
         const searchNode = createNode(NodeType.SEARCH, `Searching: "${query}"`, {
             position: this.graph.autoPosition(parentIds)
         });
@@ -809,12 +827,40 @@ class App {
         );
         
         try {
-            // Call Exa API
+            let effectiveQuery = query;
+            
+            // If context is provided, use LLM to generate a better search query
+            if (context && context.trim()) {
+                this.canvas.updateNodeContent(searchNode.id, `Refining search query...`, true);
+                
+                const model = this.modelPicker.value;
+                const apiKey = chat.getApiKeyForModel(model);
+                
+                const refineResponse = await fetch('/api/generate-search-query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_query: query,
+                        context: context,
+                        model: model,
+                        api_key: apiKey
+                    })
+                });
+                
+                if (refineResponse.ok) {
+                    const refineData = await refineResponse.json();
+                    effectiveQuery = refineData.search_query;
+                    // Update node to show what we're actually searching for
+                    this.canvas.updateNodeContent(searchNode.id, `Searching: "${effectiveQuery}"`, true);
+                }
+            }
+            
+            // Call Exa API with the (potentially refined) query
             const response = await fetch('/api/exa/search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    query: query,
+                    query: effectiveQuery,
                     api_key: exaKey,
                     num_results: 5
                 })
@@ -826,8 +872,13 @@ class App {
             
             const data = await response.json();
             
-            // Update search node with result count
-            const searchContent = `**Search:** "${query}"\n\n*Found ${data.num_results} results*`;
+            // Update search node with result count (show both original and effective query if different)
+            let searchContent;
+            if (effectiveQuery !== query) {
+                searchContent = `**Search:** "${query}"\n*Searched for: "${effectiveQuery}"*\n\n*Found ${data.num_results} results*`;
+            } else {
+                searchContent = `**Search:** "${query}"\n\n*Found ${data.num_results} results*`;
+            }
             this.canvas.updateNodeContent(searchNode.id, searchContent, false);
             this.graph.updateNode(searchNode.id, { content: searchContent });
             
@@ -1608,8 +1659,8 @@ class App {
                 this.canvas.clearSelection();
                 this.canvas.selectNode(highlightNode.id);
                 
-                // Try slash commands first
-                if (await this.tryHandleSlashCommand(content)) {
+                // Try slash commands first, passing selectedText as context
+                if (await this.tryHandleSlashCommand(content, selectedText)) {
                     return;
                 }
                 
