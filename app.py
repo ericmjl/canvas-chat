@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 import litellm
+import httpx
 from exa_py import Exa
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -201,19 +202,6 @@ MODEL_REGISTRY: list[dict] = [
         "provider": "Google",
         "context_window": 1000000,
     },
-    # Ollama (local)
-    {
-        "id": "ollama_chat/llama3.1",
-        "name": "Llama 3.1 (Local)",
-        "provider": "Ollama",
-        "context_window": 128000,
-    },
-    {
-        "id": "ollama_chat/mistral",
-        "name": "Mistral (Local)",
-        "provider": "Ollama",
-        "context_window": 32000,
-    },
     # Groq
     {
         "id": "groq/llama-3.1-70b-versatile",
@@ -230,52 +218,27 @@ MODEL_REGISTRY: list[dict] = [
     # GitHub Models (requires GitHub PAT with models:read scope)
     {
         "id": "github/gpt-4o",
-        "name": "GPT-4o (GitHub)",
+        "name": "GPT-4o",
         "provider": "GitHub",
         "context_window": 128000,
     },
     {
         "id": "github/gpt-4o-mini",
-        "name": "GPT-4o Mini (GitHub)",
+        "name": "GPT-4o Mini",
         "provider": "GitHub",
         "context_window": 128000,
     },
     {
         "id": "github/Llama-3.3-70B-Instruct",
-        "name": "Llama 3.3 70B (GitHub)",
+        "name": "Llama 3.3 70B",
         "provider": "GitHub",
         "context_window": 128000,
     },
     {
         "id": "github/DeepSeek-R1",
-        "name": "DeepSeek R1 (GitHub)",
+        "name": "DeepSeek R1",
         "provider": "GitHub",
         "context_window": 64000,
-    },
-    # GitHub Copilot (requires active Copilot subscription)
-    {
-        "id": "github_copilot/gpt-4",
-        "name": "GPT-4 (Copilot)",
-        "provider": "GitHub Copilot",
-        "context_window": 128000,
-    },
-    {
-        "id": "github_copilot/claude-3.5-sonnet",
-        "name": "Claude 3.5 Sonnet (Copilot)",
-        "provider": "GitHub Copilot",
-        "context_window": 200000,
-    },
-    {
-        "id": "github_copilot/claude-sonnet-4",
-        "name": "Claude Sonnet 4 (Copilot)",
-        "provider": "GitHub Copilot",
-        "context_window": 200000,
-    },
-    {
-        "id": "github_copilot/claude-opus-4",
-        "name": "Claude Opus 4 (Copilot)",
-        "provider": "GitHub Copilot",
-        "context_window": 200000,
     },
 ]
 
@@ -320,6 +283,36 @@ def add_copilot_headers(kwargs: dict, model: str) -> dict:
     return kwargs
 
 
+OLLAMA_BASE_URL = "http://localhost:11434"
+
+
+async def fetch_ollama_models() -> list[dict]:
+    """Fetch available models from local Ollama instance."""
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            if response.status_code == 200:
+                data = response.json()
+                models = []
+                for model in data.get("models", []):
+                    name = model.get("name", "")
+                    # Clean up model name for display (remove :latest suffix)
+                    display_name = name.replace(":latest", "")
+                    models.append(
+                        {
+                            "id": f"ollama_chat/{name}",
+                            "name": display_name,
+                            "provider": "Ollama",
+                            "context_window": 128000,  # Default, varies by model
+                        }
+                    )
+                return models
+    except (httpx.RequestError, httpx.TimeoutException):
+        # Ollama not running or not accessible
+        pass
+    return []
+
+
 # --- Routes ---
 
 
@@ -332,8 +325,15 @@ async def root():
 
 @app.get("/api/models")
 async def list_models() -> list[ModelInfo]:
-    """List available models."""
-    return [ModelInfo(**m) for m in MODEL_REGISTRY]
+    """List available models, including dynamically fetched Ollama models."""
+    # Start with static registry models
+    models = [ModelInfo(**m) for m in MODEL_REGISTRY]
+
+    # Fetch Ollama models dynamically
+    ollama_models = await fetch_ollama_models()
+    models.extend([ModelInfo(**m) for m in ollama_models])
+
+    return models
 
 
 @app.post("/api/chat")

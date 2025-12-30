@@ -32,6 +32,9 @@ Do not mix documentation types. Each document should serve one purpose.
 
 Run the dev server with `pixi run dev` before testing UI changes.
 
+**Important:** Never kill the dev server process. The developer runs it in reload mode,
+so code changes are automatically picked up. Just make your edits and the server will reload.
+
 ## Modal Deployment
 
 ### Architecture: Bring Your Own Keys

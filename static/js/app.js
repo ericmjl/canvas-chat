@@ -60,21 +60,38 @@ class App {
     }
 
     async loadModels() {
-        const models = await chat.fetchModels();
+        const allModels = await chat.fetchModels();
+        
+        // Filter models to only show those with available API keys
+        const availableModels = allModels.filter(model => 
+            storage.hasApiKeyForProvider(model.provider)
+        );
         
         // Populate model picker
         this.modelPicker.innerHTML = '';
-        for (const model of models) {
-            const option = document.createElement('option');
-            option.value = model.id;
-            option.textContent = `${model.name} (${model.provider})`;
-            this.modelPicker.appendChild(option);
-        }
         
-        // Restore last selected model
-        const savedModel = storage.getCurrentModel();
-        if (savedModel && models.find(m => m.id === savedModel)) {
-            this.modelPicker.value = savedModel;
+        if (availableModels.length === 0) {
+            // No API keys configured - show hint
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'Configure API keys in Settings ⚙️';
+            option.disabled = true;
+            this.modelPicker.appendChild(option);
+            this.modelPicker.classList.add('no-keys');
+        } else {
+            this.modelPicker.classList.remove('no-keys');
+            for (const model of availableModels) {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = `${model.name} (${model.provider})`;
+                this.modelPicker.appendChild(option);
+            }
+            
+            // Restore last selected model (if still available)
+            const savedModel = storage.getCurrentModel();
+            if (savedModel && availableModels.find(m => m.id === savedModel)) {
+                this.modelPicker.value = savedModel;
+            }
         }
     }
 
@@ -1853,6 +1870,9 @@ class App {
         // Save base URL
         const baseUrl = document.getElementById('base-url').value.trim();
         storage.setBaseUrl(baseUrl);
+        
+        // Reload models to reflect newly configured API keys
+        this.loadModels();
         
         this.hideSettingsModal();
     }

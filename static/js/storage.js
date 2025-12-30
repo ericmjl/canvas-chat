@@ -223,6 +223,72 @@ class Storage {
     }
 
     /**
+     * Check if a provider has an API key configured or doesn't need one
+     * @param {string} provider - Provider name from model registry
+     * @returns {boolean} - True if model can be used
+     */
+    hasApiKeyForProvider(provider) {
+        const normalizedProvider = provider.toLowerCase();
+        
+        // Ollama is only available on localhost (local models, no API key needed)
+        if (normalizedProvider === 'ollama') {
+            return this.isLocalhost();
+        }
+        
+        // Map display provider names to storage keys
+        const providerToStorageKey = {
+            'openai': 'openai',
+            'anthropic': 'anthropic',
+            'google': 'google',
+            'groq': 'groq',
+            'github': 'github'
+        };
+        
+        const storageKey = providerToStorageKey[normalizedProvider];
+        if (!storageKey) {
+            return false;
+        }
+        
+        const keys = this.getApiKeys();
+        return !!keys[storageKey];
+    }
+
+    /**
+     * Check if the app is running on localhost
+     * @returns {boolean} - True if running locally
+     */
+    isLocalhost() {
+        const hostname = window.location.hostname;
+        return hostname === 'localhost' || 
+               hostname === '127.0.0.1' || 
+               hostname === '0.0.0.0' ||
+               hostname === '[::1]';
+    }
+
+    /**
+     * Get list of providers that have API keys configured
+     * @returns {string[]} - List of provider names with keys
+     */
+    getConfiguredProviders() {
+        const keys = this.getApiKeys();
+        const configured = [];
+        
+        // Include Ollama if on localhost
+        if (this.isLocalhost()) {
+            configured.push('Ollama');
+        }
+        
+        // Check each provider
+        if (keys.openai) configured.push('OpenAI');
+        if (keys.anthropic) configured.push('Anthropic');
+        if (keys.google) configured.push('Google');
+        if (keys.groq) configured.push('Groq');
+        if (keys.github) configured.push('GitHub');
+        
+        return configured;
+    }
+
+    /**
      * Get Exa API key
      */
     getExaApiKey() {

@@ -229,6 +229,13 @@ html, body {
     box-shadow: 0 0 0 2px var(--selection-bg);
 }
 
+.model-picker.no-keys {
+    border-color: var(--warning, #f59e0b);
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning, #f59e0b);
+    font-style: italic;
+}
+
 /* Layout Controls */
 .layout-controls {
     display: flex;
