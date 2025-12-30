@@ -27,6 +27,28 @@ class Chat {
     }
 
     /**
+     * Fetch models available for a specific provider using an API key
+     * @param {string} provider - Provider name (openai, anthropic, google, groq, github)
+     * @param {string} apiKey - The API key for the provider
+     * @returns {Promise<Array>} - List of available models
+     */
+    async fetchProviderModels(provider, apiKey) {
+        try {
+            const response = await fetch('/api/provider-models', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider, api_key: apiKey })
+            });
+            if (response.ok) {
+                return await response.json();
+            }
+        } catch (err) {
+            console.error(`Failed to fetch ${provider} models:`, err);
+        }
+        return [];
+    }
+
+    /**
      * Get API key for the current model's provider
      */
     getApiKeyForModel(model) {

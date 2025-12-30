@@ -110,6 +110,13 @@ class ExaResearchRequest(BaseModel):
     model: str = "exa-research"  # "exa-research" or "exa-research-pro"
 
 
+class ProviderModelsRequest(BaseModel):
+    """Request body for fetching models from a provider."""
+
+    provider: str  # "openai", "anthropic", "google", "groq", "github"
+    api_key: str
+
+
 # --- Model Registry ---
 
 # Common models with their context windows
@@ -313,6 +320,257 @@ async def fetch_ollama_models() -> list[dict]:
     return []
 
 
+# Provider-specific model fetching functions
+PROVIDER_ENDPOINTS = {
+    "openai": "https://api.openai.com/v1/models",
+    "groq": "https://api.groq.com/openai/v1/models",
+    "github": "https://models.inference.ai.azure.com/models",
+}
+
+# Context windows for known models (used as fallback)
+KNOWN_CONTEXT_WINDOWS = {
+    "gpt-4o": 128000,
+    "gpt-4o-mini": 128000,
+    "gpt-4-turbo": 128000,
+    "gpt-4": 8192,
+    "gpt-3.5-turbo": 16385,
+    "claude-3": 200000,
+    "claude-3.5": 200000,
+    "claude-sonnet-4": 200000,
+    "claude-opus-4": 200000,
+    "gemini-1.5": 2000000,
+    "gemini-2": 1000000,
+    "llama": 128000,
+    "mixtral": 32768,
+}
+
+
+def get_context_window(model_id: str) -> int:
+    """Estimate context window for a model based on known patterns."""
+    model_lower = model_id.lower()
+    for pattern, ctx in KNOWN_CONTEXT_WINDOWS.items():
+        if pattern in model_lower:
+            return ctx
+    return 128000  # Default
+
+
+def is_chat_model(model_id: str) -> bool:
+    """Filter for models that support chat completions."""
+    model_lower = model_id.lower()
+    # Include chat-capable models
+    chat_patterns = [
+        "gpt-3.5",
+        "gpt-4",
+        "gpt-oss",
+        "chatgpt",
+        "claude",
+        "gemini",
+        "llama",
+        "mixtral",
+        "deepseek",
+        "qwen",
+        "compound",  # Groq compound models
+    ]
+    # Exclude non-chat models
+    exclude_patterns = [
+        "whisper",
+        "tts",
+        "dall-e",
+        "embedding",
+        "moderation",
+        "guard",  # Safety/guard models
+        "safeguard",
+        "realtime",  # Realtime API models
+        "audio",  # Audio models
+        "turbo-instruct",  # Legacy instruct models (not chat)
+        "image",  # Image generation models
+    ]
+
+    if any(exc in model_lower for exc in exclude_patterns):
+        return False
+    return any(pat in model_lower for pat in chat_patterns)
+
+
+async def fetch_openai_models(api_key: str) -> list[dict]:
+    """Fetch available models from OpenAI."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                PROVIDER_ENDPOINTS["openai"],
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                models = []
+                for m in data.get("data", []):
+                    model_id = m.get("id", "")
+                    if is_chat_model(model_id):
+                        models.append(
+                            {
+                                "id": f"openai/{model_id}",
+                                "name": model_id,
+                                "provider": "OpenAI",
+                                "context_window": get_context_window(model_id),
+                            }
+                        )
+                return models
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        logger.warning(f"Failed to fetch OpenAI models: {e}")
+    return []
+
+
+async def fetch_groq_models(api_key: str) -> list[dict]:
+    """Fetch available models from Groq."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                PROVIDER_ENDPOINTS["groq"],
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                models = []
+                for m in data.get("data", []):
+                    model_id = m.get("id", "")
+                    # Filter out non-chat models (TTS, whisper, guard, etc.)
+                    if not is_chat_model(model_id):
+                        continue
+                    models.append(
+                        {
+                            "id": f"groq/{model_id}",
+                            "name": model_id,
+                            "provider": "Groq",
+                            "context_window": m.get(
+                                "context_window", get_context_window(model_id)
+                            ),
+                        }
+                    )
+                return models
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        logger.warning(f"Failed to fetch Groq models: {e}")
+    return []
+
+
+async def fetch_github_models(api_key: str) -> list[dict]:
+    """Fetch available models from GitHub Models."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                PROVIDER_ENDPOINTS["github"],
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                models = []
+                for m in data if isinstance(data, list) else data.get("data", []):
+                    model_id = m.get("id", "") or m.get("name", "")
+                    if model_id:
+                        models.append(
+                            {
+                                "id": f"github/{model_id}",
+                                "name": model_id,
+                                "provider": "GitHub",
+                                "context_window": get_context_window(model_id),
+                            }
+                        )
+                return models
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        logger.warning(f"Failed to fetch GitHub models: {e}")
+    return []
+
+
+async def fetch_google_models(api_key: str) -> list[dict]:
+    """Fetch available models from Google AI."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"https://generativelanguage.googleapis.com/v1/models?key={api_key}",
+            )
+            if response.status_code == 200:
+                data = response.json()
+                models = []
+                for m in data.get("models", []):
+                    # Model name format: "models/gemini-1.5-pro"
+                    full_name = m.get("name", "")
+                    model_id = full_name.replace("models/", "")
+                    display_name = m.get("displayName", model_id)
+                    # Only include generative models
+                    if "generateContent" in m.get("supportedGenerationMethods", []):
+                        models.append(
+                            {
+                                "id": f"gemini/{model_id}",
+                                "name": display_name,
+                                "provider": "Google",
+                                "context_window": m.get("inputTokenLimit", 1000000),
+                            }
+                        )
+                return models
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        logger.warning(f"Failed to fetch Google models: {e}")
+    return []
+
+
+# Anthropic doesn't have a models list API, so we use a static list
+ANTHROPIC_MODELS = [
+    {
+        "id": "anthropic/claude-sonnet-4-5-20250929",
+        "name": "Claude Sonnet 4.5",
+        "provider": "Anthropic",
+        "context_window": 200000,
+    },
+    {
+        "id": "anthropic/claude-opus-4-5-20251101",
+        "name": "Claude Opus 4.5",
+        "provider": "Anthropic",
+        "context_window": 200000,
+    },
+    {
+        "id": "anthropic/claude-opus-4-20250514",
+        "name": "Claude Opus 4",
+        "provider": "Anthropic",
+        "context_window": 200000,
+    },
+    {
+        "id": "anthropic/claude-sonnet-4-20250514",
+        "name": "Claude Sonnet 4",
+        "provider": "Anthropic",
+        "context_window": 200000,
+    },
+    {
+        "id": "anthropic/claude-3-7-sonnet-20250219",
+        "name": "Claude 3.7 Sonnet",
+        "provider": "Anthropic",
+        "context_window": 200000,
+    },
+    {
+        "id": "anthropic/claude-3-5-sonnet-20241022",
+        "name": "Claude 3.5 Sonnet",
+        "provider": "Anthropic",
+        "context_window": 200000,
+    },
+    {
+        "id": "anthropic/claude-3-5-haiku-20241022",
+        "name": "Claude 3.5 Haiku",
+        "provider": "Anthropic",
+        "context_window": 200000,
+    },
+    {
+        "id": "anthropic/claude-3-opus-20240229",
+        "name": "Claude 3 Opus",
+        "provider": "Anthropic",
+        "context_window": 200000,
+    },
+]
+
+
+async def fetch_anthropic_models(api_key: str) -> list[dict]:
+    """Return static Anthropic models (no list API available)."""
+    # Verify the API key is valid by checking format
+    if api_key and api_key.startswith("sk-ant-"):
+        return ANTHROPIC_MODELS
+    return []
+
+
 # --- Routes ---
 
 
@@ -334,6 +592,33 @@ async def list_models() -> list[ModelInfo]:
     models.extend([ModelInfo(**m) for m in ollama_models])
 
     return models
+
+
+@app.post("/api/provider-models")
+async def get_provider_models(request: ProviderModelsRequest) -> list[ModelInfo]:
+    """Fetch available models from a specific provider using the provided API key."""
+    provider = request.provider.lower()
+    api_key = request.api_key
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail="API key is required")
+
+    models: list[dict] = []
+
+    if provider == "openai":
+        models = await fetch_openai_models(api_key)
+    elif provider == "anthropic":
+        models = await fetch_anthropic_models(api_key)
+    elif provider == "google":
+        models = await fetch_google_models(api_key)
+    elif provider == "groq":
+        models = await fetch_groq_models(api_key)
+    elif provider == "github":
+        models = await fetch_github_models(api_key)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+
+    return [ModelInfo(**m) for m in models]
 
 
 @app.post("/api/chat")

@@ -60,17 +60,47 @@ class App {
     }
 
     async loadModels() {
-        const allModels = await chat.fetchModels();
+        // Fetch models dynamically from each provider with configured API keys
+        const keys = storage.getApiKeys();
+        const allModels = [];
         
-        // Filter models to only show those with available API keys
-        const availableModels = allModels.filter(model => 
-            storage.hasApiKeyForProvider(model.provider)
-        );
+        // Providers to fetch from (provider name -> storage key)
+        const providers = [
+            { name: 'openai', key: keys.openai },
+            { name: 'anthropic', key: keys.anthropic },
+            { name: 'google', key: keys.google },
+            { name: 'groq', key: keys.groq },
+            { name: 'github', key: keys.github },
+        ];
+        
+        // Fetch models from all providers in parallel
+        const fetchPromises = providers
+            .filter(p => p.key) // Only providers with keys
+            .map(p => chat.fetchProviderModels(p.name, p.key));
+        
+        // Also fetch Ollama models if on localhost
+        if (storage.isLocalhost()) {
+            // Ollama models come from the static /api/models endpoint
+            fetchPromises.push(
+                chat.fetchModels().then(models => 
+                    models.filter(m => m.provider === 'Ollama')
+                )
+            );
+        }
+        
+        // Wait for all fetches to complete
+        const results = await Promise.all(fetchPromises);
+        for (const models of results) {
+            allModels.push(...models);
+        }
+        
+        // Update chat.models for context window lookups
+        chat.models = allModels;
         
         // Populate model picker
         this.modelPicker.innerHTML = '';
         
-        if (availableModels.length === 0) {
+        if (allModels.length === 0) {
             // No API keys configured - show hint
             const option = document.createElement('option');
             option.value = '';
@@ -80,7 +110,7 @@ class App {
             this.modelPicker.classList.add('no-keys');
         } else {
             this.modelPicker.classList.remove('no-keys');
-            for (const model of availableModels) {
+            for (const model of allModels) {
                 const option = document.createElement('option');
                 option.value = model.id;
                 option.textContent = `${model.name} (${model.provider})`;
@@ -89,7 +119,7 @@ class App {
             
             // Restore last selected model (if still available)
             const savedModel = storage.getCurrentModel();
-            if (savedModel && availableModels.find(m => m.id === savedModel)) {
+            if (savedModel && allModels.find(m => m.id === savedModel)) {
                 this.modelPicker.value = savedModel;
             }
         }
