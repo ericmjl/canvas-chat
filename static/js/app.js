@@ -926,18 +926,24 @@ class App {
             let cellContent = '';
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
+            let buffer = '';
             
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split('\n');
+                buffer += decoder.decode(value, { stream: true });
+                // Normalize CRLF to LF before parsing (SSE uses CRLF per HTTP spec)
+                buffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';  // Keep incomplete line in buffer
                 
                 for (const line of lines) {
                     if (line.startsWith('event:')) {
                         this._currentEvent = line.slice(6).trim();
                     } else if (line.startsWith('data:')) {
+                        // Don't trim - preserve spaces in token content
                         const data = line.slice(5);
                         const eventType = this._currentEvent || 'content';
                         
