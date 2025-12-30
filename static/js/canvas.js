@@ -83,8 +83,13 @@ class Canvas {
             this.submitReplyTooltip();
         });
         
-        // Handle submit via Enter key
+        // Handle submit via Enter key (but allow slash command menu to override)
         input.addEventListener('keydown', (e) => {
+            // Check if slash command menu should handle this
+            if (this.onReplyInputKeydown && this.onReplyInputKeydown(e)) {
+                return; // Slash command menu handled it
+            }
+            
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 this.submitReplyTooltip();
@@ -97,6 +102,16 @@ class Canvas {
         this.branchTooltip.addEventListener('mousedown', (e) => {
             e.stopPropagation();
         });
+        
+        // Store reference to input for external access
+        this.replyTooltipInput = input;
+    }
+    
+    /**
+     * Get the reply tooltip input element (for attaching slash command menu)
+     */
+    getReplyTooltipInput() {
+        return this.replyTooltipInput;
     }
     
     /**

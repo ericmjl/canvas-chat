@@ -2,6 +2,206 @@
  * Main application - ties together all modules
  */
 
+// Slash command definitions
+const SLASH_COMMANDS = [
+    { command: '/search', description: 'Search the web with Exa AI', placeholder: 'query' },
+    { command: '/research', description: 'Deep research with multiple sources', placeholder: 'topic' },
+    { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
+];
+
+/**
+ * Slash command autocomplete menu
+ */
+class SlashCommandMenu {
+    constructor() {
+        this.menu = null;
+        this.activeInput = null;
+        this.selectedIndex = 0;
+        this.visible = false;
+        this.filteredCommands = [];
+        this.onSelect = null; // Callback when command is selected
+        this.justSelected = false; // Flag to prevent immediate send after selection
+        
+        this.createMenu();
+    }
+    
+    createMenu() {
+        this.menu = document.createElement('div');
+        this.menu.className = 'slash-command-menu';
+        this.menu.style.display = 'none';
+        document.body.appendChild(this.menu);
+        
+        // Prevent clicks inside menu from blurring input
+        this.menu.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+        });
+    }
+    
+    /**
+     * Attach to an input element
+     */
+    attach(input, onSelect) {
+        this.onSelect = onSelect;
+        
+        // Store original placeholder for later reset
+        input.dataset.originalPlaceholder = input.placeholder;
+        
+        input.addEventListener('input', (e) => this.handleInput(e, input));
+        input.addEventListener('keydown', (e) => this.handleKeydown(e, input));
+        input.addEventListener('blur', () => {
+            // Delay hide to allow click on menu item
+            setTimeout(() => this.hide(), 150);
+        });
+    }
+    
+    handleInput(e, input) {
+        const value = input.value;
+        
+        // Clear the justSelected flag only on real user input (not programmatic)
+        if (!e._programmatic) {
+            this.justSelected = false;
+        }
+        
+        // Reset placeholder if input is empty or doesn't start with /
+        if (!value || !value.startsWith('/')) {
+            input.placeholder = input.dataset.originalPlaceholder || 'Type a message...';
+        }
+        
+        // Check if typing a slash command
+        if (value.startsWith('/')) {
+            const typed = value.split(' ')[0].toLowerCase(); // Just the command part
+            
+            // Filter commands that match
+            this.filteredCommands = SLASH_COMMANDS.filter(cmd => 
+                cmd.command.toLowerCase().startsWith(typed)
+            );
+            
+            if (this.filteredCommands.length > 0 && !value.includes(' ')) {
+                // Show menu only if still typing command (no space yet)
+                this.show(input);
+            } else {
+                this.hide();
+            }
+        } else {
+            this.hide();
+        }
+    }
+    
+    handleKeydown(e, input) {
+        // If we just selected a command, block the next Enter from sending
+        if (this.justSelected && e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            this.justSelected = false;
+            return true;
+        }
+        
+        if (!this.visible) return false;
+        
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                e.stopPropagation();
+                this.selectedIndex = Math.min(this.selectedIndex + 1, this.filteredCommands.length - 1);
+                this.render();
+                return true;
+            case 'ArrowUp':
+                e.preventDefault();
+                e.stopPropagation();
+                this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+                this.render();
+                return true;
+            case 'Tab':
+            case 'Enter':
+                if (this.filteredCommands.length > 0) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.selectCommand(input, this.filteredCommands[this.selectedIndex]);
+                    return true;
+                }
+                break;
+            case 'Escape':
+                e.preventDefault();
+                e.stopPropagation();
+                this.hide();
+                return true;
+        }
+        return false;
+    }
+    
+    selectCommand(input, cmd) {
+        // Insert the command with a trailing space
+        input.value = cmd.command + ' ';
+        
+        // Update placeholder to hint at expected input
+        if (cmd.placeholder) {
+            input.placeholder = cmd.placeholder + '...';
+        }
+        
+        input.focus();
+        
+        // Trigger input event for any listeners (but mark it as programmatic)
+        const event = new Event('input', { bubbles: true });
+        event._programmatic = true;
+        input.dispatchEvent(event);
+        
+        // Set flag AFTER dispatching event to prevent immediate send
+        this.justSelected = true;
+        
+        this.hide();
+        
+        if (this.onSelect) {
+            this.onSelect(cmd);
+        }
+    }
+    
+    show(input) {
+        this.activeInput = input;
+        this.visible = true;
+        this.selectedIndex = 0;
+        
+        // Position menu above the input
+        const rect = input.getBoundingClientRect();
+        this.menu.style.display = 'block';
+        this.menu.style.left = `${rect.left}px`;
+        this.menu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+        this.menu.style.minWidth = `${Math.min(rect.width, 300)}px`;
+        
+        this.render();
+    }
+    
+    hide() {
+        this.visible = false;
+        this.menu.style.display = 'none';
+        this.activeInput = null;
+    }
+    
+    render() {
+        const commandsHtml = this.filteredCommands.map((cmd, index) => `
+            <div class="slash-command-item ${index === this.selectedIndex ? 'selected' : ''}" 
+                 data-index="${index}">
+                <span class="slash-command-name">${cmd.command}</span>
+                <span class="slash-command-desc">${cmd.description}</span>
+            </div>
+        `).join('');
+        
+        this.menu.innerHTML = `
+            ${commandsHtml}
+            <div class="slash-command-hint">
+                <kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>Tab</kbd> select · <kbd>Esc</kbd> dismiss
+            </div>
+        `;
+        
+        // Add click handlers
+        this.menu.querySelectorAll('.slash-command-item').forEach((item, index) => {
+            item.addEventListener('click', () => {
+                this.selectedIndex = index;
+                this.selectCommand(this.activeInput, this.filteredCommands[index]);
+            });
+        });
+    }
+}
+
 class App {
     constructor() {
         this.canvas = null;
@@ -10,6 +210,7 @@ class App {
         this.saveTimeout = null;
         this.searchIndex = new SearchIndex();
         this.searchSelectedIndex = 0;
+        this.slashCommandMenu = new SlashCommandMenu();
         
         // UI elements
         this.chatInput = document.getElementById('chat-input');
@@ -45,6 +246,21 @@ class App {
         this.canvas.onMatrixFillAll = this.handleMatrixFillAll.bind(this);
         this.canvas.onMatrixRowExtract = this.handleMatrixRowExtract.bind(this);
         this.canvas.onMatrixColExtract = this.handleMatrixColExtract.bind(this);
+        
+        // Attach slash command menu to reply tooltip input
+        const replyInput = this.canvas.getReplyTooltipInput();
+        if (replyInput) {
+            this.slashCommandMenu.attach(replyInput);
+            // Set up callback so canvas can check if menu is handling keys
+            this.canvas.onReplyInputKeydown = (e) => {
+                if (this.slashCommandMenu.visible) {
+                    if (['ArrowUp', 'ArrowDown', 'Tab', 'Escape', 'Enter'].includes(e.key)) {
+                        return true; // Menu will handle it
+                    }
+                }
+                return false;
+            };
+        }
         
         // Load models
         await this.loadModels();
@@ -187,8 +403,19 @@ class App {
     }
 
     setupEventListeners() {
-        // Chat input
+        // Attach slash command menu to chat input
+        this.slashCommandMenu.attach(this.chatInput);
+        
+        // Chat input - send on Enter (but not if slash menu is handling it)
         this.chatInput.addEventListener('keydown', (e) => {
+            // Let slash command menu handle navigation keys when visible
+            if (this.slashCommandMenu.visible && ['ArrowUp', 'ArrowDown', 'Tab', 'Escape'].includes(e.key)) {
+                return; // Menu will handle it
+            }
+            if (this.slashCommandMenu.visible && e.key === 'Enter') {
+                return; // Menu will handle selection
+            }
+            
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 this.handleSend();
@@ -396,40 +623,49 @@ class App {
 
     // --- Node Operations ---
 
-    async handleSend() {
-        const content = this.chatInput.value.trim();
-        if (!content) return;
-        
+    /**
+     * Try to handle content as a slash command.
+     * Returns true if it was a slash command and was handled, false otherwise.
+     */
+    async tryHandleSlashCommand(content) {
         // Check for /search command
         if (content.startsWith('/search ')) {
             const query = content.slice(8).trim();
             if (query) {
-                this.chatInput.value = '';
-                this.chatInput.style.height = 'auto';
                 await this.handleSearch(query);
+                return true;
             }
-            return;
         }
         
         // Check for /research command
         if (content.startsWith('/research ')) {
             const instructions = content.slice(10).trim();
             if (instructions) {
-                this.chatInput.value = '';
-                this.chatInput.style.height = 'auto';
                 await this.handleResearch(instructions);
+                return true;
             }
-            return;
         }
         
         // Check for /matrix command
         if (content.startsWith('/matrix ')) {
             const matrixContext = content.slice(8).trim();
             if (matrixContext) {
-                this.chatInput.value = '';
-                this.chatInput.style.height = 'auto';
                 await this.handleMatrix(matrixContext);
+                return true;
             }
+        }
+        
+        return false;
+    }
+
+    async handleSend() {
+        const content = this.chatInput.value.trim();
+        if (!content) return;
+        
+        // Try slash commands first
+        if (await this.tryHandleSlashCommand(content)) {
+            this.chatInput.value = '';
+            this.chatInput.style.height = 'auto';
             return;
         }
         
@@ -1363,10 +1599,21 @@ class App {
             this.saveSession();
             this.updateEmptyState();
             
-            // If user provided a reply, create the conversation chain
+            // If user provided a reply, check for slash commands first
             if (replyText && replyText.trim()) {
-                // Create user node as reply to highlight
-                const humanNode = createNode(NodeType.HUMAN, replyText.trim(), {
+                const content = replyText.trim();
+                
+                // Select highlight node so commands/replies connect to it
+                this.canvas.clearSelection();
+                this.canvas.selectNode(highlightNode.id);
+                
+                // Try slash commands first
+                if (await this.tryHandleSlashCommand(content)) {
+                    return;
+                }
+                
+                // Regular reply - create user node as reply to highlight
+                const humanNode = createNode(NodeType.HUMAN, content, {
                     position: this.graph.autoPosition([highlightNode.id])
                 });
                 
