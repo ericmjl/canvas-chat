@@ -1425,54 +1425,89 @@ kbd {
 .node.matrix {
     background: var(--bg-primary);
     border-color: var(--accent);
-    min-width: 400px;
 }
 
 .node.matrix .node-content {
     padding: 0;
-    overflow: visible;
+    overflow: hidden;
+    height: calc(100% - 70px); /* Fill available space minus header/footer */
+    display: flex;
+    flex-direction: column;
 }
 
 .matrix-table-container {
-    max-height: 400px;
-    overflow: auto;
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .matrix-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 12px;
+    table-layout: fixed;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.matrix-table thead {
+    flex-shrink: 0;
+    display: block;
+}
+
+.matrix-table thead tr {
+    display: flex;
+    width: 100%;
+}
+
+.matrix-table tbody {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.matrix-table tbody tr {
+    display: flex;
+    flex: 1;
+    min-height: 0;
 }
 
 .matrix-table th,
 .matrix-table td {
     border: 1px solid var(--bg-secondary);
-    padding: 6px 8px;
+    padding: 4px 6px;
     text-align: left;
     vertical-align: top;
-    min-width: 80px;
-    max-width: 120px;
+    overflow: hidden;
+    flex: 1;
+    min-height: 0;
+}
+
+.matrix-table th:first-child,
+.matrix-table td:first-child {
+    flex: 0 0 25%;
 }
 
 .matrix-table th {
     background: var(--bg-secondary);
     font-weight: 600;
-    position: sticky;
-    top: 0;
-    z-index: 1;
+    height: auto; /* Headers keep natural height */
 }
 
-.matrix-table th:first-child {
-    position: sticky;
-    left: 0;
-    z-index: 2;
-}
-
+.matrix-table th:first-child,
 .matrix-table td:first-child {
     background: var(--bg-secondary);
     font-weight: 500;
-    position: sticky;
-    left: 0;
+}
+
+.matrix-table td.row-header {
+    background: var(--bg-secondary);
 }
 
 .matrix-table .corner-cell {
@@ -1485,13 +1520,14 @@ kbd {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100px;
+    /* Dynamic width - fills available space */
 }
 
 .matrix-cell {
     cursor: pointer;
-    min-height: 40px;
     transition: background 0.15s;
+    overflow: hidden;
+    position: relative;
 }
 
 .matrix-cell:hover {
@@ -1530,10 +1566,34 @@ kbd {
     font-size: 11px;
     line-height: 1.4;
     color: var(--text-primary);
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
     overflow: hidden;
+    word-wrap: break-word;
+    /* Fill cell and truncate overflow */
+    height: 100%;
+    position: relative;
+}
+
+/* Fade out effect at the bottom when content is truncated */
+.matrix-cell-content::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1.4em;
+    background: linear-gradient(transparent, white);
+    pointer-events: none;
+}
+
+.matrix-cell.highlighted {
+    background: var(--selection-bg);
+    box-shadow: inset 0 0 0 2px var(--selection-color);
+    animation: cellPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes cellPulse {
+    0%, 100% { box-shadow: inset 0 0 0 2px var(--selection-color); }
+    50% { box-shadow: inset 0 0 0 3px var(--selection-color), 0 0 8px var(--selection-color); }
 }
 
 .matrix-cell.loading {

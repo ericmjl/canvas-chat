@@ -999,21 +999,23 @@ class App {
         const matrixNode = this.graph.getNode(matrixId);
         if (!matrixNode) return;
         
-        // Create cell node
+        // Create cell node with title combining row and column names
+        const cellTitle = `${rowItem} x ${colItem}`;
         const cellNode = createCellNode(matrixId, row, col, rowItem, colItem, content, {
             position: {
                 x: matrixNode.position.x + (matrixNode.width || 500) + 50,
                 y: matrixNode.position.y + (row * 60)
-            }
+            },
+            title: cellTitle
         });
         
         this.graph.addNode(cellNode);
         this.canvas.renderNode(cellNode);
         
-        // Create edge from cell to matrix
-        const edge = createEdge(cellNode.id, matrixId, EdgeType.MATRIX_CELL);
+        // Create edge from matrix to cell (arrow points to the pinned cell)
+        const edge = createEdge(matrixId, cellNode.id, EdgeType.MATRIX_CELL);
         this.graph.addEdge(edge);
-        this.canvas.renderEdge(edge, cellNode.position, matrixNode.position);
+        this.canvas.renderEdge(edge, matrixNode.position, cellNode.position);
         
         // Close modal
         document.getElementById('cell-modal').style.display = 'none';
@@ -1022,6 +1024,9 @@ class App {
         // Select the new cell node
         this.canvas.clearSelection();
         this.canvas.selectNode(cellNode.id);
+        
+        // Generate summary async (don't await)
+        this.generateNodeSummary(cellNode.id);
         
         this.saveSession();
         this.updateEmptyState();
@@ -1149,6 +1154,17 @@ class App {
         this.updateContextHighlight(selectedIds);
         this.updateContextBudget(selectedIds);
         
+        // Clear any previous matrix cell highlights
+        this.canvas.clearMatrixCellHighlights();
+        
+        // If a cell node is selected, highlight its source cell in the matrix
+        if (selectedIds.length === 1) {
+            const node = this.graph.getNode(selectedIds[0]);
+            if (node && node.type === NodeType.CELL && node.matrixId) {
+                this.canvas.highlightMatrixCell(node.matrixId, node.rowIndex, node.colIndex);
+            }
+        }
+        
         // Auto-open tag drawer when 2+ nodes selected
         if (selectedIds.length >= 2) {
             this.openTagDrawer();
@@ -1162,6 +1178,9 @@ class App {
         this.updateSelectedIndicator(selectedIds);
         this.updateContextHighlight(selectedIds);
         this.updateContextBudget(selectedIds);
+        
+        // Clear matrix cell highlights when deselecting
+        this.canvas.clearMatrixCellHighlights();
         
         // Update tag drawer state
         this.updateTagDrawer();
@@ -1417,14 +1436,14 @@ class App {
 
     /**
      * Generate a summary for a node (for semantic zoom)
-     * Called async after AI/Research nodes complete
+     * Called async after AI/Research/Cell nodes complete
      */
     async generateNodeSummary(nodeId) {
         const node = this.graph.getNode(nodeId);
         if (!node || !node.content || node.summary) return;
         
-        // Only generate for AI and Research nodes
-        if (node.type !== NodeType.AI && node.type !== NodeType.RESEARCH) return;
+        // Only generate for AI, Research, and Cell nodes
+        if (node.type !== NodeType.AI && node.type !== NodeType.RESEARCH && node.type !== NodeType.CELL) return;
         
         try {
             const model = this.modelPicker.value;
@@ -1481,7 +1500,7 @@ class App {
     generateMissingSummaries() {
         const nodes = this.graph.getAllNodes();
         for (const node of nodes) {
-            if ((node.type === NodeType.AI || node.type === NodeType.RESEARCH) && !node.summary) {
+            if ((node.type === NodeType.AI || node.type === NodeType.RESEARCH || node.type === NodeType.CELL) && !node.summary) {
                 // Don't await - let them run in parallel/background
                 this.generateNodeSummary(node.id);
             }

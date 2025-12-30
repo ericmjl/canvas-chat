@@ -48,6 +48,15 @@
     <!-- Main Canvas Area -->
     <div id="canvas-container">
         <svg id="canvas" width="100%" height="100%">
+            <!-- Arrow marker definitions -->
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#999" />
+                </marker>
+                <marker id="arrowhead-cell" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
+                </marker>
+            </defs>
             <!-- Edges layer (below nodes) -->
             <g id="edges-layer"></g>
             <!-- Nodes layer -->

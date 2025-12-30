@@ -567,7 +567,14 @@ class Canvas {
         div.className = `node ${node.type}`;
         div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
         div.style.width = '100%';
-        div.style.minHeight = '100%';
+        
+        // Matrix nodes need fixed height to allow shrinking; others use min-height
+        if (isMatrix) {
+            div.style.height = '100%';
+            div.style.overflow = 'hidden';
+        } else {
+            div.style.minHeight = '100%';
+        }
         
         if (isMatrix) {
             div.innerHTML = this.renderMatrixNodeContent(node);
@@ -591,7 +598,7 @@ class Canvas {
                         <span class="grip-dot"></span><span class="grip-dot"></span>
                         <span class="grip-dot"></span><span class="grip-dot"></span>
                     </div>
-                    <span class="node-type">${this.getNodeTypeLabel(node.type)}</span>
+                    <span class="node-type">${node.type === NodeType.CELL && node.title ? node.title : this.getNodeTypeLabel(node.type)}</span>
                     <span class="node-model">${node.model || ''}</span>
                     <button class="node-action delete-btn" title="Delete node">🗑️</button>
                 </div>
@@ -701,7 +708,9 @@ class Canvas {
                     wrapper.setAttribute('width', newWidth);
                     
                     // If only resizing width (east), auto-adjust height based on content
-                    if (resizeType === 'e') {
+                    // But NOT for matrix nodes - they should keep their height
+                    const isMatrixNode = div.classList.contains('matrix');
+                    if (resizeType === 'e' && !isMatrixNode) {
                         // Temporarily remove min-height to get natural content height
                         const oldMinHeight = div.style.minHeight;
                         div.style.minHeight = 'auto';
@@ -712,9 +721,11 @@ class Canvas {
                         // Restore and set new height
                         div.style.minHeight = oldMinHeight;
                         wrapper.setAttribute('height', Math.max(100, contentHeight + 10));
-                    } else {
+                    } else if (resizeType.includes('s')) {
+                        // Only update height if explicitly resizing south
                         wrapper.setAttribute('height', newHeight);
                     }
+                    // If just resizing east on a matrix, don't change height at all
                     
                     // Update edges
                     this.updateEdgesForNode(node.id, node.position);
@@ -872,13 +883,34 @@ class Canvas {
             cell.classList.add('loading');
             cell.classList.remove('empty');
             cell.classList.add('filled');
-            cell.innerHTML = `<div class="matrix-cell-content">${this.escapeHtml(this.truncate(content, 50))}</div>`;
+            cell.innerHTML = `<div class="matrix-cell-content">${this.escapeHtml(content)}</div>`;
         } else {
             cell.classList.remove('loading');
             cell.classList.add('filled');
             cell.classList.remove('empty');
-            cell.innerHTML = `<div class="matrix-cell-content">${this.escapeHtml(this.truncate(content, 50))}</div>`;
+            cell.innerHTML = `<div class="matrix-cell-content">${this.escapeHtml(content)}</div>`;
         }
+    }
+    
+    /**
+     * Highlight a specific cell in a matrix node
+     */
+    highlightMatrixCell(matrixNodeId, row, col) {
+        const wrapper = this.nodeElements.get(matrixNodeId);
+        if (!wrapper) return;
+        
+        const cell = wrapper.querySelector(`.matrix-cell[data-row="${row}"][data-col="${col}"]`);
+        if (cell) {
+            cell.classList.add('highlighted');
+        }
+    }
+    
+    /**
+     * Clear all matrix cell highlights
+     */
+    clearMatrixCellHighlights() {
+        const highlightedCells = this.nodesLayer.querySelectorAll('.matrix-cell.highlighted');
+        highlightedCells.forEach(cell => cell.classList.remove('highlighted'));
     }
 
     /**
@@ -1035,9 +1067,25 @@ class Canvas {
         path.setAttribute('data-source', edge.source);
         path.setAttribute('data-target', edge.target);
         
-        // Calculate bezier curve
-        const d = this.calculateBezierPath(sourcePos, targetPos);
+        // Get node dimensions from DOM
+        const sourceWrapper = this.nodeElements.get(edge.source);
+        const targetWrapper = this.nodeElements.get(edge.target);
+        
+        const sourceWidth = sourceWrapper ? parseFloat(sourceWrapper.getAttribute('width')) || 320 : 320;
+        const sourceHeight = sourceWrapper ? parseFloat(sourceWrapper.getAttribute('height')) || 100 : 100;
+        const targetWidth = targetWrapper ? parseFloat(targetWrapper.getAttribute('width')) || 320 : 320;
+        const targetHeight = targetWrapper ? parseFloat(targetWrapper.getAttribute('height')) || 100 : 100;
+        
+        // Calculate bezier curve with dynamic connection points
+        const d = this.calculateBezierPath(
+            sourcePos, { width: sourceWidth, height: sourceHeight },
+            targetPos, { width: targetWidth, height: targetHeight }
+        );
         path.setAttribute('d', d);
+        
+        // Add arrowhead
+        const isCell = edge.type === 'matrix-cell';
+        path.setAttribute('marker-end', isCell ? 'url(#arrowhead-cell)' : 'url(#arrowhead)');
         
         this.edgesLayer.appendChild(path);
         this.edgeElements.set(edge.id, path);
@@ -1046,27 +1094,93 @@ class Canvas {
     }
 
     /**
-     * Calculate bezier curve path between two positions
+     * Calculate the best connection point on a node's border
+     * Returns {x, y, side} where side is 'top', 'bottom', 'left', 'right'
      */
-    calculateBezierPath(source, target) {
-        // Source: right edge of source node
-        const sourceX = source.x + 320; // Node width
-        const sourceY = source.y + 50;  // Approximate center
+    getConnectionPoint(nodePos, nodeSize, otherCenter) {
+        const center = {
+            x: nodePos.x + nodeSize.width / 2,
+            y: nodePos.y + nodeSize.height / 2
+        };
         
-        // Target: left edge of target node
-        const targetX = target.x;
-        const targetY = target.y + 50;
+        // Calculate angle from this node's center to the other node's center
+        const dx = otherCenter.x - center.x;
+        const dy = otherCenter.y - center.y;
+        const angle = Math.atan2(dy, dx);
         
-        // Control points for smooth curve
-        const dx = targetX - sourceX;
-        const controlOffset = Math.min(Math.abs(dx) * 0.5, 150);
+        // Determine which side to connect based on angle
+        // Right: -45° to 45°, Bottom: 45° to 135°, Left: 135° to -135°, Top: -135° to -45°
+        const PI = Math.PI;
+        let side, x, y;
         
-        const cp1x = sourceX + controlOffset;
-        const cp1y = sourceY;
-        const cp2x = targetX - controlOffset;
-        const cp2y = targetY;
+        if (angle >= -PI/4 && angle < PI/4) {
+            // Right side
+            side = 'right';
+            x = nodePos.x + nodeSize.width;
+            y = center.y;
+        } else if (angle >= PI/4 && angle < 3*PI/4) {
+            // Bottom side
+            side = 'bottom';
+            x = center.x;
+            y = nodePos.y + nodeSize.height;
+        } else if (angle >= -3*PI/4 && angle < -PI/4) {
+            // Top side
+            side = 'top';
+            x = center.x;
+            y = nodePos.y;
+        } else {
+            // Left side
+            side = 'left';
+            x = nodePos.x;
+            y = center.y;
+        }
         
-        return `M ${sourceX} ${sourceY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetX} ${targetY}`;
+        return { x, y, side };
+    }
+
+    /**
+     * Calculate bezier curve path between two nodes with dynamic connection points
+     */
+    calculateBezierPath(sourcePos, sourceSize, targetPos, targetSize) {
+        // Calculate centers
+        const sourceCenter = {
+            x: sourcePos.x + sourceSize.width / 2,
+            y: sourcePos.y + sourceSize.height / 2
+        };
+        const targetCenter = {
+            x: targetPos.x + targetSize.width / 2,
+            y: targetPos.y + targetSize.height / 2
+        };
+        
+        // Get optimal connection points
+        const sourcePoint = this.getConnectionPoint(sourcePos, sourceSize, targetCenter);
+        const targetPoint = this.getConnectionPoint(targetPos, targetSize, sourceCenter);
+        
+        // Calculate control points based on which sides are connected
+        const distance = Math.sqrt(
+            Math.pow(targetPoint.x - sourcePoint.x, 2) + 
+            Math.pow(targetPoint.y - sourcePoint.y, 2)
+        );
+        const controlOffset = Math.min(distance * 0.4, 150);
+        
+        let cp1x, cp1y, cp2x, cp2y;
+        
+        // Control point direction based on exit/entry side
+        switch (sourcePoint.side) {
+            case 'right':  cp1x = sourcePoint.x + controlOffset; cp1y = sourcePoint.y; break;
+            case 'left':   cp1x = sourcePoint.x - controlOffset; cp1y = sourcePoint.y; break;
+            case 'top':    cp1x = sourcePoint.x; cp1y = sourcePoint.y - controlOffset; break;
+            case 'bottom': cp1x = sourcePoint.x; cp1y = sourcePoint.y + controlOffset; break;
+        }
+        
+        switch (targetPoint.side) {
+            case 'right':  cp2x = targetPoint.x + controlOffset; cp2y = targetPoint.y; break;
+            case 'left':   cp2x = targetPoint.x - controlOffset; cp2y = targetPoint.y; break;
+            case 'top':    cp2x = targetPoint.x; cp2y = targetPoint.y - controlOffset; break;
+            case 'bottom': cp2x = targetPoint.x; cp2y = targetPoint.y + controlOffset; break;
+        }
+        
+        return `M ${sourcePoint.x} ${sourcePoint.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetPoint.x} ${targetPoint.y}`;
     }
 
     /**
@@ -1078,7 +1192,7 @@ class Canvas {
             const targetId = path.getAttribute('data-target');
             
             if (sourceId === nodeId || targetId === nodeId) {
-                // Get positions
+                // Get wrappers for dimensions
                 const sourceWrapper = this.nodeElements.get(sourceId);
                 const targetWrapper = this.nodeElements.get(targetId);
                 
@@ -1091,6 +1205,14 @@ class Canvas {
                         x: parseFloat(targetWrapper.getAttribute('x')),
                         y: parseFloat(targetWrapper.getAttribute('y'))
                     };
+                    const sourceSize = {
+                        width: parseFloat(sourceWrapper.getAttribute('width')) || 320,
+                        height: parseFloat(sourceWrapper.getAttribute('height')) || 100
+                    };
+                    const targetSize = {
+                        width: parseFloat(targetWrapper.getAttribute('width')) || 320,
+                        height: parseFloat(targetWrapper.getAttribute('height')) || 100
+                    };
                     
                     // Update if this is the moved node
                     if (sourceId === nodeId) {
@@ -1102,7 +1224,7 @@ class Canvas {
                         targetPos.y = newPos.y;
                     }
                     
-                    const d = this.calculateBezierPath(sourcePos, targetPos);
+                    const d = this.calculateBezierPath(sourcePos, sourceSize, targetPos, targetSize);
                     path.setAttribute('d', d);
                 }
             }
@@ -1208,13 +1330,13 @@ class Canvas {
         let tableHtml = '<table class="matrix-table"><thead><tr>';
         
         // Corner cell with context
-        tableHtml += `<th class="corner-cell" title="${this.escapeHtml(context)}">${this.escapeHtml(this.truncate(context, 20))}</th>`;
+        tableHtml += `<th class="corner-cell" title="${this.escapeHtml(context)}"><span class="matrix-header-text">${this.escapeHtml(context)}</span></th>`;
         
         // Column headers
         for (let c = 0; c < colItems.length; c++) {
             const colItem = colItems[c];
             tableHtml += `<th title="${this.escapeHtml(colItem)}">
-                <span class="matrix-header-text">${this.escapeHtml(this.truncate(colItem, 30))}</span>
+                <span class="matrix-header-text">${this.escapeHtml(colItem)}</span>
             </th>`;
         }
         tableHtml += '</tr></thead><tbody>';
@@ -1225,8 +1347,8 @@ class Canvas {
             tableHtml += '<tr>';
             
             // Row header
-            tableHtml += `<td title="${this.escapeHtml(rowItem)}">
-                <span class="matrix-header-text">${this.escapeHtml(this.truncate(rowItem, 30))}</span>
+            tableHtml += `<td class="row-header" title="${this.escapeHtml(rowItem)}">
+                <span class="matrix-header-text">${this.escapeHtml(rowItem)}</span>
             </td>`;
             
             // Cells
@@ -1237,7 +1359,7 @@ class Canvas {
                 
                 if (isFilled) {
                     tableHtml += `<td class="matrix-cell filled" data-row="${r}" data-col="${c}" title="Click to view details">
-                        <div class="matrix-cell-content">${this.escapeHtml(this.truncate(cell.content, 50))}</div>
+                        <div class="matrix-cell-content">${this.escapeHtml(cell.content)}</div>
                     </td>`;
                 } else {
                     tableHtml += `<td class="matrix-cell empty" data-row="${r}" data-col="${c}">
