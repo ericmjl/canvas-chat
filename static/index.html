@@ -280,6 +280,30 @@
         </div>
     </div>
 
+    <!-- Row/Column Detail Modal -->
+    <div id="slice-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="slice-title">Row Details</h2>
+                <button class="modal-close" id="slice-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="cell-detail-row">
+                    <label id="slice-label">Row:</label>
+                    <div class="cell-detail-content" id="slice-item"></div>
+                </div>
+                <div class="cell-detail-row">
+                    <label>Contents: <button id="slice-copy-btn" class="cell-copy-btn" title="Copy contents">📋</button></label>
+                    <div class="cell-detail-content cell-evaluation slice-content" id="slice-content"></div>
+                </div>
+                <div class="modal-actions">
+                    <button id="slice-close-btn" class="secondary-btn">Close</button>
+                    <button id="slice-pin-btn" class="primary-btn">📌 Pin to Canvas</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Search Overlay -->
     <div id="search-overlay" class="search-overlay" style="display: none;">
         <div class="search-container">

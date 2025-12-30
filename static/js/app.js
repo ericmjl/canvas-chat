@@ -43,6 +43,8 @@ class App {
         this.canvas.onMatrixCellFill = this.handleMatrixCellFill.bind(this);
         this.canvas.onMatrixCellView = this.handleMatrixCellView.bind(this);
         this.canvas.onMatrixFillAll = this.handleMatrixFillAll.bind(this);
+        this.canvas.onMatrixRowExtract = this.handleMatrixRowExtract.bind(this);
+        this.canvas.onMatrixColExtract = this.handleMatrixColExtract.bind(this);
         
         // Load models
         await this.loadModels();
@@ -251,6 +253,33 @@ class App {
         document.getElementById('cell-copy-btn').addEventListener('click', async () => {
             const content = document.getElementById('cell-content').textContent;
             const btn = document.getElementById('cell-copy-btn');
+            try {
+                await navigator.clipboard.writeText(content);
+                const originalText = btn.textContent;
+                btn.textContent = '✓';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 1500);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        });
+        
+        // Row/Column (slice) detail modal
+        document.getElementById('slice-close').addEventListener('click', () => {
+            document.getElementById('slice-modal').style.display = 'none';
+            this._currentSliceData = null;
+        });
+        document.getElementById('slice-close-btn').addEventListener('click', () => {
+            document.getElementById('slice-modal').style.display = 'none';
+            this._currentSliceData = null;
+        });
+        document.getElementById('slice-pin-btn').addEventListener('click', () => {
+            this.pinSliceToCanvas();
+        });
+        document.getElementById('slice-copy-btn').addEventListener('click', async () => {
+            const content = document.getElementById('slice-content').textContent;
+            const btn = document.getElementById('slice-copy-btn');
             try {
                 await navigator.clipboard.writeText(content);
                 const originalText = btn.textContent;
@@ -1081,6 +1110,144 @@ class App {
         
         // Generate summary async (don't await)
         this.generateNodeSummary(cellNode.id);
+        
+        this.saveSession();
+        this.updateEmptyState();
+    }
+    
+    /**
+     * Handle extracting a row from a matrix - show preview modal
+     */
+    handleMatrixRowExtract(nodeId, rowIndex) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+        
+        const { rowItems, colItems, cells } = matrixNode;
+        const rowItem = rowItems[rowIndex];
+        
+        // Collect cell contents for this row
+        const cellContents = [];
+        for (let c = 0; c < colItems.length; c++) {
+            const cellKey = `${rowIndex}-${c}`;
+            const cell = cells[cellKey];
+            cellContents.push(cell && cell.content ? cell.content : null);
+        }
+        
+        // Format content for display
+        let displayContent = '';
+        for (let c = 0; c < colItems.length; c++) {
+            const content = cellContents[c];
+            displayContent += `${colItems[c]}:\n${content || '(empty)'}\n\n`;
+        }
+        
+        // Store slice data for pinning
+        this._currentSliceData = {
+            type: 'row',
+            matrixId: nodeId,
+            index: rowIndex,
+            item: rowItem,
+            otherAxisItems: colItems,
+            cellContents: cellContents
+        };
+        
+        // Populate and show modal
+        document.getElementById('slice-title').textContent = 'Row Details';
+        document.getElementById('slice-label').textContent = 'Row:';
+        document.getElementById('slice-item').textContent = rowItem;
+        document.getElementById('slice-content').textContent = displayContent.trim();
+        document.getElementById('slice-modal').style.display = 'flex';
+    }
+    
+    /**
+     * Handle extracting a column from a matrix - show preview modal
+     */
+    handleMatrixColExtract(nodeId, colIndex) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+        
+        const { rowItems, colItems, cells } = matrixNode;
+        const colItem = colItems[colIndex];
+        
+        // Collect cell contents for this column
+        const cellContents = [];
+        for (let r = 0; r < rowItems.length; r++) {
+            const cellKey = `${r}-${colIndex}`;
+            const cell = cells[cellKey];
+            cellContents.push(cell && cell.content ? cell.content : null);
+        }
+        
+        // Format content for display
+        let displayContent = '';
+        for (let r = 0; r < rowItems.length; r++) {
+            const content = cellContents[r];
+            displayContent += `${rowItems[r]}:\n${content || '(empty)'}\n\n`;
+        }
+        
+        // Store slice data for pinning
+        this._currentSliceData = {
+            type: 'column',
+            matrixId: nodeId,
+            index: colIndex,
+            item: colItem,
+            otherAxisItems: rowItems,
+            cellContents: cellContents
+        };
+        
+        // Populate and show modal
+        document.getElementById('slice-title').textContent = 'Column Details';
+        document.getElementById('slice-label').textContent = 'Column:';
+        document.getElementById('slice-item').textContent = colItem;
+        document.getElementById('slice-content').textContent = displayContent.trim();
+        document.getElementById('slice-modal').style.display = 'flex';
+    }
+    
+    /**
+     * Pin the currently viewed row/column slice to the canvas
+     */
+    pinSliceToCanvas() {
+        if (!this._currentSliceData) return;
+        
+        const { type, matrixId, index, item, otherAxisItems, cellContents } = this._currentSliceData;
+        const matrixNode = this.graph.getNode(matrixId);
+        if (!matrixNode) return;
+        
+        let sliceNode;
+        if (type === 'row') {
+            sliceNode = createRowNode(matrixId, index, item, otherAxisItems, cellContents, {
+                position: {
+                    x: matrixNode.position.x + (matrixNode.width || 500) + 50,
+                    y: matrixNode.position.y + (index * 60)
+                },
+                title: item
+            });
+        } else {
+            sliceNode = createColumnNode(matrixId, index, item, otherAxisItems, cellContents, {
+                position: {
+                    x: matrixNode.position.x + (matrixNode.width || 500) + 50,
+                    y: matrixNode.position.y + (index * 60)
+                },
+                title: item
+            });
+        }
+        
+        this.graph.addNode(sliceNode);
+        this.canvas.renderNode(sliceNode);
+        
+        // Create edge from matrix to slice node
+        const edge = createEdge(matrixId, sliceNode.id, EdgeType.MATRIX_CELL);
+        this.graph.addEdge(edge);
+        this.canvas.renderEdge(edge, matrixNode.position, sliceNode.position);
+        
+        // Close modal
+        document.getElementById('slice-modal').style.display = 'none';
+        this._currentSliceData = null;
+        
+        // Select the new node
+        this.canvas.clearSelection();
+        this.canvas.selectNode(sliceNode.id);
+        
+        // Generate summary async
+        this.generateNodeSummary(sliceNode.id);
         
         this.saveSession();
         this.updateEmptyState();

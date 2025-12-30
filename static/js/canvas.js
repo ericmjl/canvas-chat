@@ -503,7 +503,7 @@ class Canvas {
         for (const wrapper of nodes) {
             const x = parseFloat(wrapper.getAttribute('x'));
             const y = parseFloat(wrapper.getAttribute('y'));
-            const width = parseFloat(wrapper.getAttribute('width')) || 320;
+            const width = parseFloat(wrapper.getAttribute('width')) || 420;
             const height = parseFloat(wrapper.getAttribute('height')) || 200;
             
             minX = Math.min(minX, x);
@@ -547,7 +547,7 @@ class Canvas {
         
         const x = parseFloat(wrapper.getAttribute('x'));
         const y = parseFloat(wrapper.getAttribute('y'));
-        const width = parseFloat(wrapper.getAttribute('width')) || 320;
+        const width = parseFloat(wrapper.getAttribute('width')) || 420;
         const height = parseFloat(wrapper.getAttribute('height')) || 200;
         
         // Center on the node's center point
@@ -569,7 +569,7 @@ class Canvas {
         // Use stored dimensions or defaults
         // Matrix nodes need more width
         const isMatrix = node.type === NodeType.MATRIX;
-        const width = node.width || (isMatrix ? 500 : 320);
+        const width = node.width || (isMatrix ? 500 : 420);
         const minHeight = node.height || (isMatrix ? 300 : 100);
         
         // Create foreignObject wrapper
@@ -865,6 +865,30 @@ class Canvas {
                     }
                 });
             }
+            
+            // Row header click handlers (to extract row as node)
+            const rowHeaders = div.querySelectorAll('.row-header[data-row]');
+            rowHeaders.forEach(header => {
+                header.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const row = parseInt(header.dataset.row);
+                    if (this.onMatrixRowExtract) {
+                        this.onMatrixRowExtract(node.id, row);
+                    }
+                });
+            });
+            
+            // Column header click handlers (to extract column as node)
+            const colHeaders = div.querySelectorAll('.col-header[data-col]');
+            colHeaders.forEach(header => {
+                header.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const col = parseInt(header.dataset.col);
+                    if (this.onMatrixColExtract) {
+                        this.onMatrixColExtract(node.id, col);
+                    }
+                });
+            });
         }
         
         // Double-click on summary to edit title
@@ -1194,7 +1218,7 @@ class Canvas {
         const TAG_WIDTH = 100; // Approximate width of tag labels on the left
         
         for (const [nodeId, wrapper] of this.nodeElements) {
-            const width = parseFloat(wrapper.getAttribute('width')) || 320;
+            const width = parseFloat(wrapper.getAttribute('width')) || 420;
             const height = parseFloat(wrapper.getAttribute('height')) || 200;
             
             // Check if node has tags - if so, add tag width to bounding box
@@ -1248,9 +1272,9 @@ class Canvas {
         const sourceWrapper = this.nodeElements.get(edge.source);
         const targetWrapper = this.nodeElements.get(edge.target);
         
-        const sourceWidth = sourceWrapper ? parseFloat(sourceWrapper.getAttribute('width')) || 320 : 320;
+        const sourceWidth = sourceWrapper ? parseFloat(sourceWrapper.getAttribute('width')) || 420 : 420;
         const sourceHeight = sourceWrapper ? parseFloat(sourceWrapper.getAttribute('height')) || 100 : 100;
-        const targetWidth = targetWrapper ? parseFloat(targetWrapper.getAttribute('width')) || 320 : 320;
+        const targetWidth = targetWrapper ? parseFloat(targetWrapper.getAttribute('width')) || 420 : 420;
         const targetHeight = targetWrapper ? parseFloat(targetWrapper.getAttribute('height')) || 100 : 100;
         
         // Calculate bezier curve with dynamic connection points
@@ -1383,11 +1407,11 @@ class Canvas {
                         y: parseFloat(targetWrapper.getAttribute('y'))
                     };
                     const sourceSize = {
-                        width: parseFloat(sourceWrapper.getAttribute('width')) || 320,
+                        width: parseFloat(sourceWrapper.getAttribute('width')) || 420,
                         height: parseFloat(sourceWrapper.getAttribute('height')) || 100
                     };
                     const targetSize = {
-                        width: parseFloat(targetWrapper.getAttribute('width')) || 320,
+                        width: parseFloat(targetWrapper.getAttribute('width')) || 420,
                         height: parseFloat(targetWrapper.getAttribute('height')) || 100
                     };
                     
@@ -1432,11 +1456,13 @@ class Canvas {
             [NodeType.RESEARCH]: 'Research',
             [NodeType.HIGHLIGHT]: 'Highlight',
             [NodeType.MATRIX]: 'Matrix',
-            [NodeType.CELL]: 'Cell'
+            [NodeType.CELL]: 'Cell',
+            [NodeType.ROW]: 'Row',
+            [NodeType.COLUMN]: 'Column'
         };
         return labels[type] || type;
     }
-
+    
     getNodeTypeIcon(type) {
         const icons = {
             [NodeType.HUMAN]: '💬',
@@ -1448,7 +1474,9 @@ class Canvas {
             [NodeType.RESEARCH]: '📚',
             [NodeType.HIGHLIGHT]: '✨',
             [NodeType.MATRIX]: '📊',
-            [NodeType.CELL]: '📦'
+            [NodeType.CELL]: '📦',
+            [NodeType.ROW]: '↔️',
+            [NodeType.COLUMN]: '↕️'
         };
         return icons[type] || '📄';
     }
@@ -1522,10 +1550,10 @@ class Canvas {
         // Corner cell with context
         tableHtml += `<th class="corner-cell" title="${this.escapeHtml(context)}"><span class="matrix-header-text">${this.escapeHtml(context)}</span></th>`;
         
-        // Column headers
+        // Column headers - clickable to extract column
         for (let c = 0; c < colItems.length; c++) {
             const colItem = colItems[c];
-            tableHtml += `<th title="${this.escapeHtml(colItem)}">
+            tableHtml += `<th class="col-header" data-col="${c}" title="Click to extract column: ${this.escapeHtml(colItem)}">
                 <span class="matrix-header-text">${this.escapeHtml(colItem)}</span>
             </th>`;
         }
@@ -1536,8 +1564,8 @@ class Canvas {
             const rowItem = rowItems[r];
             tableHtml += '<tr>';
             
-            // Row header
-            tableHtml += `<td class="row-header" title="${this.escapeHtml(rowItem)}">
+            // Row header - clickable to extract row
+            tableHtml += `<td class="row-header" data-row="${r}" title="Click to extract row: ${this.escapeHtml(rowItem)}">
                 <span class="matrix-header-text">${this.escapeHtml(rowItem)}</span>
             </td>`;
             

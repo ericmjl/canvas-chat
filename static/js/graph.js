@@ -15,7 +15,9 @@ const NodeType = {
     RESEARCH: 'research',  // Exa deep research node
     HIGHLIGHT: 'highlight', // Excerpted text from another node
     MATRIX: 'matrix',      // Cross-product evaluation table
-    CELL: 'cell'           // Pinned cell from a matrix
+    CELL: 'cell',          // Pinned cell from a matrix
+    ROW: 'row',            // Extracted row from a matrix
+    COLUMN: 'column'       // Extracted column from a matrix
 };
 
 /**
@@ -104,6 +106,62 @@ function createCellNode(matrixId, rowIndex, colIndex, rowItem, colItem, content,
         rowIndex,
         colIndex,
         rowItem,
+        colItem,
+        position: options.position || { x: 0, y: 0 },
+        created_at: Date.now(),
+        ...options
+    };
+}
+
+/**
+ * Create a row node (extracted row from a matrix)
+ */
+function createRowNode(matrixId, rowIndex, rowItem, colItems, cellContents, options = {}) {
+    // Format content as a list of column items and their cell contents
+    let content = `**Row: ${rowItem}**\n\n`;
+    for (let c = 0; c < colItems.length; c++) {
+        const cellContent = cellContents[c];
+        if (cellContent) {
+            content += `### ${colItems[c]}\n${cellContent}\n\n`;
+        } else {
+            content += `### ${colItems[c]}\n*(empty)*\n\n`;
+        }
+    }
+    
+    return {
+        id: crypto.randomUUID(),
+        type: NodeType.ROW,
+        content: content.trim(),
+        matrixId,
+        rowIndex,
+        rowItem,
+        position: options.position || { x: 0, y: 0 },
+        created_at: Date.now(),
+        ...options
+    };
+}
+
+/**
+ * Create a column node (extracted column from a matrix)
+ */
+function createColumnNode(matrixId, colIndex, colItem, rowItems, cellContents, options = {}) {
+    // Format content as a list of row items and their cell contents
+    let content = `**Column: ${colItem}**\n\n`;
+    for (let r = 0; r < rowItems.length; r++) {
+        const cellContent = cellContents[r];
+        if (cellContent) {
+            content += `### ${rowItems[r]}\n${cellContent}\n\n`;
+        } else {
+            content += `### ${rowItems[r]}\n*(empty)*\n\n`;
+        }
+    }
+    
+    return {
+        id: crypto.randomUUID(),
+        type: NodeType.COLUMN,
+        content: content.trim(),
+        matrixId,
+        colIndex,
         colItem,
         position: options.position || { x: 0, y: 0 },
         created_at: Date.now(),
@@ -498,7 +556,7 @@ class Graph {
      * Auto-position a new node relative to its parents, avoiding overlaps
      */
     autoPosition(parentIds) {
-        const NODE_WIDTH = 320;
+        const NODE_WIDTH = 420;
         const NODE_HEIGHT = 200;  // Estimated default height
         const HORIZONTAL_GAP = 80;
         const VERTICAL_GAP = 30;
@@ -568,7 +626,7 @@ class Graph {
         const PADDING = 20;  // Minimum gap between nodes
         
         for (const node of nodes) {
-            const nodeWidth = node.width || 320;
+            const nodeWidth = node.width || 420;
             const nodeHeight = node.height || 200;
             
             // Check bounding box overlap
@@ -592,7 +650,7 @@ class Graph {
      * @param {Map} dimensions - Optional map of nodeId -> { width, height } from canvas
      */
     autoLayout(dimensions = new Map()) {
-        const DEFAULT_WIDTH = 360;
+        const DEFAULT_WIDTH = 420;
         const DEFAULT_HEIGHT = 220;
         const HORIZONTAL_GAP = 120;
         const VERTICAL_GAP = 40;
@@ -765,7 +823,7 @@ class Graph {
      * @param {Map} dimensions - Optional map of nodeId -> { width, height } from canvas
      */
     forceDirectedLayout(dimensions = new Map()) {
-        const DEFAULT_WIDTH = 360;
+        const DEFAULT_WIDTH = 420;
         const DEFAULT_HEIGHT = 220;
         const ITERATIONS = 100;
         const REPULSION = 50000;      // Repulsion force between nodes
@@ -932,7 +990,7 @@ class Graph {
      * @param {Map} dimensions - Map of nodeId -> { width, height }
      */
     resolveOverlaps(nodes, dimensions = new Map()) {
-        const DEFAULT_WIDTH = 360;
+        const DEFAULT_WIDTH = 420;
         const DEFAULT_HEIGHT = 220;
         const PADDING = 40;
         const MAX_ITERATIONS = 50;
@@ -1063,3 +1121,7 @@ window.EdgeType = EdgeType;
 window.TAG_COLORS = TAG_COLORS;
 window.createNode = createNode;
 window.createEdge = createEdge;
+window.createMatrixNode = createMatrixNode;
+window.createCellNode = createCellNode;
+window.createRowNode = createRowNode;
+window.createColumnNode = createColumnNode;

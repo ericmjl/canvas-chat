@@ -1500,6 +1500,12 @@ kbd {
     min-height: 60px;
 }
 
+.slice-content {
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
 /* Matrix Node */
 .node.matrix {
     background: var(--bg-primary);
@@ -1627,6 +1633,21 @@ kbd {
 
 .matrix-table td.row-header {
     background: var(--bg-secondary);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.matrix-table td.row-header:hover {
+    background: var(--selection-bg);
+}
+
+.matrix-table th.col-header {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.matrix-table th.col-header:hover {
+    background: var(--selection-bg);
 }
 
 .matrix-table .corner-cell {
