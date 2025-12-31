@@ -27,8 +27,7 @@ image = (
         "pydantic>=2.0.0",
         "exa-py>=1.0.0",
     )
-    .add_local_dir("static", remote_path="/app/static")
-    .add_local_file("app.py", remote_path="/app/app.py")
+    .add_local_dir("src/canvas_chat", remote_path="/app/canvas_chat")
 )
 
 
@@ -44,6 +43,6 @@ def fastapi_app():
 
     sys.path.insert(0, "/app")
 
-    from app import app as canvas_app
+    from canvas_chat.app import app as canvas_app
 
     return canvas_app

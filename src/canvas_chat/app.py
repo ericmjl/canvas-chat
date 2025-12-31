@@ -1394,13 +1394,3 @@ Examples:
         logger.error(f"Generate summary failed: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
-
-
-if __name__ == "__main__":
-    import random
-
-    import uvicorn
-
-    port = random.randint(7000, 7999)
-    print(f"Starting Canvas Chat on http://127.0.0.1:{port}")
-    uvicorn.run("app:app", host="127.0.0.1", port=port, reload=True)

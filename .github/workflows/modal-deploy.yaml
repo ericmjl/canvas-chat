@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   deploy:
@@ -20,5 +23,10 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Deploy Canvas Chat
+      - name: Deploy to test environment (PR)
+        if: github.event_name == 'pull_request'
+        run: uv run --with modal modal deploy modal_app.py -e test
+
+      - name: Deploy to main environment (push to main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: uv run --with modal modal deploy modal_app.py

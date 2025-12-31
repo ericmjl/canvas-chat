@@ -3,15 +3,15 @@
 import pytest
 from pydantic import ValidationError
 
+from canvas_chat.app import (
+    ExaContentsResult,
+    ExaGetContentsRequest,
+    RefineQueryRequest,
+)
+
 
 def test_exa_get_contents_request_valid():
     """Test that ExaGetContentsRequest validates correct input."""
-    # Import here to avoid module-level import issues
-    import sys
-
-    sys.path.insert(0, ".")
-    from app import ExaGetContentsRequest
-
     request = ExaGetContentsRequest(
         url="https://example.com/article", api_key="test-api-key"
     )
@@ -21,33 +21,18 @@ def test_exa_get_contents_request_valid():
 
 def test_exa_get_contents_request_missing_url():
     """Test that ExaGetContentsRequest requires url."""
-    import sys
-
-    sys.path.insert(0, ".")
-    from app import ExaGetContentsRequest
-
     with pytest.raises(ValidationError):
         ExaGetContentsRequest(api_key="test-api-key")
 
 
 def test_exa_get_contents_request_missing_api_key():
     """Test that ExaGetContentsRequest requires api_key."""
-    import sys
-
-    sys.path.insert(0, ".")
-    from app import ExaGetContentsRequest
-
     with pytest.raises(ValidationError):
         ExaGetContentsRequest(url="https://example.com")
 
 
 def test_exa_contents_result_valid():
     """Test that ExaContentsResult validates correct input."""
-    import sys
-
-    sys.path.insert(0, ".")
-    from app import ExaContentsResult
-
     result = ExaContentsResult(
         title="Test Article",
         url="https://example.com/article",
@@ -64,11 +49,6 @@ def test_exa_contents_result_valid():
 
 def test_exa_contents_result_optional_fields():
     """Test that ExaContentsResult allows optional fields to be None."""
-    import sys
-
-    sys.path.insert(0, ".")
-    from app import ExaContentsResult
-
     result = ExaContentsResult(
         title="Test Article", url="https://example.com/article", text="Content here"
     )
@@ -78,11 +58,6 @@ def test_exa_contents_result_optional_fields():
 
 def test_exa_contents_result_missing_required():
     """Test that ExaContentsResult requires title, url, and text."""
-    import sys
-
-    sys.path.insert(0, ".")
-    from app import ExaContentsResult
-
     with pytest.raises(ValidationError):
         ExaContentsResult(title="Test", url="https://example.com")
 
@@ -95,11 +70,6 @@ def test_exa_contents_result_missing_required():
 
 def test_refine_query_request_valid():
     """Test that RefineQueryRequest validates correct input."""
-    import sys
-
-    sys.path.insert(0, ".")
-    from app import RefineQueryRequest
-
     request = RefineQueryRequest(
         user_query="how does this work?",
         context="Toffoli Gate (CCNOT) is a quantum gate...",
@@ -112,11 +82,6 @@ def test_refine_query_request_valid():
 
 def test_refine_query_request_defaults():
     """Test RefineQueryRequest default values."""
-    import sys
-
-    sys.path.insert(0, ".")
-    from app import RefineQueryRequest
-
     request = RefineQueryRequest(user_query="research this", context="Some context")
     assert request.command_type == "search"  # default
     assert request.model == "openai/gpt-4o-mini"  # default
@@ -126,11 +91,6 @@ def test_refine_query_request_defaults():
 
 def test_refine_query_request_research_type():
     """Test RefineQueryRequest with research command type."""
-    import sys
-
-    sys.path.insert(0, ".")
-    from app import RefineQueryRequest
-
     request = RefineQueryRequest(
         user_query="tell me more",
         context="Quantum computing basics",
@@ -141,11 +101,6 @@ def test_refine_query_request_research_type():
 
 def test_refine_query_request_missing_required():
     """Test that RefineQueryRequest requires user_query and context."""
-    import sys
-
-    sys.path.insert(0, ".")
-    from app import RefineQueryRequest
-
     with pytest.raises(ValidationError):
         RefineQueryRequest(context="Some context")
 
