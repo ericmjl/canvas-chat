@@ -1597,8 +1597,19 @@ class App {
             
             // Update the graph data
             const cellKey = `${row}-${col}`;
+            const oldCell = matrixNode.cells[cellKey] ? { ...matrixNode.cells[cellKey] } : { content: null, filled: false };
             matrixNode.cells[cellKey] = { content: cellContent, filled: true };
             this.graph.updateNode(nodeId, { cells: matrixNode.cells });
+            
+            // Push undo action for cell fill
+            this.undoManager.push({
+                type: 'FILL_CELL',
+                nodeId,
+                row,
+                col,
+                oldCell,
+                newCell: { content: cellContent, filled: true }
+            });
             
             this.saveSession();
             
@@ -2960,9 +2971,21 @@ class App {
                 // Restore old tags
                 this.graph.updateNode(action.nodeId, { tags: action.oldTags });
                 // Re-render the node to update tag display
-                const node = this.graph.getNode(action.nodeId);
-                if (node) {
-                    this.canvas.renderNode(node);
+                const tagNode = this.graph.getNode(action.nodeId);
+                if (tagNode) {
+                    this.canvas.renderNode(tagNode);
+                }
+                break;
+                
+            case 'FILL_CELL':
+                // Restore old cell state
+                const matrixNodeUndo = this.graph.getNode(action.nodeId);
+                if (matrixNodeUndo && matrixNodeUndo.type === NodeType.MATRIX) {
+                    const cellKey = `${action.row}-${action.col}`;
+                    matrixNodeUndo.cells[cellKey] = { ...action.oldCell };
+                    this.graph.updateNode(action.nodeId, { cells: matrixNodeUndo.cells });
+                    this.canvas.updateMatrixCell(action.nodeId, action.row, action.col, 
+                        action.oldCell.filled ? action.oldCell.content : null, false);
                 }
                 break;
         }
@@ -3035,9 +3058,21 @@ class App {
                 // Apply new tags
                 this.graph.updateNode(action.nodeId, { tags: action.newTags });
                 // Re-render the node to update tag display
-                const node = this.graph.getNode(action.nodeId);
-                if (node) {
-                    this.canvas.renderNode(node);
+                const tagNodeRedo = this.graph.getNode(action.nodeId);
+                if (tagNodeRedo) {
+                    this.canvas.renderNode(tagNodeRedo);
+                }
+                break;
+                
+            case 'FILL_CELL':
+                // Re-apply cell fill
+                const matrixNodeRedo = this.graph.getNode(action.nodeId);
+                if (matrixNodeRedo && matrixNodeRedo.type === NodeType.MATRIX) {
+                    const cellKey = `${action.row}-${action.col}`;
+                    matrixNodeRedo.cells[cellKey] = { ...action.newCell };
+                    this.graph.updateNode(action.nodeId, { cells: matrixNodeRedo.cells });
+                    this.canvas.updateMatrixCell(action.nodeId, action.row, action.col, 
+                        action.newCell.content, false);
                 }
                 break;
         }
