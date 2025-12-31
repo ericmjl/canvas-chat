@@ -1594,9 +1594,9 @@ kbd {
 
 /* Modal extra-wide variant (for editing large content) */
 .modal-extra-wide {
-    max-width: 80vw;
-    width: 80vw;
-    height: 70vh;
+    max-width: 90vw;
+    width: 90vw;
+    height: 80vh;
     display: flex;
     flex-direction: column;
 }
@@ -1609,12 +1609,37 @@ kbd {
     padding: 12px 20px;
 }
 
+/* Split-pane editor layout */
+.edit-content-body {
+    flex-direction: row !important;
+    gap: 16px;
+}
+
+.edit-content-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.pane-header {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--bg-secondary);
+}
+
 #edit-content-textarea {
     flex: 1;
     width: 100%;
     font-family: var(--font-mono);
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1.6;
     padding: 12px;
     border: 1px solid var(--bg-secondary);
     border-radius: var(--radius-sm);
@@ -1627,6 +1652,15 @@ kbd {
 #edit-content-textarea:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px var(--selection-bg);
+}
+
+#edit-content-preview {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
 }
 
 .modal-extra-wide .modal-actions {

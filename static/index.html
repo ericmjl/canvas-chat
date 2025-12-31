@@ -448,8 +448,15 @@
                 <h2>Edit Content</h2>
                 <button class="modal-close" id="edit-content-close">&times;</button>
             </div>
-            <div class="modal-body">
-                <textarea id="edit-content-textarea" placeholder="Edit the fetched content..."></textarea>
+            <div class="modal-body edit-content-body">
+                <div class="edit-content-pane edit-pane">
+                    <div class="pane-header">Markdown</div>
+                    <textarea id="edit-content-textarea" placeholder="Edit the fetched content..."></textarea>
+                </div>
+                <div class="edit-content-pane preview-pane">
+                    <div class="pane-header">Preview</div>
+                    <div id="edit-content-preview" class="node-content"></div>
+                </div>
             </div>
             <div class="modal-actions">
                 <button class="secondary-btn" id="edit-content-cancel">Cancel</button>

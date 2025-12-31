@@ -2762,13 +2762,35 @@ class App {
         if (!node) return;
         
         this.editingNodeId = nodeId;
-        document.getElementById('edit-content-textarea').value = node.content || '';
+        const textarea = document.getElementById('edit-content-textarea');
+        const preview = document.getElementById('edit-content-preview');
+        
+        textarea.value = node.content || '';
+        
+        // Render initial preview
+        this.updateEditContentPreview();
+        
+        // Set up live preview on input
+        textarea.oninput = () => this.updateEditContentPreview();
+        
         document.getElementById('edit-content-modal').style.display = 'flex';
         
         // Focus the textarea
         setTimeout(() => {
-            document.getElementById('edit-content-textarea').focus();
+            textarea.focus();
         }, 100);
+    }
+    
+    /**
+     * Update the live preview in the edit content modal
+     */
+    updateEditContentPreview() {
+        const textarea = document.getElementById('edit-content-textarea');
+        const preview = document.getElementById('edit-content-preview');
+        const content = textarea.value || '';
+        
+        // Use the canvas's renderMarkdown method for consistent styling
+        preview.innerHTML = this.canvas.renderMarkdown(content);
     }
     
     /**
@@ -2776,6 +2798,7 @@ class App {
      */
     hideEditContentModal() {
         document.getElementById('edit-content-modal').style.display = 'none';
+        document.getElementById('edit-content-textarea').oninput = null;
         this.editingNodeId = null;
     }
     
