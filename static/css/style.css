@@ -1592,6 +1592,47 @@ kbd {
     max-width: 700px;
 }
 
+/* Modal extra-wide variant (for editing large content) */
+.modal-extra-wide {
+    max-width: 80vw;
+    width: 80vw;
+    height: 70vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-extra-wide .modal-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px 20px;
+}
+
+#edit-content-textarea {
+    flex: 1;
+    width: 100%;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 12px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    resize: none;
+    outline: none;
+}
+
+#edit-content-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--selection-bg);
+}
+
+.modal-extra-wide .modal-actions {
+    padding: 12px 20px 20px;
+}
+
 /* Help Modal */
 .help-content {
     max-height: 70vh;

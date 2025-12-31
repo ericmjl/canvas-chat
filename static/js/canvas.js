@@ -47,6 +47,8 @@ class Canvas {
         this.onNodeRetry = null;  // For retrying failed operations
         this.onNodeDismissError = null;  // For dismissing error nodes
         this.onNodeFitToViewport = null;  // For resizing node to 80% of viewport
+        this.onNodeEditContent = null;  // For editing node content (FETCH_RESULT)
+        this.onNodeResummarize = null;  // For re-summarizing edited content
         
         // Reply tooltip state
         this.branchTooltip = null;
@@ -1019,12 +1021,15 @@ class Canvas {
         
         // Create node HTML - different for matrix nodes
         const div = document.createElement('div');
-        div.className = `node ${node.type}`;
+        // Apply viewport-fitted class if node has explicit stored dimensions (enables scrollable content)
+        const hasExplicitSize = node.width && node.height;
+        div.className = `node ${node.type}${hasExplicitSize ? ' viewport-fitted' : ''}`;
         div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
         div.style.width = '100%';
         
         // Matrix nodes need fixed height to allow shrinking; others use min-height
-        if (isMatrix) {
+        // Nodes with explicit dimensions also need fixed height for scrolling
+        if (isMatrix || hasExplicitSize) {
             div.style.height = '100%';
             div.style.overflow = 'hidden';
         } else {
@@ -1065,6 +1070,8 @@ class Canvas {
                     <button class="node-action reply-btn" title="Reply">↩️ Reply</button>
                     ${node.type === NodeType.AI ? '<button class="node-action summarize-btn" title="Summarize">📝 Summarize</button>' : ''}
                     ${node.type === NodeType.REFERENCE ? '<button class="node-action fetch-summarize-btn" title="Fetch full content and summarize">📄 Fetch & Summarize</button>' : ''}
+                    ${node.type === NodeType.FETCH_RESULT ? '<button class="node-action edit-content-btn" title="Edit fetched content">✏️ Edit</button>' : ''}
+                    ${node.type === NodeType.FETCH_RESULT ? '<button class="node-action resummarize-btn" title="Create new summary from edited content">📝 Re-summarize</button>' : ''}
                     <button class="node-action copy-btn" title="Copy content">📋 Copy</button>
                 </div>
                 <div class="resize-handle resize-e" data-resize="e"></div>
@@ -1260,6 +1267,24 @@ class Canvas {
                 } catch (err) {
                     console.error('Failed to copy:', err);
                 }
+            });
+        }
+        
+        // Edit content button (FETCH_RESULT nodes)
+        const editContentBtn = div.querySelector('.edit-content-btn');
+        if (editContentBtn) {
+            editContentBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.onNodeEditContent) this.onNodeEditContent(node.id);
+            });
+        }
+        
+        // Re-summarize button (FETCH_RESULT nodes)
+        const resummarizeBtn = div.querySelector('.resummarize-btn');
+        if (resummarizeBtn) {
+            resummarizeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.onNodeResummarize) this.onNodeResummarize(node.id);
             });
         }
         

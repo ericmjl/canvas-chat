@@ -364,6 +364,9 @@ class App {
         // Retry contexts for error recovery
         this.retryContexts = new Map();  // nodeId -> { type, ...context }
         
+        // Edit content modal state
+        this.editingNodeId = null;
+        
         // Undo/Redo manager
         this.undoManager = new UndoManager();
         
@@ -414,6 +417,10 @@ class App {
         
         // Node resize to viewport callback
         this.canvas.onNodeFitToViewport = this.handleNodeFitToViewport.bind(this);
+        
+        // Content editing callbacks (for FETCH_RESULT nodes)
+        this.canvas.onNodeEditContent = this.handleNodeEditContent.bind(this);
+        this.canvas.onNodeResummarize = this.handleNodeResummarize.bind(this);
         
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
@@ -634,6 +641,17 @@ class App {
         });
         document.getElementById('help-close').addEventListener('click', () => {
             this.hideHelpModal();
+        });
+        
+        // Edit content modal
+        document.getElementById('edit-content-close').addEventListener('click', () => {
+            this.hideEditContentModal();
+        });
+        document.getElementById('edit-content-cancel').addEventListener('click', () => {
+            this.hideEditContentModal();
+        });
+        document.getElementById('edit-content-save').addEventListener('click', () => {
+            this.handleEditContentSave();
         });
         
         // Undo/Redo buttons
@@ -2345,7 +2363,14 @@ class App {
             // Update the FETCH_RESULT node with the raw content
             const fetchedContent = `**[${contentData.title}](${url})**\n\n${contentData.text}`;
             this.canvas.updateNodeContent(fetchResultNode.id, fetchedContent, false);
-            this.graph.updateNode(fetchResultNode.id, { content: fetchedContent });
+            this.graph.updateNode(fetchResultNode.id, { 
+                content: fetchedContent,
+                versions: [{
+                    content: fetchedContent,
+                    timestamp: Date.now(),
+                    reason: 'fetched'
+                }]
+            });
             
             // Create SUMMARY node for the AI summary
             const summaryNode = createNode(NodeType.SUMMARY, 'Summarizing content...', {
@@ -2727,6 +2752,170 @@ class App {
      */
     handleNodeFitToViewport(nodeId) {
         this.canvas.resizeNodeToViewport(nodeId);
+    }
+    
+    /**
+     * Handle opening the edit content modal for a node
+     */
+    handleNodeEditContent(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+        
+        this.editingNodeId = nodeId;
+        document.getElementById('edit-content-textarea').value = node.content || '';
+        document.getElementById('edit-content-modal').style.display = 'flex';
+        
+        // Focus the textarea
+        setTimeout(() => {
+            document.getElementById('edit-content-textarea').focus();
+        }, 100);
+    }
+    
+    /**
+     * Hide the edit content modal
+     */
+    hideEditContentModal() {
+        document.getElementById('edit-content-modal').style.display = 'none';
+        this.editingNodeId = null;
+    }
+    
+    /**
+     * Save edited content with versioning
+     */
+    handleEditContentSave() {
+        if (!this.editingNodeId) return;
+        
+        const node = this.graph.getNode(this.editingNodeId);
+        if (!node) {
+            this.hideEditContentModal();
+            return;
+        }
+        
+        const newContent = document.getElementById('edit-content-textarea').value;
+        
+        // Don't save if content hasn't changed
+        if (newContent === node.content) {
+            this.hideEditContentModal();
+            return;
+        }
+        
+        // Initialize versions array if needed
+        if (!node.versions) {
+            node.versions = [{
+                content: node.content,
+                timestamp: node.createdAt || Date.now(),
+                reason: 'initial'
+            }];
+        }
+        
+        // Store current content as a version before updating
+        node.versions.push({
+            content: node.content,
+            timestamp: Date.now(),
+            reason: 'before edit'
+        });
+        
+        // Update content
+        node.content = newContent;
+        
+        // Re-render node
+        this.canvas.updateNodeContent(this.editingNodeId, this.canvas.renderMarkdown(newContent));
+        
+        // Close modal and save
+        this.hideEditContentModal();
+        this.saveSession();
+    }
+    
+    /**
+     * Handle re-summarizing a FETCH_RESULT node (creates new SUMMARY node)
+     */
+    async handleNodeResummarize(nodeId) {
+        const fetchNode = this.graph.getNode(nodeId);
+        if (!fetchNode) return;
+        
+        // Get parent reference node for URL context
+        const parents = this.graph.getParents(nodeId);
+        const refNode = parents.find(p => p.type === NodeType.REFERENCE);
+        const url = refNode?.url || 'the fetched content';
+        
+        // Create new SUMMARY node
+        const summaryNode = {
+            id: this.generateId(),
+            type: NodeType.SUMMARY,
+            content: '',
+            position: {
+                x: fetchNode.position.x + 50,
+                y: fetchNode.position.y + (fetchNode.height || 200) + 50
+            },
+            createdAt: Date.now()
+        };
+        
+        this.graph.addNode(summaryNode);
+        const edge = { source: nodeId, target: summaryNode.id };
+        this.graph.addEdge(edge);
+        
+        this.canvas.renderNode(summaryNode);
+        this.canvas.renderEdge(edge, fetchNode.position, summaryNode.position);
+        
+        // Pan to new node
+        this.canvas.panToNodeAnimated(summaryNode.id, 300);
+        
+        // Select the new node
+        this.canvas.selectNode(summaryNode.id);
+        
+        // Stream summary from LLM
+        const model = this.modelPicker.value;
+        const apiKey = chat.getApiKeyForModel(model);
+        
+        if (!apiKey) {
+            summaryNode.content = '*Error: No API key configured for the selected model.*';
+            this.canvas.updateNodeContent(summaryNode.id, this.canvas.renderMarkdown(summaryNode.content));
+            this.saveSession();
+            return;
+        }
+        
+        const systemPrompt = `You are a helpful assistant that summarizes content concisely. 
+Focus on the key points and main ideas. Use markdown formatting.`;
+        
+        const userPrompt = `Please summarize the following content from ${url}:
+
+${fetchNode.content}`;
+        
+        try {
+            // Show streaming indicator
+            this.canvas.setNodeStreaming(summaryNode.id, true);
+            
+            let fullContent = '';
+            
+            await chat.streamChat(
+                [{ role: 'user', content: userPrompt }],
+                model,
+                apiKey,
+                (chunk) => {
+                    fullContent += chunk;
+                    summaryNode.content = fullContent;
+                    this.canvas.updateNodeContent(summaryNode.id, this.canvas.renderMarkdown(fullContent));
+                },
+                systemPrompt
+            );
+            
+            // Done streaming
+            this.canvas.setNodeStreaming(summaryNode.id, false);
+            summaryNode.model = model;
+            
+            // Update edges after content settles
+            requestAnimationFrame(() => {
+                this.canvas.updateEdgesForNode(summaryNode.id, summaryNode.position);
+            });
+            
+        } catch (error) {
+            console.error('Re-summarize error:', error);
+            summaryNode.content = `*Error generating summary: ${error.message}*`;
+            this.canvas.updateNodeContent(summaryNode.id, this.canvas.renderMarkdown(summaryNode.content));
+            this.canvas.setNodeStreaming(summaryNode.id, false);
+        }
+        
+        this.saveSession();
     }
     
     /**
