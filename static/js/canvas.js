@@ -816,29 +816,28 @@ class Canvas {
                     if (resizeType.includes('e')) {
                         newWidth = Math.max(200, startWidth + dx);
                     }
-                    if (resizeType.includes('s')) {
-                        newHeight = Math.max(100, startHeight + dy);
-                    }
                     
                     wrapper.setAttribute('width', newWidth);
                     
-                    // If only resizing width (east), auto-adjust height based on content
-                    // But NOT for matrix nodes - they should keep their height
+                    // Get minimum content height (needed for both width-only and height resizing)
                     const isMatrixNode = div.classList.contains('matrix');
-                    if (resizeType === 'e' && !isMatrixNode) {
+                    let minContentHeight = 100;
+                    
+                    if (!isMatrixNode) {
                         // Temporarily remove min-height to get natural content height
                         const oldMinHeight = div.style.minHeight;
                         div.style.minHeight = 'auto';
-                        
-                        // Force reflow and measure
-                        const contentHeight = div.scrollHeight;
-                        
-                        // Restore and set new height
+                        minContentHeight = div.scrollHeight + 10;
                         div.style.minHeight = oldMinHeight;
-                        wrapper.setAttribute('height', Math.max(100, contentHeight + 10));
-                    } else if (resizeType.includes('s')) {
-                        // Only update height if explicitly resizing south
+                    }
+                    
+                    if (resizeType.includes('s')) {
+                        // When resizing south, don't allow smaller than content height
+                        newHeight = Math.max(minContentHeight, startHeight + dy);
                         wrapper.setAttribute('height', newHeight);
+                    } else if (resizeType === 'e' && !isMatrixNode) {
+                        // If only resizing width (east), auto-adjust height based on content
+                        wrapper.setAttribute('height', Math.max(100, minContentHeight));
                     }
                     // If just resizing east on a matrix, don't change height at all
                     
@@ -1933,14 +1932,19 @@ class Canvas {
             this.renderNode(node);
         }
         
-        // Then render edges
-        for (const edge of graph.getAllEdges()) {
-            const sourceNode = graph.getNode(edge.source);
-            const targetNode = graph.getNode(edge.target);
-            if (sourceNode && targetNode) {
-                this.renderEdge(edge, sourceNode.position, targetNode.position);
-            }
-        }
+        // Render edges after a frame to allow node heights to settle
+        // (renderNode uses requestAnimationFrame to measure content height)
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                for (const edge of graph.getAllEdges()) {
+                    const sourceNode = graph.getNode(edge.source);
+                    const targetNode = graph.getNode(edge.target);
+                    if (sourceNode && targetNode) {
+                        this.renderEdge(edge, sourceNode.position, targetNode.position);
+                    }
+                }
+            });
+        });
     }
 }
 
