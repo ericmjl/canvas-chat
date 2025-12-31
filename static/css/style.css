@@ -126,12 +126,33 @@ html, body {
     padding: 0 16px;
     z-index: 100;
     box-shadow: var(--shadow-sm);
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+/* Hide scrollbar but keep functionality */
+#toolbar::-webkit-scrollbar {
+    height: 4px;
+}
+
+#toolbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#toolbar::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 2px;
+}
+
+#toolbar::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
 }
 
 .toolbar-left, .toolbar-center, .toolbar-right {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
 }
 
 .logo {
