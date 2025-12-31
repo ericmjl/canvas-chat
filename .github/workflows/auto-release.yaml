@@ -1,13 +1,13 @@
 name: Auto-release
 
 on:
-  # Automatic patch release after deploy workflow completes on main.
-  # This triggers whenever the "Deploy to Modal" workflow completes.
+  # Automatic patch release after tests pass on main.
+  # This triggers whenever the "Tests" workflow completes.
   # The job-level `if` condition ensures we only release when:
-  # 1. Deploy succeeded (conclusion == 'success')
+  # 1. Tests passed (conclusion == 'success')
   # 2. It was a push event (not a PR) - i.e., code was merged to main
   workflow_run:
-    workflows: ["Deploy to Modal"]
+    workflows: ["Tests"]
     types:
       - completed
     branches:
@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -75,13 +75,13 @@ jobs:
 
       - name: Setup Python environment
         if: steps.check_release.outputs.already_released == 'false'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install uv
         if: steps.check_release.outputs.already_released == 'false'
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
 
       - name: Set up Python tools
         if: steps.check_release.outputs.already_released == 'false'
