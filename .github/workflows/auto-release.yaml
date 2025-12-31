@@ -123,6 +123,24 @@ jobs:
         if: steps.check_release.outputs.already_released == 'false'
         run: git tag | grep ${{ env.version_number }}
 
+      - name: Install llamabot
+        if: steps.check_release.outputs.already_released == 'false'
+        run: uv tool install llamabot[cli]
+
+      - name: Write release notes
+        if: steps.check_release.outputs.already_released == 'false'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          llamabot configure default-model --model-name="gpt-4.1-mini"
+          llamabot git write-release-notes
+
+      - name: Commit release notes
+        if: steps.check_release.outputs.already_released == 'false'
+        run: |
+          git add .
+          git commit -m "Add release notes for v${{ env.version_number }}"
+
       - name: Build package
         if: steps.check_release.outputs.already_released == 'false'
         run: uv build --sdist --wheel
@@ -140,7 +158,7 @@ jobs:
         if: steps.check_release.outputs.already_released == 'false'
         uses: ncipollo/release-action@v1
         with:
-          generateReleaseNotes: true
+          bodyFile: "docs/releases/v${{ env.version_number }}.md"
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: v${{ env.version_number }}
 
