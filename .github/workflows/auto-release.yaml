@@ -1,0 +1,149 @@
+name: Auto-release
+
+on:
+  # Automatic patch release after deploy workflow completes on main.
+  # This triggers whenever the "Deploy to Modal" workflow completes.
+  # The job-level `if` condition ensures we only release when:
+  # 1. Deploy succeeded (conclusion == 'success')
+  # 2. It was a push event (not a PR) - i.e., code was merged to main
+  workflow_run:
+    workflows: ["Deploy to Modal"]
+    types:
+      - completed
+    branches:
+      - main
+
+  # Manual release for minor/major versions.
+  # To cut a new release, navigate to the Actions section of the repo
+  # and select this workflow (Auto-release) on the right hand side.
+  # Then, click "Run workflow" and select major, minor, or patch.
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "One of major, minor, or patch"
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  DEFAULT_VERSION_NAME: patch
+
+jobs:
+  release:
+    name: Create a new release
+    runs-on: ubuntu-latest
+    # Run if:
+    # 1. Manual trigger (workflow_dispatch), OR
+    # 2. Automatic trigger where deploy passed AND it was a push (not PR)
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Pull latest commits of main branch
+        run: |
+          git checkout main
+          git pull
+
+      - name: Check if already released
+        id: check_release
+        run: |
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          echo "Current commit: $CURRENT_COMMIT"
+          if git tag --points-at $CURRENT_COMMIT | grep -q "^v"; then
+            echo "already_released=true" >> $GITHUB_OUTPUT
+            echo "This commit already has a release tag. Will skip release."
+            git tag --points-at $CURRENT_COMMIT
+          else
+            echo "already_released=false" >> $GITHUB_OUTPUT
+            echo "No release tag found. Proceeding with release."
+          fi
+
+      - name: Setup Python environment
+        if: steps.check_release.outputs.already_released == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        if: steps.check_release.outputs.already_released == 'false'
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python tools
+        if: steps.check_release.outputs.already_released == 'false'
+        run: uv tool install bump2version
+
+      - name: Set version name
+        if: steps.check_release.outputs.already_released == 'false'
+        run: echo "VERSION_NAME=${{ github.event.inputs.version_name || env.DEFAULT_VERSION_NAME }}" >> $GITHUB_ENV
+
+      - name: Dry run bump2version
+        if: steps.check_release.outputs.already_released == 'false'
+        run: bump2version --dry-run ${{ env.VERSION_NAME }} --allow-dirty --verbose
+
+      - name: Store new version number
+        if: steps.check_release.outputs.already_released == 'false'
+        run: echo "version_number=$(bump2version --dry-run --list ${{ env.VERSION_NAME }} | grep new_version | sed -r 's/^.*=//')" >> $GITHUB_ENV
+
+      - name: Display new version number
+        if: steps.check_release.outputs.already_released == 'false'
+        run: |
+          echo "version_name: ${{ env.VERSION_NAME }}"
+          echo "version_number: v${{ env.version_number }}"
+
+      - name: Ensure repo status is clean
+        if: steps.check_release.outputs.already_released == 'false'
+        run: git status
+
+      - name: Configure Git
+        if: steps.check_release.outputs.already_released == 'false'
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+      - name: Run bump2version
+        if: steps.check_release.outputs.already_released == 'false'
+        run: bump2version ${{ env.VERSION_NAME }} --verbose
+
+      - name: Ensure tag creation
+        if: steps.check_release.outputs.already_released == 'false'
+        run: git tag | grep ${{ env.version_number }}
+
+      - name: Build package
+        if: steps.check_release.outputs.already_released == 'false'
+        run: uv build --sdist --wheel
+
+      - name: Publish package (trusted publishing)
+        if: steps.check_release.outputs.already_released == 'false'
+        run: uv publish --trusted-publishing always
+
+      - name: Push changes with tags
+        if: steps.check_release.outputs.already_released == 'false'
+        run: |
+          git push && git push --tags
+
+      - name: Create release in GitHub repo
+        if: steps.check_release.outputs.already_released == 'false'
+        uses: ncipollo/release-action@v1
+        with:
+          generateReleaseNotes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: v${{ env.version_number }}
+
+      - name: Ensure complete
+        if: steps.check_release.outputs.already_released == 'false'
+        run: echo "Auto-release complete!"
