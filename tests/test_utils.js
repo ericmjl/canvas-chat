@@ -810,6 +810,41 @@ test('resolveOverlaps: preserves non-overlapping nodes', () => {
     }
 });
 
+test('resolveOverlaps: handles mixed node sizes (tall and wide)', () => {
+    // This tests the bug where overlap check only considered width
+    // A tall narrow node and a wide short node can overlap if only width is checked
+    const nodes = [
+        { position: { x: 100, y: 100 }, width: 640, height: 480 },  // Large scrollable
+        { position: { x: 300, y: 400 }, width: 420, height: 150 }   // Small human node
+    ];
+    
+    assertTrue(hasAnyOverlap(nodes), 'Different-sized nodes should overlap initially');
+    
+    resolveOverlaps(nodes);
+    
+    assertFalse(hasAnyOverlap(nodes), 'Different-sized nodes should be separated');
+});
+
+test('resolveOverlaps: handles nodes at same Y with different heights', () => {
+    // Regression test: old algorithm only checked width for minSep
+    // Two nodes side by side but overlapping due to height
+    const nodes = [
+        { position: { x: 100, y: 200 }, width: 300, height: 400 },
+        { position: { x: 350, y: 100 }, width: 300, height: 400 }
+    ];
+    
+    // These overlap because:
+    // Node A: x 100-440 (with 40 padding), y 200-640
+    // Node B: x 350-690, y 100-540
+    // X overlap: 440 - 350 = 90
+    // Y overlap: 540 - 200 = 340
+    assertTrue(hasAnyOverlap(nodes), 'Nodes should overlap in Y dimension');
+    
+    resolveOverlaps(nodes);
+    
+    assertFalse(hasAnyOverlap(nodes), 'Nodes should be separated after resolution');
+});
+
 // ============================================================
 // Concurrent State Management tests
 // ============================================================

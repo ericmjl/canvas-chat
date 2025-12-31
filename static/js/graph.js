@@ -862,7 +862,7 @@ class Graph {
         const REPULSION = 50000;      // Repulsion force between nodes
         const ATTRACTION = 0.05;       // Spring constant for edges
         const DAMPING = 0.85;          // Velocity damping
-        const MIN_DISTANCE = 50;       // Minimum distance between nodes
+        const PADDING = 40;            // Padding between nodes for overlap check
         const IDEAL_EDGE_LENGTH = 400; // Ideal edge length
         
         const allNodes = this.getAllNodes();
@@ -925,8 +925,20 @@ class Graph {
                     const dy = centerBy - centerAy;
                     const distance = Math.sqrt(dx * dx + dy * dy) || 1;
                     
-                    // Minimum separation based on node sizes
-                    const minSep = (sizeA.width + sizeB.width) / 2 + MIN_DISTANCE;
+                    // Check for actual rectangular overlap (not just center distance)
+                    const aLeft = nodeA.position.x - PADDING;
+                    const aRight = nodeA.position.x + sizeA.width + PADDING;
+                    const aTop = nodeA.position.y - PADDING;
+                    const aBottom = nodeA.position.y + sizeA.height + PADDING;
+                    
+                    const bLeft = nodeB.position.x - PADDING;
+                    const bRight = nodeB.position.x + sizeB.width + PADDING;
+                    const bTop = nodeB.position.y - PADDING;
+                    const bBottom = nodeB.position.y + sizeB.height + PADDING;
+                    
+                    const overlapX = Math.min(aRight, bRight) - Math.max(aLeft, bLeft);
+                    const overlapY = Math.min(aBottom, bBottom) - Math.max(aTop, bTop);
+                    const isOverlapping = overlapX > 0 && overlapY > 0;
                     
                     // Repulsion force (Coulomb's law)
                     const force = REPULSION / (distance * distance);
@@ -939,9 +951,11 @@ class Graph {
                     forces.get(nodeB.id).x += fx;
                     forces.get(nodeB.id).y += fy;
                     
-                    // Extra repulsion if overlapping
-                    if (distance < minSep) {
-                        const overlapForce = (minSep - distance) * 2;
+                    // Strong extra repulsion if bounding boxes actually overlap
+                    if (isOverlapping) {
+                        // Push apart based on actual overlap amount
+                        // Use the minimum overlap axis for efficiency
+                        const overlapForce = Math.min(overlapX, overlapY) * 5;
                         const ofx = (dx / distance) * overlapForce;
                         const ofy = (dy / distance) * overlapForce;
                         forces.get(nodeA.id).x -= ofx;
