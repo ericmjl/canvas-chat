@@ -880,49 +880,33 @@ html, body {
     50% { opacity: 0; }
 }
 
-/* Streaming Controls - fixed at top of node during generation */
-.streaming-controls {
-    position: sticky;
-    top: 0;
-    display: none;
-    justify-content: center;
-    gap: 8px;
-    padding: 8px 12px;
-    background: linear-gradient(to bottom, var(--node-bg) 80%, transparent);
-    z-index: 10;
-    margin: -12px -12px 8px -12px;
-    padding-top: 12px;
-}
-
-.streaming-btn {
-    padding: 6px 16px;
+/* Header buttons (stop/continue) - in node header next to delete */
+.header-btn {
+    padding: 4px 8px;
     border: none;
-    border-radius: var(--radius-md);
-    font-size: 13px;
-    font-weight: 500;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
     cursor: pointer;
     transition: all 0.15s;
-    box-shadow: var(--shadow-sm);
+    display: none;
 }
 
-.streaming-btn.stop-btn {
+.header-btn.stop-btn {
     background: var(--danger);
     color: white;
 }
 
-.streaming-btn.stop-btn:hover {
+.header-btn.stop-btn:hover {
     background: #e03131;
-    transform: scale(1.02);
 }
 
-.streaming-btn.continue-btn {
+.header-btn.continue-btn {
     background: var(--success);
     color: white;
 }
 
-.streaming-btn.continue-btn:hover {
+.header-btn.continue-btn:hover {
     background: #2f9e44;
-    transform: scale(1.02);
 }
 
 /* Node Actions */

@@ -96,7 +96,7 @@ if (selectedNodeIds.length > 0) {
 
 ### Streaming controls placement
 
-Stop/Continue buttons for LLM generation are placed in a **sticky overlay at the top of each node**,
+Stop/Continue buttons for LLM generation are placed in the **node header next to the delete button**,
 not in the scrolling action bar. This design choice supports parallel generations:
 
 - Multiple AI nodes can stream responses simultaneously

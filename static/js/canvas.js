@@ -976,15 +976,11 @@ class Canvas {
                     </div>
                     <span class="node-type">${node.type === NodeType.CELL && node.title ? node.title : this.getNodeTypeLabel(node.type)}</span>
                     <span class="node-model">${node.model || ''}</span>
+                    ${node.type === NodeType.AI ? '<button class="header-btn stop-btn" title="Stop generating" style="display:none;">⏹</button>' : ''}
+                    ${node.type === NodeType.AI ? '<button class="header-btn continue-btn" title="Continue generating" style="display:none;">▶</button>' : ''}
                     <button class="node-action delete-btn" title="Delete node">🗑️</button>
                 </div>
                 <div class="node-content">${this.renderMarkdown(node.content)}</div>
-                ${node.type === NodeType.AI ? `
-                <div class="streaming-controls" style="display:none;">
-                    <button class="streaming-btn stop-btn" title="Stop generating">⏹ Stop</button>
-                    <button class="streaming-btn continue-btn" title="Continue generating" style="display:none;">▶ Continue</button>
-                </div>
-                ` : ''}
                 <div class="node-actions">
                     <button class="node-action reply-btn" title="Reply">↩️ Reply</button>
                     ${node.type === NodeType.AI ? '<button class="node-action summarize-btn" title="Summarize">📝 Summarize</button>' : ''}
@@ -1519,7 +1515,7 @@ class Canvas {
 
     /**
      * Show the stop button on a node (during streaming).
-     * The button is in a fixed overlay at the top of the node so it doesn't
+     * The button is in the node header next to the delete button so it doesn't
      * move as content streams in - important for parallel generations where
      * each node needs its own accessible stop control.
      */
@@ -1527,11 +1523,9 @@ class Canvas {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
         
-        const controls = wrapper.querySelector('.streaming-controls');
         const stopBtn = wrapper.querySelector('.stop-btn');
         const continueBtn = wrapper.querySelector('.continue-btn');
         
-        if (controls) controls.style.display = 'flex';
         if (stopBtn) stopBtn.style.display = 'inline-flex';
         if (continueBtn) continueBtn.style.display = 'none';
     }
@@ -1543,15 +1537,8 @@ class Canvas {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
         
-        const controls = wrapper.querySelector('.streaming-controls');
         const stopBtn = wrapper.querySelector('.stop-btn');
-        
         if (stopBtn) stopBtn.style.display = 'none';
-        // Hide the whole control bar if continue is also hidden
-        const continueBtn = wrapper.querySelector('.continue-btn');
-        if (controls && (!continueBtn || continueBtn.style.display === 'none')) {
-            controls.style.display = 'none';
-        }
     }
     
     /**
@@ -1562,11 +1549,9 @@ class Canvas {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
         
-        const controls = wrapper.querySelector('.streaming-controls');
         const stopBtn = wrapper.querySelector('.stop-btn');
         const continueBtn = wrapper.querySelector('.continue-btn');
         
-        if (controls) controls.style.display = 'flex';
         if (stopBtn) stopBtn.style.display = 'none';
         if (continueBtn) continueBtn.style.display = 'inline-flex';
     }
@@ -1578,15 +1563,8 @@ class Canvas {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
         
-        const controls = wrapper.querySelector('.streaming-controls');
         const continueBtn = wrapper.querySelector('.continue-btn');
-        
         if (continueBtn) continueBtn.style.display = 'none';
-        // Hide the whole control bar if stop is also hidden
-        const stopBtn = wrapper.querySelector('.stop-btn');
-        if (controls && (!stopBtn || stopBtn.style.display === 'none')) {
-            controls.style.display = 'none';
-        }
     }
     
     /**
