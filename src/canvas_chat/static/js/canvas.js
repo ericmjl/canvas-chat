@@ -58,6 +58,10 @@ class Canvas {
         this.activeSelectionNodeId = null;
         this.pendingSelectedText = null;  // Store selected text when tooltip opens
         
+        // No-nodes-visible hint
+        this.noNodesHint = document.getElementById('no-nodes-hint');
+        this.noNodesHintTimeout = null;
+        
         this.init();
     }
 
@@ -315,6 +319,70 @@ class Canvas {
             this.container.classList.add('zoom-summary');
         } else {
             this.container.classList.add('zoom-mini');
+        }
+        
+        // Check if any nodes are visible and update hint
+        this.updateNoNodesHint();
+    }
+    
+    /**
+     * Check if any nodes are visible in the current viewport
+     */
+    hasVisibleNodes() {
+        if (this.nodeElements.size === 0) return false;
+        
+        const vb = this.viewBox;
+        
+        for (const [nodeId, wrapper] of this.nodeElements) {
+            const x = parseFloat(wrapper.getAttribute('x')) || 0;
+            const y = parseFloat(wrapper.getAttribute('y')) || 0;
+            const width = parseFloat(wrapper.getAttribute('width')) || 320;
+            const height = parseFloat(wrapper.getAttribute('height')) || 200;
+            
+            // Check if node rectangle overlaps with viewBox
+            const nodeRight = x + width;
+            const nodeBottom = y + height;
+            const vbRight = vb.x + vb.width;
+            const vbBottom = vb.y + vb.height;
+            
+            if (x < vbRight && nodeRight > vb.x && y < vbBottom && nodeBottom > vb.y) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Update the no-nodes-visible hint with progressive fade-in
+     */
+    updateNoNodesHint() {
+        if (!this.noNodesHint) return;
+        
+        // Clear any pending timeout
+        if (this.noNodesHintTimeout) {
+            clearTimeout(this.noNodesHintTimeout);
+            this.noNodesHintTimeout = null;
+        }
+        
+        const hasNodes = this.nodeElements.size > 0;
+        const hasVisible = this.hasVisibleNodes();
+        
+        if (hasNodes && !hasVisible) {
+            // Show hint after a short delay (progressive reveal)
+            this.noNodesHint.style.display = 'block';
+            this.noNodesHintTimeout = setTimeout(() => {
+                this.noNodesHint.classList.add('visible');
+            }, 300);
+        } else {
+            // Hide hint immediately
+            this.noNodesHint.classList.remove('visible');
+            // After transition, hide completely
+            this.noNodesHintTimeout = setTimeout(() => {
+                if (!this.noNodesHint.classList.contains('visible')) {
+                    this.noNodesHint.style.display = 'none';
+                }
+            }, 500);
         }
     }
 
@@ -735,10 +803,12 @@ class Canvas {
      * @param {Object} options - Animation options
      * @param {number} options.duration - Animation duration in ms (default 500)
      * @param {string|null} options.focusNodeId - Node to keep centered (null for fit-to-content)
+     * @param {boolean} options.keepViewport - If true, don't change viewport at all (default false)
      */
     animateToLayout(graph, options = {}) {
         const duration = options.duration || 500;
         const focusNodeId = options.focusNodeId || null;
+        const keepViewport = options.keepViewport || false;
         
         // Collect start and end positions for each node
         const animations = [];
@@ -765,17 +835,17 @@ class Canvas {
         }
         
         if (animations.length === 0) {
-            // No position changes, just update edges and optionally fit
+            // No position changes, just update edges
             this.updateAllEdges(graph);
-            if (!focusNodeId) {
+            if (!focusNodeId && !keepViewport) {
                 this.fitToContentAnimated(duration);
             }
             return;
         }
         
-        // Calculate viewport animation if fitting to content
+        // Calculate viewport animation if fitting to content (and not keeping viewport)
         let viewportAnim = null;
-        if (!focusNodeId) {
+        if (!focusNodeId && !keepViewport) {
             viewportAnim = this.calculateFitToContentViewport(graph, 50);
         }
         
@@ -812,6 +882,9 @@ class Canvas {
             
             if (progress < 1) {
                 requestAnimationFrame(animate);
+            } else {
+                // Animation complete - update hint visibility
+                this.updateNoNodesHint();
             }
         };
         
@@ -1153,6 +1226,32 @@ class Canvas {
                 div.classList.add('dragging');
             });
         }
+        
+        // When zoomed out, allow dragging from anywhere on the node
+        div.addEventListener('mousedown', (e) => {
+            // Only activate when zoomed out (summary or mini view)
+            if (this.scale > 0.6) return;
+            
+            // Don't interfere with buttons or resize handles
+            if (e.target.closest('button') || e.target.closest('.resize-handle')) return;
+            
+            e.stopPropagation();
+            e.preventDefault();
+            
+            this.isDraggingNode = true;
+            this.draggedNode = node;
+            
+            // Store starting position for undo
+            this.dragStartPos = { ...node.position };
+            
+            const point = this.clientToSvg(e.clientX, e.clientY);
+            this.dragOffset = {
+                x: point.x - node.position.x,
+                y: point.y - node.position.y
+            };
+            
+            div.classList.add('dragging');
+        });
         
         // Resize handles
         const resizeHandles = div.querySelectorAll('.resize-handle');

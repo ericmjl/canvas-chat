@@ -69,6 +69,14 @@
             <g id="nodes-layer"></g>
         </svg>
         
+        <!-- Hint overlay when no nodes visible -->
+        <div id="no-nodes-hint" class="no-nodes-hint" style="display: none;">
+            <div class="hint-content">
+                <span class="hint-icon">👆</span>
+                <span class="hint-text">Double-click to zoom out and see all nodes</span>
+            </div>
+        </div>
+        
         <!-- Node template (cloned when creating nodes) -->
         <template id="node-template">
             <foreignObject class="node-wrapper" width="320" height="auto">
