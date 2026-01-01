@@ -35,7 +35,8 @@ const SCROLLABLE_NODE_TYPES = [
     NodeType.FETCH_RESULT,
     NodeType.OPINION,
     NodeType.SYNTHESIS,
-    NodeType.REVIEW
+    NodeType.REVIEW,
+    NodeType.NOTE
 ];
 
 /**
