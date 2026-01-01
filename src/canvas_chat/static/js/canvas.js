@@ -1116,15 +1116,11 @@ class Canvas {
         if (isMatrix) {
             div.innerHTML = this.renderMatrixNodeContent(node);
         } else {
-            // Render tags if present
-            const tagsHtml = this.renderNodeTags(node);
-            
             // Get summary text for semantic zoom
             const summaryText = this.getNodeSummaryText(node);
             const typeIcon = this.getNodeTypeIcon(node.type);
             
             div.innerHTML = `
-                ${tagsHtml}
                 <div class="node-summary" title="Double-click to edit title">
                     <span class="node-type-icon">${typeIcon}</span>
                     <span class="summary-text">${this.escapeHtml(summaryText)}</span>
@@ -1155,6 +1151,13 @@ class Canvas {
                 <div class="resize-handle resize-s" data-resize="s"></div>
                 <div class="resize-handle resize-se" data-resize="se"></div>
             `;
+        }
+        
+        // Render tags as a fundamental property of ALL nodes (regardless of type)
+        // Tags are inserted as the first child so they render outside the left edge
+        const tagsHtml = this.renderNodeTags(node);
+        if (tagsHtml) {
+            div.insertAdjacentHTML('afterbegin', tagsHtml);
         }
         
         wrapper.appendChild(div);
@@ -2336,8 +2339,7 @@ class Canvas {
         const summaryText = this.getNodeSummaryText(node);
         const typeIcon = this.getNodeTypeIcon(node.type);
         
-        // Render tags if present
-        const tagsHtml = this.renderNodeTags(node);
+        // Note: Tags are rendered by renderNode() for ALL node types
         
         // Build table HTML
         let tableHtml = '<table class="matrix-table"><thead><tr>';
@@ -2387,7 +2389,6 @@ class Canvas {
         tableHtml += '</tbody></table>';
         
         return `
-            ${tagsHtml}
             <div class="node-summary" title="Double-click to edit title">
                 <span class="node-type-icon">${typeIcon}</span>
                 <span class="summary-text">${this.escapeHtml(summaryText)}</span>
