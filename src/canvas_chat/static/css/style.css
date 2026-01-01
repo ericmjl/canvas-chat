@@ -1006,7 +1006,8 @@ html, body {
 .node.viewport-fitted {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    /* Note: overflow is NOT set here so tags (positioned outside) aren't clipped */
+    /* The .node-content child handles its own overflow:auto */
 }
 
 .node.viewport-fitted .node-content {
