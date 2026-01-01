@@ -362,6 +362,10 @@ class App {
         // Streaming state - Map of nodeId -> { abortController, context }
         this.streamingNodes = new Map();
         
+        // Matrix streaming state - Map of nodeId -> Map of cellKey -> AbortController
+        // Allows stopping all cell fills for a matrix node at once
+        this.streamingMatrixCells = new Map();
+        
         // Retry contexts for error recovery
         this.retryContexts = new Map();  // nodeId -> { type, ...context }
         
@@ -547,6 +551,9 @@ class App {
         this.sessionName.textContent = session.name || 'Untitled Session';
         storage.setLastSessionId(session.id);
         
+        // Update empty state (remove welcome message if session has nodes)
+        this.updateEmptyState();
+        
         // Fit to content if not empty
         if (!this.graph.isEmpty()) {
             setTimeout(() => this.canvas.fitToContent(), 100);
@@ -655,6 +662,25 @@ class App {
             this.handleEditContentSave();
         });
         
+        // Edit title modal
+        document.getElementById('edit-title-close').addEventListener('click', () => {
+            this.hideEditTitleModal();
+        });
+        document.getElementById('edit-title-cancel').addEventListener('click', () => {
+            this.hideEditTitleModal();
+        });
+        document.getElementById('edit-title-save').addEventListener('click', () => {
+            this.saveNodeTitle();
+        });
+        document.getElementById('edit-title-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.saveNodeTitle();
+            } else if (e.key === 'Escape') {
+                this.hideEditTitleModal();
+            }
+        });
+        
         // Undo/Redo buttons
         this.undoBtn = document.getElementById('undo-btn');
         this.redoBtn = document.getElementById('redo-btn');
@@ -680,9 +706,8 @@ class App {
         
         // New Canvas button
         document.getElementById('new-canvas-btn').addEventListener('click', () => {
-            if (this.graph.isEmpty() || confirm('Start a new canvas? Current session will be saved.')) {
-                this.createNewSession();
-            }
+            // No confirmation needed - current session is auto-saved
+            this.createNewSession();
         });
         
         // Auto Layout button
@@ -2236,7 +2261,14 @@ class App {
     
     // --- Matrix Cell Handlers ---
     
-    async handleMatrixCellFill(nodeId, row, col) {
+    /**
+     * Fill a single matrix cell with AI-generated content.
+     * @param {string} nodeId - Matrix node ID
+     * @param {number} row - Row index
+     * @param {number} col - Column index
+     * @param {AbortController} [abortController] - Optional abort controller for cancellation
+     */
+    async handleMatrixCellFill(nodeId, row, col, abortController = null) {
         const matrixNode = this.graph.getNode(nodeId);
         if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
         
@@ -2250,6 +2282,25 @@ class App {
         
         // Get DAG history for context
         const messages = this.graph.resolveContext([nodeId]);
+        
+        // Track this cell fill for stop button support
+        const cellKey = `${row}-${col}`;
+        const isStandaloneFill = !abortController;  // Not called from Fill All
+        
+        if (isStandaloneFill) {
+            abortController = new AbortController();
+        }
+        
+        // Get or create the cell controllers map for this matrix node
+        let cellControllers = this.streamingMatrixCells.get(nodeId);
+        if (!cellControllers) {
+            cellControllers = new Map();
+            this.streamingMatrixCells.set(nodeId, cellControllers);
+        }
+        cellControllers.set(cellKey, abortController);
+        
+        // Show stop button when any cell is being filled
+        this.canvas.showStopButton(nodeId);
         
         try {
             const requestBody = {
@@ -2265,12 +2316,19 @@ class App {
                 requestBody.base_url = baseUrl;
             }
             
-            // Start streaming fill
-            const response = await fetch('/api/matrix/fill', {
+            // Prepare fetch options with optional abort signal
+            const fetchOptions = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody)
-            });
+            };
+            
+            if (abortController) {
+                fetchOptions.signal = abortController.signal;
+            }
+            
+            // Start streaming fill
+            const response = await fetch('/api/matrix/fill', fetchOptions);
             
             if (!response.ok) {
                 throw new Error(`Failed to fill cell: ${response.statusText}`);
@@ -2293,7 +2351,6 @@ class App {
             });
             
             // Update the graph data
-            const cellKey = `${row}-${col}`;
             const oldCell = matrixNode.cells[cellKey] ? { ...matrixNode.cells[cellKey] } : { content: null, filled: false };
             matrixNode.cells[cellKey] = { content: cellContent, filled: true };
             this.graph.updateNode(nodeId, { cells: matrixNode.cells });
@@ -2311,8 +2368,24 @@ class App {
             this.saveSession();
             
         } catch (err) {
+            // Don't log abort errors as failures
+            if (err.name === 'AbortError') {
+                console.log(`Cell fill aborted: (${row}, ${col})`);
+                return;
+            }
             console.error('Failed to fill matrix cell:', err);
             alert(`Failed to fill cell: ${err.message}`);
+        } finally {
+            // Clean up this cell from tracking
+            const controllers = this.streamingMatrixCells.get(nodeId);
+            if (controllers) {
+                controllers.delete(cellKey);
+                // If no more cells are being filled, hide stop button and clean up
+                if (controllers.size === 0) {
+                    this.streamingMatrixCells.delete(nodeId);
+                    this.canvas.hideStopButton(nodeId);
+                }
+            }
         }
     }
     
@@ -2363,20 +2436,18 @@ class App {
         }
         
         if (emptyCells.length === 0) {
-            alert('All cells are already filled!');
+            // All cells filled - no action needed, button tooltip already indicates this
             return;
         }
         
-        if (!confirm(`Fill ${emptyCells.length} empty cells? This will make parallel API calls.`)) {
-            return;
-        }
-        
-        // Fill all cells in parallel
-        const fillPromises = emptyCells.map(({ row, col }) => 
-            this.handleMatrixCellFill(nodeId, row, col).catch(err => {
-                console.error(`Failed to fill cell (${row}, ${col}):`, err);
-            })
-        );
+        // Fill all cells in parallel - each cell handles its own tracking/cleanup
+        const fillPromises = emptyCells.map(({ row, col }) => {
+            return this.handleMatrixCellFill(nodeId, row, col).catch(err => {
+                if (err.name !== 'AbortError') {
+                    console.error(`Failed to fill cell (${row}, ${col}):`, err);
+                }
+            });
+        });
         
         await Promise.all(fillPromises);
     }
@@ -3074,9 +3145,7 @@ class App {
     }
 
     handleNodeDelete(nodeId) {
-        if (!confirm('Delete this node?')) {
-            return;
-        }
+        // No confirmation needed - undo (Ctrl+Z) provides recovery
         
         // Capture node and edges for undo BEFORE deletion
         const node = this.graph.getNode(nodeId);
@@ -3117,43 +3186,78 @@ class App {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
         
-        const oldTitle = node.title;
-        const currentTitle = node.title || node.summary || '';
-        const newTitle = prompt('Edit node title:', currentTitle);
+        // Store the node ID for the save handler
+        this._editTitleNodeId = nodeId;
         
-        if (newTitle !== null) {
-            // Update the node title (empty string clears it, using summary/truncation as fallback)
-            const title = newTitle.trim() || null;
-            
-            // Only push undo if title actually changed
-            if (oldTitle !== title) {
-                this.undoManager.push({
-                    type: 'EDIT_TITLE',
-                    nodeId,
-                    oldTitle,
-                    newTitle: title
-                });
-            }
-            
-            this.graph.updateNode(nodeId, { title });
-            
-            // Update the DOM
-            const wrapper = this.canvas.nodeElements.get(nodeId);
-            if (wrapper) {
-                const summaryText = wrapper.querySelector('.summary-text');
-                if (summaryText) {
-                    summaryText.textContent = title || node.summary || this.canvas.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
-                }
-            }
-            
-            this.saveSession();
+        // Populate and show the modal
+        const input = document.getElementById('edit-title-input');
+        input.value = node.title || node.summary || '';
+        document.getElementById('edit-title-modal').style.display = 'flex';
+        
+        // Focus and select the input
+        input.focus();
+        input.select();
+    }
+    
+    hideEditTitleModal() {
+        document.getElementById('edit-title-modal').style.display = 'none';
+        this._editTitleNodeId = null;
+    }
+    
+    saveNodeTitle() {
+        const nodeId = this._editTitleNodeId;
+        if (!nodeId) return;
+        
+        const node = this.graph.getNode(nodeId);
+        if (!node) {
+            this.hideEditTitleModal();
+            return;
         }
+        
+        const oldTitle = node.title;
+        const newTitle = document.getElementById('edit-title-input').value.trim() || null;
+        
+        // Only push undo if title actually changed
+        if (oldTitle !== newTitle) {
+            this.undoManager.push({
+                type: 'EDIT_TITLE',
+                nodeId,
+                oldTitle,
+                newTitle
+            });
+        }
+        
+        this.graph.updateNode(nodeId, { title: newTitle });
+        
+        // Update the DOM
+        const wrapper = this.canvas.nodeElements.get(nodeId);
+        if (wrapper) {
+            const summaryText = wrapper.querySelector('.summary-text');
+            if (summaryText) {
+                summaryText.textContent = newTitle || node.summary || this.canvas.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
+            }
+        }
+        
+        this.saveSession();
+        this.hideEditTitleModal();
     }
     
     /**
-     * Handle stopping generation for a streaming node
+     * Handle stopping generation for a streaming node (AI nodes or Matrix fill)
      */
     handleNodeStopGeneration(nodeId) {
+        // Check if this is a matrix node with active cell fills
+        const matrixCellControllers = this.streamingMatrixCells.get(nodeId);
+        if (matrixCellControllers) {
+            // Abort all active cell fills for this matrix
+            for (const [cellKey, controller] of matrixCellControllers) {
+                controller.abort();
+            }
+            // Cleanup will happen in handleMatrixFillAll's finally block
+            return;
+        }
+        
+        // Otherwise, handle as regular AI node
         const streamingState = this.streamingNodes.get(nodeId);
         if (!streamingState) return;
         
@@ -3703,9 +3807,7 @@ class App {
         const selectedIds = this.canvas.getSelectedNodeIds();
         if (selectedIds.length === 0) return;
         
-        if (!confirm(`Delete ${selectedIds.length} node(s)?`)) {
-            return;
-        }
+        // No confirmation needed - undo (Ctrl+Z) provides recovery
         
         // Capture all nodes and edges for undo BEFORE deletion
         const deletedNodes = [];
@@ -4350,14 +4452,13 @@ class App {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const sessionId = btn.dataset.deleteId;
-                if (confirm('Delete this session? This cannot be undone.')) {
-                    await storage.deleteSession(sessionId);
-                    // If deleting current session, create new one
-                    if (this.session.id === sessionId) {
-                        this.createNewSession();
-                    }
-                    this.showSessionsModal(); // Refresh list
+                // No confirmation - user can create new sessions easily
+                await storage.deleteSession(sessionId);
+                // If deleting current session, create new one
+                if (this.session.id === sessionId) {
+                    this.createNewSession();
                 }
+                this.showSessionsModal(); // Refresh list
             });
         });
     }
@@ -4524,12 +4625,11 @@ class App {
         const tag = this.graph.getTag(color);
         if (!tag) return;
         
-        if (confirm(`Delete tag "${tag.name}"? It will be removed from all nodes.`)) {
-            this.graph.deleteTag(color);
-            this.saveSession();
-            this.canvas.renderGraph(this.graph);
-            this.renderTagSlots();
-        }
+        // No confirmation - tags can be recreated easily
+        this.graph.deleteTag(color);
+        this.saveSession();
+        this.canvas.renderGraph(this.graph);
+        this.renderTagSlots();
     }
     
     toggleTagOnNodes(color, nodeIds) {

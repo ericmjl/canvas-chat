@@ -2379,7 +2379,7 @@ class Canvas {
                 } else {
                     tableHtml += `<td class="matrix-cell empty" data-row="${r}" data-col="${c}">
                         <div class="matrix-cell-empty">
-                            <button class="matrix-cell-fill" title="Fill this cell">+</button>
+                            <button class="matrix-cell-fill" title="Fill with concise AI evaluation">+</button>
                         </div>
                     </td>`;
                 }
@@ -2400,6 +2400,7 @@ class Canvas {
                     <span class="grip-dot"></span><span class="grip-dot"></span>
                 </div>
                 <span class="node-type">Matrix</span>
+                <button class="header-btn stop-btn" title="Stop filling cells" style="display:none;">⏹</button>
                 <button class="header-btn fit-viewport-btn" title="Fit to viewport (f)">⤢</button>
                 <button class="node-action delete-btn" title="Delete node">🗑️</button>
             </div>
@@ -2412,7 +2413,7 @@ class Canvas {
             </div>
             <div class="matrix-actions">
                 <button class="matrix-edit-btn" title="Edit rows and columns">Edit</button>
-                <button class="matrix-fill-all-btn" title="Fill all empty cells">Fill All</button>
+                <button class="matrix-fill-all-btn" title="Fill all empty cells with concise AI evaluations (2-3 sentences each)">Fill All</button>
             </div>
             <div class="resize-handle resize-e" data-resize="e"></div>
             <div class="resize-handle resize-s" data-resize="s"></div>

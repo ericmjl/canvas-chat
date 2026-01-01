@@ -1361,12 +1361,24 @@ async def matrix_fill(request: MatrixFillRequest):
 
     async def generate():
         try:
-            system_prompt = f"""You are evaluating items in a matrix.
-Matrix context: {request.context}
+            system_prompt = f"""You fill matrix cells with BRIEF evaluations. Context: {request.context}
 
-You will be given a row item and a column item. Evaluate or analyze the row item against the column item.
-Be concise (2-3 sentences). Focus on the specific intersection of these two items.
-Do not repeat the item names in your response - get straight to the evaluation."""
+STRICT FORMAT RULES:
+- MAXIMUM 50 words total
+- NO headers, NO bullet points, NO markdown formatting
+- NO section titles like "Key Points" or "Summary"
+- Plain text only, 2-3 sentences max
+- Start directly with your evaluation
+
+FORBIDDEN patterns:
+- "## " or "### " (markdown headers)
+- "**Bold text**"
+- Starting with "This intersection..." or "When evaluating..."
+- Lists or structured formats
+
+Write like a terse expert jotting a note, not a formal report.
+
+Be extremely concise. Sacrifice grammar for the sake of concision."""
 
             # Build messages with history context
             messages = [{"role": "system", "content": system_prompt}]

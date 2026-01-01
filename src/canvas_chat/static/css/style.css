@@ -595,6 +595,29 @@ html, body {
     transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
+/* Custom tooltip for node summary - progressive disclosure */
+.node-summary::after {
+    content: "Double-click to edit title";
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 400;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.node-summary:hover::after {
+    opacity: 1;
+}
+
 .node-type-icon {
     font-size: 28px;
     line-height: 1;
@@ -1666,6 +1689,29 @@ kbd {
 /* Modal wide variant */
 .modal-wide {
     max-width: 700px;
+}
+
+/* Modal narrow variant (for simple text input) */
+.modal-narrow {
+    max-width: 400px;
+}
+
+/* Modal text input */
+.modal-text-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.modal-text-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 /* Modal extra-wide variant (for editing large content) */
