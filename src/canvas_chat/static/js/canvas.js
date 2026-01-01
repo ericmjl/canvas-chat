@@ -1105,9 +1105,10 @@ class Canvas {
         
         // Matrix nodes need fixed height to allow shrinking; others use min-height
         // Nodes with explicit dimensions also need fixed height for scrolling
+        // Note: We don't set overflow:hidden here - inner containers handle their own overflow
+        // This allows tags (positioned outside the node) to remain visible
         if (isMatrix || hasExplicitSize) {
             div.style.height = '100%';
-            div.style.overflow = 'hidden';
         } else {
             div.style.minHeight = '100%';
         }
