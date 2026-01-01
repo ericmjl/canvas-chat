@@ -25,8 +25,9 @@ from typing import Optional
 
 import litellm
 import httpx
+import pymupdf
 from exa_py import Exa
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -1101,6 +1102,59 @@ class FetchUrlResult(BaseModel):
     content: str  # Markdown content
 
 
+# --- PDF Upload/Fetch Models ---
+
+
+class FetchPdfRequest(BaseModel):
+    """Request body for fetching PDF content from URL."""
+
+    url: str
+
+
+class PdfResult(BaseModel):
+    """Result from PDF text extraction."""
+
+    filename: str
+    content: str  # Markdown content with warning banner
+    page_count: int
+
+
+# Maximum PDF file size (25 MB)
+MAX_PDF_SIZE = 25 * 1024 * 1024
+
+# Warning banner prepended to PDF content
+PDF_WARNING_BANNER = """> 📄 **PDF Import** — Text was extracted automatically and may contain errors.
+> Consider sourcing the original if precision is critical. Edit this note to correct any issues.
+
+---
+
+"""
+
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> tuple[str, int]:
+    """
+    Extract text from PDF bytes using pymupdf.
+
+    Returns:
+        tuple: (extracted_text, page_count)
+    """
+    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+    page_count = len(doc)
+
+    text_parts = []
+    for page_num, page in enumerate(doc, start=1):
+        page_text = page.get_text()
+        if page_text.strip():
+            text_parts.append(f"## Page {page_num}\n\n{page_text.strip()}")
+
+    doc.close()
+
+    full_text = (
+        "\n\n".join(text_parts) if text_parts else "(No text content found in PDF)"
+    )
+    return full_text, page_count
+
+
 async def fetch_url_via_jina(url: str, client: httpx.AsyncClient) -> tuple[str, str]:
     """
     Fetch URL content via Jina Reader API.
@@ -1215,6 +1269,136 @@ async def fetch_url(request: FetchUrlRequest):
         raise HTTPException(status_code=504, detail="Request timed out")
     except Exception as e:
         logger.error(f"Fetch URL failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- PDF Upload/Fetch Endpoints ---
+
+
+@app.post("/api/upload-pdf")
+async def upload_pdf(file: UploadFile = File(...)):
+    """
+    Upload a PDF file and extract its text content.
+
+    The extracted text is returned as markdown with a warning banner
+    about potential extraction errors.
+
+    Limits:
+    - Maximum file size: 25 MB
+    - Only PDF files are accepted
+    """
+    logger.info(f"PDF upload request: filename='{file.filename}'")
+
+    # Validate file type
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+
+    # Read file content
+    try:
+        pdf_bytes = await file.read()
+    except Exception as e:
+        logger.error(f"Failed to read uploaded file: {e}")
+        raise HTTPException(status_code=400, detail="Failed to read uploaded file")
+
+    # Validate file size
+    if len(pdf_bytes) > MAX_PDF_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"PDF file is too large. Maximum size is {MAX_PDF_SIZE // (1024 * 1024)} MB",
+        )
+
+    # Extract text from PDF
+    try:
+        text, page_count = extract_text_from_pdf(pdf_bytes)
+        content = PDF_WARNING_BANNER + text
+        logger.info(
+            f"Successfully extracted text from PDF: {file.filename} ({page_count} pages)"
+        )
+        return PdfResult(filename=file.filename, content=content, page_count=page_count)
+    except Exception as e:
+        logger.error(f"Failed to extract text from PDF: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500, detail=f"Failed to extract text from PDF: {str(e)}"
+        )
+
+
+@app.post("/api/fetch-pdf")
+async def fetch_pdf(request: FetchPdfRequest):
+    """
+    Fetch a PDF from a URL and extract its text content.
+
+    The extracted text is returned as markdown with a warning banner
+    about potential extraction errors.
+
+    Limits:
+    - Maximum file size: 25 MB
+    - URL must point to a PDF file
+    """
+    logger.info(f"PDF fetch request: url='{request.url}'")
+
+    # Extract filename from URL
+    filename = request.url.split("/")[-1].split("?")[0]
+    if not filename.endswith(".pdf"):
+        filename = filename + ".pdf" if filename else "document.pdf"
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            # Stream the response to check size before downloading fully
+            async with client.stream(
+                "GET", request.url, follow_redirects=True
+            ) as response:
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"Failed to fetch PDF: HTTP {response.status_code}",
+                    )
+
+                # Check content type
+                content_type = response.headers.get("content-type", "")
+                if (
+                    "pdf" not in content_type.lower()
+                    and not request.url.lower().endswith(".pdf")
+                ):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="URL does not appear to point to a PDF file",
+                    )
+
+                # Check content length if available
+                content_length = response.headers.get("content-length")
+                if content_length and int(content_length) > MAX_PDF_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"PDF file is too large. Maximum size is {MAX_PDF_SIZE // (1024 * 1024)} MB",
+                    )
+
+                # Read the PDF content
+                pdf_bytes = b""
+                async for chunk in response.aiter_bytes():
+                    pdf_bytes += chunk
+                    if len(pdf_bytes) > MAX_PDF_SIZE:
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"PDF file is too large. Maximum size is {MAX_PDF_SIZE // (1024 * 1024)} MB",
+                        )
+
+        # Extract text from PDF
+        text, page_count = extract_text_from_pdf(pdf_bytes)
+        content = PDF_WARNING_BANNER + text
+        logger.info(
+            f"Successfully fetched and extracted PDF: {filename} ({page_count} pages)"
+        )
+        return PdfResult(filename=filename, content=content, page_count=page_count)
+
+    except HTTPException:
+        raise
+    except httpx.TimeoutException:
+        logger.error(f"Timeout fetching PDF: {request.url}")
+        raise HTTPException(status_code=504, detail="Request timed out")
+    except Exception as e:
+        logger.error(f"Failed to fetch PDF: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 

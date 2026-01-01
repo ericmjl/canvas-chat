@@ -77,6 +77,14 @@
             </div>
         </div>
         
+        <!-- Drop zone overlay for PDF drag & drop -->
+        <div id="drop-zone-overlay" class="drop-zone-overlay" style="display: none;">
+            <div class="drop-zone-content">
+                <span class="drop-zone-icon">📄</span>
+                <span class="drop-zone-text">Drop PDF here</span>
+            </div>
+        </div>
+        
         <!-- Node template (cloned when creating nodes) -->
         <template id="node-template">
             <foreignObject class="node-wrapper" width="320" height="auto">
@@ -119,6 +127,11 @@
             <button id="clear-selection-btn">✕</button>
         </div>
         <div class="chat-input-wrapper">
+            <button id="attach-btn" class="attach-btn" title="Attach PDF (drag & drop also supported)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+            </button>
             <textarea 
                 id="chat-input" 
                 placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
@@ -213,6 +226,9 @@
 
     <!-- Hidden file input for import -->
     <input type="file" id="import-file-input" accept=".canvaschat" style="display: none;">
+    
+    <!-- Hidden file input for PDF upload -->
+    <input type="file" id="pdf-file-input" accept=".pdf,application/pdf" style="display: none;">
 
     <!-- Matrix Axis Confirmation Modal -->
     <div id="matrix-modal" class="modal" style="display: none;">
@@ -428,6 +444,7 @@
                     <h3>Slash Commands</h3>
                     <table class="shortcuts-table">
                         <tbody>
+                            <tr><td><code>/note</code> <em>text or URL</em></td><td>Create a note (supports PDF URLs)</td></tr>
                             <tr><td><code>/search</code> <em>query</em></td><td>Search the web with Exa AI</td></tr>
                             <tr><td><code>/research</code> <em>topic</em></td><td>Deep research with multiple sources</td></tr>
                             <tr><td><code>/matrix</code> <em>context</em></td><td>Create a comparison matrix</td></tr>
@@ -444,6 +461,7 @@
                         <li><strong>Context:</strong> The context budget bar shows how much of the model's context window is used</li>
                         <li><strong>Tags:</strong> Use the 🏷️ button to organize nodes with colored tags</li>
                         <li><strong>Stop generation:</strong> Click "⏹ Stop" on an AI response to stop and optionally continue later</li>
+                        <li><strong>PDF import:</strong> Click 📎 to upload a PDF, or drag & drop onto the canvas</li>
                     </ul>
                 </section>
             </div>

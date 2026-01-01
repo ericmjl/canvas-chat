@@ -427,6 +427,9 @@ class App {
         this.canvas.onNodeEditContent = this.handleNodeEditContent.bind(this);
         this.canvas.onNodeResummarize = this.handleNodeResummarize.bind(this);
         
+        // PDF drag & drop callback
+        this.canvas.onPdfDrop = this.handlePdfDrop.bind(this);
+        
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
         if (replyInput) {
@@ -701,6 +704,17 @@ class App {
             if (e.target.files.length > 0) {
                 this.importSession(e.target.files[0]);
                 e.target.value = ''; // Reset for next import
+            }
+        });
+        
+        // PDF attachment
+        document.getElementById('attach-btn').addEventListener('click', () => {
+            document.getElementById('pdf-file-input').click();
+        });
+        document.getElementById('pdf-file-input').addEventListener('change', async (e) => {
+            if (e.target.files.length > 0) {
+                await this.handlePdfUpload(e.target.files[0]);
+                e.target.value = ''; // Reset for next upload
             }
         });
         
@@ -1276,9 +1290,10 @@ class App {
      * Handle /note command - creates a NOTE node without triggering LLM
      * Notes are standalone by default (no automatic attachment to existing nodes)
      * 
-     * Supports two modes:
+     * Supports three modes:
      * - `/note <markdown content>` - Creates a note with the provided markdown
      * - `/note <url>` - Fetches the URL content and creates a note with the markdown
+     * - `/note <pdf-url>` - Downloads PDF and extracts text
      * 
      * @param {string} content - The markdown note content or URL to fetch
      */
@@ -1288,8 +1303,17 @@ class App {
         const isUrl = urlPattern.test(content.trim());
         
         if (isUrl) {
-            // Fetch URL content and create a FETCH_RESULT node
-            await this.handleNoteFromUrl(content.trim());
+            const url = content.trim();
+            // Check if URL ends with .pdf (case insensitive, ignore query params)
+            const isPdfUrl = /\.pdf(\?.*)?$/i.test(url);
+            
+            if (isPdfUrl) {
+                // Fetch PDF and extract text
+                await this.handleNoteFromPdfUrl(url);
+            } else {
+                // Fetch URL content and create a FETCH_RESULT node
+                await this.handleNoteFromUrl(url);
+            }
         } else {
             // Create NOTE node with the provided content
             const noteNode = createNode(NodeType.NOTE, content, {
@@ -1386,6 +1410,152 @@ class App {
             this.graph.updateNode(fetchNode.id, { content: errorContent });
             this.saveSession();
         }
+    }
+    
+    /**
+     * Fetch a PDF from URL and create a PDF node with extracted text.
+     * 
+     * @param {string} url - The URL of the PDF to fetch
+     */
+    async handleNoteFromPdfUrl(url) {
+        // Create a placeholder node while fetching
+        const pdfNode = createNode(NodeType.PDF, `Fetching PDF from:\n${url}...`, {
+            position: this.graph.autoPosition([])
+        });
+        
+        this.graph.addNode(pdfNode);
+        this.canvas.renderNode(pdfNode);
+        
+        // Clear input
+        this.chatInput.value = '';
+        this.chatInput.style.height = 'auto';
+        this.canvas.clearSelection();
+        this.saveSession();
+        this.updateEmptyState();
+        
+        // Pan to the new node
+        this.canvas.centerOnAnimated(
+            pdfNode.position.x + 160,
+            pdfNode.position.y + 100,
+            300
+        );
+        
+        try {
+            // Fetch PDF content via backend
+            const response = await fetch('/api/fetch-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to fetch PDF');
+            }
+            
+            const data = await response.json();
+            
+            // Update the node with the extracted content
+            this.canvas.updateNodeContent(pdfNode.id, data.content, false);
+            this.graph.updateNode(pdfNode.id, { 
+                content: data.content,
+                title: data.title,
+                page_count: data.page_count
+            });
+            this.saveSession();
+            
+        } catch (err) {
+            // Update node with error message
+            const errorContent = `**Failed to fetch PDF**\n\n${url}\n\n*Error: ${err.message}*`;
+            this.canvas.updateNodeContent(pdfNode.id, errorContent, false);
+            this.graph.updateNode(pdfNode.id, { content: errorContent });
+            this.saveSession();
+        }
+    }
+    
+    /**
+     * Handle PDF file upload (from paperclip button or drag & drop).
+     * 
+     * @param {File} file - The PDF file to upload
+     * @param {Object} position - Optional position for the node (for drag & drop)
+     */
+    async handlePdfUpload(file, position = null) {
+        // Validate file type
+        if (file.type !== 'application/pdf') {
+            alert('Please select a PDF file.');
+            return;
+        }
+        
+        // Validate file size (25 MB limit)
+        const MAX_SIZE = 25 * 1024 * 1024;
+        if (file.size > MAX_SIZE) {
+            alert(`PDF file is too large. Maximum size is 25 MB.`);
+            return;
+        }
+        
+        // Create a placeholder node while processing
+        const nodePosition = position || this.graph.autoPosition([]);
+        const pdfNode = createNode(NodeType.PDF, `Processing PDF: ${file.name}...`, {
+            position: nodePosition
+        });
+        
+        this.graph.addNode(pdfNode);
+        this.canvas.renderNode(pdfNode);
+        
+        this.canvas.clearSelection();
+        this.saveSession();
+        this.updateEmptyState();
+        
+        // Pan to the new node
+        this.canvas.centerOnAnimated(
+            pdfNode.position.x + 160,
+            pdfNode.position.y + 100,
+            300
+        );
+        
+        try {
+            // Upload PDF via FormData
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await fetch('/api/upload-pdf', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to process PDF');
+            }
+            
+            const data = await response.json();
+            
+            // Update the node with the extracted content
+            this.canvas.updateNodeContent(pdfNode.id, data.content, false);
+            this.graph.updateNode(pdfNode.id, { 
+                content: data.content,
+                title: data.title,
+                page_count: data.page_count
+            });
+            this.saveSession();
+            
+        } catch (err) {
+            // Update node with error message
+            const errorContent = `**Failed to process PDF**\n\n${file.name}\n\n*Error: ${err.message}*`;
+            this.canvas.updateNodeContent(pdfNode.id, errorContent, false);
+            this.graph.updateNode(pdfNode.id, { content: errorContent });
+            this.saveSession();
+        }
+    }
+    
+    /**
+     * Handle PDF drop on canvas (from drag & drop).
+     * 
+     * @param {File} file - The PDF file that was dropped
+     * @param {Object} position - The drop position in canvas coordinates
+     */
+    async handlePdfDrop(file, position) {
+        await this.handlePdfUpload(file, position);
     }
 
     /**
