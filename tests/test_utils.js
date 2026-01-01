@@ -1470,6 +1470,95 @@ test('isUrl: rejects whitespace only', () => {
 });
 
 // ============================================================
+// isPdfUrl tests (for PDF URL detection)
+// ============================================================
+
+/**
+ * Detect if a URL points to a PDF file.
+ * This pattern is used in app.js to route /note commands with PDF URLs
+ * to handleNoteFromPdfUrl instead of handleNoteFromUrl.
+ */
+function isPdfUrl(url) {
+    return /\.pdf(\?.*)?$/i.test(url.trim());
+}
+
+test('isPdfUrl: detects .pdf extension', () => {
+    assertTrue(isPdfUrl('https://example.com/document.pdf'));
+});
+
+test('isPdfUrl: detects .PDF uppercase extension', () => {
+    assertTrue(isPdfUrl('https://example.com/DOCUMENT.PDF'));
+});
+
+test('isPdfUrl: detects mixed case .Pdf extension', () => {
+    assertTrue(isPdfUrl('https://example.com/Report.Pdf'));
+});
+
+test('isPdfUrl: detects .pdf with query parameters', () => {
+    assertTrue(isPdfUrl('https://example.com/doc.pdf?token=abc123'));
+});
+
+test('isPdfUrl: detects .pdf with multiple query parameters', () => {
+    assertTrue(isPdfUrl('https://example.com/doc.pdf?id=1&ref=abc&download=true'));
+});
+
+test('isPdfUrl: detects .pdf in path with subdirectories', () => {
+    assertTrue(isPdfUrl('https://example.com/files/reports/2024/annual.pdf'));
+});
+
+test('isPdfUrl: trims whitespace', () => {
+    assertTrue(isPdfUrl('  https://example.com/doc.pdf  '));
+});
+
+test('isPdfUrl: rejects non-PDF URLs', () => {
+    assertFalse(isPdfUrl('https://example.com/page.html'));
+});
+
+test('isPdfUrl: rejects .txt files', () => {
+    assertFalse(isPdfUrl('https://example.com/readme.txt'));
+});
+
+test('isPdfUrl: rejects .doc files', () => {
+    assertFalse(isPdfUrl('https://example.com/document.doc'));
+});
+
+test('isPdfUrl: rejects .docx files', () => {
+    assertFalse(isPdfUrl('https://example.com/document.docx'));
+});
+
+test('isPdfUrl: rejects URL with pdf in path but different extension', () => {
+    assertFalse(isPdfUrl('https://example.com/pdf-viewer/page.html'));
+});
+
+test('isPdfUrl: rejects URL with pdf in domain', () => {
+    assertFalse(isPdfUrl('https://pdf.example.com/page'));
+});
+
+test('isPdfUrl: rejects URL with pdf in query but no .pdf extension', () => {
+    assertFalse(isPdfUrl('https://example.com/view?file=document.pdf&format=html'));
+});
+
+test('isPdfUrl: rejects plain text', () => {
+    assertFalse(isPdfUrl('This is not a URL'));
+});
+
+test('isPdfUrl: rejects empty string', () => {
+    assertFalse(isPdfUrl(''));
+});
+
+test('isPdfUrl: rejects URL without extension', () => {
+    assertFalse(isPdfUrl('https://example.com/document'));
+});
+
+test('isPdfUrl: handles arxiv-style PDF URLs', () => {
+    assertTrue(isPdfUrl('https://arxiv.org/pdf/2301.12345.pdf'));
+});
+
+test('isPdfUrl: handles nature-style PDF URLs', () => {
+    assertTrue(isPdfUrl('https://www.nature.com/articles/s41586-024-12345-6.pdf'));
+});
+
+// ============================================================
 // Graph.isEmpty() tests
 // ============================================================
 

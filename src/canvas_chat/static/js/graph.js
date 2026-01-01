@@ -19,6 +19,7 @@ const NodeType = {
     ROW: 'row',            // Extracted row from a matrix
     COLUMN: 'column',      // Extracted column from a matrix
     FETCH_RESULT: 'fetch_result', // Fetched content from URL (via Exa)
+    PDF: 'pdf',            // Imported PDF document
     OPINION: 'opinion',    // Committee member's opinion
     SYNTHESIS: 'synthesis', // Chairman's synthesized answer
     REVIEW: 'review'       // Committee member's review of other opinions
@@ -33,6 +34,7 @@ const SCROLLABLE_NODE_TYPES = [
     NodeType.SUMMARY,
     NodeType.RESEARCH,
     NodeType.FETCH_RESULT,
+    NodeType.PDF,
     NodeType.OPINION,
     NodeType.SYNTHESIS,
     NodeType.REVIEW,

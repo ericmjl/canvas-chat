@@ -53,6 +53,9 @@ class Canvas {
         this.onNodeEditContent = null;  // For editing node content (FETCH_RESULT)
         this.onNodeResummarize = null;  // For re-summarizing edited content
         
+        // PDF drag & drop callback
+        this.onPdfDrop = null;  // For handling PDF file drops
+        
         // Reply tooltip state
         this.branchTooltip = null;
         this.activeSelectionNodeId = null;
@@ -233,6 +236,11 @@ class Canvas {
             }
         });
         
+        // PDF drag & drop handling
+        this.container.addEventListener('dragover', this.handleDragOver.bind(this));
+        this.container.addEventListener('dragleave', this.handleDragLeave.bind(this));
+        this.container.addEventListener('drop', this.handleDrop.bind(this));
+        
         // Initialize touch state
         this.touchState = {
             touches: [],
@@ -296,6 +304,77 @@ class Canvas {
         const tooltipY = rect.top - 100; // Above the selection (tooltip is ~90px tall now with preview)
         
         this.showBranchTooltip(tooltipX, tooltipY);
+    }
+    
+    // --- PDF Drag & Drop Handlers ---
+    
+    /**
+     * Handle dragover event for PDF drop zone
+     */
+    handleDragOver(e) {
+        // Check if dragging files
+        if (!e.dataTransfer.types.includes('Files')) return;
+        
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        this.showDropZone();
+    }
+    
+    /**
+     * Handle dragleave event for PDF drop zone
+     */
+    handleDragLeave(e) {
+        // Only hide if leaving the container entirely (not entering a child)
+        if (!this.container.contains(e.relatedTarget)) {
+            this.hideDropZone();
+        }
+    }
+    
+    /**
+     * Handle drop event for PDF files
+     */
+    handleDrop(e) {
+        e.preventDefault();
+        this.hideDropZone();
+        
+        // Get dropped files
+        const files = e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+        
+        // Find PDF files
+        const pdfFile = Array.from(files).find(f => f.type === 'application/pdf');
+        if (!pdfFile) {
+            // No PDF file found, ignore
+            return;
+        }
+        
+        // Convert drop position to SVG coordinates
+        const position = this.clientToSvg(e.clientX, e.clientY);
+        
+        // Call the PDF drop callback
+        if (this.onPdfDrop) {
+            this.onPdfDrop(pdfFile, position);
+        }
+    }
+    
+    /**
+     * Show the PDF drop zone overlay
+     */
+    showDropZone() {
+        const overlay = document.getElementById('drop-zone-overlay');
+        if (overlay) {
+            overlay.classList.add('visible');
+        }
+    }
+    
+    /**
+     * Hide the PDF drop zone overlay
+     */
+    hideDropZone() {
+        const overlay = document.getElementById('drop-zone-overlay');
+        if (overlay) {
+            overlay.classList.remove('visible');
+        }
     }
 
     handleResize() {
@@ -463,41 +542,14 @@ class Canvas {
     }
 
     handleWheel(e) {
-        // Check if scrolling inside a node's scrollable content
-        const scrollableContent = e.target.closest('.node-content');
-        if (scrollableContent) {
-            const node = scrollableContent.closest('.node');
-            // Only allow internal scrolling if node is viewport-fitted (has scrollable content)
-            if (node && node.classList.contains('viewport-fitted')) {
-                // Check if content can scroll in the wheel direction
-                const canScrollUp = scrollableContent.scrollTop > 0;
-                const canScrollDown = scrollableContent.scrollTop < (scrollableContent.scrollHeight - scrollableContent.clientHeight);
-                const canScrollLeft = scrollableContent.scrollLeft > 0;
-                const canScrollRight = scrollableContent.scrollLeft < (scrollableContent.scrollWidth - scrollableContent.clientWidth);
-                
-                // Determine scroll direction from wheel delta
-                const scrollingDown = e.deltaY > 0;
-                const scrollingUp = e.deltaY < 0;
-                const scrollingRight = e.deltaX > 0;
-                const scrollingLeft = e.deltaX < 0;
-                
-                // If content can scroll in the requested direction, let it scroll naturally
-                const shouldScrollVertically = (scrollingDown && canScrollDown) || (scrollingUp && canScrollUp);
-                const shouldScrollHorizontally = (scrollingRight && canScrollRight) || (scrollingLeft && canScrollLeft);
-                
-                if (shouldScrollVertically || shouldScrollHorizontally) {
-                    // Don't prevent default - let the content scroll
-                    return;
-                }
-            }
-        }
-        
-        e.preventDefault();
-        
         const rect = this.container.getBoundingClientRect();
         
         // Check if this is a pinch-to-zoom gesture (ctrlKey is set by trackpad pinch)
+        // IMPORTANT: Check this FIRST before scrollable content check, because pinch-to-zoom
+        // should always control canvas zoom, even when cursor is over a node
         if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            
             // Pinch to zoom
             // deltaY is negative when zooming in (fingers spreading)
             const zoomFactor = 1 - e.deltaY * 0.01;
@@ -519,6 +571,48 @@ class Canvas {
             
             this.updateViewBox();
         } else {
+            // Regular two-finger scroll (pan) - check if we should scroll node content instead
+            const scrollableContent = e.target.closest('.node-content');
+            if (scrollableContent) {
+                // Check if this content element is actually scrollable (has overflow: auto/scroll)
+                const style = window.getComputedStyle(scrollableContent);
+                const isScrollable = style.overflowY === 'auto' || style.overflowY === 'scroll' ||
+                                     style.overflowX === 'auto' || style.overflowX === 'scroll';
+                
+                if (isScrollable) {
+                    // Check if content can scroll in the wheel direction
+                    const canScrollUp = scrollableContent.scrollTop > 0;
+                    const canScrollDown = scrollableContent.scrollTop < (scrollableContent.scrollHeight - scrollableContent.clientHeight - 1);
+                    const canScrollLeft = scrollableContent.scrollLeft > 0;
+                    const canScrollRight = scrollableContent.scrollLeft < (scrollableContent.scrollWidth - scrollableContent.clientWidth - 1);
+                    
+                    // Determine scroll direction from wheel delta
+                    const scrollingDown = e.deltaY > 0;
+                    const scrollingUp = e.deltaY < 0;
+                    const scrollingRight = e.deltaX > 0;
+                    const scrollingLeft = e.deltaX < 0;
+                    
+                    // If content can scroll in the requested direction, let it scroll naturally
+                    const shouldScrollVertically = (scrollingDown && canScrollDown) || (scrollingUp && canScrollUp);
+                    const shouldScrollHorizontally = (scrollingRight && canScrollRight) || (scrollingLeft && canScrollLeft);
+                    
+                    if (shouldScrollVertically || shouldScrollHorizontally) {
+                        // Let the content scroll - prevent canvas from panning
+                        e.preventDefault();
+                        // Manually scroll the content to ensure it works in foreignObject
+                        if (shouldScrollVertically) {
+                            scrollableContent.scrollTop += e.deltaY;
+                        }
+                        if (shouldScrollHorizontally) {
+                            scrollableContent.scrollLeft += e.deltaX;
+                        }
+                        return;
+                    }
+                }
+            }
+            
+            e.preventDefault();
+            
             // Two-finger pan (regular scroll)
             const dx = e.deltaX / this.scale;
             const dy = e.deltaY / this.scale;
@@ -540,29 +634,30 @@ class Canvas {
     // --- Touch Event Handlers (for mobile/tablet) ---
 
     handleTouchStart(e) {
-        if (e.target.closest('.node')) return;
-        
         const touches = Array.from(e.touches);
         this.touchState.touches = touches.map(t => ({ x: t.clientX, y: t.clientY }));
         
         if (touches.length === 2) {
             // Two fingers - prepare for pinch/pan
+            // Always capture two-finger gestures, even on nodes, to prevent viewport zoom
             e.preventDefault();
             this.touchState.isPinching = true;
             this.touchState.lastDistance = this.getTouchDistance(touches);
             this.touchState.lastCenter = this.getTouchCenter(touches);
         } else if (touches.length === 1) {
-            // Single finger - could be pan
+            // Single finger on a node - allow native behavior (text selection, scrolling)
+            if (e.target.closest('.node')) return;
+            
+            // Single finger on canvas - could be pan
             this.touchState.lastCenter = { x: touches[0].clientX, y: touches[0].clientY };
         }
     }
 
     handleTouchMove(e) {
-        if (e.target.closest('.node')) return;
-        
         const touches = Array.from(e.touches);
         
         if (touches.length === 2 && this.touchState.isPinching) {
+            // Always handle pinch-zoom, even if gesture is over a node
             e.preventDefault();
             
             const currentDistance = this.getTouchDistance(touches);
@@ -596,7 +691,10 @@ class Canvas {
             this.updateViewBox();
             
         } else if (touches.length === 1 && !this.touchState.isPinching) {
-            // Single finger pan (if not on a node)
+            // Single finger on a node - allow native behavior
+            if (e.target.closest('.node')) return;
+            
+            // Single finger pan on canvas
             e.preventDefault();
             
             const dx = (touches[0].clientX - this.touchState.lastCenter.x) / this.scale;
@@ -636,6 +734,8 @@ class Canvas {
     }
 
     // --- Safari Gesture Event Handlers ---
+    // These handle pinch-to-zoom on Safari. We always capture these gestures
+    // (even on nodes) to prevent the browser's viewport zoom from activating.
 
     handleGestureStart(e) {
         e.preventDefault();
@@ -669,6 +769,7 @@ class Canvas {
     }
 
     handleGestureEnd(e) {
+        e.preventDefault();
         this.gestureState.isGesturing = false;
     }
 
@@ -2247,6 +2348,7 @@ class Canvas {
             [NodeType.ROW]: 'Row',
             [NodeType.COLUMN]: 'Column',
             [NodeType.FETCH_RESULT]: 'Fetched Content',
+            [NodeType.PDF]: 'PDF',
             [NodeType.OPINION]: 'Opinion',
             [NodeType.SYNTHESIS]: 'Synthesis',
             [NodeType.REVIEW]: 'Review'
@@ -2269,6 +2371,7 @@ class Canvas {
             [NodeType.ROW]: '↔️',
             [NodeType.COLUMN]: '↕️',
             [NodeType.FETCH_RESULT]: '📄',
+            [NodeType.PDF]: '📑',
             [NodeType.OPINION]: '🗣️',
             [NodeType.SYNTHESIS]: '⚖️',
             [NodeType.REVIEW]: '🔍'

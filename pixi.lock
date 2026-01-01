@@ -141,6 +141,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2c/94/93b7f5981aa04f922e0d9ce7326a4587866ec7e39f7c180ffcf408e66ee8/pydocket-0.16.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/61/ad/689f02752eeec26aed679477e80e632ef1b682313be70793d798c1d5fc8f/PyJWT-2.10.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/2a/6b/3de1714d734ff949be1e90a22375d0598d3540b22ae73eb85c2d7d1f36a9/pymupdf-1.26.7-cp310-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/df/80/fc9d01d5ed37ba4c42ca2b55b4339ae6e200b456be3a1aaddf4a9fa99b8c/pyperclip-1.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/53/9b/eef01392be945c0fe86a8d084ba9188b1e2b22af037d7109b9f40a962cd0/pyprojroot-0.3.0-py3-none-any.whl
@@ -321,6 +322,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2c/94/93b7f5981aa04f922e0d9ce7326a4587866ec7e39f7c180ffcf408e66ee8/pydocket-0.16.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/61/ad/689f02752eeec26aed679477e80e632ef1b682313be70793d798c1d5fc8f/PyJWT-2.10.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/94/35/cd74cea1787b2247702ef8522186bdef32e9cb30a099e6bb864627ef6045/pymupdf-1.26.7-cp310-abi3-macosx_10_9_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/df/80/fc9d01d5ed37ba4c42ca2b55b4339ae6e200b456be3a1aaddf4a9fa99b8c/pyperclip-1.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/53/9b/eef01392be945c0fe86a8d084ba9188b1e2b22af037d7109b9f40a962cd0/pyprojroot-0.3.0-py3-none-any.whl
@@ -498,6 +500,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2c/94/93b7f5981aa04f922e0d9ce7326a4587866ec7e39f7c180ffcf408e66ee8/pydocket-0.16.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/61/ad/689f02752eeec26aed679477e80e632ef1b682313be70793d798c1d5fc8f/PyJWT-2.10.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/72/74/448b6172927c829c6a3fba80078d7b0a016ebbe2c9ee528821f5ea21677a/pymupdf-1.26.7-cp310-abi3-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/df/80/fc9d01d5ed37ba4c42ca2b55b4339ae6e200b456be3a1aaddf4a9fa99b8c/pyperclip-1.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/53/9b/eef01392be945c0fe86a8d084ba9188b1e2b22af037d7109b9f40a962cd0/pyprojroot-0.3.0-py3-none-any.whl
@@ -877,7 +880,7 @@ packages:
 - pypi: ./
   name: canvas-chat
   version: 0.1.7
-  sha256: 5ed61ee57140433a3befe5285f0bf38d7791596dbcb65bae3e9298f9aa386cac
+  sha256: 9fdb7110bc24446cc65f5ebba026b11c8da876df1e847f7b839f921714641d20
   requires_dist:
   - fastapi>=0.115.0
   - uvicorn>=0.32.0
@@ -891,9 +894,12 @@ packages:
   - pytest>=9.0.2,<10
   - build>=1.3.0,<2
   - html2text>=2025.4.15,<2026
+  - pymupdf>=1.24.0
+  - python-multipart>=0.0.9
   - pytest>=8.0.0 ; extra == 'dev'
   - httpx>=0.27.0 ; extra == 'dev'
   requires_python: '>=3.11'
+  editable: true
 - pypi: https://files.pythonhosted.org/packages/4b/0c/0654233d7543ac8a50f4785f172430ddc97538ba418eb305d6e529d1a120/cbor2-5.8.0-cp314-cp314-macosx_11_0_arm64.whl
   name: cbor2
   version: 5.8.0
@@ -3229,6 +3235,21 @@ packages:
   - coverage[toml]==5.0.4 ; extra == 'tests'
   - pytest>=6.0.0,<7.0.0 ; extra == 'tests'
   requires_python: '>=3.9'
+- pypi: https://files.pythonhosted.org/packages/2a/6b/3de1714d734ff949be1e90a22375d0598d3540b22ae73eb85c2d7d1f36a9/pymupdf-1.26.7-cp310-abi3-manylinux_2_28_x86_64.whl
+  name: pymupdf
+  version: 1.26.7
+  sha256: 69dfc78f206a96e5b3ac22741263ebab945fdf51f0dbe7c5757c3511b23d9d72
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/72/74/448b6172927c829c6a3fba80078d7b0a016ebbe2c9ee528821f5ea21677a/pymupdf-1.26.7-cp310-abi3-macosx_11_0_arm64.whl
+  name: pymupdf
+  version: 1.26.7
+  sha256: 31aa9c8377ea1eea02934b92f4dcf79fb2abba0bf41f8a46d64c3e31546a3c02
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/94/35/cd74cea1787b2247702ef8522186bdef32e9cb30a099e6bb864627ef6045/pymupdf-1.26.7-cp310-abi3-macosx_10_9_x86_64.whl
+  name: pymupdf
+  version: 1.26.7
+  sha256: 07085718dfdae5ab83b05eb5eb397f863bcc538fe05135318a01ea353e7a1353
+  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/df/80/fc9d01d5ed37ba4c42ca2b55b4339ae6e200b456be3a1aaddf4a9fa99b8c/pyperclip-1.11.0-py3-none-any.whl
   name: pyperclip
   version: 1.11.0

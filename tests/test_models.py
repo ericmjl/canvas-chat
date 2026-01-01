@@ -7,9 +7,11 @@ from canvas_chat.app import (
     CommitteeRequest,
     ExaContentsResult,
     ExaGetContentsRequest,
+    FetchPdfRequest,
     FetchUrlRequest,
     FetchUrlResult,
     Message,
+    PdfResult,
     RefineQueryRequest,
 )
 
@@ -259,3 +261,76 @@ def test_fetch_url_result_missing_required():
 
     with pytest.raises(ValidationError):
         FetchUrlResult(title="Test", content="content")
+
+
+# --- FetchPdfRequest and PdfResult tests ---
+
+
+def test_fetch_pdf_request_valid():
+    """Test that FetchPdfRequest validates correct input."""
+    request = FetchPdfRequest(url="https://example.com/document.pdf")
+    assert request.url == "https://example.com/document.pdf"
+
+
+def test_fetch_pdf_request_with_query_params():
+    """Test FetchPdfRequest accepts URLs with query parameters."""
+    request = FetchPdfRequest(url="https://example.com/doc.pdf?token=abc123")
+    assert request.url == "https://example.com/doc.pdf?token=abc123"
+
+
+def test_fetch_pdf_request_missing_url():
+    """Test that FetchPdfRequest requires url."""
+    with pytest.raises(ValidationError):
+        FetchPdfRequest()
+
+
+def test_pdf_result_valid():
+    """Test that PdfResult validates correct input."""
+    result = PdfResult(
+        filename="document.pdf",
+        content="# Document\n\nExtracted text content.",
+        page_count=5,
+    )
+    assert result.filename == "document.pdf"
+    assert result.content == "# Document\n\nExtracted text content."
+    assert result.page_count == 5
+
+
+def test_pdf_result_with_warning_banner():
+    """Test PdfResult with the standard warning banner content."""
+    content = """> 📄 **PDF Import** — Text was extracted automatically and may contain errors.
+> Consider sourcing the original if precision is critical.
+
+---
+
+# Extracted Content
+
+Some text from the PDF."""
+    result = PdfResult(filename="report.pdf", content=content, page_count=10)
+    assert result.filename == "report.pdf"
+    assert "PDF Import" in result.content
+    assert result.page_count == 10
+
+
+def test_pdf_result_single_page():
+    """Test PdfResult with single page document."""
+    result = PdfResult(filename="one-pager.pdf", content="Brief content", page_count=1)
+    assert result.page_count == 1
+
+
+def test_pdf_result_missing_filename():
+    """Test that PdfResult requires filename."""
+    with pytest.raises(ValidationError):
+        PdfResult(content="Some content", page_count=1)
+
+
+def test_pdf_result_missing_content():
+    """Test that PdfResult requires content."""
+    with pytest.raises(ValidationError):
+        PdfResult(filename="doc.pdf", page_count=1)
+
+
+def test_pdf_result_missing_page_count():
+    """Test that PdfResult requires page_count."""
+    with pytest.raises(ValidationError):
+        PdfResult(filename="doc.pdf", content="Content")
