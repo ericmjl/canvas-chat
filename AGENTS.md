@@ -208,6 +208,30 @@ this.canvas.updateNodeContent(node.id, realContent, false); // Updates both disp
 this.graph.updateNode(node.id, { content: realContent });
 ```
 
+### Node tags
+
+Tags are rendered as a **fundamental property of all nodes**, not inside node-type-specific templates.
+This ensures tags work consistently across all node types without duplication.
+
+**Architecture:** In `renderNode()`, after setting `div.innerHTML` for the specific node type,
+tags are inserted using `insertAdjacentHTML('afterbegin', tagsHtml)`:
+
+```javascript
+// After setting div.innerHTML for matrix or non-matrix nodes:
+const tagsHtml = this.renderNodeTags(node);
+if (tagsHtml) {
+    div.insertAdjacentHTML('afterbegin', tagsHtml);
+}
+```
+
+**Important CSS considerations:**
+- Tags are positioned with `position: absolute; right: 100%` (outside the left edge of the node)
+- The `.node` container must NOT have `overflow: hidden` or tags will be clipped
+- Inner containers (`.node-content`, `.matrix-table-container`) handle their own overflow for scrolling
+
+**When adding new node types:** You don't need to add tag rendering - it's automatic.
+Just ensure the new node type's container doesn't set `overflow: hidden` on the `.node` div.
+
 ## Design standards
 
 - New features must be coherent with existing design patterns and visual language
