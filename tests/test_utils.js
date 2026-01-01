@@ -1470,6 +1470,260 @@ test('isUrl: rejects whitespace only', () => {
 });
 
 // ============================================================
+// Graph.isEmpty() tests
+// ============================================================
+
+/**
+ * Tests for Graph.isEmpty() - this was the root cause of the
+ * "welcome message not hiding" bug. The isEmpty check must work
+ * correctly for loadSessionData to hide the empty state.
+ */
+
+class TestGraphWithIsEmpty {
+    constructor(session = null) {
+        this.nodes = new Map();
+        if (session && session.nodes) {
+            for (const node of session.nodes) {
+                this.nodes.set(node.id, node);
+            }
+        }
+    }
+    
+    addNode(node) {
+        this.nodes.set(node.id, node);
+        return node;
+    }
+    
+    isEmpty() {
+        return this.nodes.size === 0;
+    }
+    
+    getAllNodes() {
+        return Array.from(this.nodes.values());
+    }
+}
+
+test('Graph.isEmpty: returns true for new empty graph', () => {
+    const graph = new TestGraphWithIsEmpty();
+    assertTrue(graph.isEmpty(), 'New graph should be empty');
+});
+
+test('Graph.isEmpty: returns false after adding a node', () => {
+    const graph = new TestGraphWithIsEmpty();
+    graph.addNode({ id: 'node-1', content: 'test' });
+    assertFalse(graph.isEmpty(), 'Graph with node should not be empty');
+});
+
+test('Graph.isEmpty: returns false when initialized with session nodes', () => {
+    // This is the bug case - loading a session with nodes
+    const session = {
+        nodes: [
+            { id: 'node-1', content: 'First node' },
+            { id: 'node-2', content: 'Second node' }
+        ]
+    };
+    const graph = new TestGraphWithIsEmpty(session);
+    
+    assertFalse(graph.isEmpty(), 'Graph loaded from session should not be empty');
+    assertEqual(graph.getAllNodes().length, 2);
+});
+
+test('Graph.isEmpty: returns true for session with empty nodes array', () => {
+    const session = { nodes: [] };
+    const graph = new TestGraphWithIsEmpty(session);
+    
+    assertTrue(graph.isEmpty(), 'Graph with empty nodes array should be empty');
+});
+
+test('Graph.isEmpty: returns true for session with null nodes', () => {
+    const session = { nodes: null };
+    const graph = new TestGraphWithIsEmpty(session);
+    
+    assertTrue(graph.isEmpty(), 'Graph with null nodes should be empty');
+});
+
+// ============================================================
+// Matrix cell tracking tests (streamingMatrixCells)
+// ============================================================
+
+/**
+ * Tests for the matrix cell fill tracking pattern.
+ * When filling matrix cells (single or "Fill All"), each cell needs
+ * its own AbortController tracked in a nested Map structure:
+ *   streamingMatrixCells: Map<nodeId, Map<cellKey, AbortController>>
+ * 
+ * This allows:
+ * - Multiple matrices to fill simultaneously
+ * - Individual cells within a matrix to be tracked/aborted
+ * - Stop button to abort all cells in a matrix at once
+ */
+
+class MatrixCellTracker {
+    constructor() {
+        // Map<nodeId, Map<cellKey, AbortController>>
+        this.streamingMatrixCells = new Map();
+    }
+    
+    // Start tracking a cell fill
+    startCellFill(nodeId, row, col) {
+        const cellKey = `${row}-${col}`;
+        const abortController = { aborted: false, cellKey };
+        
+        // Get or create the cell controllers map for this matrix
+        let cellControllers = this.streamingMatrixCells.get(nodeId);
+        if (!cellControllers) {
+            cellControllers = new Map();
+            this.streamingMatrixCells.set(nodeId, cellControllers);
+        }
+        cellControllers.set(cellKey, abortController);
+        
+        return abortController;
+    }
+    
+    // Complete a cell fill (cleanup)
+    completeCellFill(nodeId, row, col) {
+        const cellKey = `${row}-${col}`;
+        const cellControllers = this.streamingMatrixCells.get(nodeId);
+        
+        if (cellControllers) {
+            cellControllers.delete(cellKey);
+            // If no more cells are being filled, clean up the matrix entry
+            if (cellControllers.size === 0) {
+                this.streamingMatrixCells.delete(nodeId);
+            }
+        }
+    }
+    
+    // Stop all cell fills for a matrix (stop button)
+    stopAllCellFills(nodeId) {
+        const cellControllers = this.streamingMatrixCells.get(nodeId);
+        if (!cellControllers) return 0;
+        
+        let abortedCount = 0;
+        for (const controller of cellControllers.values()) {
+            controller.aborted = true;
+            abortedCount++;
+        }
+        return abortedCount;
+    }
+    
+    // Check if any cells are being filled for a matrix
+    isMatrixFilling(nodeId) {
+        const cellControllers = this.streamingMatrixCells.get(nodeId);
+        return !!(cellControllers && cellControllers.size > 0);
+    }
+    
+    // Get count of active cell fills for a matrix
+    getActiveCellCount(nodeId) {
+        const cellControllers = this.streamingMatrixCells.get(nodeId);
+        return cellControllers ? cellControllers.size : 0;
+    }
+}
+
+test('MatrixCellTracker: single cell fill tracking', () => {
+    const tracker = new MatrixCellTracker();
+    
+    const controller = tracker.startCellFill('matrix-1', 0, 0);
+    
+    assertTrue(tracker.isMatrixFilling('matrix-1'), 'Matrix should be filling');
+    assertEqual(tracker.getActiveCellCount('matrix-1'), 1);
+    assertFalse(controller.aborted, 'Controller should not be aborted initially');
+});
+
+test('MatrixCellTracker: multiple cells in same matrix', () => {
+    const tracker = new MatrixCellTracker();
+    
+    // Simulate "Fill All" - multiple cells starting at once
+    const c00 = tracker.startCellFill('matrix-1', 0, 0);
+    const c01 = tracker.startCellFill('matrix-1', 0, 1);
+    const c10 = tracker.startCellFill('matrix-1', 1, 0);
+    const c11 = tracker.startCellFill('matrix-1', 1, 1);
+    
+    assertEqual(tracker.getActiveCellCount('matrix-1'), 4);
+    
+    // Complete some cells
+    tracker.completeCellFill('matrix-1', 0, 0);
+    assertEqual(tracker.getActiveCellCount('matrix-1'), 3);
+    
+    tracker.completeCellFill('matrix-1', 1, 1);
+    assertEqual(tracker.getActiveCellCount('matrix-1'), 2);
+});
+
+test('MatrixCellTracker: stop all cells aborts all controllers', () => {
+    const tracker = new MatrixCellTracker();
+    
+    const c00 = tracker.startCellFill('matrix-1', 0, 0);
+    const c01 = tracker.startCellFill('matrix-1', 0, 1);
+    const c10 = tracker.startCellFill('matrix-1', 1, 0);
+    
+    // Stop button pressed
+    const abortedCount = tracker.stopAllCellFills('matrix-1');
+    
+    assertEqual(abortedCount, 3);
+    assertTrue(c00.aborted, 'Cell 0,0 should be aborted');
+    assertTrue(c01.aborted, 'Cell 0,1 should be aborted');
+    assertTrue(c10.aborted, 'Cell 1,0 should be aborted');
+});
+
+test('MatrixCellTracker: cleanup removes matrix entry when all cells complete', () => {
+    const tracker = new MatrixCellTracker();
+    
+    tracker.startCellFill('matrix-1', 0, 0);
+    tracker.startCellFill('matrix-1', 0, 1);
+    
+    assertTrue(tracker.isMatrixFilling('matrix-1'), 'Matrix should be filling');
+    
+    // Complete all cells (simulates finally blocks running)
+    tracker.completeCellFill('matrix-1', 0, 0);
+    assertTrue(tracker.isMatrixFilling('matrix-1'), 'Matrix should still be filling with one cell');
+    
+    tracker.completeCellFill('matrix-1', 0, 1);
+    
+    assertFalse(tracker.isMatrixFilling('matrix-1'), 'Matrix should not be filling after all complete');
+    assertEqual(tracker.streamingMatrixCells.size, 0, 'Map should be empty after cleanup');
+});
+
+test('MatrixCellTracker: multiple matrices tracked independently', () => {
+    const tracker = new MatrixCellTracker();
+    
+    // Fill cells in two different matrices
+    tracker.startCellFill('matrix-1', 0, 0);
+    tracker.startCellFill('matrix-1', 0, 1);
+    tracker.startCellFill('matrix-2', 0, 0);
+    
+    assertEqual(tracker.getActiveCellCount('matrix-1'), 2);
+    assertEqual(tracker.getActiveCellCount('matrix-2'), 1);
+    
+    // Stop only matrix-1
+    tracker.stopAllCellFills('matrix-1');
+    
+    // matrix-2 should still be active
+    assertTrue(tracker.isMatrixFilling('matrix-2'), 'Matrix 2 should still be filling');
+});
+
+test('MatrixCellTracker: stop non-existent matrix returns 0', () => {
+    const tracker = new MatrixCellTracker();
+    
+    const abortedCount = tracker.stopAllCellFills('non-existent');
+    assertEqual(abortedCount, 0);
+});
+
+test('MatrixCellTracker: same cell can be restarted after completion', () => {
+    const tracker = new MatrixCellTracker();
+    
+    // Fill and complete (simulates the finally block running)
+    const c1 = tracker.startCellFill('matrix-1', 0, 0);
+    tracker.completeCellFill('matrix-1', 0, 0);  // finally block cleanup
+    
+    assertFalse(tracker.isMatrixFilling('matrix-1'), 'Should not be filling after complete');
+    
+    const c2 = tracker.startCellFill('matrix-1', 0, 0);
+    
+    assertTrue(tracker.isMatrixFilling('matrix-1'), 'Should be filling after restart');
+    assertTrue(c1 !== c2, 'New controller should be different instance');
+});
+
+// ============================================================
 // Summary
 // ============================================================
 
