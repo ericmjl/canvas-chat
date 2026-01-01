@@ -1054,6 +1054,353 @@ test('GoodConcurrentManager: same node can be restarted after completion', () =>
 });
 
 // ============================================================
+// RecentModels storage tests
+// ============================================================
+
+/**
+ * Mock localStorage for testing storage functions.
+ * These tests validate the getRecentModels/addRecentModel logic.
+ */
+class MockLocalStorage {
+    constructor() {
+        this.store = {};
+    }
+    
+    getItem(key) {
+        return this.store[key] || null;
+    }
+    
+    setItem(key, value) {
+        this.store[key] = value;
+    }
+    
+    removeItem(key) {
+        delete this.store[key];
+    }
+    
+    clear() {
+        this.store = {};
+    }
+}
+
+// Simulate the storage functions from storage.js
+function createRecentModelsStorage(localStorage) {
+    return {
+        getRecentModels() {
+            const data = localStorage.getItem('canvas-chat-recent-models');
+            return data ? JSON.parse(data) : [];
+        },
+        
+        addRecentModel(modelId) {
+            const recent = this.getRecentModels();
+            
+            // Remove if already exists (will re-add at front)
+            const filtered = recent.filter(id => id !== modelId);
+            
+            // Add to front
+            filtered.unshift(modelId);
+            
+            // Keep only last 10
+            const trimmed = filtered.slice(0, 10);
+            
+            localStorage.setItem('canvas-chat-recent-models', JSON.stringify(trimmed));
+        }
+    };
+}
+
+test('getRecentModels: returns empty array when no data', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createRecentModelsStorage(mockStorage);
+    
+    assertEqual(storage.getRecentModels(), []);
+});
+
+test('addRecentModel: adds model to empty list', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createRecentModelsStorage(mockStorage);
+    
+    storage.addRecentModel('openai/gpt-4o');
+    
+    assertEqual(storage.getRecentModels(), ['openai/gpt-4o']);
+});
+
+test('addRecentModel: adds model to front of list', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createRecentModelsStorage(mockStorage);
+    
+    storage.addRecentModel('openai/gpt-4o');
+    storage.addRecentModel('anthropic/claude-sonnet-4-20250514');
+    
+    assertEqual(storage.getRecentModels(), ['anthropic/claude-sonnet-4-20250514', 'openai/gpt-4o']);
+});
+
+test('addRecentModel: moves existing model to front', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createRecentModelsStorage(mockStorage);
+    
+    storage.addRecentModel('openai/gpt-4o');
+    storage.addRecentModel('anthropic/claude-sonnet-4-20250514');
+    storage.addRecentModel('groq/llama-3.1-70b-versatile');
+    
+    // Now add gpt-4o again - should move to front
+    storage.addRecentModel('openai/gpt-4o');
+    
+    assertEqual(storage.getRecentModels(), [
+        'openai/gpt-4o',
+        'groq/llama-3.1-70b-versatile',
+        'anthropic/claude-sonnet-4-20250514'
+    ]);
+});
+
+test('addRecentModel: limits to 10 models', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createRecentModelsStorage(mockStorage);
+    
+    // Add 12 models
+    for (let i = 0; i < 12; i++) {
+        storage.addRecentModel(`model-${i}`);
+    }
+    
+    const recent = storage.getRecentModels();
+    assertEqual(recent.length, 10);
+    
+    // Most recent should be first
+    assertEqual(recent[0], 'model-11');
+    // Oldest kept should be model-2
+    assertEqual(recent[9], 'model-2');
+});
+
+test('addRecentModel: no duplicates in list', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createRecentModelsStorage(mockStorage);
+    
+    storage.addRecentModel('openai/gpt-4o');
+    storage.addRecentModel('anthropic/claude-sonnet-4-20250514');
+    storage.addRecentModel('openai/gpt-4o');
+    storage.addRecentModel('openai/gpt-4o');
+    
+    const recent = storage.getRecentModels();
+    
+    // Should only have 2 unique models
+    assertEqual(recent.length, 2);
+    assertEqual(recent, ['openai/gpt-4o', 'anthropic/claude-sonnet-4-20250514']);
+});
+
+// ============================================================
+// Provider mapping tests (_getStorageKeyForProvider, getApiKeysForModels)
+// ============================================================
+
+/**
+ * Simulate the provider mapping logic from storage.js
+ * This is the canonical mapping for provider name to storage key.
+ */
+function createProviderMappingStorage(localStorage) {
+    return {
+        _getStorageKeyForProvider(provider) {
+            const providerMap = {
+                'openai': 'openai',
+                'anthropic': 'anthropic',
+                'gemini': 'google',
+                'google': 'google',
+                'groq': 'groq',
+                'github': 'github',
+                'github_copilot': 'github',
+                'exa': 'exa'
+            };
+            return providerMap[provider.toLowerCase()] || provider.toLowerCase();
+        },
+        
+        getApiKeys() {
+            const data = localStorage.getItem('canvas-chat-api-keys');
+            return data ? JSON.parse(data) : {};
+        },
+        
+        saveApiKeys(keys) {
+            localStorage.setItem('canvas-chat-api-keys', JSON.stringify(keys));
+        },
+        
+        getApiKeyForProvider(provider) {
+            const keys = this.getApiKeys();
+            const storageKey = this._getStorageKeyForProvider(provider);
+            return keys[storageKey] || null;
+        },
+        
+        getApiKeysForModels(modelIds) {
+            const apiKeys = {};
+            for (const modelId of modelIds) {
+                const provider = modelId.split('/')[0];
+                const storageKey = this._getStorageKeyForProvider(provider);
+                const key = this.getApiKeyForProvider(provider);
+                if (key) {
+                    apiKeys[storageKey] = key;
+                }
+            }
+            return apiKeys;
+        }
+    };
+}
+
+test('_getStorageKeyForProvider: direct mapping', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    assertEqual(storage._getStorageKeyForProvider('openai'), 'openai');
+    assertEqual(storage._getStorageKeyForProvider('anthropic'), 'anthropic');
+    assertEqual(storage._getStorageKeyForProvider('groq'), 'groq');
+});
+
+test('_getStorageKeyForProvider: gemini maps to google', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    assertEqual(storage._getStorageKeyForProvider('gemini'), 'google');
+    assertEqual(storage._getStorageKeyForProvider('google'), 'google');
+});
+
+test('_getStorageKeyForProvider: github_copilot maps to github', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    assertEqual(storage._getStorageKeyForProvider('github'), 'github');
+    assertEqual(storage._getStorageKeyForProvider('github_copilot'), 'github');
+});
+
+test('_getStorageKeyForProvider: case insensitive', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    assertEqual(storage._getStorageKeyForProvider('OpenAI'), 'openai');
+    assertEqual(storage._getStorageKeyForProvider('GEMINI'), 'google');
+    assertEqual(storage._getStorageKeyForProvider('GitHub_Copilot'), 'github');
+});
+
+test('_getStorageKeyForProvider: unknown provider returns lowercase', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    assertEqual(storage._getStorageKeyForProvider('mistral'), 'mistral');
+    assertEqual(storage._getStorageKeyForProvider('Cohere'), 'cohere');
+});
+
+test('getApiKeyForProvider: returns key using mapping', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    storage.saveApiKeys({
+        'openai': 'sk-openai-key',
+        'google': 'google-key',
+        'github': 'gh-token'
+    });
+    
+    assertEqual(storage.getApiKeyForProvider('openai'), 'sk-openai-key');
+    assertEqual(storage.getApiKeyForProvider('gemini'), 'google-key');
+    assertEqual(storage.getApiKeyForProvider('github_copilot'), 'gh-token');
+});
+
+test('getApiKeyForProvider: returns null for unconfigured provider', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    storage.saveApiKeys({ 'openai': 'sk-key' });
+    
+    assertNull(storage.getApiKeyForProvider('anthropic'));
+    assertNull(storage.getApiKeyForProvider('mistral'));
+});
+
+test('getApiKeysForModels: builds dict from model IDs', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    storage.saveApiKeys({
+        'openai': 'sk-openai',
+        'anthropic': 'sk-anthropic',
+        'google': 'google-key'
+    });
+    
+    const result = storage.getApiKeysForModels([
+        'openai/gpt-4o',
+        'anthropic/claude-sonnet-4-20250514'
+    ]);
+    
+    assertDeepEqual(result, {
+        'openai': 'sk-openai',
+        'anthropic': 'sk-anthropic'
+    });
+});
+
+test('getApiKeysForModels: maps gemini to google', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    storage.saveApiKeys({
+        'openai': 'sk-openai',
+        'google': 'google-key'
+    });
+    
+    const result = storage.getApiKeysForModels([
+        'openai/gpt-4o',
+        'gemini/gemini-1.5-pro'
+    ]);
+    
+    assertDeepEqual(result, {
+        'openai': 'sk-openai',
+        'google': 'google-key'
+    });
+});
+
+test('getApiKeysForModels: skips models without configured keys', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    storage.saveApiKeys({
+        'openai': 'sk-openai'
+    });
+    
+    const result = storage.getApiKeysForModels([
+        'openai/gpt-4o',
+        'anthropic/claude-sonnet-4-20250514',  // No key configured
+        'mistral/mistral-large'  // Unknown provider, no key
+    ]);
+    
+    assertDeepEqual(result, {
+        'openai': 'sk-openai'
+    });
+});
+
+test('getApiKeysForModels: deduplicates providers', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    storage.saveApiKeys({
+        'openai': 'sk-openai'
+    });
+    
+    // Multiple models from same provider
+    const result = storage.getApiKeysForModels([
+        'openai/gpt-4o',
+        'openai/gpt-4o-mini',
+        'openai/gpt-3.5-turbo'
+    ]);
+    
+    assertDeepEqual(result, {
+        'openai': 'sk-openai'
+    });
+});
+
+test('getApiKeysForModels: empty array returns empty object', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+    
+    storage.saveApiKeys({
+        'openai': 'sk-openai'
+    });
+    
+    const result = storage.getApiKeysForModels([]);
+    
+    assertDeepEqual(result, {});
+});
+
+// ============================================================
 // Summary
 // ============================================================
 

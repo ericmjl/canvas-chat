@@ -33,6 +33,12 @@
     --node-research-border: #b39ddb;
     --node-highlight: #fffde7;
     --node-highlight-border: #ffd54f;
+    --node-opinion: #e8eaf6;
+    --node-opinion-border: #7986cb;
+    --node-synthesis: #fce4ec;
+    --node-synthesis-border: #f06292;
+    --node-review: #fff8e1;
+    --node-review-border: #ffb74d;
     
     /* UI colors */
     --edge-color: #495057;
@@ -91,6 +97,12 @@
         --node-research-border: #7c3aed;
         --node-highlight: #3d3a20;
         --node-highlight-border: #fbc02d;
+        --node-opinion: #2d2d45;
+        --node-opinion-border: #5c6bc0;
+        --node-synthesis: #3d2d35;
+        --node-synthesis-border: #ec407a;
+        --node-review: #3d3520;
+        --node-review-border: #ffa726;
         
         --edge-color: #9ca3af;
         --edge-color-light: #4b5563;
@@ -469,6 +481,21 @@ html, body {
     background: var(--node-highlight);
     border-color: var(--node-highlight-border);
     border-style: dashed;
+}
+
+.node.opinion {
+    background: var(--node-opinion);
+    border-color: var(--node-opinion-border);
+}
+
+.node.synthesis {
+    background: var(--node-synthesis);
+    border-color: var(--node-synthesis-border);
+}
+
+.node.review {
+    background: var(--node-review);
+    border-color: var(--node-review-border);
 }
 
 /* Source text highlight - shown in parent node when a highlight excerpt is selected */
@@ -1938,6 +1965,178 @@ kbd {
     border-radius: var(--radius-sm);
     font-size: 12px;
     color: var(--warning);
+}
+
+/* Committee Modal */
+.committee-question-group {
+    margin-bottom: 20px;
+}
+
+.committee-question-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+}
+
+.committee-question-group textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: var(--font-sans);
+    resize: none;
+}
+
+.committee-models-group {
+    margin-bottom: 20px;
+}
+
+.committee-models-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.committee-models-header label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.committee-models-count {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.committee-models-count.valid {
+    color: var(--success);
+}
+
+.committee-models-count.invalid {
+    color: var(--danger);
+}
+
+.committee-models-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 12px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+}
+
+.committee-model-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+}
+
+.committee-model-item:hover {
+    border-color: var(--accent);
+}
+
+.committee-model-item.selected {
+    border-color: var(--accent);
+    background: var(--selection-bg);
+}
+
+.committee-model-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+.committee-model-item .model-name {
+    font-size: 12px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.committee-chairman-group {
+    margin-bottom: 20px;
+}
+
+.committee-chairman-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+}
+
+.committee-chairman-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.committee-chairman-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.committee-options-group {
+    margin-bottom: 8px;
+}
+
+.committee-checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.committee-checkbox-label:hover {
+    background: var(--bg-secondary);
+}
+
+.committee-checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    cursor: pointer;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+}
+
+.committee-checkbox-label .checkbox-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.committee-checkbox-label .checkbox-hint {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
 }
 
 .modal-actions {

@@ -423,6 +423,7 @@
                             <tr><td><code>/search</code> <em>query</em></td><td>Search the web with Exa AI</td></tr>
                             <tr><td><code>/research</code> <em>topic</em></td><td>Deep research with multiple sources</td></tr>
                             <tr><td><code>/matrix</code> <em>context</em></td><td>Create a comparison matrix</td></tr>
+                            <tr><td><code>/committee</code> <em>question</em></td><td>Consult multiple LLMs and synthesize</td></tr>
                         </tbody>
                     </table>
                 </section>
@@ -461,6 +462,52 @@
             <div class="modal-actions">
                 <button class="secondary-btn" id="edit-content-cancel">Cancel</button>
                 <button class="primary-btn" id="edit-content-save">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Committee Modal -->
+    <div id="committee-modal" class="modal" style="display: none;">
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2>LLM Committee</h2>
+                <button class="modal-close" id="committee-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="committee-question-group">
+                    <label for="committee-question">Question</label>
+                    <textarea id="committee-question" rows="3" readonly placeholder="Your question will appear here..."></textarea>
+                </div>
+                
+                <div class="committee-models-group">
+                    <div class="committee-models-header">
+                        <label>Committee Members</label>
+                        <span class="committee-models-count" id="committee-models-count">0 selected (2-5 required)</span>
+                    </div>
+                    <div class="committee-models-grid" id="committee-models-grid">
+                        <!-- Model checkboxes will be populated by JS -->
+                    </div>
+                </div>
+                
+                <div class="committee-chairman-group">
+                    <label for="committee-chairman">Chairman (synthesizes opinions)</label>
+                    <select id="committee-chairman" class="committee-chairman-select">
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                
+                <div class="committee-options-group">
+                    <label class="committee-checkbox-label">
+                        <input type="checkbox" id="committee-include-review">
+                        <span class="checkbox-text">Include review stage</span>
+                        <span class="checkbox-hint">Each model reviews all other opinions before synthesis</span>
+                    </label>
+                </div>
+                
+                <div class="modal-actions">
+                    <button id="committee-cancel-btn" class="secondary-btn">Cancel</button>
+                    <button id="committee-execute-btn" class="primary-btn" disabled>Consult Committee</button>
+                </div>
             </div>
         </div>
     </div>

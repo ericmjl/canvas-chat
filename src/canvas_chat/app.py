@@ -15,6 +15,8 @@ Conversations are nodes on an infinite canvas, allowing branching,
 merging, and exploration of topics as a DAG.
 """
 
+import asyncio
+import asyncio
 import json
 import logging
 import traceback
@@ -132,6 +134,23 @@ class ProviderModelsRequest(BaseModel):
 
     provider: str  # "openai", "anthropic", "google", "groq", "github"
     api_key: str
+
+
+class CommitteeRequest(BaseModel):
+    """Request body for LLM committee endpoint.
+
+    The committee feature allows multiple LLMs to respond to a question,
+    optionally review each other's responses, and then have a chairman
+    model synthesize a final answer.
+    """
+
+    question: str  # The question to ask the committee
+    context: list[Message]  # Conversation history for context
+    models: list[str]  # Committee member models (2-5 models)
+    chairman_model: str  # Model that synthesizes the final answer
+    api_keys: dict[str, str]  # Provider -> API key mapping
+    base_url: Optional[str] = None
+    include_review: bool = False  # Whether to include review/ranking stage
 
 
 # --- Model Registry ---
@@ -1394,3 +1413,438 @@ Examples:
         logger.error(f"Generate summary failed: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Committee Endpoint ---
+
+
+def get_api_key_for_model(model: str, api_keys: dict[str, str]) -> Optional[str]:
+    """Get the API key for a model from the api_keys dict."""
+    provider = extract_provider(model)
+    # Map provider names to storage keys
+    provider_map = {
+        "openai": "openai",
+        "anthropic": "anthropic",
+        "gemini": "google",
+        "google": "google",
+        "groq": "groq",
+        "github": "github",
+        "github_copilot": "github",
+        "ollama": None,  # Ollama doesn't need API key
+        "ollama_chat": None,
+    }
+    key_name = provider_map.get(provider.lower())
+    if key_name:
+        return api_keys.get(key_name)
+    return None
+
+
+async def stream_single_opinion(
+    index: int,
+    model: str,
+    question: str,
+    context: list[dict],
+    api_key: Optional[str],
+    base_url: Optional[str],
+    queue: asyncio.Queue,
+):
+    """Stream a single committee member's opinion to the queue."""
+    try:
+        # Send start event
+        await queue.put(
+            {"event": "opinion_start", "data": {"index": index, "model": model}}
+        )
+
+        system_prompt = """You are a committee member providing your independent opinion.
+Analyze the question thoughtfully and provide your perspective.
+Be specific and substantive in your response."""
+
+        messages = [{"role": "system", "content": system_prompt}]
+
+        # Add conversation context
+        for msg in context:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+
+        # Add the question
+        messages.append({"role": "user", "content": question})
+
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.7,
+            "stream": True,
+        }
+
+        if api_key:
+            kwargs["api_key"] = api_key
+        if base_url:
+            kwargs["base_url"] = base_url
+
+        add_copilot_headers(kwargs, model)
+
+        response = await litellm.acompletion(**kwargs)
+        full_content = ""
+
+        async for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                full_content += content
+                await queue.put(
+                    {
+                        "event": "opinion_chunk",
+                        "data": {"index": index, "content": content},
+                    }
+                )
+
+        await queue.put(
+            {
+                "event": "opinion_done",
+                "data": {"index": index, "full_content": full_content},
+            }
+        )
+
+        return full_content
+
+    except Exception as e:
+        logger.error(f"Opinion {index} failed: {e}")
+        await queue.put(
+            {"event": "opinion_error", "data": {"index": index, "error": str(e)}}
+        )
+        return None
+
+
+async def stream_single_review(
+    reviewer_index: int,
+    reviewer_model: str,
+    question: str,
+    opinions: list[dict],  # {"index": int, "model": str, "content": str}
+    api_key: Optional[str],
+    base_url: Optional[str],
+    queue: asyncio.Queue,
+):
+    """Stream a single committee member's review of other opinions."""
+    try:
+        await queue.put(
+            {
+                "event": "review_start",
+                "data": {"reviewer_index": reviewer_index, "model": reviewer_model},
+            }
+        )
+
+        # Build the review prompt with anonymized opinions
+        other_opinions = [op for op in opinions if op["index"] != reviewer_index]
+        opinions_text = "\n\n".join(
+            [
+                f"**Opinion {chr(65 + i)}:**\n{op['content']}"
+                for i, op in enumerate(other_opinions)
+            ]
+        )
+
+        system_prompt = """You are reviewing and ranking other committee members' opinions.
+For each opinion, briefly comment on its strengths and weaknesses.
+Then rank them from best to worst with a brief justification.
+Be constructive and specific in your critique."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": f"""Question: {question}
+
+Here are the other committee members' opinions:
+
+{opinions_text}
+
+Please review and rank these opinions.""",
+            },
+        ]
+
+        kwargs = {
+            "model": reviewer_model,
+            "messages": messages,
+            "temperature": 0.5,
+            "stream": True,
+        }
+
+        if api_key:
+            kwargs["api_key"] = api_key
+        if base_url:
+            kwargs["base_url"] = base_url
+
+        add_copilot_headers(kwargs, reviewer_model)
+
+        response = await litellm.acompletion(**kwargs)
+        full_content = ""
+
+        async for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                full_content += content
+                await queue.put(
+                    {
+                        "event": "review_chunk",
+                        "data": {"reviewer_index": reviewer_index, "content": content},
+                    }
+                )
+
+        await queue.put(
+            {
+                "event": "review_done",
+                "data": {
+                    "reviewer_index": reviewer_index,
+                    "full_content": full_content,
+                },
+            }
+        )
+
+        return full_content
+
+    except Exception as e:
+        logger.error(f"Review {reviewer_index} failed: {e}")
+        await queue.put(
+            {
+                "event": "review_error",
+                "data": {"reviewer_index": reviewer_index, "error": str(e)},
+            }
+        )
+        return None
+
+
+@app.post("/api/committee")
+async def committee(request: CommitteeRequest):
+    """
+    Run an LLM committee to answer a question.
+
+    Multiple models respond in parallel, optionally review each other's
+    responses, then a chairman model synthesizes the final answer.
+
+    Returns an SSE stream with opinion, review, and synthesis events.
+    """
+    logger.info(
+        f"Committee request: question='{request.question[:50]}...', "
+        f"models={request.models}, chairman={request.chairman_model}, "
+        f"include_review={request.include_review}"
+    )
+
+    # Validate request
+    if len(request.models) < 2:
+        raise HTTPException(
+            status_code=400, detail="At least 2 committee models required"
+        )
+    if len(request.models) > 5:
+        raise HTTPException(
+            status_code=400, detail="Maximum 5 committee models allowed"
+        )
+
+    async def generate():
+        try:
+            # Convert context messages to dicts
+            context = [{"role": m.role, "content": m.content} for m in request.context]
+
+            # Phase 1: Gather opinions in parallel
+            queue: asyncio.Queue = asyncio.Queue()
+            opinion_tasks = []
+
+            for i, model in enumerate(request.models):
+                api_key = get_api_key_for_model(model, request.api_keys)
+                task = asyncio.create_task(
+                    stream_single_opinion(
+                        index=i,
+                        model=model,
+                        question=request.question,
+                        context=context,
+                        api_key=api_key,
+                        base_url=request.base_url,
+                        queue=queue,
+                    )
+                )
+                opinion_tasks.append(task)
+
+            # Stream events from queue while tasks are running
+            opinions_done = 0
+            opinions = {}  # index -> {"model": str, "content": str}
+
+            while opinions_done < len(request.models):
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield {"event": event["event"], "data": json.dumps(event["data"])}
+
+                    if event["event"] == "opinion_done":
+                        opinions_done += 1
+                        idx = event["data"]["index"]
+                        opinions[idx] = {
+                            "index": idx,
+                            "model": request.models[idx],
+                            "content": event["data"]["full_content"],
+                        }
+                    elif event["event"] == "opinion_error":
+                        opinions_done += 1
+
+                except asyncio.TimeoutError:
+                    # Check if all tasks are done
+                    if all(task.done() for task in opinion_tasks):
+                        # Drain remaining queue events
+                        while not queue.empty():
+                            event = await queue.get()
+                            yield {
+                                "event": event["event"],
+                                "data": json.dumps(event["data"]),
+                            }
+                            if event["event"] == "opinion_done":
+                                idx = event["data"]["index"]
+                                opinions[idx] = {
+                                    "index": idx,
+                                    "model": request.models[idx],
+                                    "content": event["data"]["full_content"],
+                                }
+                        break
+                    continue
+
+            # Wait for all opinion tasks to complete
+            await asyncio.gather(*opinion_tasks, return_exceptions=True)
+
+            # Phase 2: Reviews (if enabled)
+            reviews = {}
+            if request.include_review and len(opinions) > 1:
+                review_queue: asyncio.Queue = asyncio.Queue()
+                review_tasks = []
+                opinions_list = list(opinions.values())
+
+                for i, model in enumerate(request.models):
+                    if i not in opinions:
+                        continue  # Skip failed opinions
+                    api_key = get_api_key_for_model(model, request.api_keys)
+                    task = asyncio.create_task(
+                        stream_single_review(
+                            reviewer_index=i,
+                            reviewer_model=model,
+                            question=request.question,
+                            opinions=opinions_list,
+                            api_key=api_key,
+                            base_url=request.base_url,
+                            queue=review_queue,
+                        )
+                    )
+                    review_tasks.append(task)
+
+                # Stream review events
+                reviews_done = 0
+                expected_reviews = len(
+                    [i for i in range(len(request.models)) if i in opinions]
+                )
+
+                while reviews_done < expected_reviews:
+                    try:
+                        event = await asyncio.wait_for(review_queue.get(), timeout=0.1)
+                        yield {
+                            "event": event["event"],
+                            "data": json.dumps(event["data"]),
+                        }
+
+                        if event["event"] == "review_done":
+                            reviews_done += 1
+                            idx = event["data"]["reviewer_index"]
+                            reviews[idx] = event["data"]["full_content"]
+                        elif event["event"] == "review_error":
+                            reviews_done += 1
+
+                    except asyncio.TimeoutError:
+                        if all(task.done() for task in review_tasks):
+                            while not review_queue.empty():
+                                event = await review_queue.get()
+                                yield {
+                                    "event": event["event"],
+                                    "data": json.dumps(event["data"]),
+                                }
+                                if event["event"] == "review_done":
+                                    idx = event["data"]["reviewer_index"]
+                                    reviews[idx] = event["data"]["full_content"]
+                            break
+                        continue
+
+                await asyncio.gather(*review_tasks, return_exceptions=True)
+
+            # Phase 3: Chairman synthesis
+            yield {
+                "event": "synthesis_start",
+                "data": json.dumps({"model": request.chairman_model}),
+            }
+
+            # Build synthesis prompt
+            opinions_text = "\n\n".join(
+                [
+                    f"**{opinions[i]['model']}:**\n{opinions[i]['content']}"
+                    for i in sorted(opinions.keys())
+                ]
+            )
+
+            reviews_text = ""
+            if reviews:
+                reviews_text = "\n\n**Reviews:**\n" + "\n\n".join(
+                    [
+                        f"*Review by {request.models[i]}:*\n{reviews[i]}"
+                        for i in sorted(reviews.keys())
+                    ]
+                )
+
+            synthesis_prompt = f"""You are the chairman synthesizing the committee's responses.
+
+Question: {request.question}
+
+**Committee Opinions:**
+
+{opinions_text}
+{reviews_text}
+
+Please synthesize these perspectives into a comprehensive, balanced answer.
+Highlight areas of agreement and note any significant disagreements.
+Provide your own assessment of the most accurate and helpful response."""
+
+            chairman_api_key = get_api_key_for_model(
+                request.chairman_model, request.api_keys
+            )
+
+            kwargs = {
+                "model": request.chairman_model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a chairman synthesizing committee opinions into a final, comprehensive answer.",
+                    },
+                    {"role": "user", "content": synthesis_prompt},
+                ],
+                "temperature": 0.5,
+                "stream": True,
+            }
+
+            if chairman_api_key:
+                kwargs["api_key"] = chairman_api_key
+            if request.base_url:
+                kwargs["base_url"] = request.base_url
+
+            add_copilot_headers(kwargs, request.chairman_model)
+
+            response = await litellm.acompletion(**kwargs)
+            synthesis_content = ""
+
+            async for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    synthesis_content += content
+                    yield {
+                        "event": "synthesis_chunk",
+                        "data": json.dumps({"content": content}),
+                    }
+
+            yield {
+                "event": "synthesis_done",
+                "data": json.dumps({"full_content": synthesis_content}),
+            }
+            yield {"event": "done", "data": ""}
+
+        except Exception as e:
+            logger.error(f"Committee failed: {e}")
+            logger.error(traceback.format_exc())
+            yield {"event": "error", "data": json.dumps({"message": str(e)})}
+
+    return EventSourceResponse(generate())

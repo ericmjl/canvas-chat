@@ -1063,15 +1063,15 @@ class Canvas {
                     </div>
                     <span class="node-type">${node.type === NodeType.CELL && node.title ? node.title : this.getNodeTypeLabel(node.type)}</span>
                     <span class="node-model">${node.model || ''}</span>
-                    ${node.type === NodeType.AI ? '<button class="header-btn stop-btn" title="Stop generating" style="display:none;">⏹</button>' : ''}
-                    ${node.type === NodeType.AI ? '<button class="header-btn continue-btn" title="Continue generating" style="display:none;">▶</button>' : ''}
+                    ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="header-btn stop-btn" title="Stop generating" style="display:none;">⏹</button>' : ''}
+                    ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="header-btn continue-btn" title="Continue generating" style="display:none;">▶</button>' : ''}
                     <button class="header-btn fit-viewport-btn" title="Fit to viewport (f)">⤢</button>
                     <button class="node-action delete-btn" title="Delete node">🗑️</button>
                 </div>
                 <div class="node-content">${this.renderMarkdown(node.content)}</div>
                 <div class="node-actions">
                     <button class="node-action reply-btn" title="Reply">↩️ Reply</button>
-                    ${node.type === NodeType.AI ? '<button class="node-action summarize-btn" title="Summarize">📝 Summarize</button>' : ''}
+                    ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="node-action summarize-btn" title="Summarize">📝 Summarize</button>' : ''}
                     ${node.type === NodeType.REFERENCE ? '<button class="node-action fetch-summarize-btn" title="Fetch full content and summarize">📄 Fetch & Summarize</button>' : ''}
                     ${node.type === NodeType.FETCH_RESULT ? '<button class="node-action edit-content-btn" title="Edit fetched content">✏️ Edit</button>' : ''}
                     ${node.type === NodeType.FETCH_RESULT ? '<button class="node-action resummarize-btn" title="Create new summary from edited content">📝 Re-summarize</button>' : ''}
@@ -2143,7 +2143,10 @@ class Canvas {
             [NodeType.CELL]: 'Cell',
             [NodeType.ROW]: 'Row',
             [NodeType.COLUMN]: 'Column',
-            [NodeType.FETCH_RESULT]: 'Fetched Content'
+            [NodeType.FETCH_RESULT]: 'Fetched Content',
+            [NodeType.OPINION]: 'Opinion',
+            [NodeType.SYNTHESIS]: 'Synthesis',
+            [NodeType.REVIEW]: 'Review'
         };
         return labels[type] || type;
     }
@@ -2162,7 +2165,10 @@ class Canvas {
             [NodeType.CELL]: '📦',
             [NodeType.ROW]: '↔️',
             [NodeType.COLUMN]: '↕️',
-            [NodeType.FETCH_RESULT]: '📄'
+            [NodeType.FETCH_RESULT]: '📄',
+            [NodeType.OPINION]: '🗣️',
+            [NodeType.SYNTHESIS]: '⚖️',
+            [NodeType.REVIEW]: '🔍'
         };
         return icons[type] || '📄';
     }

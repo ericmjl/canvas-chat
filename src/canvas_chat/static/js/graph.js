@@ -18,7 +18,10 @@ const NodeType = {
     CELL: 'cell',          // Pinned cell from a matrix
     ROW: 'row',            // Extracted row from a matrix
     COLUMN: 'column',      // Extracted column from a matrix
-    FETCH_RESULT: 'fetch_result' // Fetched content from URL (via Exa)
+    FETCH_RESULT: 'fetch_result', // Fetched content from URL (via Exa)
+    OPINION: 'opinion',    // Committee member's opinion
+    SYNTHESIS: 'synthesis', // Chairman's synthesized answer
+    REVIEW: 'review'       // Committee member's review of other opinions
 };
 
 /**
@@ -29,7 +32,10 @@ const SCROLLABLE_NODE_TYPES = [
     NodeType.AI,
     NodeType.SUMMARY,
     NodeType.RESEARCH,
-    NodeType.FETCH_RESULT
+    NodeType.FETCH_RESULT,
+    NodeType.OPINION,
+    NodeType.SYNTHESIS,
+    NodeType.REVIEW
 ];
 
 /**
@@ -51,7 +57,10 @@ const EdgeType = {
     REFERENCE: 'reference',   // Reference link
     SEARCH_RESULT: 'search_result', // Link from search to results
     HIGHLIGHT: 'highlight',   // Link from source to highlighted excerpt
-    MATRIX_CELL: 'matrix_cell' // Link from pinned cell to matrix
+    MATRIX_CELL: 'matrix_cell', // Link from pinned cell to matrix
+    OPINION: 'opinion',       // Human → OPINION nodes (committee)
+    SYNTHESIS: 'synthesis',   // OPINION/REVIEW → SYNTHESIS node (committee)
+    REVIEW: 'review'          // OPINION → REVIEW nodes (committee)
 };
 
 /**

@@ -4,8 +4,10 @@ import pytest
 from pydantic import ValidationError
 
 from canvas_chat.app import (
+    CommitteeRequest,
     ExaContentsResult,
     ExaGetContentsRequest,
+    Message,
     RefineQueryRequest,
 )
 
@@ -106,3 +108,113 @@ def test_refine_query_request_missing_required():
 
     with pytest.raises(ValidationError):
         RefineQueryRequest(user_query="some query")
+
+
+# --- CommitteeRequest tests ---
+
+
+def test_committee_request_valid():
+    """Test that CommitteeRequest validates correct input."""
+    request = CommitteeRequest(
+        question="What is the best approach?",
+        context=[
+            Message(role="user", content="I have a problem"),
+            Message(role="assistant", content="Let me help"),
+        ],
+        models=["openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"],
+        chairman_model="openai/gpt-4o",
+        api_keys={"openai": "sk-test", "anthropic": "sk-ant-test"},
+    )
+    assert request.question == "What is the best approach?"
+    assert len(request.context) == 2
+    assert len(request.models) == 2
+    assert request.chairman_model == "openai/gpt-4o"
+    assert request.include_review is False  # default
+    assert request.base_url is None  # default
+
+
+def test_committee_request_with_review():
+    """Test CommitteeRequest with review stage enabled."""
+    request = CommitteeRequest(
+        question="Evaluate these options",
+        context=[],
+        models=[
+            "openai/gpt-4o",
+            "anthropic/claude-sonnet-4-20250514",
+            "groq/llama-3.1-70b-versatile",
+        ],
+        chairman_model="openai/gpt-4o",
+        api_keys={"openai": "sk-test"},
+        include_review=True,
+    )
+    assert request.include_review is True
+    assert len(request.models) == 3
+
+
+def test_committee_request_with_base_url():
+    """Test CommitteeRequest with custom base URL."""
+    request = CommitteeRequest(
+        question="Test question",
+        context=[],
+        models=["openai/gpt-4o", "openai/gpt-4o-mini"],
+        chairman_model="openai/gpt-4o",
+        api_keys={},
+        base_url="https://my-proxy.example.com/v1",
+    )
+    assert request.base_url == "https://my-proxy.example.com/v1"
+
+
+def test_committee_request_empty_context():
+    """Test CommitteeRequest with empty context list."""
+    request = CommitteeRequest(
+        question="Fresh question",
+        context=[],
+        models=["openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"],
+        chairman_model="openai/gpt-4o",
+        api_keys={},
+    )
+    assert request.context == []
+
+
+def test_committee_request_missing_question():
+    """Test that CommitteeRequest requires question."""
+    with pytest.raises(ValidationError):
+        CommitteeRequest(
+            context=[],
+            models=["openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"],
+            chairman_model="openai/gpt-4o",
+            api_keys={},
+        )
+
+
+def test_committee_request_missing_models():
+    """Test that CommitteeRequest requires models."""
+    with pytest.raises(ValidationError):
+        CommitteeRequest(
+            question="Test",
+            context=[],
+            chairman_model="openai/gpt-4o",
+            api_keys={},
+        )
+
+
+def test_committee_request_missing_chairman():
+    """Test that CommitteeRequest requires chairman_model."""
+    with pytest.raises(ValidationError):
+        CommitteeRequest(
+            question="Test",
+            context=[],
+            models=["openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"],
+            api_keys={},
+        )
+
+
+def test_committee_request_missing_api_keys():
+    """Test that CommitteeRequest requires api_keys dict."""
+    with pytest.raises(ValidationError):
+        CommitteeRequest(
+            question="Test",
+            context=[],
+            models=["openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"],
+            chairman_model="openai/gpt-4o",
+        )

@@ -204,10 +204,12 @@ class Storage {
     }
 
     /**
-     * Get API key for a specific provider
+     * Map provider name to storage key name.
+     * This is the canonical mapping - all other methods should use this.
+     * @param {string} provider - Provider name (e.g., "openai", "gemini", "github_copilot")
+     * @returns {string} - Storage key name (e.g., "openai", "google", "github")
      */
-    getApiKeyForProvider(provider) {
-        const keys = this.getApiKeys();
+    _getStorageKeyForProvider(provider) {
         const providerMap = {
             'openai': 'openai',
             'anthropic': 'anthropic',
@@ -218,8 +220,37 @@ class Storage {
             'github_copilot': 'github',  // Copilot uses the same GitHub token
             'exa': 'exa'
         };
-        const key = providerMap[provider.toLowerCase()] || provider.toLowerCase();
-        return keys[key] || null;
+        return providerMap[provider.toLowerCase()] || provider.toLowerCase();
+    }
+
+    /**
+     * Get API key for a specific provider
+     * @param {string} provider - Provider name from model ID (e.g., "openai", "gemini")
+     * @returns {string|null} - API key or null if not configured
+     */
+    getApiKeyForProvider(provider) {
+        const keys = this.getApiKeys();
+        const storageKey = this._getStorageKeyForProvider(provider);
+        return keys[storageKey] || null;
+    }
+
+    /**
+     * Build an API keys dict for a list of models.
+     * Used by endpoints that need multiple provider keys (e.g., committee).
+     * @param {string[]} modelIds - Array of model IDs (e.g., ["openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"])
+     * @returns {Object} - Dict of {storageKey: apiKey} for models that have keys configured
+     */
+    getApiKeysForModels(modelIds) {
+        const apiKeys = {};
+        for (const modelId of modelIds) {
+            const provider = modelId.split('/')[0];
+            const storageKey = this._getStorageKeyForProvider(provider);
+            const key = this.getApiKeyForProvider(provider);
+            if (key) {
+                apiKeys[storageKey] = key;
+            }
+        }
+        return apiKeys;
     }
 
     /**
@@ -235,20 +266,8 @@ class Storage {
             return this.isLocalhost();
         }
         
-        // Map display provider names to storage keys
-        const providerToStorageKey = {
-            'openai': 'openai',
-            'anthropic': 'anthropic',
-            'google': 'google',
-            'groq': 'groq',
-            'github': 'github'
-        };
-        
-        const storageKey = providerToStorageKey[normalizedProvider];
-        if (!storageKey) {
-            return false;
-        }
-        
+        // Use the canonical mapping to get the storage key
+        const storageKey = this._getStorageKeyForProvider(normalizedProvider);
         const keys = this.getApiKeys();
         return !!keys[storageKey];
     }
@@ -340,6 +359,34 @@ class Storage {
         } else {
             localStorage.removeItem('canvas-chat-base-url');
         }
+    }
+
+    /**
+     * Get recently used models for committee pre-selection
+     * @returns {string[]} - Array of model IDs, most recent first
+     */
+    getRecentModels() {
+        const data = localStorage.getItem('canvas-chat-recent-models');
+        return data ? JSON.parse(data) : [];
+    }
+
+    /**
+     * Add a model to the recently used list
+     * @param {string} modelId - The model ID to add
+     */
+    addRecentModel(modelId) {
+        const recent = this.getRecentModels();
+        
+        // Remove if already exists (will re-add at front)
+        const filtered = recent.filter(id => id !== modelId);
+        
+        // Add to front
+        filtered.unshift(modelId);
+        
+        // Keep only last 10
+        const trimmed = filtered.slice(0, 10);
+        
+        localStorage.setItem('canvas-chat-recent-models', JSON.stringify(trimmed));
     }
 }
 
