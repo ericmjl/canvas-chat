@@ -119,6 +119,16 @@ jobs:
         if: steps.check_release.outputs.already_released == 'false'
         run: bump2version ${{ env.VERSION_NAME }} --verbose
 
+      - name: Sync pixi.lock
+        if: steps.check_release.outputs.already_released == 'false'
+        uses: prefix-dev/setup-pixi@v0.9.3
+        with:
+          run-install: false
+
+      - name: Update pixi.lock
+        if: steps.check_release.outputs.already_released == 'false'
+        run: pixi lock
+
       - name: Ensure tag creation
         if: steps.check_release.outputs.already_released == 'false'
         run: git tag | grep ${{ env.version_number }}
