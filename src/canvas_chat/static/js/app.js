@@ -2577,14 +2577,10 @@ class App {
             this.graph.autoLayout(dimensions);
         }
         
-        // Check if any node is selected - if so, keep focus on it
-        const selectedNodeIds = this.canvas.getSelectedNodeIds();
-        const focusNodeId = selectedNodeIds.length === 1 ? selectedNodeIds[0] : null;
-        
-        // Animate nodes to their new positions
+        // Animate nodes to their new positions (keep current viewport)
         this.canvas.animateToLayout(this.graph, {
             duration: 500,
-            focusNodeId
+            keepViewport: true
         });
         
         // Save the new positions

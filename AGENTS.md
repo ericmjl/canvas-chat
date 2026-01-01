@@ -2,6 +2,54 @@
 
 Instructions for AI coding agents working on this project.
 
+## Codebase map
+
+Quick reference for which files to edit for common tasks:
+
+### Frontend (Vanilla JS)
+
+| File | Purpose | Edit for... |
+|------|---------|-------------|
+| `src/canvas_chat/static/js/app.js` | Main application, orchestrates everything | Slash commands, keyboard shortcuts, feature handlers, App class methods |
+| `src/canvas_chat/static/js/canvas.js` | SVG canvas, pan/zoom, node rendering | Node appearance, drag behavior, viewport logic, node event handlers |
+| `src/canvas_chat/static/js/graph.js` | Data model, node/edge types, layout algorithms | Node types, edge types, graph traversal, auto-positioning |
+| `src/canvas_chat/static/js/chat.js` | LLM API calls, streaming | API integration, message formatting, token estimation |
+| `src/canvas_chat/static/js/storage.js` | localStorage persistence | Session storage, API key storage, settings |
+| `src/canvas_chat/static/js/search.js` | Node search functionality | Search UI, filtering logic |
+| `src/canvas_chat/static/js/sse.js` | Server-sent events utilities | Streaming connection handling |
+
+### Frontend (HTML/CSS)
+
+| File | Purpose | Edit for... |
+|------|---------|-------------|
+| `src/canvas_chat/static/index.html` | Main HTML, modals, templates | New modals, toolbar buttons, HTML structure |
+| `src/canvas_chat/static/css/style.css` | All styles | Colors, layout, node styling, animations |
+
+### Backend (Python/FastAPI)
+
+| File | Purpose | Edit for... |
+|------|---------|-------------|
+| `src/canvas_chat/app.py` | FastAPI routes, LLM proxy | API endpoints, backend logic |
+| `modal_app.py` | Modal deployment config | Deployment settings |
+
+### Key constants and their locations
+
+| Constant | Location | Purpose |
+|----------|----------|---------|
+| `NodeType` | `graph.js:8-25` | All node type definitions |
+| `EdgeType` | `graph.js:53-64` | All edge type definitions |
+| `SCROLLABLE_NODE_TYPES` | `graph.js:31-40` | Node types with 4:3 fixed size |
+| `SLASH_COMMANDS` | `app.js:77-83` | Slash command definitions |
+| CSS variables | `style.css:10-80` | Colors, sizing, theming |
+
+### Zoom levels (semantic zoom)
+
+| Scale | Class | Behavior |
+|-------|-------|----------|
+| > 0.6 | `zoom-full` | Full node content visible |
+| 0.35 - 0.6 | `zoom-summary` | Summary text shown, drag anywhere |
+| <= 0.35 | `zoom-mini` | Minimal view, drag anywhere |
+
 ## Documentation
 
 All documentation must follow the [Diataxis framework](https://diataxis.fr/):

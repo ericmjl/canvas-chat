@@ -358,6 +358,43 @@ html, body {
     background-position: center center;
 }
 
+/* Hint overlay when no nodes visible */
+.no-nodes-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s ease-in;
+}
+
+.no-nodes-hint.visible {
+    opacity: 1;
+}
+
+.no-nodes-hint .hint-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 24px 32px;
+    background: var(--bg-primary);
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+}
+
+.no-nodes-hint .hint-icon {
+    font-size: 32px;
+}
+
+.no-nodes-hint .hint-text {
+    color: var(--text-secondary);
+    font-size: 14px;
+    text-align: center;
+}
+
 /* Edges */
 .edge {
     fill: none;
