@@ -2335,6 +2335,9 @@ class Canvas {
         const summaryText = this.getNodeSummaryText(node);
         const typeIcon = this.getNodeTypeIcon(node.type);
         
+        // Render tags if present
+        const tagsHtml = this.renderNodeTags(node);
+        
         // Build table HTML
         let tableHtml = '<table class="matrix-table"><thead><tr>';
         
@@ -2383,6 +2386,7 @@ class Canvas {
         tableHtml += '</tbody></table>';
         
         return `
+            ${tagsHtml}
             <div class="node-summary" title="Double-click to edit title">
                 <span class="node-type-icon">${typeIcon}</span>
                 <span class="summary-text">${this.escapeHtml(summaryText)}</span>

@@ -660,6 +660,12 @@ html, body {
     pointer-events: none;
 }
 
+/* Tags remain visible when zoomed out */
+.zoom-summary .node-tags {
+    opacity: 1;
+    visibility: visible;
+}
+
 /* Mini zoom (scale < 0.35) - minimal view */
 .zoom-mini .node-summary {
     opacity: 1;
@@ -681,11 +687,16 @@ html, body {
 .zoom-mini .node-header,
 .zoom-mini .node-content,
 .zoom-mini .node-actions,
-.zoom-mini .resize-handle,
-.zoom-mini .node-tags {
+.zoom-mini .resize-handle {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
+}
+
+/* Tags remain visible even at mini zoom */
+.zoom-mini .node-tags {
+    opacity: 1;
+    visibility: visible;
 }
 
 /* Reply Tooltip - floating tooltip with input on text selection */
