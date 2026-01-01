@@ -75,7 +75,7 @@ function formatUserError(error) {
 
 // Slash command definitions
 const SLASH_COMMANDS = [
-    { command: '/note', description: 'Add a note (no AI response)', placeholder: 'markdown content' },
+    { command: '/note', description: 'Add a note or fetch URL content', placeholder: 'markdown or https://...' },
     { command: '/search', description: 'Search the web with Exa AI', placeholder: 'query' },
     { command: '/research', description: 'Deep research with multiple sources', placeholder: 'topic' },
     { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
@@ -1250,31 +1250,117 @@ class App {
     /**
      * Handle /note command - creates a NOTE node without triggering LLM
      * Notes are standalone by default (no automatic attachment to existing nodes)
-     * @param {string} content - The markdown note content
+     * 
+     * Supports two modes:
+     * - `/note <markdown content>` - Creates a note with the provided markdown
+     * - `/note <url>` - Fetches the URL content and creates a note with the markdown
+     * 
+     * @param {string} content - The markdown note content or URL to fetch
      */
     async handleNote(content) {
-        // Create NOTE node as standalone (no parent attachment by default)
-        // autoPosition([]) will find a free position avoiding overlaps
-        const noteNode = createNode(NodeType.NOTE, content, {
+        // Detect if content is a URL
+        const urlPattern = /^https?:\/\/[^\s]+$/;
+        const isUrl = urlPattern.test(content.trim());
+        
+        if (isUrl) {
+            // Fetch URL content and create a FETCH_RESULT node
+            await this.handleNoteFromUrl(content.trim());
+        } else {
+            // Create NOTE node with the provided content
+            const noteNode = createNode(NodeType.NOTE, content, {
+                position: this.graph.autoPosition([])
+            });
+            
+            this.graph.addNode(noteNode);
+            this.canvas.renderNode(noteNode);
+            
+            // Clear input and save
+            this.chatInput.value = '';
+            this.chatInput.style.height = 'auto';
+            this.canvas.clearSelection();
+            this.saveSession();
+            this.updateEmptyState();
+            
+            // Pan to the new note
+            this.canvas.centerOnAnimated(
+                noteNode.position.x + 160,
+                noteNode.position.y + 100,
+                300
+            );
+        }
+    }
+    
+    /**
+     * Fetch URL content and create a FETCH_RESULT node.
+     * 
+     * This uses Jina Reader API (/api/fetch-url) which is free and requires no API key.
+     * This is intentionally separate from handleNodeFetchSummarize which uses Exa API.
+     * 
+     * Design rationale (see docs/explanation/url-fetching.md):
+     * - /note <url> should "just work" without any API configuration (zero-friction)
+     * - Exa API (used by fetch+summarize) offers higher quality but requires API key
+     * - Both create FETCH_RESULT nodes with the same structure for consistency
+     * 
+     * @param {string} url - The URL to fetch
+     */
+    async handleNoteFromUrl(url) {
+        // Create a placeholder node while fetching
+        const fetchNode = createNode(NodeType.FETCH_RESULT, `Fetching content from:\n${url}...`, {
             position: this.graph.autoPosition([])
         });
         
-        this.graph.addNode(noteNode);
-        this.canvas.renderNode(noteNode);
+        this.graph.addNode(fetchNode);
+        this.canvas.renderNode(fetchNode);
         
-        // Clear input and save
+        // Clear input
         this.chatInput.value = '';
         this.chatInput.style.height = 'auto';
         this.canvas.clearSelection();
         this.saveSession();
         this.updateEmptyState();
         
-        // Pan to the new note
+        // Pan to the new node
         this.canvas.centerOnAnimated(
-            noteNode.position.x + 160,
-            noteNode.position.y + 100,
+            fetchNode.position.x + 160,
+            fetchNode.position.y + 100,
             300
         );
+        
+        try {
+            // Fetch URL content via backend
+            const response = await fetch('/api/fetch-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to fetch URL');
+            }
+            
+            const data = await response.json();
+            
+            // Update the node with the fetched content
+            const fetchedContent = `**[${data.title}](${url})**\n\n${data.content}`;
+            this.canvas.updateNodeContent(fetchNode.id, fetchedContent, false);
+            this.graph.updateNode(fetchNode.id, { 
+                content: fetchedContent,
+                versions: [{
+                    content: fetchedContent,
+                    timestamp: Date.now(),
+                    reason: 'fetched'
+                }]
+            });
+            this.saveSession();
+            
+        } catch (err) {
+            // Update node with error message
+            const errorContent = `**Failed to fetch URL**\n\n${url}\n\n*Error: ${err.message}*`;
+            this.canvas.updateNodeContent(fetchNode.id, errorContent, false);
+            this.graph.updateNode(fetchNode.id, { content: errorContent });
+            this.saveSession();
+        }
     }
 
     /**
@@ -2778,6 +2864,15 @@ class App {
     /**
      * Handle fetching full content from a Reference node URL and summarizing it.
      * Creates two nodes: FETCH_RESULT (raw content) → SUMMARY (AI summary)
+     * 
+     * This uses Exa API (/api/exa/get-contents) which requires an API key but
+     * provides higher quality content extraction than free alternatives.
+     * 
+     * Design rationale (see docs/explanation/url-fetching.md):
+     * - This is triggered from REFERENCE nodes (search results) via UI button
+     * - Users who have Exa configured get premium content extraction
+     * - Separate from handleNoteFromUrl which uses free Jina Reader API
+     * - Both create FETCH_RESULT nodes with the same structure for consistency
      */
     async handleNodeFetchSummarize(nodeId) {
         const node = this.graph.getNode(nodeId);

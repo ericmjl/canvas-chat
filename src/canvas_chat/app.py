@@ -1084,6 +1084,141 @@ async def exa_get_contents(request: ExaGetContentsRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# --- URL Fetch Endpoint ---
+
+
+class FetchUrlRequest(BaseModel):
+    """Request body for fetching URL content as markdown."""
+
+    url: str
+
+
+class FetchUrlResult(BaseModel):
+    """Result from fetching URL content."""
+
+    url: str
+    title: str
+    content: str  # Markdown content
+
+
+async def fetch_url_via_jina(url: str, client: httpx.AsyncClient) -> tuple[str, str]:
+    """
+    Fetch URL content via Jina Reader API.
+
+    Returns (title, content) tuple.
+    Raises exception if Jina fails.
+    """
+    jina_url = f"https://r.jina.ai/{url}"
+    response = await client.get(
+        jina_url,
+        headers={"Accept": "text/markdown"},
+        follow_redirects=True,
+    )
+
+    if response.status_code != 200:
+        raise Exception(f"Jina Reader returned {response.status_code}")
+
+    content = response.text
+
+    # Check for error messages in Jina response
+    if "SecurityCompromiseError" in content or "blocked" in content.lower():
+        raise Exception("Jina Reader blocked this domain")
+
+    # Extract title from first markdown heading
+    title = "Untitled"
+    for line in content.split("\n"):
+        if line.startswith("# "):
+            title = line[2:].strip()
+            break
+
+    return title, content
+
+
+async def fetch_url_directly(url: str, client: httpx.AsyncClient) -> tuple[str, str]:
+    """
+    Fetch URL content directly and convert HTML to markdown.
+
+    Returns (title, content) tuple.
+    Uses html2text for HTML-to-markdown conversion.
+    """
+    import html2text
+
+    response = await client.get(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; CanvasChat/1.0)",
+            "Accept": "text/html,application/xhtml+xml",
+        },
+        follow_redirects=True,
+    )
+
+    if response.status_code != 200:
+        raise Exception(f"Direct fetch returned {response.status_code}")
+
+    html_content = response.text
+
+    # Extract title from HTML
+    title = "Untitled"
+    import re
+
+    title_match = re.search(r"<title[^>]*>([^<]+)</title>", html_content, re.IGNORECASE)
+    if title_match:
+        title = title_match.group(1).strip()
+
+    # Convert HTML to markdown
+    h = html2text.HTML2Text()
+    h.ignore_links = False
+    h.ignore_images = False
+    h.ignore_emphasis = False
+    h.body_width = 0  # Don't wrap lines
+    content = h.handle(html_content)
+
+    return title, content
+
+
+@app.post("/api/fetch-url")
+async def fetch_url(request: FetchUrlRequest):
+    """
+    Fetch the content of a URL and return it as markdown.
+
+    Strategy:
+    1. Try Jina Reader API first (free, good markdown conversion)
+    2. Fall back to direct fetch + html2text if Jina fails
+
+    Design rationale (see docs/explanation/url-fetching.md):
+    - This endpoint enables zero-config URL fetching for /note <url>
+    - Separate from /api/exa/get-contents which uses Exa API (requires API key)
+    - Jina Reader provides good markdown conversion for most public web pages
+    - Direct fetch fallback ensures robustness when Jina is unavailable
+    """
+    logger.info(f"Fetch URL request: url='{request.url}'")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Try Jina Reader first
+            try:
+                title, content = await fetch_url_via_jina(request.url, client)
+                logger.info(f"Successfully fetched URL via Jina: {title}")
+                return FetchUrlResult(url=request.url, title=title, content=content)
+            except Exception as jina_error:
+                logger.warning(
+                    f"Jina Reader failed, falling back to direct fetch: {jina_error}"
+                )
+
+            # Fall back to direct fetch
+            title, content = await fetch_url_directly(request.url, client)
+            logger.info(f"Successfully fetched URL directly: {title}")
+            return FetchUrlResult(url=request.url, title=title, content=content)
+
+    except httpx.TimeoutException:
+        logger.error(f"Timeout fetching URL: {request.url}")
+        raise HTTPException(status_code=504, detail="Request timed out")
+    except Exception as e:
+        logger.error(f"Fetch URL failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- Matrix Endpoints ---
 
 

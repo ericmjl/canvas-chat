@@ -1401,6 +1401,75 @@ test('getApiKeysForModels: empty array returns empty object', () => {
 });
 
 // ============================================================
+// URL detection tests (for /note command)
+// ============================================================
+
+/**
+ * Detect if content is a URL (used by handleNote to route to handleNoteFromUrl)
+ * This is a copy of the logic from app.js for testing
+ */
+function isUrl(content) {
+    const urlPattern = /^https?:\/\/[^\s]+$/;
+    return urlPattern.test(content.trim());
+}
+
+test('isUrl: detects http URL', () => {
+    assertTrue(isUrl('http://example.com'));
+});
+
+test('isUrl: detects https URL', () => {
+    assertTrue(isUrl('https://example.com'));
+});
+
+test('isUrl: detects URL with path', () => {
+    assertTrue(isUrl('https://example.com/path/to/page'));
+});
+
+test('isUrl: detects URL with query params', () => {
+    assertTrue(isUrl('https://example.com/page?id=123&ref=abc'));
+});
+
+test('isUrl: detects URL with fragment', () => {
+    assertTrue(isUrl('https://example.com/page#section'));
+});
+
+test('isUrl: detects complex URL', () => {
+    assertTrue(isUrl('https://pmc.ncbi.nlm.nih.gov/articles/PMC12514551/'));
+});
+
+test('isUrl: trims whitespace', () => {
+    assertTrue(isUrl('  https://example.com  '));
+});
+
+test('isUrl: rejects plain text', () => {
+    assertFalse(isUrl('This is just some text'));
+});
+
+test('isUrl: rejects markdown', () => {
+    assertFalse(isUrl('# Heading\n\nSome content'));
+});
+
+test('isUrl: rejects URL embedded in text', () => {
+    assertFalse(isUrl('Check out https://example.com for more'));
+});
+
+test('isUrl: rejects URL without protocol', () => {
+    assertFalse(isUrl('example.com'));
+});
+
+test('isUrl: rejects ftp URLs', () => {
+    assertFalse(isUrl('ftp://files.example.com'));
+});
+
+test('isUrl: rejects empty string', () => {
+    assertFalse(isUrl(''));
+});
+
+test('isUrl: rejects whitespace only', () => {
+    assertFalse(isUrl('   '));
+});
+
+// ============================================================
 // Summary
 // ============================================================
 

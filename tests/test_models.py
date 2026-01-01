@@ -7,6 +7,8 @@ from canvas_chat.app import (
     CommitteeRequest,
     ExaContentsResult,
     ExaGetContentsRequest,
+    FetchUrlRequest,
+    FetchUrlResult,
     Message,
     RefineQueryRequest,
 )
@@ -218,3 +220,42 @@ def test_committee_request_missing_api_keys():
             models=["openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"],
             chairman_model="openai/gpt-4o",
         )
+
+
+# --- FetchUrlRequest and FetchUrlResult tests ---
+
+
+def test_fetch_url_request_valid():
+    """Test that FetchUrlRequest validates correct input."""
+    request = FetchUrlRequest(url="https://example.com/article")
+    assert request.url == "https://example.com/article"
+
+
+def test_fetch_url_request_missing_url():
+    """Test that FetchUrlRequest requires url."""
+    with pytest.raises(ValidationError):
+        FetchUrlRequest()
+
+
+def test_fetch_url_result_valid():
+    """Test that FetchUrlResult validates correct input."""
+    result = FetchUrlResult(
+        url="https://example.com/article",
+        title="Test Article",
+        content="# Test Article\n\nThis is the content.",
+    )
+    assert result.url == "https://example.com/article"
+    assert result.title == "Test Article"
+    assert result.content == "# Test Article\n\nThis is the content."
+
+
+def test_fetch_url_result_missing_required():
+    """Test that FetchUrlResult requires url, title, and content."""
+    with pytest.raises(ValidationError):
+        FetchUrlResult(url="https://example.com", title="Test")
+
+    with pytest.raises(ValidationError):
+        FetchUrlResult(url="https://example.com", content="content")
+
+    with pytest.raises(ValidationError):
+        FetchUrlResult(title="Test", content="content")
