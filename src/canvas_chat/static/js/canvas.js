@@ -1073,7 +1073,7 @@ class Canvas {
                     <button class="node-action reply-btn" title="Reply">↩️ Reply</button>
                     ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="node-action summarize-btn" title="Summarize">📝 Summarize</button>' : ''}
                     ${node.type === NodeType.REFERENCE ? '<button class="node-action fetch-summarize-btn" title="Fetch full content and summarize">📄 Fetch & Summarize</button>' : ''}
-                    ${node.type === NodeType.FETCH_RESULT ? '<button class="node-action edit-content-btn" title="Edit fetched content">✏️ Edit</button>' : ''}
+                    ${[NodeType.FETCH_RESULT, NodeType.NOTE].includes(node.type) ? '<button class="node-action edit-content-btn" title="Edit content">✏️ Edit</button>' : ''}
                     ${node.type === NodeType.FETCH_RESULT ? '<button class="node-action resummarize-btn" title="Create new summary from edited content">📝 Re-summarize</button>' : ''}
                     <button class="node-action copy-btn" title="Copy content">📋 Copy</button>
                 </div>

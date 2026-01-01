@@ -75,6 +75,7 @@ function formatUserError(error) {
 
 // Slash command definitions
 const SLASH_COMMANDS = [
+    { command: '/note', description: 'Add a note (no AI response)', placeholder: 'markdown content' },
     { command: '/search', description: 'Search the web with Exa AI', placeholder: 'query' },
     { command: '/research', description: 'Deep research with multiple sources', placeholder: 'topic' },
     { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
@@ -956,6 +957,15 @@ class App {
             }
         }
         
+        // Check for /note command
+        if (content.startsWith('/note ')) {
+            const noteContent = content.slice(6).trim();
+            if (noteContent) {
+                await this.handleNote(noteContent);
+                return true;
+            }
+        }
+        
         return false;
     }
 
@@ -1235,6 +1245,36 @@ class App {
             this.graph.updateNode(searchNode.id, { content: errorContent });
             this.saveSession();
         }
+    }
+
+    /**
+     * Handle /note command - creates a NOTE node without triggering LLM
+     * Notes are standalone by default (no automatic attachment to existing nodes)
+     * @param {string} content - The markdown note content
+     */
+    async handleNote(content) {
+        // Create NOTE node as standalone (no parent attachment by default)
+        // autoPosition([]) will find a free position avoiding overlaps
+        const noteNode = createNode(NodeType.NOTE, content, {
+            position: this.graph.autoPosition([])
+        });
+        
+        this.graph.addNode(noteNode);
+        this.canvas.renderNode(noteNode);
+        
+        // Clear input and save
+        this.chatInput.value = '';
+        this.chatInput.style.height = 'auto';
+        this.canvas.clearSelection();
+        this.saveSession();
+        this.updateEmptyState();
+        
+        // Pan to the new note
+        this.canvas.centerOnAnimated(
+            noteNode.position.x + 160,
+            noteNode.position.y + 100,
+            300
+        );
     }
 
     /**
