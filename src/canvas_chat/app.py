@@ -1945,11 +1945,12 @@ async def stream_single_review(
             ]
         )
 
-        # noqa: E501
-        system_prompt = """You are reviewing and ranking other committee members' opinions.
-For each opinion, briefly comment on its strengths and weaknesses.
-Then rank them from best to worst with a brief justification.
-Be constructive and specific in your critique."""
+        system_prompt = (
+            """You are reviewing and ranking other committee members' opinions. """
+            """For each opinion, briefly comment on its strengths and weaknesses. """
+            """Then rank them from best to worst with a brief justification. """
+            """Be constructive and specific in your critique."""
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -2193,7 +2194,9 @@ async def committee(request: CommitteeRequest):
                     ]
                 )
 
-            synthesis_prompt = f"""You are the chairman synthesizing the committee's responses.
+            synthesis_prompt = (
+                f"""You are the chairman synthesizing """
+                f"""the committee's responses.
 
 Question: {request.question}
 
@@ -2205,6 +2208,7 @@ Question: {request.question}
 Please synthesize these perspectives into a comprehensive, balanced answer.
 Highlight areas of agreement and note any significant disagreements.
 Provide your own assessment of the most accurate and helpful response."""
+            )
 
             chairman_api_key = get_api_key_for_model(
                 request.chairman_model, request.api_keys
