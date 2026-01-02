@@ -60,7 +60,7 @@ Click "Fill All" at the bottom of the matrix. A confirmation dialog appears show
 Click any filled cell to open the detail modal, which shows:
 
 - The row item name
-- The column item name  
+- The column item name
 - The complete evaluation text (cells in the matrix show truncated previews)
 
 ## Pinning cells to the canvas

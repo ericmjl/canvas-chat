@@ -298,7 +298,9 @@ def test_pdf_result_valid():
 
 def test_pdf_result_with_warning_banner():
     """Test PdfResult with the standard warning banner content."""
-    content = """> 📄 **PDF Import** — Text was extracted automatically and may contain errors.
+    content = (
+        """> 📄 **PDF Import** — Text was extracted automatically """
+        """and may contain errors.
 > Consider sourcing the original if precision is critical.
 
 ---
@@ -306,6 +308,7 @@ def test_pdf_result_with_warning_banner():
 # Extracted Content
 
 Some text from the PDF."""
+    )
     result = PdfResult(filename="report.pdf", content=content, page_count=10)
     assert result.filename == "report.pdf"
     assert "PDF Import" in result.content

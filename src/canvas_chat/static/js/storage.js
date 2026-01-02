@@ -31,7 +31,7 @@ class Storage {
 
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
-                
+
                 // Create sessions store
                 if (!db.objectStoreNames.contains(SESSIONS_STORE)) {
                     const store = db.createObjectStore(SESSIONS_STORE, { keyPath: 'id' });
@@ -62,7 +62,7 @@ class Storage {
         return new Promise((resolve, reject) => {
             const tx = db.transaction(SESSIONS_STORE, 'readwrite');
             const store = tx.objectStore(SESSIONS_STORE);
-            
+
             session.updated_at = Date.now();
             const request = store.put(session);
 
@@ -96,7 +96,7 @@ class Storage {
             const store = tx.objectStore(SESSIONS_STORE);
             const index = store.index('updated_at');
             const request = index.openCursor(null, 'prev');
-            
+
             const sessions = [];
             request.onsuccess = (event) => {
                 const cursor = event.target.result;
@@ -140,7 +140,7 @@ class Storage {
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        
+
         const a = document.createElement('a');
         a.href = url;
         a.download = `${session.name || 'session'}-${Date.now()}.canvaschat`;
@@ -156,16 +156,16 @@ class Storage {
     async importSession(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            
+
             reader.onload = async (event) => {
                 try {
                     const data = JSON.parse(event.target.result);
-                    
+
                     // Validate structure
                     if (!data.nodes || !data.edges) {
                         throw new Error('Invalid .canvaschat file format');
                     }
-                    
+
                     // Generate new ID to avoid conflicts
                     const session = {
                         ...data,
@@ -173,14 +173,14 @@ class Storage {
                         imported_at: Date.now(),
                         updated_at: Date.now()
                     };
-                    
+
                     await this.saveSession(session);
                     resolve(session);
                 } catch (err) {
                     reject(new Error(`Failed to import: ${err.message}`));
                 }
             };
-            
+
             reader.onerror = () => reject(new Error('Failed to read file'));
             reader.readAsText(file);
         });
@@ -270,12 +270,12 @@ class Storage {
      */
     hasApiKeyForProvider(provider) {
         const normalizedProvider = provider.toLowerCase();
-        
+
         // Ollama is only available on localhost (local models, no API key needed)
         if (normalizedProvider === 'ollama') {
             return this.isLocalhost();
         }
-        
+
         // Use the canonical mapping to get the storage key
         const storageKey = this._getStorageKeyForProvider(normalizedProvider);
         const keys = this.getApiKeys();
@@ -288,8 +288,8 @@ class Storage {
      */
     isLocalhost() {
         const hostname = window.location.hostname;
-        return hostname === 'localhost' || 
-               hostname === '127.0.0.1' || 
+        return hostname === 'localhost' ||
+               hostname === '127.0.0.1' ||
                hostname === '0.0.0.0' ||
                hostname === '[::1]';
     }
@@ -301,19 +301,19 @@ class Storage {
     getConfiguredProviders() {
         const keys = this.getApiKeys();
         const configured = [];
-        
+
         // Include Ollama if on localhost
         if (this.isLocalhost()) {
             configured.push('Ollama');
         }
-        
+
         // Check each provider
         if (keys.openai) configured.push('OpenAI');
         if (keys.anthropic) configured.push('Anthropic');
         if (keys.google) configured.push('Google');
         if (keys.groq) configured.push('Groq');
         if (keys.github) configured.push('GitHub');
-        
+
         return configured;
     }
 
@@ -386,16 +386,16 @@ class Storage {
      */
     addRecentModel(modelId) {
         const recent = this.getRecentModels();
-        
+
         // Remove if already exists (will re-add at front)
         const filtered = recent.filter(id => id !== modelId);
-        
+
         // Add to front
         filtered.unshift(modelId);
-        
+
         // Keep only last 10
         const trimmed = filtered.slice(0, 10);
-        
+
         localStorage.setItem('canvas-chat-recent-models', JSON.stringify(trimmed));
     }
 }

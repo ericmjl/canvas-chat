@@ -91,7 +91,7 @@ function createNode(type, content, options = {}) {
     const isScrollable = SCROLLABLE_NODE_TYPES.includes(type);
     const defaultWidth = isScrollable ? SCROLLABLE_NODE_SIZE.width : undefined;
     const defaultHeight = isScrollable ? SCROLLABLE_NODE_SIZE.height : undefined;
-    
+
     return {
         id: crypto.randomUUID(),
         type,
@@ -125,7 +125,7 @@ function createMatrixNode(context, contextNodeIds, rowItems, colItems, options =
             cells[`${r}-${c}`] = { content: null, filled: false };
         }
     }
-    
+
     return {
         id: crypto.randomUUID(),
         type: NodeType.MATRIX,
@@ -174,7 +174,7 @@ function createRowNode(matrixId, rowIndex, rowItem, colItems, cellContents, opti
             content += `### ${colItems[c]}\n*(empty)*\n\n`;
         }
     }
-    
+
     return {
         id: crypto.randomUUID(),
         type: NodeType.ROW,
@@ -202,7 +202,7 @@ function createColumnNode(matrixId, colIndex, colItem, rowItems, cellContents, o
             content += `### ${rowItems[r]}\n*(empty)*\n\n`;
         }
     }
-    
+
     return {
         id: crypto.randomUUID(),
         type: NodeType.COLUMN,
@@ -236,15 +236,15 @@ class Graph {
     constructor(data = {}) {
         this.nodes = new Map();
         this.edges = [];
-        
+
         // Tag definitions: color -> { name, color }
         // Max 8 tags, one per color
         this.tags = {};
-        
+
         // Indexes for fast lookups
         this.outgoingEdges = new Map(); // nodeId -> [edges where node is source]
         this.incomingEdges = new Map(); // nodeId -> [edges where node is target]
-        
+
         // Load from data if provided
         if (data.nodes) {
             for (const node of data.nodes) {
@@ -263,9 +263,9 @@ class Graph {
             this.tags = data.tags;
         }
     }
-    
+
     // --- Tag Management ---
-    
+
     /**
      * Create or update a tag for a color
      * @param {string} color - The color hex code (must be in TAG_COLORS)
@@ -277,7 +277,7 @@ class Graph {
         }
         this.tags[color] = { name, color };
     }
-    
+
     /**
      * Update a tag's name
      * @param {string} color - The color hex code
@@ -288,14 +288,14 @@ class Graph {
             this.tags[color].name = name;
         }
     }
-    
+
     /**
      * Delete a tag and remove it from all nodes
      * @param {string} color - The color hex code
      */
     deleteTag(color) {
         delete this.tags[color];
-        
+
         // Remove from all nodes
         for (const node of this.nodes.values()) {
             if (node.tags) {
@@ -303,7 +303,7 @@ class Graph {
             }
         }
     }
-    
+
     /**
      * Get a tag by color
      * @param {string} color - The color hex code
@@ -312,7 +312,7 @@ class Graph {
     getTag(color) {
         return this.tags[color] || null;
     }
-    
+
     /**
      * Get all defined tags
      * @returns {Object} Map of color -> tag
@@ -320,7 +320,7 @@ class Graph {
     getAllTags() {
         return this.tags;
     }
-    
+
     /**
      * Add a tag to a node
      * @param {string} nodeId - The node ID
@@ -335,7 +335,7 @@ class Graph {
             }
         }
     }
-    
+
     /**
      * Remove a tag from a node
      * @param {string} nodeId - The node ID
@@ -347,7 +347,7 @@ class Graph {
             node.tags = node.tags.filter(t => t !== color);
         }
     }
-    
+
     /**
      * Check if a node has a tag
      * @param {string} nodeId - The node ID
@@ -424,11 +424,11 @@ class Graph {
         // Remove connected edges
         const incoming = this.incomingEdges.get(id) || [];
         const outgoing = this.outgoingEdges.get(id) || [];
-        
+
         for (const edge of [...incoming, ...outgoing]) {
             this.removeEdge(edge.id);
         }
-        
+
         this.nodes.delete(id);
         this.incomingEdges.delete(id);
         this.outgoingEdges.delete(id);
@@ -481,13 +481,13 @@ class Graph {
 
         const ancestors = [];
         const parents = this.getParents(nodeId);
-        
+
         for (const parent of parents) {
             // Recursively get ancestors of parents
             ancestors.push(...this.getAncestors(parent.id, visited));
             ancestors.push(parent);
         }
-        
+
         return ancestors;
     }
 
@@ -500,12 +500,12 @@ class Graph {
 
         const edges = [];
         const incoming = this.incomingEdges.get(nodeId) || [];
-        
+
         for (const edge of incoming) {
             edges.push(edge);
             edges.push(...this.getAncestorEdges(edge.source, visited));
         }
-        
+
         return edges;
     }
 
@@ -515,25 +515,25 @@ class Graph {
      */
     resolveContext(nodeIds) {
         const allAncestors = new Map();
-        
+
         // Collect ancestors from all selected nodes
         for (const nodeId of nodeIds) {
             const node = this.getNode(nodeId);
             if (node) {
                 allAncestors.set(node.id, node);
             }
-            
+
             const ancestors = this.getAncestors(nodeId);
             for (const ancestor of ancestors) {
                 allAncestors.set(ancestor.id, ancestor);
             }
         }
-        
+
         // Convert to array and sort by created_at
         // Include all node types in context - any node in the DAG history is relevant
         const sorted = Array.from(allAncestors.values())
             .sort((a, b) => a.created_at - b.created_at);
-        
+
         // Convert to message format for API
         // User-generated content types are mapped to 'user' role, AI-generated to 'assistant'
         const userTypes = [NodeType.HUMAN, NodeType.HIGHLIGHT, NodeType.NOTE, NodeType.IMAGE];
@@ -557,7 +557,7 @@ class Graph {
      */
     getAncestorIds(nodeIds) {
         const ancestorIds = new Set();
-        
+
         for (const nodeId of nodeIds) {
             ancestorIds.add(nodeId);
             const ancestors = this.getAncestors(nodeId);
@@ -565,7 +565,7 @@ class Graph {
                 ancestorIds.add(ancestor.id);
             }
         }
-        
+
         return ancestorIds;
     }
 
@@ -615,16 +615,16 @@ class Graph {
         const NODE_HEIGHT = 200;  // Estimated default height
         const HORIZONTAL_GAP = 80;
         const VERTICAL_GAP = 30;
-        
+
         let initialX, initialY;
-        
+
         if (parentIds.length === 0) {
             // First node - center of viewport
             initialX = 100;
             initialY = 100;
         } else {
             const parents = parentIds.map(id => this.getNode(id)).filter(Boolean);
-            
+
             if (parents.length === 1) {
                 // Single parent - position to the right
                 const parent = parents[0];
@@ -639,38 +639,38 @@ class Graph {
                     return pRight > maxRight ? p : max;
                 }, parents[0]);
                 const avgY = parents.reduce((sum, p) => sum + p.position.y, 0) / parents.length;
-                
+
                 initialX = rightmost.position.x + (rightmost.width || NODE_WIDTH) + HORIZONTAL_GAP;
                 initialY = avgY;
             }
         }
-        
+
         // Now check for overlaps and adjust position
         const candidatePos = { x: initialX, y: initialY };
         const allNodes = this.getAllNodes();
-        
+
         // Try to find a non-overlapping position
         let attempts = 0;
         const maxAttempts = 20;
-        
+
         while (attempts < maxAttempts && this.wouldOverlap(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
             // Move down to find free space
             candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
             attempts++;
         }
-        
+
         // If still overlapping after max attempts, try moving right
         if (this.wouldOverlap(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
             candidatePos.x += NODE_WIDTH + HORIZONTAL_GAP;
             candidatePos.y = initialY;
-            
+
             attempts = 0;
             while (attempts < maxAttempts && this.wouldOverlap(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
                 candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
                 attempts++;
             }
         }
-        
+
         return candidatePos;
     }
 
@@ -679,23 +679,23 @@ class Graph {
      */
     wouldOverlap(pos, width, height, nodes) {
         const PADDING = 20;  // Minimum gap between nodes
-        
+
         for (const node of nodes) {
             const nodeWidth = node.width || 420;
             const nodeHeight = node.height || 200;
-            
+
             // Check bounding box overlap
-            const noOverlap = 
+            const noOverlap =
                 pos.x + width + PADDING < node.position.x ||  // new is left of existing
                 pos.x > node.position.x + nodeWidth + PADDING ||  // new is right of existing
                 pos.y + height + PADDING < node.position.y ||  // new is above existing
                 pos.y > node.position.y + nodeHeight + PADDING;   // new is below existing
-            
+
             if (!noOverlap) {
                 return true;  // There is overlap
             }
         }
-        
+
         return false;  // No overlap with any node
     }
 
@@ -714,22 +714,22 @@ class Graph {
 
         const allNodes = this.getAllNodes();
         if (allNodes.length === 0) return;
-        
+
         // Helper to get node dimensions
         const getNodeSize = (node) => {
             const dim = dimensions.get(node.id);
             if (dim) {
                 return { width: dim.width, height: dim.height };
             }
-            return { 
-                width: node.width || DEFAULT_WIDTH, 
-                height: node.height || DEFAULT_HEIGHT 
+            return {
+                width: node.width || DEFAULT_WIDTH,
+                height: node.height || DEFAULT_HEIGHT
             };
         };
 
         // Step 1: Topological sort using Kahn's algorithm
         const sorted = this.topologicalSort();
-        
+
         // Step 2: Assign layers (depth from roots)
         const layers = new Map(); // nodeId -> layer
         for (const node of sorted) {
@@ -742,7 +742,7 @@ class Graph {
                 layers.set(node.id, maxParentLayer + 1);
             }
         }
-        
+
         // Step 3: Calculate max width per layer for proper horizontal spacing
         const layerMaxWidth = new Map();
         for (const node of sorted) {
@@ -751,7 +751,7 @@ class Graph {
             const current = layerMaxWidth.get(layer) || 0;
             layerMaxWidth.set(layer, Math.max(current, width));
         }
-        
+
         // Calculate X offset for each layer
         const layerX = new Map();
         let currentX = START_X;
@@ -763,12 +763,12 @@ class Graph {
 
         // Step 4: Greedy placement - position each node avoiding overlaps
         const positioned = []; // Array of { x, y, width, height }
-        
+
         for (const node of sorted) {
             const layer = layers.get(node.id);
             const x = layerX.get(layer);
             const { width: nodeWidth, height: nodeHeight } = getNodeSize(node);
-            
+
             // Determine ideal Y based on parents
             let idealY = START_Y;
             const parents = this.getParents(node.id);
@@ -777,47 +777,47 @@ class Graph {
                 const avgParentY = parents.reduce((sum, p) => sum + p.position.y, 0) / parents.length;
                 idealY = avgParentY;
             }
-            
+
             // Find a Y position that doesn't overlap with existing nodes
             let y = idealY;
             let foundPosition = false;
-            
+
             // Try the ideal position first, then search up and down
             const searchOffsets = [0];
             for (let i = 1; i <= 30; i++) {
                 searchOffsets.push(i * (DEFAULT_HEIGHT / 2 + VERTICAL_GAP));
                 searchOffsets.push(-i * (DEFAULT_HEIGHT / 2 + VERTICAL_GAP));
             }
-            
+
             for (const offset of searchOffsets) {
                 const testY = Math.max(START_Y, idealY + offset);
-                
+
                 // Check if this position overlaps with any positioned node
                 let hasOverlap = false;
                 for (const pos of positioned) {
                     // Check bounding box overlap with padding
                     const horizontalOverlap = !(x + nodeWidth + 20 < pos.x || x > pos.x + pos.width + 20);
                     const verticalOverlap = !(testY + nodeHeight + VERTICAL_GAP < pos.y || testY > pos.y + pos.height + VERTICAL_GAP);
-                    
+
                     if (horizontalOverlap && verticalOverlap) {
                         hasOverlap = true;
                         break;
                     }
                 }
-                
+
                 if (!hasOverlap) {
                     y = testY;
                     foundPosition = true;
                     break;
                 }
             }
-            
+
             // Fallback: just place at bottom of all positioned nodes
             if (!foundPosition) {
                 const maxY = positioned.reduce((max, pos) => Math.max(max, pos.y + pos.height), START_Y);
                 y = maxY + VERTICAL_GAP;
             }
-            
+
             node.position = { x, y };
             positioned.push({ x, y, width: nodeWidth, height: nodeHeight });
         }
@@ -831,28 +831,28 @@ class Graph {
         const allNodes = this.getAllNodes();
         const inDegree = new Map();
         const result = [];
-        
+
         // Calculate in-degree for each node
         for (const node of allNodes) {
             const incoming = this.incomingEdges.get(node.id) || [];
             inDegree.set(node.id, incoming.length);
         }
-        
+
         // Start with nodes that have no incoming edges (roots)
         const queue = allNodes.filter(n => inDegree.get(n.id) === 0);
-        
+
         // Sort initial queue by creation time for consistent ordering
         queue.sort((a, b) => a.created_at - b.created_at);
-        
+
         while (queue.length > 0) {
             const node = queue.shift();
             result.push(node);
-            
+
             // Reduce in-degree of children
             const children = this.getChildren(node.id);
             // Sort children by creation time for consistent ordering
             children.sort((a, b) => a.created_at - b.created_at);
-            
+
             for (const child of children) {
                 const newDegree = inDegree.get(child.id) - 1;
                 inDegree.set(child.id, newDegree);
@@ -861,17 +861,17 @@ class Graph {
                 }
             }
         }
-        
+
         // Handle any remaining nodes (cycles - shouldn't happen in a DAG)
         for (const node of allNodes) {
             if (!result.includes(node)) {
                 result.push(node);
             }
         }
-        
+
         return result;
     }
-    
+
     /**
      * Force-directed layout using simple simulation.
      * Nodes repel each other, edges act as springs.
@@ -887,49 +887,49 @@ class Graph {
         const PADDING = 40;            // Padding between nodes for overlap check
         // Extra spacing between connected nodes (added to minimum safe distance)
         const IDEAL_EDGE_LENGTH = 100;
-        
+
         const allNodes = this.getAllNodes();
         if (allNodes.length === 0) return;
-        
+
         // Helper to get node dimensions
         const getNodeSize = (node) => {
             const dim = dimensions.get(node.id);
             if (dim) {
                 return { width: dim.width, height: dim.height };
             }
-            return { 
-                width: node.width || DEFAULT_WIDTH, 
-                height: node.height || DEFAULT_HEIGHT 
+            return {
+                width: node.width || DEFAULT_WIDTH,
+                height: node.height || DEFAULT_HEIGHT
             };
         };
-        
+
         // Initialize velocities
         const velocities = new Map();
         for (const node of allNodes) {
             velocities.set(node.id, { x: 0, y: 0 });
         }
-        
+
         // If nodes don't have positions, spread them out initially
         const unpositioned = allNodes.filter(n => !n.position || (n.position.x === 0 && n.position.y === 0));
         if (unpositioned.length > 0) {
             const cols = Math.ceil(Math.sqrt(allNodes.length));
             allNodes.forEach((node, i) => {
                 if (!node.position) {
-                    node.position = { 
-                        x: 200 + (i % cols) * 400, 
-                        y: 200 + Math.floor(i / cols) * 300 
+                    node.position = {
+                        x: 200 + (i % cols) * 400,
+                        y: 200 + Math.floor(i / cols) * 300
                     };
                 }
             });
         }
-        
+
         // Run simulation
         for (let iter = 0; iter < ITERATIONS; iter++) {
             const forces = new Map();
             for (const node of allNodes) {
                 forces.set(node.id, { x: 0, y: 0 });
             }
-            
+
             // Calculate repulsion forces between all pairs
             for (let i = 0; i < allNodes.length; i++) {
                 for (let j = i + 1; j < allNodes.length; j++) {
@@ -937,43 +937,43 @@ class Graph {
                     const nodeB = allNodes[j];
                     const sizeA = getNodeSize(nodeA);
                     const sizeB = getNodeSize(nodeB);
-                    
+
                     // Calculate center-to-center distance
                     const centerAx = nodeA.position.x + sizeA.width / 2;
                     const centerAy = nodeA.position.y + sizeA.height / 2;
                     const centerBx = nodeB.position.x + sizeB.width / 2;
                     const centerBy = nodeB.position.y + sizeB.height / 2;
-                    
+
                     const dx = centerBx - centerAx;
                     const dy = centerBy - centerAy;
                     const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-                    
+
                     // Check for actual rectangular overlap (not just center distance)
                     const aLeft = nodeA.position.x - PADDING;
                     const aRight = nodeA.position.x + sizeA.width + PADDING;
                     const aTop = nodeA.position.y - PADDING;
                     const aBottom = nodeA.position.y + sizeA.height + PADDING;
-                    
+
                     const bLeft = nodeB.position.x - PADDING;
                     const bRight = nodeB.position.x + sizeB.width + PADDING;
                     const bTop = nodeB.position.y - PADDING;
                     const bBottom = nodeB.position.y + sizeB.height + PADDING;
-                    
+
                     const overlapX = Math.min(aRight, bRight) - Math.max(aLeft, bLeft);
                     const overlapY = Math.min(aBottom, bBottom) - Math.max(aTop, bTop);
                     const isOverlapping = overlapX > 0 && overlapY > 0;
-                    
+
                     // Repulsion force (Coulomb's law)
                     const force = REPULSION / (distance * distance);
                     const fx = (dx / distance) * force;
                     const fy = (dy / distance) * force;
-                    
+
                     // Apply to both nodes in opposite directions
                     forces.get(nodeA.id).x -= fx;
                     forces.get(nodeA.id).y -= fy;
                     forces.get(nodeB.id).x += fx;
                     forces.get(nodeB.id).y += fy;
-                    
+
                     // Strong extra repulsion if bounding boxes actually overlap
                     if (isOverlapping) {
                         // Push apart based on actual overlap amount
@@ -988,26 +988,26 @@ class Graph {
                     }
                 }
             }
-            
+
             // Calculate attraction forces along edges
             for (const node of allNodes) {
                 const children = this.getChildren(node.id);
                 const parents = this.getParents(node.id);
                 const connected = [...children, ...parents];
-                
+
                 for (const other of connected) {
                     const sizeA = getNodeSize(node);
                     const sizeB = getNodeSize(other);
-                    
+
                     const centerAx = node.position.x + sizeA.width / 2;
                     const centerAy = node.position.y + sizeA.height / 2;
                     const centerBx = other.position.x + sizeB.width / 2;
                     const centerBy = other.position.y + sizeB.height / 2;
-                    
+
                     const dx = centerBx - centerAx;
                     const dy = centerBy - centerAy;
                     const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-                    
+
                     // Calculate minimum safe distance based on node sizes
                     // Nodes should be far enough apart that they don't overlap
                     const minSafeDistance = Math.max(
@@ -1016,38 +1016,38 @@ class Graph {
                     );
                     // Ideal distance is min safe distance plus some extra spacing
                     const idealDistance = minSafeDistance + IDEAL_EDGE_LENGTH;
-                    
+
                     // Spring force (Hooke's law)
                     const displacement = distance - idealDistance;
                     const force = ATTRACTION * displacement;
                     const fx = (dx / distance) * force;
                     const fy = (dy / distance) * force;
-                    
+
                     forces.get(node.id).x += fx;
                     forces.get(node.id).y += fy;
                 }
             }
-            
+
             // Apply forces with damping
             for (const node of allNodes) {
                 const vel = velocities.get(node.id);
                 const force = forces.get(node.id);
-                
+
                 vel.x = (vel.x + force.x) * DAMPING;
                 vel.y = (vel.y + force.y) * DAMPING;
-                
+
                 // Limit max velocity
                 const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
                 if (speed > 50) {
                     vel.x = (vel.x / speed) * 50;
                     vel.y = (vel.y / speed) * 50;
                 }
-                
+
                 node.position.x += vel.x;
                 node.position.y += vel.y;
             }
         }
-        
+
         // Normalize positions to start from (100, 100)
         let minX = Infinity, minY = Infinity;
         for (const node of allNodes) {
@@ -1058,11 +1058,11 @@ class Graph {
             node.position.x = node.position.x - minX + 100;
             node.position.y = node.position.y - minY + 100;
         }
-        
+
         // Final pass: resolve any remaining overlaps
         this.resolveOverlaps(allNodes, dimensions);
     }
-    
+
     /**
      * Resolve any overlapping nodes by nudging them apart.
      * @param {Array} nodes - Array of nodes to check
@@ -1073,18 +1073,18 @@ class Graph {
         const DEFAULT_HEIGHT = 220;
         const PADDING = 40;
         const MAX_ITERATIONS = 50;
-        
+
         const getNodeSize = (node) => {
             const dim = dimensions.get(node.id);
             if (dim) {
                 return { width: dim.width, height: dim.height };
             }
-            return { 
-                width: node.width || DEFAULT_WIDTH, 
-                height: node.height || DEFAULT_HEIGHT 
+            return {
+                width: node.width || DEFAULT_WIDTH,
+                height: node.height || DEFAULT_HEIGHT
             };
         };
-        
+
         /**
          * Calculate overlap between two nodes.
          * Returns { overlapX, overlapY } - the amount of overlap in each dimension.
@@ -1093,50 +1093,50 @@ class Graph {
         const getOverlap = (nodeA, nodeB) => {
             const sizeA = getNodeSize(nodeA);
             const sizeB = getNodeSize(nodeB);
-            
+
             const aLeft = nodeA.position.x;
             const aRight = nodeA.position.x + sizeA.width + PADDING;
             const aTop = nodeA.position.y;
             const aBottom = nodeA.position.y + sizeA.height + PADDING;
-            
+
             const bLeft = nodeB.position.x;
             const bRight = nodeB.position.x + sizeB.width + PADDING;
             const bTop = nodeB.position.y;
             const bBottom = nodeB.position.y + sizeB.height + PADDING;
-            
+
             // Calculate overlap in each dimension
             const overlapX = Math.min(aRight, bRight) - Math.max(aLeft, bLeft);
             const overlapY = Math.min(aBottom, bBottom) - Math.max(aTop, bTop);
-            
+
             // Only overlapping if both dimensions overlap
             if (overlapX > 0 && overlapY > 0) {
                 return { overlapX, overlapY };
             }
             return { overlapX: 0, overlapY: 0 };
         };
-        
+
         for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
             let hasOverlap = false;
-            
+
             for (let i = 0; i < nodes.length; i++) {
                 for (let j = i + 1; j < nodes.length; j++) {
                     const nodeA = nodes[i];
                     const nodeB = nodes[j];
-                    
+
                     const { overlapX, overlapY } = getOverlap(nodeA, nodeB);
-                    
+
                     if (overlapX > 0 && overlapY > 0) {
                         hasOverlap = true;
-                        
+
                         const sizeA = getNodeSize(nodeA);
                         const sizeB = getNodeSize(nodeB);
-                        
+
                         // Calculate centers
                         const centerAx = nodeA.position.x + sizeA.width / 2;
                         const centerAy = nodeA.position.y + sizeA.height / 2;
                         const centerBx = nodeB.position.x + sizeB.width / 2;
                         const centerBy = nodeB.position.y + sizeB.height / 2;
-                        
+
                         // Push apart along the axis of minimum overlap (more efficient)
                         // This avoids diagonal pushes that may not resolve the overlap
                         if (overlapX < overlapY) {
@@ -1163,10 +1163,10 @@ class Graph {
                     }
                 }
             }
-            
+
             if (!hasOverlap) break;
         }
-        
+
         // Ensure all nodes stay in positive coordinates
         let minX = Infinity, minY = Infinity;
         for (const node of nodes) {
@@ -1203,7 +1203,7 @@ class Graph {
     isEmpty() {
         return this.nodes.size === 0;
     }
-    
+
     /**
      * Serialize graph to JSON-compatible object
      */

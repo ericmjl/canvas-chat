@@ -8,13 +8,13 @@ class Canvas {
         this.svg = document.getElementById(svgId);
         this.nodesLayer = document.getElementById('nodes-layer');
         this.edgesLayer = document.getElementById('edges-layer');
-        
+
         // Viewport state
         this.viewBox = { x: 0, y: 0, width: 1000, height: 800 };
         this.scale = 1;
         this.minScale = 0.1;
         this.maxScale = 3;
-        
+
         // Interaction state
         this.isPanning = false;
         this.panStart = { x: 0, y: 0 };
@@ -22,18 +22,18 @@ class Canvas {
         this.draggedNode = null;
         this.dragOffset = { x: 0, y: 0 };
         this.dragStartPos = null;  // Track start position for undo
-        
+
         // Node elements map
         this.nodeElements = new Map();
         this.edgeElements = new Map();
-        
+
         // Track nodes where user has manually scrolled (to pause auto-scroll)
         this.userScrolledNodes = new Set();
-        
+
         // Selection state
         this.selectedNodes = new Set();
         this.hoveredNode = null;
-        
+
         // Callbacks
         this.onNodeSelect = null;
         this.onNodeDeselect = null;
@@ -52,25 +52,25 @@ class Canvas {
         this.onNodeFitToViewport = null;  // For resizing node to 80% of viewport
         this.onNodeEditContent = null;  // For editing node content (FETCH_RESULT)
         this.onNodeResummarize = null;  // For re-summarizing edited content
-        
+
         // PDF drag & drop callback
         this.onPdfDrop = null;  // For handling PDF file drops
-        
+
         // Image drag & drop callback
         this.onImageDrop = null;  // For handling image file drops
-        
+
         // Image click callback (for images in node content)
         this.onImageClick = null;  // For handling clicks on images in node content
-        
+
         // Reply tooltip state
         this.branchTooltip = null;
         this.activeSelectionNodeId = null;
         this.pendingSelectedText = null;  // Store selected text when tooltip opens
-        
+
         // No-nodes-visible hint
         this.noNodesHint = document.getElementById('no-nodes-hint');
         this.noNodesHintTimeout = null;
-        
+
         this.init();
     }
 
@@ -81,7 +81,7 @@ class Canvas {
         this.createBranchTooltip();
         this.createImageTooltip();
     }
-    
+
     /**
      * Create the floating reply tooltip element with input field
      */
@@ -99,23 +99,23 @@ class Canvas {
         `;
         this.branchTooltip.style.display = 'none';
         document.body.appendChild(this.branchTooltip);
-        
+
         const input = this.branchTooltip.querySelector('.reply-tooltip-input');
         const btn = this.branchTooltip.querySelector('.reply-tooltip-btn');
-        
+
         // Handle submit via button click
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.submitReplyTooltip();
         });
-        
+
         // Handle submit via Enter key (but allow slash command menu to override)
         input.addEventListener('keydown', (e) => {
             // Check if slash command menu should handle this
             if (this.onReplyInputKeydown && this.onReplyInputKeydown(e)) {
                 return; // Slash command menu handled it
             }
-            
+
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 this.submitReplyTooltip();
@@ -123,23 +123,23 @@ class Canvas {
                 this.hideBranchTooltip();
             }
         });
-        
+
         // Prevent click inside tooltip from triggering outside click handler
         this.branchTooltip.addEventListener('mousedown', (e) => {
             e.stopPropagation();
         });
-        
+
         // Store reference to input for external access
         this.replyTooltipInput = input;
     }
-    
+
     /**
      * Get the reply tooltip input element (for attaching slash command menu)
      */
     getReplyTooltipInput() {
         return this.replyTooltipInput;
     }
-    
+
     /**
      * Submit the reply from the tooltip
      */
@@ -147,17 +147,17 @@ class Canvas {
         const input = this.branchTooltip.querySelector('.reply-tooltip-input');
         const replyText = input.value.trim();
         const selectedText = this.pendingSelectedText;
-        
+
         if (selectedText && this.activeSelectionNodeId && this.onNodeBranch) {
             // Pass both the selected text and the user's reply
             this.onNodeBranch(this.activeSelectionNodeId, selectedText, replyText);
         }
-        
+
         this.hideBranchTooltip();
         window.getSelection().removeAllRanges();
         input.value = '';
     }
-    
+
     /**
      * Show the reply tooltip near the selection
      * NOTE: Do NOT auto-focus the input - this would clear the text selection
@@ -166,24 +166,24 @@ class Canvas {
         // Store the selected text before showing (selection may change later)
         const selection = window.getSelection();
         this.pendingSelectedText = selection.toString().trim();
-        
+
         // Update the selection preview text
         const selectionTextEl = this.branchTooltip.querySelector('.reply-tooltip-selection-text');
         if (selectionTextEl) {
             // Truncate if too long, but show full text on hover
             const maxLength = 100;
-            const displayText = this.pendingSelectedText.length > maxLength 
+            const displayText = this.pendingSelectedText.length > maxLength
                 ? this.pendingSelectedText.slice(0, maxLength) + '…'
                 : this.pendingSelectedText;
             selectionTextEl.textContent = `"${displayText}"`;
             selectionTextEl.title = this.pendingSelectedText; // Full text on hover
         }
-        
+
         this.branchTooltip.style.display = 'block';
         this.branchTooltip.style.left = `${x}px`;
         this.branchTooltip.style.top = `${y}px`;
     }
-    
+
     /**
      * Hide the reply tooltip
      */
@@ -197,7 +197,7 @@ class Canvas {
         const selectionTextEl = this.branchTooltip.querySelector('.reply-tooltip-selection-text');
         if (selectionTextEl) selectionTextEl.textContent = '';
     }
-    
+
     /**
      * Create the floating image action tooltip with action buttons
      */
@@ -215,49 +215,49 @@ class Canvas {
         `;
         this.imageTooltip.style.display = 'none';
         document.body.appendChild(this.imageTooltip);
-        
+
         // State
         this.pendingImageSrc = null;
         this.pendingImageNodeId = null;
-        
+
         // Ask button - select image node and focus chat
         const askBtn = this.imageTooltip.querySelector('.ask-btn');
         askBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.handleImageAsk();
         });
-        
+
         // Extract button - create an IMAGE node from this image
         const extractBtn = this.imageTooltip.querySelector('.extract-btn');
         extractBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.handleImageExtract();
         });
-        
+
         // Prevent click inside tooltip from triggering outside click handler
         this.imageTooltip.addEventListener('mousedown', (e) => {
             e.stopPropagation();
         });
     }
-    
+
     /**
      * Show the image tooltip near the clicked image
      */
     showImageTooltip(imgSrc, position) {
         // Store image info
         this.pendingImageSrc = imgSrc;
-        
+
         // Update preview image
         const previewImg = this.imageTooltip.querySelector('.image-tooltip-img');
         if (previewImg) {
             previewImg.src = imgSrc;
         }
-        
+
         this.imageTooltip.style.display = 'block';
         this.imageTooltip.style.left = `${position.x - 100}px`;  // Center horizontally
         this.imageTooltip.style.top = `${position.y - 10}px`;
     }
-    
+
     /**
      * Hide the image tooltip
      */
@@ -266,7 +266,7 @@ class Canvas {
         this.pendingImageSrc = null;
         this.pendingImageNodeId = null;
     }
-    
+
     /**
      * Handle "Ask" action from image tooltip
      * Extracts image and focuses chat input
@@ -277,7 +277,7 @@ class Canvas {
         }
         this.hideImageTooltip();
     }
-    
+
     /**
      * Handle "Extract" action from image tooltip
      * Creates a new IMAGE node with this image
@@ -288,7 +288,7 @@ class Canvas {
         }
         this.hideImageTooltip();
     }
-    
+
     /**
      * Get the center of the visible viewport in SVG coordinates
      */
@@ -305,26 +305,26 @@ class Canvas {
         this.container.addEventListener('mousemove', this.handleMouseMove.bind(this));
         this.container.addEventListener('mouseup', this.handleMouseUp.bind(this));
         this.container.addEventListener('mouseleave', this.handleMouseUp.bind(this));
-        
+
         // Wheel events: pinch-to-zoom (ctrlKey) or two-finger pan
         this.container.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
-        
+
         // Touch events for mobile/tablet
         this.container.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
         this.container.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
         this.container.addEventListener('touchend', this.handleTouchEnd.bind(this));
-        
+
         // Gesture events (Safari)
         this.container.addEventListener('gesturestart', this.handleGestureStart.bind(this), { passive: false });
         this.container.addEventListener('gesturechange', this.handleGestureChange.bind(this), { passive: false });
         this.container.addEventListener('gestureend', this.handleGestureEnd.bind(this));
-        
+
         // Resize
         window.addEventListener('resize', this.handleResize.bind(this));
-        
+
         // Double-click to fit
         this.container.addEventListener('dblclick', this.handleDoubleClick.bind(this));
-        
+
         // Text selection handling for reply tooltip
         document.addEventListener('selectionchange', this.handleSelectionChange.bind(this));
         document.addEventListener('mousedown', (e) => {
@@ -336,12 +336,12 @@ class Canvas {
                 this.hideImageTooltip();
             }
         });
-        
+
         // PDF drag & drop handling
         this.container.addEventListener('dragover', this.handleDragOver.bind(this));
         this.container.addEventListener('dragleave', this.handleDragLeave.bind(this));
         this.container.addEventListener('drop', this.handleDrop.bind(this));
-        
+
         // Initialize touch state
         this.touchState = {
             touches: [],
@@ -354,7 +354,7 @@ class Canvas {
             isGesturing: false
         };
     }
-    
+
     /**
      * Handle text selection changes to show/hide branch tooltip
      */
@@ -363,10 +363,10 @@ class Canvas {
         if (this.branchTooltip && this.branchTooltip.contains(document.activeElement)) {
             return;
         }
-        
+
         const selection = window.getSelection();
         const selectedText = selection.toString().trim();
-        
+
         if (!selectedText) {
             // No selection - but only hide if user isn't focused on tooltip
             if (!this.branchTooltip.contains(document.activeElement)) {
@@ -379,48 +379,48 @@ class Canvas {
             }
             return;
         }
-        
+
         // Check if selection is within a node's content
         const anchorNode = selection.anchorNode;
         if (!anchorNode) return;
-        
+
         const nodeContent = anchorNode.parentElement?.closest('.node-content');
         if (!nodeContent) return;
-        
+
         const nodeWrapper = nodeContent.closest('.node-wrapper');
         if (!nodeWrapper) return;
-        
+
         // Get the node ID from the wrapper
         const nodeId = nodeWrapper.getAttribute('data-node-id');
         if (!nodeId) return;
-        
+
         this.activeSelectionNodeId = nodeId;
-        
+
         // Position tooltip above the selection
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
-        
+
         // Position above and centered on the selection
         const tooltipX = rect.left + rect.width / 2 - 140; // Center the tooltip (tooltip is ~280px wide)
         const tooltipY = rect.top - 100; // Above the selection (tooltip is ~90px tall now with preview)
-        
+
         this.showBranchTooltip(tooltipX, tooltipY);
     }
-    
+
     // --- PDF Drag & Drop Handlers ---
-    
+
     /**
      * Handle dragover event for PDF drop zone
      */
     handleDragOver(e) {
         // Check if dragging files
         if (!e.dataTransfer.types.includes('Files')) return;
-        
+
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
         this.showDropZone();
     }
-    
+
     /**
      * Handle dragleave event for PDF drop zone
      */
@@ -430,28 +430,28 @@ class Canvas {
             this.hideDropZone();
         }
     }
-    
+
     /**
      * Handle drop event for PDF and image files
      */
     handleDrop(e) {
         e.preventDefault();
         this.hideDropZone();
-        
+
         // Get dropped files
         const files = e.dataTransfer.files;
         if (!files || files.length === 0) return;
-        
+
         // Convert drop position to SVG coordinates
         const position = this.clientToSvg(e.clientX, e.clientY);
-        
+
         // Check for PDF file first
         const pdfFile = Array.from(files).find(f => f.type === 'application/pdf');
         if (pdfFile && this.onPdfDrop) {
             this.onPdfDrop(pdfFile, position);
             return;
         }
-        
+
         // Check for image file
         const imageFile = Array.from(files).find(f => f.type.startsWith('image/'));
         if (imageFile && this.onImageDrop) {
@@ -459,7 +459,7 @@ class Canvas {
             return;
         }
     }
-    
+
     /**
      * Show the PDF drop zone overlay
      */
@@ -469,7 +469,7 @@ class Canvas {
             overlay.classList.add('visible');
         }
     }
-    
+
     /**
      * Hide the PDF drop zone overlay
      */
@@ -488,13 +488,13 @@ class Canvas {
     }
 
     updateViewBox() {
-        this.svg.setAttribute('viewBox', 
+        this.svg.setAttribute('viewBox',
             `${this.viewBox.x} ${this.viewBox.y} ${this.viewBox.width} ${this.viewBox.height}`
         );
-        
+
         // Update zoom level class for semantic zoom
         this.container.classList.remove('zoom-full', 'zoom-summary', 'zoom-mini');
-        
+
         if (this.scale > 0.6) {
             this.container.classList.add('zoom-full');
         } else if (this.scale > 0.35) {
@@ -502,54 +502,54 @@ class Canvas {
         } else {
             this.container.classList.add('zoom-mini');
         }
-        
+
         // Check if any nodes are visible and update hint
         this.updateNoNodesHint();
     }
-    
+
     /**
      * Check if any nodes are visible in the current viewport
      */
     hasVisibleNodes() {
         if (this.nodeElements.size === 0) return false;
-        
+
         const vb = this.viewBox;
-        
+
         for (const [nodeId, wrapper] of this.nodeElements) {
             const x = parseFloat(wrapper.getAttribute('x')) || 0;
             const y = parseFloat(wrapper.getAttribute('y')) || 0;
             const width = parseFloat(wrapper.getAttribute('width')) || 320;
             const height = parseFloat(wrapper.getAttribute('height')) || 200;
-            
+
             // Check if node rectangle overlaps with viewBox
             const nodeRight = x + width;
             const nodeBottom = y + height;
             const vbRight = vb.x + vb.width;
             const vbBottom = vb.y + vb.height;
-            
+
             if (x < vbRight && nodeRight > vb.x && y < vbBottom && nodeBottom > vb.y) {
                 return true;
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * Update the no-nodes-visible hint with progressive fade-in
      */
     updateNoNodesHint() {
         if (!this.noNodesHint) return;
-        
+
         // Clear any pending timeout
         if (this.noNodesHintTimeout) {
             clearTimeout(this.noNodesHintTimeout);
             this.noNodesHintTimeout = null;
         }
-        
+
         const hasNodes = this.nodeElements.size > 0;
         const hasVisible = this.hasVisibleNodes();
-        
+
         if (hasNodes && !hasVisible) {
             // Show hint after a short delay (progressive reveal)
             this.noNodesHint.style.display = 'block';
@@ -573,14 +573,14 @@ class Canvas {
         if (e.target.closest('.node')) {
             return;
         }
-        
+
         // Check for click on empty space (deselect)
         if (e.target === this.svg || e.target.closest('#edges-layer')) {
             if (!e.ctrlKey && !e.metaKey) {
                 this.clearSelection();
             }
         }
-        
+
         // Start panning
         this.isPanning = true;
         this.panStart = { x: e.clientX, y: e.clientY };
@@ -591,24 +591,24 @@ class Canvas {
         if (this.isPanning) {
             const dx = (e.clientX - this.panStart.x) / this.scale;
             const dy = (e.clientY - this.panStart.y) / this.scale;
-            
+
             this.viewBox.x -= dx;
             this.viewBox.y -= dy;
-            
+
             this.panStart = { x: e.clientX, y: e.clientY };
             this.updateViewBox();
         } else if (this.isDraggingNode && this.draggedNode) {
             const point = this.clientToSvg(e.clientX, e.clientY);
             const newX = point.x - this.dragOffset.x;
             const newY = point.y - this.dragOffset.y;
-            
+
             // Update visual position
             const wrapper = this.nodeElements.get(this.draggedNode.id);
             if (wrapper) {
                 wrapper.setAttribute('x', newX);
                 wrapper.setAttribute('y', newY);
             }
-            
+
             // Update edges
             this.updateEdgesForNode(this.draggedNode.id, { x: newX, y: newY });
         }
@@ -619,7 +619,7 @@ class Canvas {
             this.isPanning = false;
             this.container.style.cursor = 'grab';
         }
-        
+
         if (this.isDraggingNode && this.draggedNode) {
             const wrapper = this.nodeElements.get(this.draggedNode.id);
             if (wrapper) {
@@ -627,17 +627,17 @@ class Canvas {
                     x: parseFloat(wrapper.getAttribute('x')),
                     y: parseFloat(wrapper.getAttribute('y'))
                 };
-                
+
                 // Remove dragging class
                 const nodeEl = wrapper.querySelector('.node');
                 if (nodeEl) nodeEl.classList.remove('dragging');
-                
+
                 // Callback to persist position (pass old position for undo)
                 if (this.onNodeMove) {
                     this.onNodeMove(this.draggedNode.id, newPos, this.dragStartPos);
                 }
             }
-            
+
             this.isDraggingNode = false;
             this.draggedNode = null;
             this.dragStartPos = null;
@@ -646,32 +646,32 @@ class Canvas {
 
     handleWheel(e) {
         const rect = this.container.getBoundingClientRect();
-        
+
         // Check if this is a pinch-to-zoom gesture (ctrlKey is set by trackpad pinch)
         // IMPORTANT: Check this FIRST before scrollable content check, because pinch-to-zoom
         // should always control canvas zoom, even when cursor is over a node
         if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
-            
+
             // Pinch to zoom
             // deltaY is negative when zooming in (fingers spreading)
             const zoomFactor = 1 - e.deltaY * 0.01;
             const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * zoomFactor));
-            
+
             if (newScale === this.scale) return;
-            
+
             // Zoom towards mouse/gesture position
             const pointBefore = this.clientToSvg(e.clientX, e.clientY);
-            
+
             this.scale = newScale;
             this.viewBox.width = rect.width / this.scale;
             this.viewBox.height = rect.height / this.scale;
-            
+
             const pointAfter = this.clientToSvg(e.clientX, e.clientY);
-            
+
             this.viewBox.x += pointBefore.x - pointAfter.x;
             this.viewBox.y += pointBefore.y - pointAfter.y;
-            
+
             this.updateViewBox();
         } else {
             // Regular two-finger scroll (pan) - check if we should scroll node content instead
@@ -681,24 +681,24 @@ class Canvas {
                 const style = window.getComputedStyle(scrollableContent);
                 const isScrollable = style.overflowY === 'auto' || style.overflowY === 'scroll' ||
                                      style.overflowX === 'auto' || style.overflowX === 'scroll';
-                
+
                 if (isScrollable) {
                     // Check if content can scroll in the wheel direction
                     const canScrollUp = scrollableContent.scrollTop > 0;
                     const canScrollDown = scrollableContent.scrollTop < (scrollableContent.scrollHeight - scrollableContent.clientHeight - 1);
                     const canScrollLeft = scrollableContent.scrollLeft > 0;
                     const canScrollRight = scrollableContent.scrollLeft < (scrollableContent.scrollWidth - scrollableContent.clientWidth - 1);
-                    
+
                     // Determine scroll direction from wheel delta
                     const scrollingDown = e.deltaY > 0;
                     const scrollingUp = e.deltaY < 0;
                     const scrollingRight = e.deltaX > 0;
                     const scrollingLeft = e.deltaX < 0;
-                    
+
                     // If content can scroll in the requested direction, let it scroll naturally
                     const shouldScrollVertically = (scrollingDown && canScrollDown) || (scrollingUp && canScrollUp);
                     const shouldScrollHorizontally = (scrollingRight && canScrollRight) || (scrollingLeft && canScrollLeft);
-                    
+
                     if (shouldScrollVertically || shouldScrollHorizontally) {
                         // Let the content scroll - prevent canvas from panning
                         e.preventDefault();
@@ -713,16 +713,16 @@ class Canvas {
                     }
                 }
             }
-            
+
             e.preventDefault();
-            
+
             // Two-finger pan (regular scroll)
             const dx = e.deltaX / this.scale;
             const dy = e.deltaY / this.scale;
-            
+
             this.viewBox.x += dx;
             this.viewBox.y += dy;
-            
+
             this.updateViewBox();
         }
     }
@@ -739,7 +739,7 @@ class Canvas {
     handleTouchStart(e) {
         const touches = Array.from(e.touches);
         this.touchState.touches = touches.map(t => ({ x: t.clientX, y: t.clientY }));
-        
+
         if (touches.length === 2) {
             // Two fingers - prepare for pinch/pan
             // Always capture two-finger gestures, even on nodes, to prevent viewport zoom
@@ -750,7 +750,7 @@ class Canvas {
         } else if (touches.length === 1) {
             // Single finger on a node - allow native behavior (text selection, scrolling)
             if (e.target.closest('.node')) return;
-            
+
             // Single finger on canvas - could be pan
             this.touchState.lastCenter = { x: touches[0].clientX, y: touches[0].clientY };
         }
@@ -758,54 +758,54 @@ class Canvas {
 
     handleTouchMove(e) {
         const touches = Array.from(e.touches);
-        
+
         if (touches.length === 2 && this.touchState.isPinching) {
             // Always handle pinch-zoom, even if gesture is over a node
             e.preventDefault();
-            
+
             const currentDistance = this.getTouchDistance(touches);
             const currentCenter = this.getTouchCenter(touches);
-            
+
             // Pinch zoom
             const scaleFactor = currentDistance / this.touchState.lastDistance;
             const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * scaleFactor));
-            
+
             if (newScale !== this.scale) {
                 const rect = this.container.getBoundingClientRect();
                 const pointBefore = this.clientToSvg(currentCenter.x, currentCenter.y);
-                
+
                 this.scale = newScale;
                 this.viewBox.width = rect.width / this.scale;
                 this.viewBox.height = rect.height / this.scale;
-                
+
                 const pointAfter = this.clientToSvg(currentCenter.x, currentCenter.y);
                 this.viewBox.x += pointBefore.x - pointAfter.x;
                 this.viewBox.y += pointBefore.y - pointAfter.y;
             }
-            
+
             // Pan while pinching
             const dx = (currentCenter.x - this.touchState.lastCenter.x) / this.scale;
             const dy = (currentCenter.y - this.touchState.lastCenter.y) / this.scale;
             this.viewBox.x -= dx;
             this.viewBox.y -= dy;
-            
+
             this.touchState.lastDistance = currentDistance;
             this.touchState.lastCenter = currentCenter;
             this.updateViewBox();
-            
+
         } else if (touches.length === 1 && !this.touchState.isPinching) {
             // Single finger on a node - allow native behavior
             if (e.target.closest('.node')) return;
-            
+
             // Single finger pan on canvas
             e.preventDefault();
-            
+
             const dx = (touches[0].clientX - this.touchState.lastCenter.x) / this.scale;
             const dy = (touches[0].clientY - this.touchState.lastCenter.y) / this.scale;
-            
+
             this.viewBox.x -= dx;
             this.viewBox.y -= dy;
-            
+
             this.touchState.lastCenter = { x: touches[0].clientX, y: touches[0].clientY };
             this.updateViewBox();
         }
@@ -814,7 +814,7 @@ class Canvas {
     handleTouchEnd(e) {
         const touches = Array.from(e.touches);
         this.touchState.touches = touches.map(t => ({ x: t.clientX, y: t.clientY }));
-        
+
         if (touches.length < 2) {
             this.touchState.isPinching = false;
         }
@@ -849,24 +849,24 @@ class Canvas {
     handleGestureChange(e) {
         e.preventDefault();
         if (!this.gestureState.isGesturing) return;
-        
+
         const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.gestureState.startScale * e.scale));
-        
+
         if (newScale !== this.scale) {
             const rect = this.container.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
-            
+
             const pointBefore = this.clientToSvg(centerX, centerY);
-            
+
             this.scale = newScale;
             this.viewBox.width = rect.width / this.scale;
             this.viewBox.height = rect.height / this.scale;
-            
+
             const pointAfter = this.clientToSvg(centerX, centerY);
             this.viewBox.x += pointBefore.x - pointAfter.x;
             this.viewBox.y += pointBefore.y - pointAfter.y;
-            
+
             this.updateViewBox();
         }
     }
@@ -893,35 +893,35 @@ class Canvas {
     fitToContent(padding = 50) {
         const nodes = Array.from(this.nodeElements.values());
         if (nodes.length === 0) return;
-        
+
         let minX = Infinity, minY = Infinity;
         let maxX = -Infinity, maxY = -Infinity;
-        
+
         for (const wrapper of nodes) {
             const x = parseFloat(wrapper.getAttribute('x'));
             const y = parseFloat(wrapper.getAttribute('y'));
             const width = parseFloat(wrapper.getAttribute('width')) || 420;
             const height = parseFloat(wrapper.getAttribute('height')) || 200;
-            
+
             minX = Math.min(minX, x);
             minY = Math.min(minY, y);
             maxX = Math.max(maxX, x + width);
             maxY = Math.max(maxY, y + height);
         }
-        
+
         const contentWidth = maxX - minX + padding * 2;
         const contentHeight = maxY - minY + padding * 2;
-        
+
         const rect = this.container.getBoundingClientRect();
         const scaleX = rect.width / contentWidth;
         const scaleY = rect.height / contentHeight;
         this.scale = Math.min(scaleX, scaleY, 1);
-        
+
         this.viewBox.x = minX - padding;
         this.viewBox.y = minY - padding;
         this.viewBox.width = rect.width / this.scale;
         this.viewBox.height = rect.height / this.scale;
-        
+
         this.updateViewBox();
     }
 
@@ -934,7 +934,7 @@ class Canvas {
         this.viewBox.y = y - (rect.height / this.scale) / 2;
         this.updateViewBox();
     }
-    
+
     /**
      * Smoothly animate to center on a specific position
      */
@@ -942,65 +942,65 @@ class Canvas {
         const rect = this.container.getBoundingClientRect();
         const endX = x - (rect.width / this.scale) / 2;
         const endY = y - (rect.height / this.scale) / 2;
-        
+
         const startX = this.viewBox.x;
         const startY = this.viewBox.y;
         const startTime = performance.now();
-        
+
         const animate = (currentTime) => {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
             const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-            
+
             this.viewBox.x = startX + (endX - startX) * eased;
             this.viewBox.y = startY + (endY - startY) * eased;
             this.updateViewBox();
-            
+
             if (progress < 1) {
                 requestAnimationFrame(animate);
             }
         };
-        
+
         requestAnimationFrame(animate);
     }
-    
+
     /**
      * Pan to center a specific node in the viewport (instant)
      */
     panToNode(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const x = parseFloat(wrapper.getAttribute('x'));
         const y = parseFloat(wrapper.getAttribute('y'));
         const width = parseFloat(wrapper.getAttribute('width')) || 420;
         const height = parseFloat(wrapper.getAttribute('height')) || 200;
-        
+
         // Center on the node's center point
         const centerX = x + width / 2;
         const centerY = y + height / 2;
-        
+
         this.centerOn(centerX, centerY);
     }
-    
+
     /**
      * Smoothly pan to center a specific node in the viewport
      */
     panToNodeAnimated(nodeId, duration = 300) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const x = parseFloat(wrapper.getAttribute('x'));
         const y = parseFloat(wrapper.getAttribute('y'));
         const width = parseFloat(wrapper.getAttribute('width')) || 420;
         const height = parseFloat(wrapper.getAttribute('height')) || 200;
-        
+
         const centerX = x + width / 2;
         const centerY = y + height / 2;
-        
+
         this.centerOnAnimated(centerX, centerY, duration);
     }
-    
+
     /**
      * Animate nodes to new positions with smooth transitions
      * @param {Object} graph - The graph with updated node positions
@@ -1013,18 +1013,18 @@ class Canvas {
         const duration = options.duration || 500;
         const focusNodeId = options.focusNodeId || null;
         const keepViewport = options.keepViewport || false;
-        
+
         // Collect start and end positions for each node
         const animations = [];
         for (const node of graph.getAllNodes()) {
             const wrapper = this.nodeElements.get(node.id);
             if (!wrapper) continue;
-            
+
             const startX = parseFloat(wrapper.getAttribute('x'));
             const startY = parseFloat(wrapper.getAttribute('y'));
             const endX = node.position.x;
             const endY = node.position.y;
-            
+
             // Only animate if position changed
             if (startX !== endX || startY !== endY) {
                 animations.push({
@@ -1037,7 +1037,7 @@ class Canvas {
                 });
             }
         }
-        
+
         if (animations.length === 0) {
             // No position changes, just update edges
             this.updateAllEdges(graph);
@@ -1046,34 +1046,34 @@ class Canvas {
             }
             return;
         }
-        
+
         // Calculate viewport animation if fitting to content (and not keeping viewport)
         let viewportAnim = null;
         if (!focusNodeId && !keepViewport) {
             viewportAnim = this.calculateFitToContentViewport(graph, 50);
         }
-        
+
         const startTime = performance.now();
-        
+
         const animate = (currentTime) => {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
-            
+
             // Easing function (ease-out cubic)
             const eased = 1 - Math.pow(1 - progress, 3);
-            
+
             // Update node positions
             for (const anim of animations) {
                 const x = anim.startX + (anim.endX - anim.startX) * eased;
                 const y = anim.startY + (anim.endY - anim.startY) * eased;
-                
+
                 anim.wrapper.setAttribute('x', x);
                 anim.wrapper.setAttribute('y', y);
             }
-            
+
             // Update all edges
             this.updateAllEdges(graph);
-            
+
             // Animate viewport if fitting to content
             if (viewportAnim) {
                 this.viewBox.x = viewportAnim.startX + (viewportAnim.endX - viewportAnim.startX) * eased;
@@ -1083,7 +1083,7 @@ class Canvas {
                 this.scale = viewportAnim.startScale + (viewportAnim.endScale - viewportAnim.startScale) * eased;
                 this.updateViewBox();
             }
-            
+
             if (progress < 1) {
                 requestAnimationFrame(animate);
             } else {
@@ -1091,40 +1091,40 @@ class Canvas {
                 this.updateNoNodesHint();
             }
         };
-        
+
         requestAnimationFrame(animate);
     }
-    
+
     /**
      * Calculate the target viewport for fit-to-content
      */
     calculateFitToContentViewport(graph, padding = 50) {
         const nodes = graph.getAllNodes();
         if (nodes.length === 0) return null;
-        
+
         let minX = Infinity, minY = Infinity;
         let maxX = -Infinity, maxY = -Infinity;
-        
+
         for (const node of nodes) {
             const wrapper = this.nodeElements.get(node.id);
             const width = wrapper ? parseFloat(wrapper.getAttribute('width')) || 420 : 420;
             const height = wrapper ? parseFloat(wrapper.getAttribute('height')) || 200 : 200;
-            
+
             // Use the TARGET position from graph
             minX = Math.min(minX, node.position.x);
             minY = Math.min(minY, node.position.y);
             maxX = Math.max(maxX, node.position.x + width);
             maxY = Math.max(maxY, node.position.y + height);
         }
-        
+
         const contentWidth = maxX - minX + padding * 2;
         const contentHeight = maxY - minY + padding * 2;
-        
+
         const rect = this.container.getBoundingClientRect();
         const scaleX = rect.width / contentWidth;
         const scaleY = rect.height / contentHeight;
         const endScale = Math.min(scaleX, scaleY, 1);
-        
+
         return {
             startX: this.viewBox.x,
             startY: this.viewBox.y,
@@ -1138,71 +1138,71 @@ class Canvas {
             endScale
         };
     }
-    
+
     /**
      * Animated version of fitToContent
      */
     fitToContentAnimated(duration = 500) {
         const nodes = Array.from(this.nodeElements.values());
         if (nodes.length === 0) return;
-        
+
         let minX = Infinity, minY = Infinity;
         let maxX = -Infinity, maxY = -Infinity;
-        
+
         for (const wrapper of nodes) {
             const x = parseFloat(wrapper.getAttribute('x'));
             const y = parseFloat(wrapper.getAttribute('y'));
             const width = parseFloat(wrapper.getAttribute('width')) || 420;
             const height = parseFloat(wrapper.getAttribute('height')) || 200;
-            
+
             minX = Math.min(minX, x);
             minY = Math.min(minY, y);
             maxX = Math.max(maxX, x + width);
             maxY = Math.max(maxY, y + height);
         }
-        
+
         const padding = 50;
         const contentWidth = maxX - minX + padding * 2;
         const contentHeight = maxY - minY + padding * 2;
-        
+
         const rect = this.container.getBoundingClientRect();
         const scaleX = rect.width / contentWidth;
         const scaleY = rect.height / contentHeight;
         const endScale = Math.min(scaleX, scaleY, 1);
-        
+
         const startX = this.viewBox.x;
         const startY = this.viewBox.y;
         const startWidth = this.viewBox.width;
         const startHeight = this.viewBox.height;
         const startScale = this.scale;
-        
+
         const endX = minX - padding;
         const endY = minY - padding;
         const endWidth = rect.width / endScale;
         const endHeight = rect.height / endScale;
-        
+
         const startTime = performance.now();
-        
+
         const animate = (currentTime) => {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
             const eased = 1 - Math.pow(1 - progress, 3);
-            
+
             this.viewBox.x = startX + (endX - startX) * eased;
             this.viewBox.y = startY + (endY - startY) * eased;
             this.viewBox.width = startWidth + (endWidth - startWidth) * eased;
             this.viewBox.height = startHeight + (endHeight - startHeight) * eased;
             this.scale = startScale + (endScale - startScale) * eased;
             this.updateViewBox();
-            
+
             if (progress < 1) {
                 requestAnimationFrame(animate);
             }
         };
-        
+
         requestAnimationFrame(animate);
     }
-    
+
     /**
      * Get the visible viewport dimensions in screen pixels
      */
@@ -1210,7 +1210,7 @@ class Canvas {
         const rect = this.container.getBoundingClientRect();
         return { width: rect.width, height: rect.height };
     }
-    
+
     /**
      * Resize a node to fit 80% of the visible viewport
      * Makes content scrollable if it overflows
@@ -1218,18 +1218,18 @@ class Canvas {
     resizeNodeToViewport(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const viewport = this.getViewportDimensions();
-        
+
         // Calculate 80% of viewport in canvas coordinates
         // We use screen pixels directly since we want consistent sizing regardless of zoom
         const targetWidth = Math.round(viewport.width * 0.8 / this.scale);
         const targetHeight = Math.round(viewport.height * 0.8 / this.scale);
-        
+
         // Apply new dimensions
         wrapper.setAttribute('width', targetWidth);
         wrapper.setAttribute('height', targetHeight);
-        
+
         // Mark node as "viewport-fitted" so CSS can apply scrolling
         const node = wrapper.querySelector('.node');
         if (node) {
@@ -1237,21 +1237,21 @@ class Canvas {
             // Set explicit height for content scrolling
             node.style.height = '100%';
         }
-        
+
         // Update edges after resize
         const x = parseFloat(wrapper.getAttribute('x'));
         const y = parseFloat(wrapper.getAttribute('y'));
         this.updateEdgesForNode(nodeId, { x, y });
-        
+
         // Notify callback to persist dimensions
         if (this.onNodeResize) {
             this.onNodeResize(nodeId, targetWidth, targetHeight);
         }
-        
+
         // Center the node in viewport
         this.panToNodeAnimated(nodeId, 300);
     }
-    
+
     /**
      * Update all edges based on current node positions in graph
      */
@@ -1259,7 +1259,7 @@ class Canvas {
         for (const edge of graph.getAllEdges()) {
             const sourceWrapper = this.nodeElements.get(edge.source);
             const targetWrapper = this.nodeElements.get(edge.target);
-            
+
             if (sourceWrapper && targetWrapper) {
                 const sourcePos = {
                     x: parseFloat(sourceWrapper.getAttribute('x')),
@@ -1269,7 +1269,7 @@ class Canvas {
                     x: parseFloat(targetWrapper.getAttribute('x')),
                     y: parseFloat(targetWrapper.getAttribute('y'))
                 };
-                
+
                 this.renderEdge(edge, sourcePos, targetPos);
             }
         }
@@ -1283,13 +1283,13 @@ class Canvas {
     renderNode(node) {
         // Remove existing if present
         this.removeNode(node.id);
-        
+
         // Use stored dimensions or defaults
         // Matrix nodes need more width
         const isMatrix = node.type === NodeType.MATRIX;
         const width = node.width || (isMatrix ? 500 : 420);
         const minHeight = node.height || (isMatrix ? 300 : 100);
-        
+
         // Create foreignObject wrapper
         const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
         wrapper.setAttribute('class', 'node-wrapper');
@@ -1298,7 +1298,7 @@ class Canvas {
         wrapper.setAttribute('width', width);
         wrapper.setAttribute('height', minHeight);
         wrapper.setAttribute('data-node-id', node.id);
-        
+
         // Create node HTML - different for matrix nodes
         const div = document.createElement('div');
         // Apply viewport-fitted class if node has explicit stored dimensions (enables scrollable content)
@@ -1306,7 +1306,7 @@ class Canvas {
         div.className = `node ${node.type}${hasExplicitSize ? ' viewport-fitted' : ''}`;
         div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
         div.style.width = '100%';
-        
+
         // Matrix nodes need fixed height to allow shrinking; others use min-height
         // Nodes with explicit dimensions also need fixed height for scrolling
         // Note: We don't set overflow:hidden here - inner containers handle their own overflow
@@ -1316,14 +1316,14 @@ class Canvas {
         } else {
             div.style.minHeight = '100%';
         }
-        
+
         if (isMatrix) {
             div.innerHTML = this.renderMatrixNodeContent(node);
         } else {
             // Get summary text for semantic zoom
             const summaryText = this.getNodeSummaryText(node);
             const typeIcon = this.getNodeTypeIcon(node.type);
-            
+
             // Determine content HTML based on node type
             let contentHtml;
             if (node.imageData) {
@@ -1334,7 +1334,7 @@ class Canvas {
                 // Standard text content
                 contentHtml = this.renderMarkdown(node.content);
             }
-            
+
             div.innerHTML = `
                 <div class="node-summary" title="Double-click to edit title">
                     <span class="node-type-icon">${typeIcon}</span>
@@ -1367,18 +1367,18 @@ class Canvas {
                 <div class="resize-handle resize-se" data-resize="se"></div>
             `;
         }
-        
+
         // Render tags as a fundamental property of ALL nodes (regardless of type)
         // Tags are inserted as the first child so they render outside the left edge
         const tagsHtml = this.renderNodeTags(node);
         if (tagsHtml) {
             div.insertAdjacentHTML('afterbegin', tagsHtml);
         }
-        
+
         wrapper.appendChild(div);
         this.nodesLayer.appendChild(wrapper);
         this.nodeElements.set(node.id, wrapper);
-        
+
         // Auto-size height after render based on actual content
         // Skip auto-sizing for scrollable node types - they have fixed dimensions
         const isScrollableType = SCROLLABLE_NODE_TYPES.includes(node.type);
@@ -1391,10 +1391,10 @@ class Canvas {
                 wrapper.setAttribute('height', finalHeight);
             });
         }
-        
+
         // Setup node event listeners
         this.setupNodeEvents(wrapper, node);
-        
+
         return wrapper;
     }
 
@@ -1403,12 +1403,12 @@ class Canvas {
      */
     setupNodeEvents(wrapper, node) {
         const div = wrapper.querySelector('.node');
-        
+
         // Click to select
         div.addEventListener('click', (e) => {
             if (e.target.closest('.node-action')) return;
             if (e.target.closest('.resize-handle')) return;
-            
+
             if (e.ctrlKey || e.metaKey) {
                 // Multi-select toggle
                 if (this.selectedNodes.has(node.id)) {
@@ -1422,86 +1422,86 @@ class Canvas {
                 this.selectNode(node.id, false);
             }
         });
-        
+
         // Drag to move - only via drag handle
         const dragHandle = div.querySelector('.drag-handle');
         if (dragHandle) {
             dragHandle.addEventListener('mousedown', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                
+
                 this.isDraggingNode = true;
                 this.draggedNode = node;
-                
+
                 // Store starting position for undo
                 this.dragStartPos = { ...node.position };
-                
+
                 const point = this.clientToSvg(e.clientX, e.clientY);
                 this.dragOffset = {
                     x: point.x - node.position.x,
                     y: point.y - node.position.y
                 };
-                
+
                 div.classList.add('dragging');
             });
         }
-        
+
         // When zoomed out, allow dragging from anywhere on the node
         div.addEventListener('mousedown', (e) => {
             // Only activate when zoomed out (summary or mini view)
             if (this.scale > 0.6) return;
-            
+
             // Don't interfere with buttons or resize handles
             if (e.target.closest('button') || e.target.closest('.resize-handle')) return;
-            
+
             e.stopPropagation();
             e.preventDefault();
-            
+
             this.isDraggingNode = true;
             this.draggedNode = node;
-            
+
             // Store starting position for undo
             this.dragStartPos = { ...node.position };
-            
+
             const point = this.clientToSvg(e.clientX, e.clientY);
             this.dragOffset = {
                 x: point.x - node.position.x,
                 y: point.y - node.position.y
             };
-            
+
             div.classList.add('dragging');
         });
-        
+
         // Resize handles
         const resizeHandles = div.querySelectorAll('.resize-handle');
         resizeHandles.forEach(handle => {
             handle.addEventListener('mousedown', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                
+
                 const resizeType = handle.dataset.resize;
                 const startX = e.clientX;
                 const startY = e.clientY;
                 const startWidth = parseFloat(wrapper.getAttribute('width'));
                 const startHeight = parseFloat(wrapper.getAttribute('height'));
-                
+
                 const onMouseMove = (moveEvent) => {
                     const dx = (moveEvent.clientX - startX) / this.scale;
                     const dy = (moveEvent.clientY - startY) / this.scale;
-                    
+
                     let newWidth = startWidth;
                     let newHeight = startHeight;
-                    
+
                     if (resizeType.includes('e')) {
                         newWidth = Math.max(200, startWidth + dx);
                     }
-                    
+
                     wrapper.setAttribute('width', newWidth);
-                    
+
                     // Get minimum content height (needed for both width-only and height resizing)
                     const isMatrixNode = div.classList.contains('matrix');
                     let minContentHeight = 100;
-                    
+
                     if (!isMatrixNode) {
                         // Temporarily remove min-height to get natural content height
                         const oldMinHeight = div.style.minHeight;
@@ -1509,7 +1509,7 @@ class Canvas {
                         minContentHeight = div.scrollHeight + 10;
                         div.style.minHeight = oldMinHeight;
                     }
-                    
+
                     if (resizeType.includes('s')) {
                         // When resizing south, don't allow smaller than content height
                         newHeight = Math.max(minContentHeight, startHeight + dy);
@@ -1519,63 +1519,63 @@ class Canvas {
                         wrapper.setAttribute('height', Math.max(100, minContentHeight));
                     }
                     // If just resizing east on a matrix, don't change height at all
-                    
+
                     // Update edges
                     this.updateEdgesForNode(node.id, node.position);
                 };
-                
+
                 const onMouseUp = () => {
                     document.removeEventListener('mousemove', onMouseMove);
                     document.removeEventListener('mouseup', onMouseUp);
-                    
+
                     // Save new dimensions
                     const finalWidth = parseFloat(wrapper.getAttribute('width'));
                     const finalHeight = parseFloat(wrapper.getAttribute('height'));
-                    
+
                     if (this.onNodeResize) {
                         this.onNodeResize(node.id, finalWidth, finalHeight);
                     }
                 };
-                
+
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
             });
         });
-        
+
         // Action buttons
         const replyBtn = div.querySelector('.reply-btn');
         const summarizeBtn = div.querySelector('.summarize-btn');
         const fetchSummarizeBtn = div.querySelector('.fetch-summarize-btn');
         const deleteBtn = div.querySelector('.delete-btn');
-        
+
         if (replyBtn) {
             replyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onNodeReply) this.onNodeReply(node.id);
             });
         }
-        
+
         if (summarizeBtn) {
             summarizeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onNodeSummarize) this.onNodeSummarize(node.id);
             });
         }
-        
+
         if (fetchSummarizeBtn) {
             fetchSummarizeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onNodeFetchSummarize) this.onNodeFetchSummarize(node.id);
             });
         }
-        
+
         if (deleteBtn) {
             deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onNodeDelete) this.onNodeDelete(node.id);
             });
         }
-        
+
         // Copy button
         const copyBtn = div.querySelector('.copy-btn');
         if (copyBtn) {
@@ -1600,7 +1600,7 @@ class Canvas {
                 }
             });
         }
-        
+
         // Edit content button (FETCH_RESULT nodes)
         const editContentBtn = div.querySelector('.edit-content-btn');
         if (editContentBtn) {
@@ -1609,7 +1609,7 @@ class Canvas {
                 if (this.onNodeEditContent) this.onNodeEditContent(node.id);
             });
         }
-        
+
         // Re-summarize button (FETCH_RESULT nodes)
         const resummarizeBtn = div.querySelector('.resummarize-btn');
         if (resummarizeBtn) {
@@ -1618,7 +1618,7 @@ class Canvas {
                 if (this.onNodeResummarize) this.onNodeResummarize(node.id);
             });
         }
-        
+
         // Stop generation button (AI nodes only)
         const stopBtn = div.querySelector('.stop-btn');
         if (stopBtn) {
@@ -1627,7 +1627,7 @@ class Canvas {
                 if (this.onNodeStopGeneration) this.onNodeStopGeneration(node.id);
             });
         }
-        
+
         // Continue generation button (AI nodes only)
         const continueBtn = div.querySelector('.continue-btn');
         if (continueBtn) {
@@ -1636,7 +1636,7 @@ class Canvas {
                 if (this.onNodeContinueGeneration) this.onNodeContinueGeneration(node.id);
             });
         }
-        
+
         // Fit to viewport button
         const fitViewportBtn = div.querySelector('.fit-viewport-btn');
         if (fitViewportBtn) {
@@ -1645,7 +1645,7 @@ class Canvas {
                 if (this.onNodeFitToViewport) this.onNodeFitToViewport(node.id);
             });
         }
-        
+
         // Matrix-specific event handlers
         if (node.type === NodeType.MATRIX) {
             // Cell click handlers (for filling or viewing)
@@ -1655,7 +1655,7 @@ class Canvas {
                     e.stopPropagation();
                     const row = parseInt(cell.dataset.row);
                     const col = parseInt(cell.dataset.col);
-                    
+
                     if (cell.classList.contains('filled')) {
                         // View filled cell
                         if (this.onMatrixCellView) {
@@ -1669,7 +1669,7 @@ class Canvas {
                     }
                 });
             });
-            
+
             // Edit button
             const editBtn = div.querySelector('.matrix-edit-btn');
             if (editBtn) {
@@ -1680,7 +1680,7 @@ class Canvas {
                     }
                 });
             }
-            
+
             // Fill all button
             const fillAllBtn = div.querySelector('.matrix-fill-all-btn');
             if (fillAllBtn) {
@@ -1691,7 +1691,7 @@ class Canvas {
                     }
                 });
             }
-            
+
             // Copy context button
             const copyContextBtn = div.querySelector('.matrix-context-copy');
             if (copyContextBtn) {
@@ -1709,7 +1709,7 @@ class Canvas {
                     }
                 });
             }
-            
+
             // Row header click handlers (to extract row as node)
             const rowHeaders = div.querySelectorAll('.row-header[data-row]');
             rowHeaders.forEach(header => {
@@ -1721,7 +1721,7 @@ class Canvas {
                     }
                 });
             });
-            
+
             // Column header click handlers (to extract column as node)
             const colHeaders = div.querySelectorAll('.col-header[data-col]');
             colHeaders.forEach(header => {
@@ -1734,7 +1734,7 @@ class Canvas {
                 });
             });
         }
-        
+
         // Track user scroll to pause auto-scroll during streaming
         // If user scrolls up (not at bottom), we stop auto-scrolling
         const contentEl = div.querySelector('.node-content');
@@ -1750,7 +1750,7 @@ class Canvas {
                 }
             });
         }
-        
+
         // Double-click on summary to edit title
         const nodeSummary = div.querySelector('.node-summary');
         if (nodeSummary) {
@@ -1761,7 +1761,7 @@ class Canvas {
                 }
             });
         }
-        
+
         // Click on images in node content (for asking about or extracting images)
         // Only for node types that can contain rich markdown/HTML with images
         const nodeContentEl = div.querySelector('.node-content');
@@ -1773,7 +1773,7 @@ class Canvas {
                     // Get image src and position for tooltip
                     const imgSrc = clickedImg.src;
                     const rect = clickedImg.getBoundingClientRect();
-                    
+
                     // Store node ID and show tooltip
                     this.pendingImageNodeId = node.id;
                     this.showImageTooltip(imgSrc, {
@@ -1791,7 +1791,7 @@ class Canvas {
     updateNodeContent(nodeId, content, isStreaming = false) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const contentEl = wrapper.querySelector('.node-content');
         if (contentEl) {
             // During streaming, use plain text for performance
@@ -1799,7 +1799,7 @@ class Canvas {
             if (isStreaming) {
                 contentEl.textContent = content;
                 contentEl.classList.add('streaming');
-                
+
                 // Auto-scroll to bottom during streaming (unless user manually scrolled up)
                 if (!this.userScrolledNodes.has(nodeId)) {
                     contentEl.scrollTop = contentEl.scrollHeight;
@@ -1807,13 +1807,13 @@ class Canvas {
             } else {
                 contentEl.innerHTML = this.renderMarkdown(content);
                 contentEl.classList.remove('streaming');
-                
+
                 // Streaming complete: snap to top and clear scroll tracking
                 contentEl.scrollTop = 0;
                 this.userScrolledNodes.delete(nodeId);
             }
         }
-        
+
         // Update the summary text (shown when zoomed out)
         // Only update when not streaming, to avoid flickering
         if (!isStreaming) {
@@ -1824,24 +1824,24 @@ class Canvas {
                 summaryTextEl.textContent = this.truncate(plainText, 60);
             }
         }
-        
+
         // Update height - but skip for scrollable node types which have fixed dimensions
         const div = wrapper.querySelector('.node');
         if (div && !div.classList.contains('viewport-fitted')) {
             wrapper.setAttribute('height', div.offsetHeight + 10);
         }
     }
-    
+
     /**
      * Update a matrix cell (for streaming cell fills)
      */
     updateMatrixCell(nodeId, row, col, content, isStreaming = false) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const cell = wrapper.querySelector(`.matrix-cell[data-row="${row}"][data-col="${col}"]`);
         if (!cell) return;
-        
+
         if (isStreaming) {
             cell.classList.add('loading');
             cell.classList.remove('empty');
@@ -1854,20 +1854,20 @@ class Canvas {
             cell.innerHTML = `<div class="matrix-cell-content">${this.escapeHtml(content)}</div>`;
         }
     }
-    
+
     /**
      * Highlight a specific cell in a matrix node
      */
     highlightMatrixCell(matrixNodeId, row, col) {
         const wrapper = this.nodeElements.get(matrixNodeId);
         if (!wrapper) return;
-        
+
         const cell = wrapper.querySelector(`.matrix-cell[data-row="${row}"][data-col="${col}"]`);
         if (cell) {
             cell.classList.add('highlighted');
         }
     }
-    
+
     /**
      * Clear all matrix cell highlights
      */
@@ -1875,7 +1875,7 @@ class Canvas {
         const highlightedCells = this.nodesLayer.querySelectorAll('.matrix-cell.highlighted');
         highlightedCells.forEach(cell => cell.classList.remove('highlighted'));
     }
-    
+
     /**
      * Highlight specific text within a node's content
      * @param {string} nodeId - The node to highlight text in
@@ -1884,35 +1884,35 @@ class Canvas {
     highlightTextInNode(nodeId, text) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper || !text) return;
-        
+
         const contentEl = wrapper.querySelector('.node-content');
         if (!contentEl) return;
-        
+
         // Store original HTML if not already stored
         if (!contentEl.dataset.originalHtml) {
             contentEl.dataset.originalHtml = contentEl.innerHTML;
         }
-        
+
         // Get the text content and find the match
         const originalHtml = contentEl.dataset.originalHtml;
-        
+
         // Create a case-insensitive regex to find the text
         // Escape special regex characters in the search text
         const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp(`(${escapedText})`, 'gi');
-        
+
         // Replace matching text with highlighted version
         // We need to be careful not to break HTML tags
         const highlightedHtml = this.highlightTextInHtml(originalHtml, text);
         contentEl.innerHTML = highlightedHtml;
-        
+
         // Scroll the highlight into view within the node if needed
         const mark = contentEl.querySelector('.source-highlight');
         if (mark) {
             mark.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
     }
-    
+
     /**
      * Helper to highlight text within HTML without breaking tags.
      * Handles text that spans across multiple HTML elements (e.g., across <strong> boundaries).
@@ -1922,11 +1922,11 @@ class Canvas {
      */
     highlightTextInHtml(html, text) {
         if (!text || !html) return html;
-        
+
         // Create a temporary element to parse the HTML
         const temp = document.createElement('div');
         temp.innerHTML = html;
-        
+
         // Use TreeWalker to collect all text nodes
         const walker = document.createTreeWalker(temp, NodeFilter.SHOW_TEXT);
         const textNodes = [];
@@ -1934,73 +1934,73 @@ class Canvas {
         while (node = walker.nextNode()) {
             textNodes.push(node);
         }
-        
+
         if (textNodes.length === 0) return html;
-        
+
         // Combine all text and find the match position
         const fullText = textNodes.map(n => n.textContent).join('');
         const lowerFull = fullText.toLowerCase();
         const lowerSearch = text.toLowerCase();
         const matchStart = lowerFull.indexOf(lowerSearch);
-        
+
         if (matchStart === -1) return html;
-        
+
         const matchEnd = matchStart + text.length;
-        
+
         // Walk through text nodes and wrap the matching portions
         let currentPos = 0;
         const nodesToProcess = [];
-        
+
         for (const textNode of textNodes) {
             const nodeStart = currentPos;
             const nodeEnd = currentPos + textNode.textContent.length;
-            
+
             // Check if this node overlaps with the match
             if (nodeEnd > matchStart && nodeStart < matchEnd) {
                 // Calculate overlap within this node
                 const overlapStart = Math.max(0, matchStart - nodeStart);
                 const overlapEnd = Math.min(textNode.textContent.length, matchEnd - nodeStart);
-                
+
                 nodesToProcess.push({
                     node: textNode,
                     overlapStart,
                     overlapEnd
                 });
             }
-            
+
             currentPos = nodeEnd;
         }
-        
+
         // Process nodes in reverse order to avoid invalidating positions
         for (let i = nodesToProcess.length - 1; i >= 0; i--) {
             const { node: textNode, overlapStart, overlapEnd } = nodesToProcess[i];
             const content = textNode.textContent;
-            
+
             const before = content.slice(0, overlapStart);
             const match = content.slice(overlapStart, overlapEnd);
             const after = content.slice(overlapEnd);
-            
+
             const fragment = document.createDocumentFragment();
-            
+
             if (before) {
                 fragment.appendChild(document.createTextNode(before));
             }
-            
+
             const mark = document.createElement('mark');
             mark.className = 'source-highlight';
             mark.textContent = match;
             fragment.appendChild(mark);
-            
+
             if (after) {
                 fragment.appendChild(document.createTextNode(after));
             }
-            
+
             textNode.parentNode.replaceChild(fragment, textNode);
         }
-        
+
         return temp.innerHTML;
     }
-    
+
     /**
      * Clear all source text highlights from nodes
      */
@@ -2025,25 +2025,25 @@ class Canvas {
     showStopButton(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const stopBtn = wrapper.querySelector('.stop-btn');
         const continueBtn = wrapper.querySelector('.continue-btn');
-        
+
         if (stopBtn) stopBtn.style.display = 'inline-flex';
         if (continueBtn) continueBtn.style.display = 'none';
     }
-    
+
     /**
      * Hide the stop button on a node (when streaming completes)
      */
     hideStopButton(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const stopBtn = wrapper.querySelector('.stop-btn');
         if (stopBtn) stopBtn.style.display = 'none';
     }
-    
+
     /**
      * Show the continue button on a node (after stopping).
      * Allows resuming generation for this specific node.
@@ -2051,35 +2051,35 @@ class Canvas {
     showContinueButton(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const stopBtn = wrapper.querySelector('.stop-btn');
         const continueBtn = wrapper.querySelector('.continue-btn');
-        
+
         if (stopBtn) stopBtn.style.display = 'none';
         if (continueBtn) continueBtn.style.display = 'inline-flex';
     }
-    
+
     /**
      * Hide the continue button on a node
      */
     hideContinueButton(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const continueBtn = wrapper.querySelector('.continue-btn');
         if (continueBtn) continueBtn.style.display = 'none';
     }
-    
+
     /**
      * Show an error state on a node with retry/dismiss buttons
      */
     showNodeError(nodeId, errorInfo) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const contentEl = wrapper.querySelector('.node-content');
         const div = wrapper.querySelector('.node');
-        
+
         if (contentEl) {
             const errorHtml = `
                 <div class="error-content">
@@ -2093,21 +2093,21 @@ class Canvas {
                 </div>
             `;
             contentEl.innerHTML = errorHtml;
-            
+
             // Add error class to node
             if (div) div.classList.add('error-node');
-            
+
             // Setup button handlers
             const retryBtn = contentEl.querySelector('.error-retry-btn');
             const dismissBtn = contentEl.querySelector('.error-dismiss-btn');
-            
+
             if (retryBtn) {
                 retryBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     if (this.onNodeRetry) this.onNodeRetry(nodeId);
                 });
             }
-            
+
             if (dismissBtn) {
                 dismissBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -2116,25 +2116,25 @@ class Canvas {
             }
         }
     }
-    
+
     /**
      * Clear error state on a node
      */
     clearNodeError(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const div = wrapper.querySelector('.node');
         if (div) div.classList.remove('error-node');
     }
-    
+
     /**
      * Show brief copy feedback on a node
      */
     showCopyFeedback(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
         if (!wrapper) return;
-        
+
         const div = wrapper.querySelector('.node');
         if (div) {
             div.classList.add('copy-flash');
@@ -2163,16 +2163,16 @@ class Canvas {
         if (!isMulti) {
             this.clearSelection();
         }
-        
+
         this.selectedNodes.add(nodeId);
         const wrapper = this.nodeElements.get(nodeId);
         if (wrapper) {
             wrapper.querySelector('.node')?.classList.add('selected');
             wrapper.querySelector('.node')?.classList.remove('faded');
         }
-        
+
         this.updateFadedState();
-        
+
         if (this.onNodeSelect) {
             this.onNodeSelect(Array.from(this.selectedNodes));
         }
@@ -2187,9 +2187,9 @@ class Canvas {
         if (wrapper) {
             wrapper.querySelector('.node')?.classList.remove('selected');
         }
-        
+
         this.updateFadedState();
-        
+
         if (this.onNodeDeselect) {
             this.onNodeDeselect(Array.from(this.selectedNodes));
         }
@@ -2206,24 +2206,24 @@ class Canvas {
             }
         }
         this.selectedNodes.clear();
-        
+
         this.updateFadedState();
-        
+
         if (this.onNodeDeselect) {
             this.onNodeDeselect([]);
         }
     }
-    
+
     /**
      * Update faded state for all nodes based on selection
      */
     updateFadedState() {
         const hasSelection = this.selectedNodes.size > 0;
-        
+
         for (const [nodeId, wrapper] of this.nodeElements) {
             const node = wrapper.querySelector('.node');
             if (!node) continue;
-            
+
             if (hasSelection && !this.selectedNodes.has(nodeId)) {
                 node.classList.add('faded');
             } else {
@@ -2238,7 +2238,7 @@ class Canvas {
     getSelectedNodeIds() {
         return Array.from(this.selectedNodes);
     }
-    
+
     /**
      * Get actual rendered dimensions for all nodes
      * Returns Map of nodeId -> { width, height }
@@ -2246,19 +2246,19 @@ class Canvas {
     getNodeDimensions() {
         const dimensions = new Map();
         const TAG_WIDTH = 100; // Approximate width of tag labels on the left
-        
+
         for (const [nodeId, wrapper] of this.nodeElements) {
             const width = parseFloat(wrapper.getAttribute('width')) || 420;
             const height = parseFloat(wrapper.getAttribute('height')) || 200;
-            
+
             // Check if node has tags - if so, add tag width to bounding box
             const tagsEl = wrapper.querySelector('.node-tags');
             const tagCount = tagsEl ? tagsEl.querySelectorAll('.node-tag').length : 0;
             const effectiveWidth = tagCount > 0 ? width + TAG_WIDTH : width;
-            
+
             dimensions.set(nodeId, { width: effectiveWidth, height });
         }
-        
+
         return dimensions;
     }
 
@@ -2273,7 +2273,7 @@ class Canvas {
         for (const edge of this.edgeElements.values()) {
             edge.classList.remove('context-highlight');
         }
-        
+
         // Apply new highlights
         for (const nodeId of ancestorIds) {
             const wrapper = this.nodeElements.get(nodeId);
@@ -2291,36 +2291,36 @@ class Canvas {
     renderEdge(edge, sourcePos, targetPos) {
         // Remove existing
         this.removeEdge(edge.id);
-        
+
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('class', `edge ${edge.type}`);
         path.setAttribute('data-edge-id', edge.id);
         path.setAttribute('data-source', edge.source);
         path.setAttribute('data-target', edge.target);
-        
+
         // Get node dimensions from DOM
         const sourceWrapper = this.nodeElements.get(edge.source);
         const targetWrapper = this.nodeElements.get(edge.target);
-        
+
         const sourceWidth = sourceWrapper ? parseFloat(sourceWrapper.getAttribute('width')) || 420 : 420;
         const sourceHeight = sourceWrapper ? parseFloat(sourceWrapper.getAttribute('height')) || 100 : 100;
         const targetWidth = targetWrapper ? parseFloat(targetWrapper.getAttribute('width')) || 420 : 420;
         const targetHeight = targetWrapper ? parseFloat(targetWrapper.getAttribute('height')) || 100 : 100;
-        
+
         // Calculate bezier curve with dynamic connection points
         const d = this.calculateBezierPath(
             sourcePos, { width: sourceWidth, height: sourceHeight },
             targetPos, { width: targetWidth, height: targetHeight }
         );
         path.setAttribute('d', d);
-        
+
         // Add arrowhead
         const isCell = edge.type === 'matrix-cell';
         path.setAttribute('marker-end', isCell ? 'url(#arrowhead-cell)' : 'url(#arrowhead)');
-        
+
         this.edgesLayer.appendChild(path);
         this.edgeElements.set(edge.id, path);
-        
+
         return path;
     }
 
@@ -2333,17 +2333,17 @@ class Canvas {
             x: nodePos.x + nodeSize.width / 2,
             y: nodePos.y + nodeSize.height / 2
         };
-        
+
         // Calculate angle from this node's center to the other node's center
         const dx = otherCenter.x - center.x;
         const dy = otherCenter.y - center.y;
         const angle = Math.atan2(dy, dx);
-        
+
         // Determine which side to connect based on angle
         // Right: -45° to 45°, Bottom: 45° to 135°, Left: 135° to -135°, Top: -135° to -45°
         const PI = Math.PI;
         let side, x, y;
-        
+
         if (angle >= -PI/4 && angle < PI/4) {
             // Right side
             side = 'right';
@@ -2365,7 +2365,7 @@ class Canvas {
             x = nodePos.x;
             y = center.y;
         }
-        
+
         return { x, y, side };
     }
 
@@ -2382,20 +2382,20 @@ class Canvas {
             x: targetPos.x + targetSize.width / 2,
             y: targetPos.y + targetSize.height / 2
         };
-        
+
         // Get optimal connection points
         const sourcePoint = this.getConnectionPoint(sourcePos, sourceSize, targetCenter);
         const targetPoint = this.getConnectionPoint(targetPos, targetSize, sourceCenter);
-        
+
         // Calculate control points based on which sides are connected
         const distance = Math.sqrt(
-            Math.pow(targetPoint.x - sourcePoint.x, 2) + 
+            Math.pow(targetPoint.x - sourcePoint.x, 2) +
             Math.pow(targetPoint.y - sourcePoint.y, 2)
         );
         const controlOffset = Math.min(distance * 0.4, 150);
-        
+
         let cp1x, cp1y, cp2x, cp2y;
-        
+
         // Control point direction based on exit/entry side
         switch (sourcePoint.side) {
             case 'right':  cp1x = sourcePoint.x + controlOffset; cp1y = sourcePoint.y; break;
@@ -2403,14 +2403,14 @@ class Canvas {
             case 'top':    cp1x = sourcePoint.x; cp1y = sourcePoint.y - controlOffset; break;
             case 'bottom': cp1x = sourcePoint.x; cp1y = sourcePoint.y + controlOffset; break;
         }
-        
+
         switch (targetPoint.side) {
             case 'right':  cp2x = targetPoint.x + controlOffset; cp2y = targetPoint.y; break;
             case 'left':   cp2x = targetPoint.x - controlOffset; cp2y = targetPoint.y; break;
             case 'top':    cp2x = targetPoint.x; cp2y = targetPoint.y - controlOffset; break;
             case 'bottom': cp2x = targetPoint.x; cp2y = targetPoint.y + controlOffset; break;
         }
-        
+
         return `M ${sourcePoint.x} ${sourcePoint.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetPoint.x} ${targetPoint.y}`;
     }
 
@@ -2421,12 +2421,12 @@ class Canvas {
         for (const [edgeId, path] of this.edgeElements) {
             const sourceId = path.getAttribute('data-source');
             const targetId = path.getAttribute('data-target');
-            
+
             if (sourceId === nodeId || targetId === nodeId) {
                 // Get wrappers for dimensions
                 const sourceWrapper = this.nodeElements.get(sourceId);
                 const targetWrapper = this.nodeElements.get(targetId);
-                
+
                 if (sourceWrapper && targetWrapper) {
                     const sourcePos = {
                         x: parseFloat(sourceWrapper.getAttribute('x')),
@@ -2444,7 +2444,7 @@ class Canvas {
                         width: parseFloat(targetWrapper.getAttribute('width')) || 420,
                         height: parseFloat(targetWrapper.getAttribute('height')) || 100
                     };
-                    
+
                     // Update if this is the moved node
                     if (sourceId === nodeId) {
                         sourcePos.x = newPos.x;
@@ -2454,7 +2454,7 @@ class Canvas {
                         targetPos.x = newPos.x;
                         targetPos.y = newPos.y;
                     }
-                    
+
                     const d = this.calculateBezierPath(sourcePos, sourceSize, targetPos, targetSize);
                     path.setAttribute('d', d);
                 }
@@ -2498,7 +2498,7 @@ class Canvas {
         };
         return labels[type] || type;
     }
-    
+
     getNodeTypeIcon(type) {
         const icons = {
             [NodeType.HUMAN]: '💬',
@@ -2522,7 +2522,7 @@ class Canvas {
         };
         return icons[type] || '📄';
     }
-    
+
     /**
      * Check if a node type can contain rich content (markdown with images)
      * Used to determine if image click handlers should be attached
@@ -2543,7 +2543,7 @@ class Canvas {
         // Priority: user-set title > LLM summary > generated fallback
         if (node.title) return node.title;
         if (node.summary) return node.summary;
-        
+
         // For matrix nodes, generate from context and dimensions
         if (node.type === NodeType.MATRIX) {
             const context = node.context || 'Matrix';
@@ -2551,7 +2551,7 @@ class Canvas {
             const cols = node.colItems?.length || 0;
             return `${context} (${rows}×${cols})`;
         }
-        
+
         // For other nodes, strip markdown and truncate content
         const plainText = (node.content || '').replace(/[#*_`>\[\]()!]/g, '').trim();
         return this.truncate(plainText, 60);
@@ -2562,17 +2562,17 @@ class Canvas {
         div.textContent = text;
         return div.innerHTML;
     }
-    
+
     truncate(text, maxLength) {
         if (!text) return '';
         if (text.length <= maxLength) return text;
         return text.slice(0, maxLength - 1) + '…';
     }
-    
+
     /**
      * Copy an image to the clipboard.
      * Converts base64 image data to a PNG blob and writes to clipboard.
-     * 
+     *
      * @param {string} imageData - Base64 encoded image data (without data URL prefix)
      * @param {string} mimeType - MIME type of the image (e.g., 'image/png', 'image/jpeg')
      */
@@ -2584,7 +2584,7 @@ class Canvas {
             byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
         const byteArray = new Uint8Array(byteNumbers);
-        
+
         // Clipboard API only supports PNG for images
         // If the source is not PNG, we need to convert it
         if (mimeType === 'image/png') {
@@ -2596,20 +2596,20 @@ class Canvas {
             // Convert to PNG using canvas
             const blob = new Blob([byteArray], { type: mimeType || 'image/png' });
             const imageBitmap = await createImageBitmap(blob);
-            
+
             const canvas = document.createElement('canvas');
             canvas.width = imageBitmap.width;
             canvas.height = imageBitmap.height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(imageBitmap, 0, 0);
-            
+
             const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
             await navigator.clipboard.write([
                 new ClipboardItem({ 'image/png': pngBlob })
             ]);
         }
     }
-    
+
     /**
      * Render tags for a node (left side, post-it style with arrows)
      */
@@ -2617,40 +2617,40 @@ class Canvas {
         if (!node.tags || node.tags.length === 0) {
             return '';
         }
-        
+
         // Get tag definitions from the graph (accessed via app.graph)
         const graph = window.app?.graph;
         if (!graph) return '';
-        
+
         const tagsHtml = node.tags.map(color => {
             const tag = graph.getTag(color);
             if (!tag) return '';
             return `<div class="node-tag" data-color="${color}">${this.escapeHtml(tag.name)}</div>`;
         }).filter(h => h).join('');
-        
+
         if (!tagsHtml) return '';
-        
+
         return `<div class="node-tags">${tagsHtml}</div>`;
     }
-    
+
     /**
      * Render matrix node HTML content
      */
     renderMatrixNodeContent(node) {
         const { context, rowItems, colItems, cells } = node;
-        
+
         // Get summary text for semantic zoom (reuse same logic as other nodes)
         const summaryText = this.getNodeSummaryText(node);
         const typeIcon = this.getNodeTypeIcon(node.type);
-        
+
         // Note: Tags are rendered by renderNode() for ALL node types
-        
+
         // Build table HTML
         let tableHtml = '<table class="matrix-table"><thead><tr>';
-        
+
         // Corner cell with context
         tableHtml += `<th class="corner-cell" title="${this.escapeHtml(context)}"><span class="matrix-header-text">${this.escapeHtml(context)}</span></th>`;
-        
+
         // Column headers - clickable to extract column
         for (let c = 0; c < colItems.length; c++) {
             const colItem = colItems[c];
@@ -2659,23 +2659,23 @@ class Canvas {
             </th>`;
         }
         tableHtml += '</tr></thead><tbody>';
-        
+
         // Data rows
         for (let r = 0; r < rowItems.length; r++) {
             const rowItem = rowItems[r];
             tableHtml += '<tr>';
-            
+
             // Row header - clickable to extract row
             tableHtml += `<td class="row-header" data-row="${r}" title="Click to extract row: ${this.escapeHtml(rowItem)}">
                 <span class="matrix-header-text">${this.escapeHtml(rowItem)}</span>
             </td>`;
-            
+
             // Cells
             for (let c = 0; c < colItems.length; c++) {
                 const cellKey = `${r}-${c}`;
                 const cell = cells[cellKey];
                 const isFilled = cell && cell.filled && cell.content;
-                
+
                 if (isFilled) {
                     tableHtml += `<td class="matrix-cell filled" data-row="${r}" data-col="${c}" title="Click to view details">
                         <div class="matrix-cell-content">${this.escapeHtml(cell.content)}</div>
@@ -2691,7 +2691,7 @@ class Canvas {
             tableHtml += '</tr>';
         }
         tableHtml += '</tbody></table>';
-        
+
         return `
             <div class="node-summary" title="Double-click to edit title">
                 <span class="node-type-icon">${typeIcon}</span>
@@ -2730,7 +2730,7 @@ class Canvas {
      */
     renderMarkdown(text) {
         if (!text) return '';
-        
+
         // Check if marked is available
         if (typeof marked !== 'undefined') {
             try {
@@ -2745,14 +2745,14 @@ class Canvas {
                         }
                     }
                 });
-                
+
                 return marked.parse(text);
             } catch (e) {
                 console.error('Markdown parsing error:', e);
                 return this.escapeHtml(text);
             }
         }
-        
+
         // Fallback to escaped HTML if marked not loaded
         return this.escapeHtml(text);
     }
@@ -2773,12 +2773,12 @@ class Canvas {
      */
     renderGraph(graph) {
         this.clear();
-        
+
         // Render nodes first
         for (const node of graph.getAllNodes()) {
             this.renderNode(node);
         }
-        
+
         // Render edges after a frame to allow node heights to settle
         // (renderNode uses requestAnimationFrame to measure content height)
         requestAnimationFrame(() => {

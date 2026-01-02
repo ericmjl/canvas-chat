@@ -16,18 +16,16 @@ merging, and exploration of topics as a DAG.
 """
 
 import asyncio
-import asyncio
 import json
 import logging
 import traceback
 from pathlib import Path
-from typing import Optional, Union
 
-import litellm
 import httpx
+import litellm
 import pymupdf
 from exa_py import Exa
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -53,8 +51,8 @@ async def health_check(request: Request):
 
     Returns a short JSON payload with status and optional service info.
     Attempts a lightweight readiness probe for optional local services (e.g., Ollama).
-    If the optional service is not reachable, the endpoint still returns 200 but includes
-    the service status so CI can choose how to interpret it.
+    If the optional service is not reachable, the endpoint still returns 200 but
+    includes the service status so CI can choose how to interpret it.
     """
     result = {"status": "ok", "service": "canvas-chat"}
 
@@ -76,11 +74,12 @@ class Message(BaseModel):
     """A single message in the conversation.
 
     Content can be a string (text-only) or a list of content parts (multimodal).
-    Multimodal format: [{"type": "text", "text": "..."}, {"type": "image_url", "image_url": {"url": "data:..."}}]
+    Multimodal format: [{"type": "text", "text": "..."},
+    {"type": "image_url", "image_url": {"url": "data:..."}}]
     """
 
     role: str  # "user", "assistant", "system"
-    content: Union[str, list]
+    content: str | list
 
 
 class ChatRequest(BaseModel):
@@ -88,10 +87,10 @@ class ChatRequest(BaseModel):
 
     messages: list[Message]
     model: str = "openai/gpt-4o-mini"
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
+    api_key: str | None = None
+    base_url: str | None = None
     temperature: float = 0.7
-    max_tokens: Optional[int] = None
+    max_tokens: int | None = None
 
 
 class SummarizeRequest(BaseModel):
@@ -99,8 +98,8 @@ class SummarizeRequest(BaseModel):
 
     messages: list[Message]
     model: str = "openai/gpt-4o-mini"
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
+    api_key: str | None = None
+    base_url: str | None = None
 
 
 class ModelInfo(BaseModel):
@@ -127,8 +126,8 @@ class ExaSearchResult(BaseModel):
     title: str
     url: str
     snippet: str
-    published_date: Optional[str] = None
-    author: Optional[str] = None
+    published_date: str | None = None
+    author: str | None = None
 
 
 class ExaResearchRequest(BaseModel):
@@ -152,8 +151,8 @@ class ExaContentsResult(BaseModel):
     title: str
     url: str
     text: str
-    published_date: Optional[str] = None
-    author: Optional[str] = None
+    published_date: str | None = None
+    author: str | None = None
 
 
 class ProviderModelsRequest(BaseModel):
@@ -176,7 +175,7 @@ class CommitteeRequest(BaseModel):
     models: list[str]  # Committee member models (2-5 models)
     chairman_model: str  # Model that synthesizes the final answer
     api_keys: dict[str, str]  # Provider -> API key mapping
-    base_url: Optional[str] = None
+    base_url: str | None = None
     include_review: bool = False  # Whether to include review/ranking stage
 
 
@@ -313,9 +312,7 @@ MODEL_REGISTRY: list[dict] = [
 ]
 
 
-def get_api_key_for_provider(
-    provider: str, request_key: Optional[str]
-) -> Optional[str]:
+def get_api_key_for_provider(provider: str, request_key: str | None) -> str | None:
     """Get API key from request or fall back to environment."""
     if request_key:
         return request_key
@@ -692,8 +689,6 @@ async def chat(request: ChatRequest, http_request: Request):
     The frontend sends the full conversation context (resolved from the DAG).
     We proxy to LiteLLM and stream the response back via SSE.
     """
-    provider = extract_provider(request.model)
-
     # Build kwargs for litellm
     kwargs = {
         "model": request.model,
@@ -738,7 +733,13 @@ async def chat(request: ChatRequest, http_request: Request):
             ):
                 yield {
                     "event": "error",
-                    "data": f'GitHub Copilot authentication required. Please run \'python -c "import litellm; litellm.completion(model=\\"github_copilot/gpt-4\\", messages=[{{\\"role\\": \\"user\\", \\"content\\": \\"test\\"}}])"\' in your terminal to authenticate. Original error: {error_msg}',
+                    "data": (
+                        f"GitHub Copilot authentication required. Please run "
+                        f"'python -c \"import litellm; litellm.completion("
+                        f'model=\\"github_copilot/gpt-4\\", messages=[{{'
+                        f'{{\\"role\\": \\"user\\", \\"content\\": \\"test\\"}}}}])"\' '
+                        f"in your terminal to authenticate. Original error: {error_msg}"
+                    ),
                 }
             else:
                 yield {"event": "error", "data": f"Authentication failed: {error_msg}"}
@@ -756,7 +757,11 @@ async def chat(request: ChatRequest, http_request: Request):
             ):
                 yield {
                     "event": "error",
-                    "data": f"GitHub Copilot authentication required. Please check your terminal/server logs for the device code and URL to authenticate. Error: {error_msg}",
+                    "data": (
+                        f"GitHub Copilot authentication required. Please check "
+                        f"your terminal/server logs for the device code and URL "
+                        f"to authenticate. Error: {error_msg}"
+                    ),
                 }
             else:
                 yield {"event": "error", "data": f"Error: {error_msg}"}
@@ -771,12 +776,10 @@ async def summarize(request: SummarizeRequest):
 
     Used for creating summary nodes that condense long branches.
     """
-    provider = extract_provider(request.model)
-
     # Build the summarization prompt
     conversation = "\n".join([f"{m.role}: {m.content}" for m in request.messages])
 
-    summary_prompt = f"""Please provide a concise summary of the following conversation. 
+    summary_prompt = f"""Please provide a concise summary of the following conversation.
 Focus on the key points, decisions, and insights discussed.
 
 Conversation:
@@ -805,7 +808,7 @@ Summary:"""
         summary = response.choices[0].message.content
         return {"summary": summary}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/token-count")
@@ -831,8 +834,8 @@ class RefineQueryRequest(BaseModel):
     context: str  # The context from selected text or parent nodes
     command_type: str = "search"  # "search" or "research"
     model: str = "openai/gpt-4o-mini"
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
+    api_key: str | None = None
+    base_url: str | None = None
 
 
 @app.post("/api/refine-query")
@@ -845,10 +848,10 @@ async def refine_query(request: RefineQueryRequest):
     Works for both search queries and research instructions.
     """
     logger.info(
-        f"Refine query: user_query='{request.user_query}', command_type={request.command_type}, context_length={len(request.context)}"
+        f"Refine query: user_query='{request.user_query}', "
+        f"command_type={request.command_type}, "
+        f"context_length={len(request.context)}"
     )
-
-    provider = extract_provider(request.model)
 
     # Different prompts for search vs research
     if request.command_type == "research":
@@ -865,7 +868,7 @@ Rules:
 Examples:
 - User: "research more about this" Context: "Toffoli Gate (CCNOT)..." → "Research the Toffoli gate (CCNOT) in quantum computing, including its applications, implementation, and relationship to reversible computing"
 - User: "find alternatives" Context: "gradient descent optimization..." → "Research alternative optimization algorithms to gradient descent, comparing their convergence properties and use cases"
-- User: "explain how this works" Context: "transformer attention mechanism..." → "Research how the transformer attention mechanism works, including self-attention, multi-head attention, and their computational complexity" """
+- User: "explain how this works" Context: "transformer attention mechanism..." → "Research how the transformer attention mechanism works, including self-attention, multi-head attention, and their computational complexity" """  # noqa: E501
     else:
         system_prompt = """You are a search query optimizer. Given a user's question and the context it refers to, generate an effective web search query.
 
@@ -880,7 +883,7 @@ Rules:
 Examples:
 - User: "how does this work?" Context: "Toffoli Gate (CCNOT)..." → "how Toffoli gate CCNOT quantum computing works"
 - User: "explain this better" Context: "gradient descent optimization..." → "gradient descent optimization algorithm explained"
-- User: "what are alternatives?" Context: "React framework..." → "React framework alternatives comparison" """
+- User: "what are alternatives?" Context: "React framework..." → "React framework alternatives comparison" """  # noqa: E501
 
     try:
         kwargs = {
@@ -889,7 +892,10 @@ Examples:
                 {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
-                    "content": f"User query: {request.user_query}\n\nContext:\n{request.context[:2000]}",
+                    "content": (
+                        f"User query: {request.user_query}\n\n"
+                        f"Context:\n{request.context[:2000]}"
+                    ),
                 },
             ],
             "temperature": 0.3,
@@ -930,7 +936,8 @@ async def exa_search(request: ExaSearchRequest):
     Returns search results that can be displayed as nodes on the canvas.
     """
     logger.info(
-        f"Exa search request: query='{request.query}', num_results={request.num_results}"
+        f"Exa search request: query='{request.query}', "
+        f"num_results={request.num_results}"
     )
 
     try:
@@ -972,7 +979,7 @@ async def exa_search(request: ExaSearchRequest):
     except Exception as e:
         logger.error(f"Exa search failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def format_research_output(output) -> str:
@@ -1026,7 +1033,8 @@ async def exa_research(request: ExaResearchRequest):
     Returns an SSE stream with research progress and final report.
     """
     logger.info(
-        f"Exa research request: instructions='{request.instructions[:100]}...', model={request.model}"
+        f"Exa research request: instructions='{request.instructions[:100]}...', "
+        f"model={request.model}"
     )
 
     async def generate():
@@ -1108,7 +1116,7 @@ async def exa_get_contents(request: ExaGetContentsRequest):
     except Exception as e:
         logger.error(f"Exa get-contents failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # --- URL Fetch Endpoint ---
@@ -1149,12 +1157,15 @@ class PdfResult(BaseModel):
 MAX_PDF_SIZE = 25 * 1024 * 1024
 
 # Warning banner prepended to PDF content
-PDF_WARNING_BANNER = """> 📄 **PDF Import** — Text was extracted automatically and may contain errors.
-> Consider sourcing the original if precision is critical. Edit this note to correct any issues.
+PDF_WARNING_BANNER = (
+    """> 📄 **PDF Import** — Text was extracted automatically and may contain errors.
+> Consider sourcing the original if precision is critical. Edit this note to """
+    """correct any issues.
 
 ---
 
 """
+)
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> tuple[str, int]:
@@ -1292,18 +1303,18 @@ async def fetch_url(request: FetchUrlRequest):
 
     except httpx.TimeoutException:
         logger.error(f"Timeout fetching URL: {request.url}")
-        raise HTTPException(status_code=504, detail="Request timed out")
+        raise HTTPException(status_code=504, detail="Request timed out") from None
     except Exception as e:
         logger.error(f"Fetch URL failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # --- PDF Upload/Fetch Endpoints ---
 
 
 @app.post("/api/upload-pdf")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(file: UploadFile = File(...)):  # noqa: B008
     """
     Upload a PDF file and extract its text content.
 
@@ -1325,13 +1336,16 @@ async def upload_pdf(file: UploadFile = File(...)):
         pdf_bytes = await file.read()
     except Exception as e:
         logger.error(f"Failed to read uploaded file: {e}")
-        raise HTTPException(status_code=400, detail="Failed to read uploaded file")
+        raise HTTPException(
+            status_code=400, detail="Failed to read uploaded file"
+        ) from e
 
     # Validate file size
     if len(pdf_bytes) > MAX_PDF_SIZE:
+        max_size_mb = MAX_PDF_SIZE // (1024 * 1024)
         raise HTTPException(
             status_code=413,
-            detail=f"PDF file is too large. Maximum size is {MAX_PDF_SIZE // (1024 * 1024)} MB",
+            detail=f"PDF file is too large. Maximum size is {max_size_mb} MB",
         )
 
     # Extract text from PDF
@@ -1339,7 +1353,8 @@ async def upload_pdf(file: UploadFile = File(...)):
         text, page_count = extract_text_from_pdf(pdf_bytes)
         content = PDF_WARNING_BANNER + text
         logger.info(
-            f"Successfully extracted text from PDF: {file.filename} ({page_count} pages)"
+            f"Successfully extracted text from PDF: {file.filename} "
+            f"({page_count} pages)"
         )
         return PdfResult(filename=file.filename, content=content, page_count=page_count)
     except Exception as e:
@@ -1347,7 +1362,7 @@ async def upload_pdf(file: UploadFile = File(...)):
         logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=500, detail=f"Failed to extract text from PDF: {str(e)}"
-        )
+        ) from e
 
 
 @app.post("/api/fetch-pdf")
@@ -1395,9 +1410,10 @@ async def fetch_pdf(request: FetchPdfRequest):
                 # Check content length if available
                 content_length = response.headers.get("content-length")
                 if content_length and int(content_length) > MAX_PDF_SIZE:
+                    max_size_mb = MAX_PDF_SIZE // (1024 * 1024)
                     raise HTTPException(
                         status_code=413,
-                        detail=f"PDF file is too large. Maximum size is {MAX_PDF_SIZE // (1024 * 1024)} MB",
+                        detail=f"PDF file is too large. Maximum size is {max_size_mb} MB",  # noqa: E501
                     )
 
                 # Read the PDF content
@@ -1405,9 +1421,13 @@ async def fetch_pdf(request: FetchPdfRequest):
                 async for chunk in response.aiter_bytes():
                     pdf_bytes += chunk
                     if len(pdf_bytes) > MAX_PDF_SIZE:
+                        max_size_mb = MAX_PDF_SIZE // (1024 * 1024)
                         raise HTTPException(
                             status_code=413,
-                            detail=f"PDF file is too large. Maximum size is {MAX_PDF_SIZE // (1024 * 1024)} MB",
+                            detail=(
+                                f"PDF file is too large. "
+                                f"Maximum size is {max_size_mb} MB"
+                            ),
                         )
 
         # Extract text from PDF
@@ -1422,11 +1442,11 @@ async def fetch_pdf(request: FetchPdfRequest):
         raise
     except httpx.TimeoutException:
         logger.error(f"Timeout fetching PDF: {request.url}")
-        raise HTTPException(status_code=504, detail="Request timed out")
+        raise HTTPException(status_code=504, detail="Request timed out") from None
     except Exception as e:
         logger.error(f"Failed to fetch PDF: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # --- Matrix Endpoints ---
@@ -1440,8 +1460,8 @@ class MatrixFillRequest(BaseModel):
     context: str  # User-provided matrix context
     messages: list[Message]  # DAG history for additional context
     model: str = "openai/gpt-4o-mini"
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
+    api_key: str | None = None
+    base_url: str | None = None
 
 
 class GenerateTitleRequest(BaseModel):
@@ -1449,8 +1469,8 @@ class GenerateTitleRequest(BaseModel):
 
     content: str  # Summary of conversation content
     model: str = "openai/gpt-4o-mini"
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
+    api_key: str | None = None
+    base_url: str | None = None
 
 
 class GenerateSummaryRequest(BaseModel):
@@ -1458,8 +1478,8 @@ class GenerateSummaryRequest(BaseModel):
 
     content: str  # Node content to summarize
     model: str = "openai/gpt-4o-mini"
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
+    api_key: str | None = None
+    base_url: str | None = None
 
 
 class ParseTwoListsRequest(BaseModel):
@@ -1468,8 +1488,8 @@ class ParseTwoListsRequest(BaseModel):
     contents: list[str]  # Content from all selected context nodes
     context: str  # User-provided matrix context to help identify the two lists
     model: str = "openai/gpt-4o-mini"
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
+    api_key: str | None = None
+    base_url: str | None = None
 
 
 @app.post("/api/parse-two-lists")
@@ -1481,7 +1501,9 @@ async def parse_two_lists(request: ParseTwoListsRequest):
     """
     combined_content = "\n\n---\n\n".join(request.contents)
     logger.info(
-        f"Parse two lists request: {len(request.contents)} nodes, total length={len(combined_content)}, context={request.context[:50]}..."
+        f"Parse two lists request: {len(request.contents)} nodes, "
+        f"total length={len(combined_content)}, "
+        f"context={request.context[:50]}..."
     )
 
     provider = extract_provider(request.model)
@@ -1494,14 +1516,14 @@ Rules:
 - Return ONLY a JSON object with "rows" and "columns" arrays, no other text
 - Extract just the NAME or LABEL of each item, not descriptions
 - For example: "GitHub Copilot: $10/month..." → "GitHub Copilot" (not the full text)
-- Look for two naturally separate categories (e.g., products vs attributes, services vs features)
+- Look for two naturally separate categories (e.g., products vs attributes, services vs features)  # noqa: E501
 - If the text has numbered/bulleted lists, extract the item names from those
-- If only one list is clearly present, put it in "rows" and infer reasonable column headers from the context
+- If only one list is clearly present, put it in "rows" and infer reasonable column headers from the context  # noqa: E501
 - Maximum 10 items per list - pick the most distinct ones if there are more
 - Keep labels concise (1-5 words typically)
 
 Example input: "1. GitHub Copilot: $10/month... 2. Tabnine: Free tier available..."
-Example output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", "Features", "Python Support"]}}"""
+Example output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", "Features", "Python Support"]}}"""  # noqa: E501
 
     try:
         kwargs = {
@@ -1549,11 +1571,11 @@ Example output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", "F
 
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse LLM response as JSON: {e}")
-        raise HTTPException(status_code=500, detail="Failed to parse lists")
+        raise HTTPException(status_code=500, detail="Failed to parse lists") from e
     except Exception as e:
         logger.error(f"Parse two lists failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/matrix/fill")
@@ -1564,14 +1586,17 @@ async def matrix_fill(request: MatrixFillRequest):
     Returns SSE stream with the evaluation content.
     """
     logger.info(
-        f"Matrix fill request: row_item={request.row_item[:50]}..., col_item={request.col_item[:50]}..."
+        f"Matrix fill request: row_item={request.row_item[:50]}..., "
+        f"col_item={request.col_item[:50]}..."
     )
 
     provider = extract_provider(request.model)
 
     async def generate():
         try:
-            system_prompt = f"""You fill matrix cells with BRIEF evaluations. Context: {request.context}
+            system_prompt = (
+                f"""You fill matrix cells with BRIEF evaluations. """
+                f"""Context: {request.context}
 
 STRICT FORMAT RULES:
 - MAXIMUM 50 words total
@@ -1589,6 +1614,7 @@ FORBIDDEN patterns:
 Write like a terse expert jotting a note, not a formal report.
 
 Be extremely concise. Sacrifice grammar for the sake of concision."""
+            )
 
             # Build messages with history context
             messages = [{"role": "system", "content": system_prompt}]
@@ -1650,7 +1676,9 @@ async def generate_title(request: GenerateTitleRequest):
 
     provider = extract_provider(request.model)
 
-    system_prompt = """Generate a short, descriptive title for a conversation/session based on the content provided.
+    system_prompt = (
+        """Generate a short, descriptive title for a conversation/session """
+        """based on the content provided.
 
 Rules:
 - Return ONLY the title text, no quotes or extra formatting
@@ -1666,6 +1694,7 @@ Examples of good titles:
 - "Machine Learning Model Optimization"
 - "React Component Architecture"
 """
+    )
 
     try:
         kwargs = {
@@ -1674,7 +1703,9 @@ Examples of good titles:
                 {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
-                    "content": f"Generate a title for this conversation:\n\n{request.content}",
+                    "content": (
+                        f"Generate a title for this conversation:\n\n{request.content}"
+                    ),
                 },
             ],
             "temperature": 0.7,
@@ -1703,7 +1734,7 @@ Examples of good titles:
     except Exception as e:
         logger.error(f"Generate title failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/generate-summary")
@@ -1717,7 +1748,9 @@ async def generate_summary(request: GenerateSummaryRequest):
 
     provider = extract_provider(request.model)
 
-    system_prompt = """Generate a very short summary (5-10 words) for the following content.
+    system_prompt = (
+        """Generate a very short summary (5-10 words) """
+        """for the following content.
 
 Rules:
 - Return ONLY the summary text, no quotes or formatting
@@ -1732,6 +1765,7 @@ Examples:
 - "Debugging React state management issues"
 - "Benefits of microservices architecture"
 """
+    )
 
     try:
         kwargs = {
@@ -1740,7 +1774,7 @@ Examples:
                 {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
-                    "content": f"Summarize this content:\n\n{request.content[:2000]}",  # Limit content length
+                    "content": f"Summarize this content:\n\n{request.content[:2000]}",  # noqa: E501
                 },
             ],
             "temperature": 0.5,
@@ -1762,7 +1796,7 @@ Examples:
 
         # Handle None or empty content from LLM
         if not content:
-            logger.warning(f"LLM returned empty content for summary")
+            logger.warning("LLM returned empty content for summary")
             raise HTTPException(status_code=422, detail="LLM returned empty summary")
 
         summary = content.strip()
@@ -1772,7 +1806,7 @@ Examples:
 
         # Final check for empty summary after cleanup
         if not summary:
-            logger.warning(f"Summary is empty after cleanup")
+            logger.warning("Summary is empty after cleanup")
             raise HTTPException(status_code=422, detail="LLM returned empty summary")
 
         logger.info(f"Generated summary: {summary}")
@@ -1781,13 +1815,13 @@ Examples:
     except Exception as e:
         logger.error(f"Generate summary failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # --- Committee Endpoint ---
 
 
-def get_api_key_for_model(model: str, api_keys: dict[str, str]) -> Optional[str]:
+def get_api_key_for_model(model: str, api_keys: dict[str, str]) -> str | None:
     """Get the API key for a model from the api_keys dict."""
     provider = extract_provider(model)
     # Map provider names to storage keys
@@ -1813,8 +1847,8 @@ async def stream_single_opinion(
     model: str,
     question: str,
     context: list[dict],
-    api_key: Optional[str],
-    base_url: Optional[str],
+    api_key: str | None,
+    base_url: str | None,
     queue: asyncio.Queue,
 ):
     """Stream a single committee member's opinion to the queue."""
@@ -1824,9 +1858,11 @@ async def stream_single_opinion(
             {"event": "opinion_start", "data": {"index": index, "model": model}}
         )
 
-        system_prompt = """You are a committee member providing your independent opinion.
-Analyze the question thoughtfully and provide your perspective.
-Be specific and substantive in your response."""
+        system_prompt = (
+            """You are a committee member providing your independent opinion. """
+            """Analyze the question thoughtfully and provide your perspective. """
+            """Be specific and substantive in your response."""
+        )
 
         messages = [{"role": "system", "content": system_prompt}]
 
@@ -1887,8 +1923,8 @@ async def stream_single_review(
     reviewer_model: str,
     question: str,
     opinions: list[dict],  # {"index": int, "model": str, "content": str}
-    api_key: Optional[str],
-    base_url: Optional[str],
+    api_key: str | None,
+    base_url: str | None,
     queue: asyncio.Queue,
 ):
     """Stream a single committee member's review of other opinions."""
@@ -1909,6 +1945,7 @@ async def stream_single_review(
             ]
         )
 
+        # noqa: E501
         system_prompt = """You are reviewing and ranking other committee members' opinions.
 For each opinion, briefly comment on its strengths and weaknesses.
 Then rank them from best to worst with a brief justification.
@@ -2049,7 +2086,7 @@ async def committee(request: CommitteeRequest):
                     elif event["event"] == "opinion_error":
                         opinions_done += 1
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Check if all tasks are done
                     if all(task.done() for task in opinion_tasks):
                         # Drain remaining queue events
@@ -2117,7 +2154,7 @@ async def committee(request: CommitteeRequest):
                         elif event["event"] == "review_error":
                             reviews_done += 1
 
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         if all(task.done() for task in review_tasks):
                             while not review_queue.empty():
                                 event = await review_queue.get()
@@ -2178,7 +2215,10 @@ Provide your own assessment of the most accurate and helpful response."""
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a chairman synthesizing committee opinions into a final, comprehensive answer.",
+                        "content": (
+                            "You are a chairman synthesizing committee opinions "
+                            "into a final, comprehensive answer."
+                        ),
                     },
                     {"role": "user", "content": synthesis_prompt},
                 ],
