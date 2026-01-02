@@ -212,7 +212,7 @@ It enables conversational slash commands:
 ## Differences from regular replies
 
 | Feature | Regular Reply | Highlight + Reply |
-|---------|---------------|-------------------|
+| ------- | ------------- | ----------------- |
 | Creates nodes | 1 (reply) | 2 (highlight + reply) |
 | Edge type | REPLY (solid) | HIGHLIGHT (dashed) |
 | Source content | Full parent node | Selected text only |
@@ -220,25 +220,25 @@ It enables conversational slash commands:
 
 ## Troubleshooting
 
-**"🌿 Branch" button doesn't appear**
+### "🌿 Branch" button doesn't appear
 
 - Make sure you've selected text (click and drag)
 - Try selecting text again
 - Some nodes may not support text selection (check node type)
 
-**Highlight appears in wrong location**
+### Highlight appears in wrong location
 
 - Highlights appear near the viewport center
 - Move them manually by dragging
 - Or use auto-layout (🔀 button) to reorganize
 
-**Selected text is not visible in highlight node**
+### Selected text is not visible in highlight node
 
 - Check that you selected text before clicking Branch
 - Highlights should show the text with `>` prefix (blockquote)
 - If empty, try creating the highlight again
 
-**Can't highlight images**
+### Can't highlight images
 
 - Images use a different mechanism: right-click → "Extract as separate node"
 - This creates an IMAGE node, not a HIGHLIGHT node

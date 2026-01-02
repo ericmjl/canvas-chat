@@ -9,7 +9,7 @@ Quick reference for which files to edit for common tasks:
 ### Frontend (Vanilla JS)
 
 | File | Purpose | Edit for... |
-|------|---------|-------------|
+| ---- | ------- | ----------- |
 | `src/canvas_chat/static/js/app.js` | Main application, orchestrates everything | Slash commands, keyboard shortcuts, feature handlers, App class methods |
 | `src/canvas_chat/static/js/canvas.js` | SVG canvas, pan/zoom, node rendering | Node appearance, drag behavior, viewport logic, node event handlers |
 | `src/canvas_chat/static/js/graph.js` | Data model, node/edge types, layout algorithms | Node types, edge types, graph traversal, auto-positioning |
@@ -21,21 +21,21 @@ Quick reference for which files to edit for common tasks:
 ### Frontend (HTML/CSS)
 
 | File | Purpose | Edit for... |
-|------|---------|-------------|
+| ---- | ------- | ----------- |
 | `src/canvas_chat/static/index.html` | Main HTML, modals, templates | New modals, toolbar buttons, HTML structure |
 | `src/canvas_chat/static/css/style.css` | All styles | Colors, layout, node styling, animations |
 
 ### Backend (Python/FastAPI)
 
 | File | Purpose | Edit for... |
-|------|---------|-------------|
+| ---- | ------- | ----------- |
 | `src/canvas_chat/app.py` | FastAPI routes, LLM proxy | API endpoints, backend logic |
 | `modal_app.py` | Modal deployment config | Deployment settings |
 
 ### Key constants and their locations
 
 | Constant | Location | Purpose |
-|----------|----------|---------|
+| -------- | -------- | ------- |
 | `NodeType` | `graph.js:8-27` | All node type definitions |
 | `EdgeType` | `graph.js:58-69` | All edge type definitions |
 | `SCROLLABLE_NODE_TYPES` | `graph.js:33-44` | Node types with 4:3 fixed size |
@@ -45,7 +45,7 @@ Quick reference for which files to edit for common tasks:
 ### Zoom levels (semantic zoom)
 
 | Scale | Class | Behavior |
-|-------|-------|----------|
+| ----- | ----- | -------- |
 | > 0.6 | `zoom-full` | Full node content visible |
 | 0.35 - 0.6 | `zoom-summary` | Summary text shown, drag anywhere |
 | <= 0.35 | `zoom-mini` | Minimal view, drag anywhere |
@@ -319,7 +319,7 @@ that are hard to debug because they only appear when the code path is triggered.
 **Common mistakes (do NOT use these - they don't exist):**
 
 | Wrong (doesn't exist) | Correct alternative |
-|-----------------------|---------------------|
+| --------------------- | ------------------- |
 | `chat.streamChat()` | Use `chat.sendMessage()` with callbacks |
 | `canvas.setNodeStreaming()` | Use `canvas.showStopButton()` / `canvas.hideStopButton()` |
 | `canvas.getSelectedNodes()` | Use `canvas.getSelectedNodeIds()` |
@@ -354,7 +354,7 @@ that are hard to debug because they only appear when the code path is triggered.
 
 ### Production URL
 
-The app is deployed at: **https://ericmjl--canvas-chat-fastapi-app.modal.run/**
+The app is deployed at: **[ericmjl--canvas-chat-fastapi-app.modal.run](https://ericmjl--canvas-chat-fastapi-app.modal.run/)**
 
 ### Architecture: Bring Your Own Keys
 

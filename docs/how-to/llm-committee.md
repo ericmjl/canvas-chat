@@ -254,23 +254,23 @@ Committee runs can be expensive:
 
 ## Troubleshooting
 
-**"At least 2 committee models required"**
+### "At least 2 committee models required"
 
 - You must select at least 2 models
 - Click checkboxes to select more models
 
-**"API key missing for [provider]"**
+### "API key missing for [provider]"
 
 - One of your selected models needs an API key
 - Go to Settings and add the missing key, or deselect that model
 
-**One opinion fails but others succeed**
+### One opinion fails but others succeed
 
 - The committee continues with working models
 - The failed model's opinion won't appear
 - Synthesis will note which models contributed
 
-**Committee stuck on "Gathering opinions..."**
+### Committee stuck on "Gathering opinions..."
 
 - Check browser console for errors (F12)
 - One model may be timing out (wait up to 60 seconds)

@@ -4,9 +4,8 @@ A visual, non-linear chat interface where conversations are nodes on an infinite
 
 ## Try It Online
 
-No installation required! Try Canvas Chat at:
-
-**https://ericmjl--canvas-chat-fastapi-app.modal.run/**
+No installation required! Try Canvas Chat at
+**[ericmjl--canvas-chat-fastapi-app.modal.run](https://ericmjl--canvas-chat-fastapi-app.modal.run/)**.
 
 Bring your own API keys (configured in Settings).
 
@@ -41,12 +40,12 @@ Your browser will open automatically to the local server.
 
 Click the ⚙️ Settings button to add your API keys:
 
-- **OpenAI**: Get from https://platform.openai.com/api-keys
-- **Anthropic**: Get from https://console.anthropic.com/
-- **Google AI**: Get from https://aistudio.google.com/
-- **Groq**: Get from https://console.groq.com/
-- **GitHub Models**: Get from https://github.com/settings/tokens (requires beta access)
-- **Exa** (for search/research): Get from https://exa.ai/
+- **OpenAI**: Get from [platform.openai.com](https://platform.openai.com/api-keys)
+- **Anthropic**: Get from [console.anthropic.com](https://console.anthropic.com/)
+- **Google AI**: Get from [aistudio.google.com](https://aistudio.google.com/)
+- **Groq**: Get from [console.groq.com](https://console.groq.com/)
+- **GitHub Models**: Get from [github.com/settings/tokens](https://github.com/settings/tokens) (requires beta access)
+- **Exa** (for search/research): Get from [exa.ai](https://exa.ai/)
 
 Keys are stored locally in your browser's localStorage.
 
@@ -88,7 +87,7 @@ pixi install
 pixi run dev
 ```
 
-Open your browser to the URL shown (usually http://127.0.0.1:7865).
+Open your browser to the URL shown (usually `http://127.0.0.1:7865`).
 
 ## Tech Stack
 

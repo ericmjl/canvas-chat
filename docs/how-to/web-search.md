@@ -7,7 +7,7 @@ The `/search` command lets you search the web and bring results directly into yo
 You need an Exa API key configured in Settings. If you haven't set one up:
 
 1. Click the ⚙️ Settings button
-2. Get an API key from https://exa.ai/
+2. Get an API key from [Exa](https://exa.ai/)
 3. Paste it into the "Exa API Key" field
 4. Click Save
 

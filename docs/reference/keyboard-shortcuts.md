@@ -7,7 +7,7 @@ Canvas Chat provides keyboard shortcuts for common operations to improve efficie
 These work anywhere in the application:
 
 | Shortcut | Action | Notes |
-|----------|--------|-------|
+| -------- | ------ | ----- |
 | `Cmd/Ctrl + K` | Open search | Search for nodes by content |
 | `Cmd/Ctrl + Z` | Undo | Undo last action |
 | `Cmd/Ctrl + Shift + Z` | Redo | Redo previously undone action |
@@ -21,7 +21,7 @@ These work anywhere in the application:
 These shortcuts work when nodes are selected or when the canvas has focus:
 
 | Shortcut | Action | Notes |
-|----------|--------|-------|
+| -------- | ------ | ----- |
 | `Cmd/Ctrl + Click` | Multi-select nodes | Add/remove nodes from selection |
 | `Delete` or `Backspace` | Delete selected nodes | Only when not typing in an input |
 | `R` | Focus reply input | When a node is selected |
@@ -32,7 +32,7 @@ These shortcuts work when nodes are selected or when the canvas has focus:
 These shortcuts work when the chat input field is focused:
 
 | Shortcut | Action | Notes |
-|----------|--------|-------|
+| -------- | ------ | ----- |
 | `Enter` | Send message | Send current message |
 | `Shift + Enter` | New line | Add line break without sending |
 | `/` | Trigger slash commands | Start typing a slash command |
@@ -45,7 +45,7 @@ These shortcuts work when the chat input field is focused:
 These shortcuts work when the search panel is open (`Cmd/Ctrl + K`):
 
 | Shortcut | Action | Notes |
-|----------|--------|-------|
+| -------- | ------ | ----- |
 | `Arrow Up/Down` | Navigate results | Move through search results |
 | `Enter` | Select result | Jump to selected node |
 | `Esc` | Close search | Close the search panel |
@@ -55,7 +55,7 @@ These shortcuts work when the search panel is open (`Cmd/Ctrl + K`):
 All modal dialogs support:
 
 | Shortcut | Action | Notes |
-|----------|--------|-------|
+| -------- | ------ | ----- |
 | `Esc` | Close modal | Works for settings, help, etc. |
 | `Enter` | Confirm action | When editing text fields |
 
@@ -64,7 +64,7 @@ All modal dialogs support:
 Mouse/trackpad actions on the canvas:
 
 | Action | Result | Notes |
-|--------|--------|-------|
+| ------ | ------ | ----- |
 | Click + Drag canvas | Pan viewport | Move around the canvas |
 | Scroll wheel | Zoom in/out | Centered on cursor position |
 | Double-click canvas | Fit content | Centers and zooms to show all nodes |
@@ -75,7 +75,7 @@ Mouse/trackpad actions on the canvas:
 Type these in the chat input to trigger special commands:
 
 | Command | Description | Example |
-|---------|-------------|---------|
+| ------- | ----------- | ------- |
 | `/note` | Add note or fetch URL | `/note https://example.com` |
 | `/search` | Web search via Exa | `/search quantum computing` |
 | `/research` | Deep research report | `/research CRISPR applications` |
@@ -153,7 +153,7 @@ Current limitations:
 Some shortcuts may conflict with browser defaults:
 
 | Shortcut | Conflict | Solution |
-|----------|----------|----------|
+| -------- | -------- | -------- |
 | `Cmd + K` | Browser search on some browsers | Canvas Chat captures this; use browser menu if needed |
 | `Ctrl + K` | Browser search on Chrome/Edge | Same as above |
 | `Cmd + Z` | Browser undo | Canvas Chat's undo takes precedence when app has focus |

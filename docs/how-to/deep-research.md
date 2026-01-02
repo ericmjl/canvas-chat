@@ -7,7 +7,7 @@ The `/research` command performs comprehensive research on a topic by querying m
 You need an Exa API key configured in Settings:
 
 1. Click the ⚙️ Settings button
-2. Get an API key from https://exa.ai/
+2. Get an API key from [Exa](https://exa.ai/)
 3. Paste it into the "Exa API Key" field
 4. Click Save
 
@@ -175,18 +175,18 @@ Use `/research` when you want:
 
 ## Troubleshooting
 
-**"Research failed: 402 Payment Required"**
+### "Research failed: 402 Payment Required"
 
 - Your Exa account has run out of credits
-- Add credits at https://exa.ai/
+- Add credits at [Exa](https://exa.ai/)
 
-**Research returns very brief results**
+### Research returns very brief results
 
 - Topic may be too narrow or too obscure
 - Try rephrasing with more context
 - Consider using `/search` for niche topics
 
-**Sources are not clickable**
+### Sources are not clickable
 
 - Check that the research completed successfully
 - Sources should appear as markdown links `[text](url)`

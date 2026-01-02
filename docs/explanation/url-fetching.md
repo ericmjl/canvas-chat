@@ -46,7 +46,7 @@ The intentional duplication serves the user experience:
 ## Trade-offs
 
 | Aspect | `/note <url>` | Exa API (Fetch + Summarize) |
-|--------|---------------|----------------------------|
+| ------ | ------------- | --------------------------- |
 | Setup required | None | Exa API key |
 | Cost | Free | Paid (per request) |
 | Fetch strategy | Jina Reader → direct fetch | Exa API only |
