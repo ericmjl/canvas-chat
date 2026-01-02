@@ -26,6 +26,9 @@ image = (
         "sse-starlette>=2.0.0",
         "pydantic>=2.0.0",
         "exa-py>=1.0.0",
+        "pymupdf>=1.24.0",
+        "python-multipart>=0.0.9",
+        "html2text>=2024.0.0",
     )
     .add_local_dir("src/canvas_chat", remote_path="/app/canvas_chat")
 )
