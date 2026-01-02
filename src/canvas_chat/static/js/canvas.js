@@ -3,6 +3,9 @@
  */
 
 class Canvas {
+    // Static flag to track if KaTeX has been configured (only configure once)
+    static katexConfigured = false;
+
     constructor(containerId, svgId) {
         this.container = document.getElementById(containerId);
         this.svg = document.getElementById(svgId);
@@ -2734,6 +2737,15 @@ class Canvas {
         // Check if marked is available
         if (typeof marked !== 'undefined') {
             try {
+                // Configure KaTeX extension once (if available and not already configured)
+                if (!Canvas.katexConfigured && typeof markedKatex !== 'undefined') {
+                    marked.use(markedKatex({
+                        throwOnError: false,
+                        nonStandard: true  // Enables \(...\) and \[...\] delimiters
+                    }));
+                    Canvas.katexConfigured = true;
+                }
+
                 // Configure marked with custom link renderer to open in new tab
                 marked.use({
                     breaks: true,   // Convert \n to <br> within paragraphs
