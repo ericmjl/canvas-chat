@@ -498,6 +498,9 @@ class App {
     }
 
     async init() {
+        // Configure marked.js early (ensures KaTeX and other extensions are set up)
+        Canvas.configureMarked();
+
         // Initialize canvas
         this.canvas = new Canvas('canvas-container', 'canvas');
 

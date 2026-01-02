@@ -3,8 +3,8 @@
  */
 
 class Canvas {
-    // Static flag to track if KaTeX has been configured (only configure once)
-    static katexConfigured = false;
+    // Static flag to track if marked has been configured (only configure once)
+    static markedConfigured = false;
 
     constructor(containerId, svgId) {
         this.container = document.getElementById(containerId);
@@ -2729,35 +2729,52 @@ class Canvas {
     }
 
     /**
+     * Configure marked.js with KaTeX and other extensions (called once)
+     */
+    static configureMarked() {
+        if (Canvas.markedConfigured || typeof marked === 'undefined') {
+            return;
+        }
+
+        try {
+            // Configure KaTeX extension first (if available)
+            if (typeof markedKatex !== 'undefined') {
+                marked.use(markedKatex({
+                    throwOnError: false,
+                    nonStandard: true  // Enables \(...\) and \[...\] delimiters
+                }));
+            }
+
+            // Configure marked with custom link renderer and other options
+            marked.use({
+                breaks: true,   // Convert \n to <br> within paragraphs
+                gfm: true,      // GitHub Flavored Markdown
+                renderer: {
+                    link({ href, title, text }) {
+                        const titleAttr = title ? ` title="${title}"` : '';
+                        return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+                    }
+                }
+            });
+
+            Canvas.markedConfigured = true;
+        } catch (e) {
+            console.error('Error configuring marked:', e);
+        }
+    }
+
+    /**
      * Render markdown to HTML
      */
     renderMarkdown(text) {
         if (!text) return '';
 
+        // Ensure marked is configured (only happens once)
+        Canvas.configureMarked();
+
         // Check if marked is available
         if (typeof marked !== 'undefined') {
             try {
-                // Configure KaTeX extension once (if available and not already configured)
-                if (!Canvas.katexConfigured && typeof markedKatex !== 'undefined') {
-                    marked.use(markedKatex({
-                        throwOnError: false,
-                        nonStandard: true  // Enables \(...\) and \[...\] delimiters
-                    }));
-                    Canvas.katexConfigured = true;
-                }
-
-                // Configure marked with custom link renderer to open in new tab
-                marked.use({
-                    breaks: true,   // Convert \n to <br> within paragraphs
-                    gfm: true,      // GitHub Flavored Markdown
-                    renderer: {
-                        link({ href, title, text }) {
-                            const titleAttr = title ? ` title="${title}"` : '';
-                            return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
-                        }
-                    }
-                });
-
                 return marked.parse(text);
             } catch (e) {
                 console.error('Markdown parsing error:', e);
