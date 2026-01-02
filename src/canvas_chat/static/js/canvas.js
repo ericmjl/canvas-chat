@@ -2791,13 +2791,52 @@ class Canvas {
         // Check if marked is available
         if (typeof marked !== 'undefined') {
             try {
-                const result = marked.parse(text);
+                // Protect math delimiters from Markdown's backslash escaping
+                // Marked processes backslashes as escape characters before extensions see them,
+                // so we temporarily replace delimiters with placeholders
+                const mathPlaceholders = new Map();
+                let placeholderIndex = 0;
+
+                // Protect \[...\] display math (non-greedy match)
+                let protectedText = text.replace(/\\\[([\s\S]*?)\\\]/g, (match) => {
+                    const placeholder = `__MATH_DISPLAY_${placeholderIndex}__`;
+                    placeholderIndex++;
+                    mathPlaceholders.set(placeholder, match);
+                    return placeholder;
+                });
+
+                // Protect \(...\) inline math (non-greedy match)
+                protectedText = protectedText.replace(/\\\(([\s\S]*?)\\\)/g, (match) => {
+                    const placeholder = `__MATH_INLINE_${placeholderIndex}__`;
+                    placeholderIndex++;
+                    mathPlaceholders.set(placeholder, match);
+                    return placeholder;
+                });
+
+                // Protect $$...$$ blocks (already safe from backslash escaping)
+                protectedText = protectedText.replace(/\$\$([\s\S]*?)\$\$/g, (match) => {
+                    const placeholder = `__MATH_DOLLAR_${placeholderIndex}__`;
+                    placeholderIndex++;
+                    mathPlaceholders.set(placeholder, match);
+                    return placeholder;
+                });
+
+                // Parse with marked
+                let result = marked.parse(protectedText);
+
+                // Restore math delimiters (they'll be processed by KaTeX extension)
+                for (const [placeholder, original] of mathPlaceholders) {
+                    result = result.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), original);
+                }
+
                 // Debug logging for math content
                 if (text.includes('\\[') || text.includes('\\(') || text.includes('$$') || text.includes('$')) {
                     console.log('[Canvas] Rendering markdown with math:', {
                         input: text.substring(0, 100),
+                        protected: protectedText.substring(0, 100),
                         output: result.substring(0, 200),
                         hasKatex: result.includes('katex'),
+                        placeholders: mathPlaceholders.size,
                         markedConfigured: Canvas.markedConfigured
                     });
                 }
