@@ -16,6 +16,8 @@ on:
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/tests.yaml"
 
 concurrency:
@@ -62,5 +64,8 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install npm dependencies
+        run: npm install
+
       - name: Run JavaScript tests
-        run: node tests/test_utils.js
+        run: npm test
