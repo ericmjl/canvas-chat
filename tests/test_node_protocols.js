@@ -28,19 +28,6 @@ global.NodeType = {
     IMAGE: 'image'
 };
 
-global.SCROLLABLE_NODE_TYPES = [
-    NodeType.AI,
-    NodeType.SUMMARY,
-    NodeType.RESEARCH,
-    NodeType.FETCH_RESULT,
-    NodeType.PDF,
-    NodeType.OPINION,
-    NodeType.SYNTHESIS,
-    NodeType.REVIEW,
-    NodeType.NOTE,
-    NodeType.IMAGE
-];
-
 // Load node-protocols.js by reading and evaluating it
 const fs = require('fs');
 const path = require('path');
