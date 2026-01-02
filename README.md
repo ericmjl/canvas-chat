@@ -2,6 +2,16 @@
 
 A visual, non-linear chat interface where conversations are nodes on an infinite canvas. Explore topics by branching, merging, and navigating your discussions as a directed acyclic graph (DAG).
 
+## Quick Start
+
+Run Canvas Chat instantly with no installation:
+
+```bash
+uvx canvas-chat
+```
+
+Your browser will open automatically to the local server.
+
 ## Features
 
 - **Infinite Canvas**: Pan, zoom, and navigate your conversations visually
@@ -17,40 +27,7 @@ A visual, non-linear chat interface where conversations are nodes on an infinite
 - **Local-First**: All data stored in your browser (IndexedDB)
 - **Export/Import**: Save sessions as `.canvaschat` files
 
-## Getting Started
-
-### Prerequisites
-
-- Python 3.11+
-- [Pixi](https://pixi.sh) (recommended) or uv
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/canvas-chat.git
-cd canvas-chat
-
-# Install with pixi
-pixi install
-
-# Or with uv
-uv sync
-```
-
-### Running
-
-```bash
-# With pixi
-pixi run dev
-
-# Or directly
-uv run app.py
-```
-
-Open your browser to the URL shown (usually http://127.0.0.1:8765).
-
-### Configuration
+## Configuration
 
 Click the ⚙️ Settings button to add your API keys:
 
@@ -74,6 +51,31 @@ Keys are stored locally in your browser's localStorage.
 8. **Create a matrix**: Select one or more context nodes, type `/matrix <context>` to create an evaluation table
 9. **Navigate**: Drag the handle (⋮⋮) to move nodes, scroll to zoom, double-click canvas to fit content
 10. **Export**: Click 💾 to save your session as a `.canvaschat` file
+
+## Development
+
+For contributors or local development:
+
+### Prerequisites
+
+- Python 3.11+
+- [Pixi](https://pixi.sh) (recommended) or uv
+
+### Setup
+
+```bash
+git clone https://github.com/ericmjl/canvas-chat.git
+cd canvas-chat
+pixi install
+```
+
+### Running
+
+```bash
+pixi run dev
+```
+
+Open your browser to the URL shown (usually http://127.0.0.1:7865).
 
 ## Tech Stack
 
