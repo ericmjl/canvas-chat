@@ -2780,7 +2780,7 @@ class Canvas {
     }
 
     /**
-     * Render markdown to HTML
+     * Render markdown to HTML with math support
      */
     renderMarkdown(text) {
         if (!text) return '';
@@ -2791,55 +2791,69 @@ class Canvas {
         // Check if marked is available
         if (typeof marked !== 'undefined') {
             try {
-                // Protect math delimiters from Markdown's backslash escaping
-                // Marked processes backslashes as escape characters before extensions see them,
-                // so we temporarily replace delimiters with placeholders that won't be interpreted as markdown
-                const mathPlaceholders = new Map();
-                let placeholderIndex = 0;
+                // Extract and render math BEFORE markdown processing
+                // This avoids marked's backslash escaping breaking math delimiters
+                const mathBlocks = [];
+                let processedText = text;
 
-                // Protect \[...\] display math (non-greedy match)
-                // Use HTML comment-style placeholders that markdown won't interpret
-                let protectedText = text.replace(/\\\[([\s\S]*?)\\\]/g, (match) => {
-                    const placeholder = `<!--MATH_DISPLAY_${placeholderIndex}-->`;
-                    placeholderIndex++;
-                    mathPlaceholders.set(placeholder, match);
+                // Extract \[...\] display math
+                processedText = processedText.replace(/\\\[([\s\S]*?)\\\]/g, (match, content) => {
+                    const placeholder = `<!--KATEX_DISPLAY_${mathBlocks.length}-->`;
+                    mathBlocks.push({ type: 'display', content: content });
                     return placeholder;
                 });
 
-                // Protect \(...\) inline math (non-greedy match)
-                protectedText = protectedText.replace(/\\\(([\s\S]*?)\\\)/g, (match) => {
-                    const placeholder = `<!--MATH_INLINE_${placeholderIndex}-->`;
-                    placeholderIndex++;
-                    mathPlaceholders.set(placeholder, match);
+                // Extract \(...\) inline math
+                processedText = processedText.replace(/\\\(([\s\S]*?)\\\)/g, (match, content) => {
+                    const placeholder = `<!--KATEX_INLINE_${mathBlocks.length}-->`;
+                    mathBlocks.push({ type: 'inline', content: content });
                     return placeholder;
                 });
 
-                // Protect $$...$$ blocks (already safe from backslash escaping)
-                protectedText = protectedText.replace(/\$\$([\s\S]*?)\$\$/g, (match) => {
-                    const placeholder = `<!--MATH_DOLLAR_${placeholderIndex}-->`;
-                    placeholderIndex++;
-                    mathPlaceholders.set(placeholder, match);
+                // Extract $$...$$ display math
+                processedText = processedText.replace(/\$\$([\s\S]*?)\$\$/g, (match, content) => {
+                    const placeholder = `<!--KATEX_DISPLAY_${mathBlocks.length}-->`;
+                    mathBlocks.push({ type: 'display', content: content });
                     return placeholder;
                 });
 
-                // Parse with marked
-                let result = marked.parse(protectedText);
+                // Parse markdown (placeholders pass through as HTML comments)
+                let result = marked.parse(processedText);
 
-                // Restore math delimiters (they'll be processed by KaTeX extension)
-                // HTML comments pass through marked.parse() unchanged, so we can restore them
-                for (const [placeholder, original] of mathPlaceholders) {
-                    result = result.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), original);
+                // Render math with KaTeX and replace placeholders
+                if (typeof katex !== 'undefined' && mathBlocks.length > 0) {
+                    for (let i = 0; i < mathBlocks.length; i++) {
+                        const block = mathBlocks[i];
+                        const displayPlaceholder = `<!--KATEX_DISPLAY_${i}-->`;
+                        const inlinePlaceholder = `<!--KATEX_INLINE_${i}-->`;
+
+                        try {
+                            const renderedMath = katex.renderToString(block.content, {
+                                displayMode: block.type === 'display',
+                                throwOnError: false
+                            });
+
+                            if (block.type === 'display') {
+                                result = result.replace(displayPlaceholder, renderedMath);
+                            } else {
+                                result = result.replace(inlinePlaceholder, renderedMath);
+                            }
+                        } catch (mathError) {
+                            console.warn('[Canvas] KaTeX error for:', block.content, mathError);
+                            // Show the original LaTeX on error
+                            const errorHtml = `<span class="katex-error">${this.escapeHtml(block.type === 'display' ? `\\[${block.content}\\]` : `\\(${block.content}\\)`)}</span>`;
+                            result = result.replace(block.type === 'display' ? displayPlaceholder : inlinePlaceholder, errorHtml);
+                        }
+                    }
                 }
 
                 // Debug logging for math content
-                if (text.includes('\\[') || text.includes('\\(') || text.includes('$$') || text.includes('$')) {
+                if (text.includes('\\[') || text.includes('\\(') || text.includes('$$')) {
                     console.log('[Canvas] Rendering markdown with math:', {
                         input: text.substring(0, 100),
-                        protected: protectedText.substring(0, 100),
+                        mathBlocksFound: mathBlocks.length,
                         output: result.substring(0, 200),
-                        hasKatex: result.includes('katex'),
-                        placeholders: mathPlaceholders.size,
-                        markedConfigured: Canvas.markedConfigured
+                        hasKatex: result.includes('katex')
                     });
                 }
                 return result;
