@@ -248,7 +248,7 @@ It enables conversational slash commands:
 
 ### Multi-stage highlighting
 
-1. Import a research paper (PDF)
+1. Import a research paper (PDF) - see [How to import PDFs](import-pdfs.md) for details on drag/drop and `/note` URL methods
 2. Highlight key sections
 3. For each section, highlight specific sentences
 4. Ask detailed questions about each sentence
@@ -258,11 +258,11 @@ It enables conversational slash commands:
 
 1. Find a controversial claim in a node
 2. Highlight just that claim
-3. Run `/committee is this claim accurate?`
+3. Run `/committee is this claim accurate?` - see [How to use LLM committee](llm-committee.md) for details
 4. Get multiple AI perspectives on that specific assertion
 
 ### Highlight + Matrix
 
 1. Highlight 5-10 different ideas from various sources
 2. Select all highlights
-3. Run `/matrix compare these ideas against originality, feasibility, evidence`
+3. Run `/matrix compare these ideas against originality, feasibility, evidence` - see [How to use matrix evaluation](use-matrix-evaluation.md) for details

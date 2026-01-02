@@ -36,11 +36,14 @@ Exa's research API:
 3. **Synthesizes findings** - Combines information from all sources into a coherent report
 4. **Cites sources** - Includes links to the pages used
 
-You'll see status updates as it progresses:
+You'll see status updates as it progresses. Example status messages include:
 
+- "Research started..."
 - "Planning research..."
 - "Searching sources..."
 - "Synthesizing report..."
+
+The exact messages may vary based on Exa's API responses.
 
 ## Context-aware research
 
@@ -62,7 +65,7 @@ Exa offers two research models:
 - **`exa-research`** (default) - Fast, good for most topics
 - **`exa-research-pro`** - Slower, more comprehensive, better for complex topics
 
-To use Pro, modify your API call (this requires editing the code - Pro mode is not yet exposed in the UI).
+> **Future enhancement:** Pro mode (`exa-research-pro`) is not yet exposed in the UI. To use it, you would need to modify the API call in the code. This feature may be added in a future release.
 
 ## Working with research results
 
@@ -170,7 +173,7 @@ Use `/research` when you want:
 
 - Requires Exa API key (paid feature, costs $0.01-0.05 per research)
 - Research takes 30-90 seconds to complete
-- Cannot be stopped once started (no abort button)
+- Cannot be stopped once started - Exa's Research API does not support cancellation of ongoing research tasks. Once initiated, research runs to completion.
 - Wide nodes may overflow on small screens
 
 ## Troubleshooting
