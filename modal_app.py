@@ -16,18 +16,20 @@ import modal
 # Create the Modal app
 app = modal.App("canvas-chat")
 
-# Define the image with all dependencies
+# Define the image using pixi for environment management
 image = (
     modal.Image.debian_slim(python_version="3.11")
-    .pip_install(
-        "fastapi[standard]>=0.115.0",
-        "uvicorn>=0.32.0",
-        "litellm>=1.50.0",
-        "sse-starlette>=2.0.0",
-        "pydantic>=2.0.0",
-        "exa-py>=1.0.0",
+    # Install pixi
+    .run_commands("curl -fsSL https://pixi.sh/install.sh | bash")
+    .env({"PATH": "/root/.pixi/bin:$PATH"})
+    # Copy project files needed for pixi install
+    .add_local_file("pyproject.toml", remote_path="/app/pyproject.toml")
+    .add_local_file("pixi.lock", remote_path="/app/pixi.lock")
+    .add_local_dir("src", remote_path="/app/src")
+    # Install dependencies using pixi
+    .run_commands(
+        "cd /app && /root/.pixi/bin/pixi install --locked",
     )
-    .add_local_dir("src/canvas_chat", remote_path="/app/canvas_chat")
 )
 
 
@@ -39,9 +41,27 @@ image = (
 @modal.asgi_app()
 def fastapi_app():
     """Serve the FastAPI application."""
+    import subprocess
     import sys
 
-    sys.path.insert(0, "/app")
+    # Get the pixi environment's Python path and add it to sys.path
+    result = subprocess.run(
+        [
+            "/root/.pixi/bin/pixi",
+            "run",
+            "-e",
+            "default",
+            "python",
+            "-c",
+            "import sys; print(':'.join(sys.path))",
+        ],
+        capture_output=True,
+        text=True,
+        cwd="/app",
+    )
+    for path in result.stdout.strip().split(":"):
+        if path and path not in sys.path:
+            sys.path.insert(0, path)
 
     from canvas_chat.app import app as canvas_app
 
