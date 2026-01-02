@@ -2,6 +2,14 @@
 
 A visual, non-linear chat interface where conversations are nodes on an infinite canvas. Explore topics by branching, merging, and navigating your discussions as a directed acyclic graph (DAG).
 
+## Try It Online
+
+No installation required! Try Canvas Chat at:
+
+**https://ericmjl--canvas-chat-fastapi-app.modal.run/**
+
+Bring your own API keys (configured in Settings).
+
 ## Quick Start
 
 Run Canvas Chat instantly with no installation:
@@ -21,9 +29,11 @@ Your browser will open automatically to the local server.
 - **Context Visualization**: See which messages are included in your context
 - **Auto-Layout**: Automatically arrange nodes in a clean left-to-right hierarchy
 - **Matrix Evaluation**: Use `/matrix <context>` to create cross-product evaluation tables
+- **LLM Committee**: Use `/committee <question>` to consult multiple LLMs and synthesize answers
 - **Web Research**: Use `/research <topic>` to generate research reports via Exa
 - **Web Search**: Use `/search <query>` to search the web via Exa
-- **Multiple LLM Providers**: Support for OpenAI, Anthropic, Google, Groq, and local models via Ollama
+- **Image Analysis**: Upload, paste, or drag-and-drop images for multimodal AI analysis
+- **Multiple LLM Providers**: Support for OpenAI, Anthropic, Google, Groq, GitHub Models, and local models via Ollama
 - **Local-First**: All data stored in your browser (IndexedDB)
 - **Export/Import**: Save sessions as `.canvaschat` files
 
@@ -35,6 +45,7 @@ Click the ⚙️ Settings button to add your API keys:
 - **Anthropic**: Get from https://console.anthropic.com/
 - **Google AI**: Get from https://aistudio.google.com/
 - **Groq**: Get from https://console.groq.com/
+- **GitHub Models**: Get from https://github.com/settings/tokens (requires beta access)
 - **Exa** (for search/research): Get from https://exa.ai/
 
 Keys are stored locally in your browser's localStorage.
@@ -48,9 +59,11 @@ Keys are stored locally in your browser's localStorage.
 5. **Auto-layout**: Click 🔀 to automatically arrange all nodes
 6. **Search the web**: Type `/search <query>` to search via Exa
 7. **Research a topic**: Type `/research <topic>` to generate a research report
-8. **Create a matrix**: Select one or more context nodes, type `/matrix <context>` to create an evaluation table
-9. **Navigate**: Drag the handle (⋮⋮) to move nodes, scroll to zoom, double-click canvas to fit content
-10. **Export**: Click 💾 to save your session as a `.canvaschat` file
+8. **Consult LLM committee**: Type `/committee <question>` to get opinions from multiple LLMs
+9. **Add images**: Upload, paste (Ctrl/Cmd+V), or drag-and-drop images for AI analysis
+10. **Create a matrix**: Select one or more context nodes, type `/matrix <context>` to create an evaluation table
+11. **Navigate**: Drag the handle (⋮⋮) to move nodes, scroll to zoom, double-click canvas to fit content
+12. **Export**: Click 💾 to save your session as a `.canvaschat` file
 
 ## Development
 

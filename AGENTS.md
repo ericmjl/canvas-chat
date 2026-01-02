@@ -36,11 +36,11 @@ Quick reference for which files to edit for common tasks:
 
 | Constant | Location | Purpose |
 |----------|----------|---------|
-| `NodeType` | `graph.js:8-25` | All node type definitions |
-| `EdgeType` | `graph.js:53-64` | All edge type definitions |
-| `SCROLLABLE_NODE_TYPES` | `graph.js:31-40` | Node types with 4:3 fixed size |
-| `SLASH_COMMANDS` | `app.js:77-83` | Slash command definitions |
-| CSS variables | `style.css:10-80` | Colors, sizing, theming |
+| `NodeType` | `graph.js:8-27` | All node type definitions |
+| `EdgeType` | `graph.js:58-69` | All edge type definitions |
+| `SCROLLABLE_NODE_TYPES` | `graph.js:33-44` | Node types with 4:3 fixed size |
+| `SLASH_COMMANDS` | `app.js:186-192` | Slash command definitions |
+| CSS variables | `style.css:10-75` | Colors, sizing, theming |
 
 ### Zoom levels (semantic zoom)
 
@@ -345,6 +345,10 @@ that are hard to debug because they only appear when the code path is triggered.
 - `saveSession(session)` / `getSession(id)` - Session persistence
 
 ## Modal Deployment
+
+### Production URL
+
+The app is deployed at: **https://ericmjl--canvas-chat-fastapi-app.modal.run/**
 
 ### Architecture: Bring Your Own Keys
 
