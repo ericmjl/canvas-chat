@@ -56,6 +56,12 @@ class Canvas {
         // PDF drag & drop callback
         this.onPdfDrop = null;  // For handling PDF file drops
         
+        // Image drag & drop callback
+        this.onImageDrop = null;  // For handling image file drops
+        
+        // Image click callback (for images in node content)
+        this.onImageClick = null;  // For handling clicks on images in node content
+        
         // Reply tooltip state
         this.branchTooltip = null;
         this.activeSelectionNodeId = null;
@@ -73,6 +79,7 @@ class Canvas {
         this.setupEventListeners();
         this.handleResize();
         this.createBranchTooltip();
+        this.createImageTooltip();
     }
     
     /**
@@ -192,6 +199,97 @@ class Canvas {
     }
     
     /**
+     * Create the floating image action tooltip with action buttons
+     */
+    createImageTooltip() {
+        this.imageTooltip = document.createElement('div');
+        this.imageTooltip.className = 'image-tooltip';
+        this.imageTooltip.innerHTML = `
+            <div class="image-tooltip-preview">
+                <img class="image-tooltip-img" src="" alt="Selected image">
+            </div>
+            <div class="image-tooltip-actions">
+                <button class="image-tooltip-btn ask-btn" title="Ask about this image">💬 Ask</button>
+                <button class="image-tooltip-btn extract-btn" title="Extract to canvas">📤 Extract</button>
+            </div>
+        `;
+        this.imageTooltip.style.display = 'none';
+        document.body.appendChild(this.imageTooltip);
+        
+        // State
+        this.pendingImageSrc = null;
+        this.pendingImageNodeId = null;
+        
+        // Ask button - select image node and focus chat
+        const askBtn = this.imageTooltip.querySelector('.ask-btn');
+        askBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.handleImageAsk();
+        });
+        
+        // Extract button - create an IMAGE node from this image
+        const extractBtn = this.imageTooltip.querySelector('.extract-btn');
+        extractBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.handleImageExtract();
+        });
+        
+        // Prevent click inside tooltip from triggering outside click handler
+        this.imageTooltip.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
+    }
+    
+    /**
+     * Show the image tooltip near the clicked image
+     */
+    showImageTooltip(imgSrc, position) {
+        // Store image info
+        this.pendingImageSrc = imgSrc;
+        
+        // Update preview image
+        const previewImg = this.imageTooltip.querySelector('.image-tooltip-img');
+        if (previewImg) {
+            previewImg.src = imgSrc;
+        }
+        
+        this.imageTooltip.style.display = 'block';
+        this.imageTooltip.style.left = `${position.x - 100}px`;  // Center horizontally
+        this.imageTooltip.style.top = `${position.y - 10}px`;
+    }
+    
+    /**
+     * Hide the image tooltip
+     */
+    hideImageTooltip() {
+        this.imageTooltip.style.display = 'none';
+        this.pendingImageSrc = null;
+        this.pendingImageNodeId = null;
+    }
+    
+    /**
+     * Handle "Ask" action from image tooltip
+     * Extracts image and focuses chat input
+     */
+    handleImageAsk() {
+        if (this.pendingImageSrc && this.pendingImageNodeId && this.onImageClick) {
+            this.onImageClick(this.pendingImageNodeId, this.pendingImageSrc, { action: 'ask' });
+        }
+        this.hideImageTooltip();
+    }
+    
+    /**
+     * Handle "Extract" action from image tooltip
+     * Creates a new IMAGE node with this image
+     */
+    handleImageExtract() {
+        if (this.pendingImageSrc && this.pendingImageNodeId && this.onImageClick) {
+            this.onImageClick(this.pendingImageNodeId, this.pendingImageSrc, { action: 'extract' });
+        }
+        this.hideImageTooltip();
+    }
+    
+    /**
      * Get the center of the visible viewport in SVG coordinates
      */
     getViewportCenter() {
@@ -230,9 +328,12 @@ class Canvas {
         // Text selection handling for reply tooltip
         document.addEventListener('selectionchange', this.handleSelectionChange.bind(this));
         document.addEventListener('mousedown', (e) => {
-            // Hide tooltip when clicking outside of it
+            // Hide tooltips when clicking outside of them
             if (!e.target.closest('.reply-tooltip')) {
                 this.hideBranchTooltip();
+            }
+            if (!e.target.closest('.image-tooltip')) {
+                this.hideImageTooltip();
             }
         });
         
@@ -331,7 +432,7 @@ class Canvas {
     }
     
     /**
-     * Handle drop event for PDF files
+     * Handle drop event for PDF and image files
      */
     handleDrop(e) {
         e.preventDefault();
@@ -341,19 +442,21 @@ class Canvas {
         const files = e.dataTransfer.files;
         if (!files || files.length === 0) return;
         
-        // Find PDF files
-        const pdfFile = Array.from(files).find(f => f.type === 'application/pdf');
-        if (!pdfFile) {
-            // No PDF file found, ignore
-            return;
-        }
-        
         // Convert drop position to SVG coordinates
         const position = this.clientToSvg(e.clientX, e.clientY);
         
-        // Call the PDF drop callback
-        if (this.onPdfDrop) {
+        // Check for PDF file first
+        const pdfFile = Array.from(files).find(f => f.type === 'application/pdf');
+        if (pdfFile && this.onPdfDrop) {
             this.onPdfDrop(pdfFile, position);
+            return;
+        }
+        
+        // Check for image file
+        const imageFile = Array.from(files).find(f => f.type.startsWith('image/'));
+        if (imageFile && this.onImageDrop) {
+            this.onImageDrop(imageFile, position);
+            return;
         }
     }
     
@@ -1221,6 +1324,17 @@ class Canvas {
             const summaryText = this.getNodeSummaryText(node);
             const typeIcon = this.getNodeTypeIcon(node.type);
             
+            // Determine content HTML based on node type
+            let contentHtml;
+            if (node.imageData) {
+                // IMAGE node or HIGHLIGHT node with image
+                const imgSrc = `data:${node.mimeType || 'image/png'};base64,${node.imageData}`;
+                contentHtml = `<div class="image-node-content"><img src="${imgSrc}" class="node-image" alt="Image"></div>`;
+            } else {
+                // Standard text content
+                contentHtml = this.renderMarkdown(node.content);
+            }
+            
             div.innerHTML = `
                 <div class="node-summary" title="Double-click to edit title">
                     <span class="node-type-icon">${typeIcon}</span>
@@ -1239,7 +1353,7 @@ class Canvas {
                     <button class="header-btn fit-viewport-btn" title="Fit to viewport (f)">⤢</button>
                     <button class="node-action delete-btn" title="Delete node">🗑️</button>
                 </div>
-                <div class="node-content">${this.renderMarkdown(node.content)}</div>
+                <div class="node-content">${contentHtml}</div>
                 <div class="node-actions">
                     <button class="node-action reply-btn" title="Reply">↩️ Reply</button>
                     ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="node-action summarize-btn" title="Summarize">📝 Summarize</button>' : ''}
@@ -1468,7 +1582,13 @@ class Canvas {
             copyBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 try {
-                    await navigator.clipboard.writeText(node.content);
+                    if (node.imageData) {
+                        // For image nodes, copy the image to clipboard
+                        await this.copyImageToClipboard(node.imageData, node.mimeType);
+                    } else {
+                        // For text nodes, copy text content
+                        await navigator.clipboard.writeText(node.content);
+                    }
                     // Visual feedback
                     const originalText = copyBtn.textContent;
                     copyBtn.textContent = '✓ Copied';
@@ -1638,6 +1758,28 @@ class Canvas {
                 e.stopPropagation();
                 if (this.onNodeTitleEdit) {
                     this.onNodeTitleEdit(node.id);
+                }
+            });
+        }
+        
+        // Click on images in node content (for asking about or extracting images)
+        // Only for node types that can contain rich markdown/HTML with images
+        const nodeContentEl = div.querySelector('.node-content');
+        if (nodeContentEl && this.isRichContentNodeType(node.type)) {
+            nodeContentEl.addEventListener('click', (e) => {
+                const clickedImg = e.target.closest('img');
+                if (clickedImg) {
+                    e.stopPropagation();
+                    // Get image src and position for tooltip
+                    const imgSrc = clickedImg.src;
+                    const rect = clickedImg.getBoundingClientRect();
+                    
+                    // Store node ID and show tooltip
+                    this.pendingImageNodeId = node.id;
+                    this.showImageTooltip(imgSrc, {
+                        x: rect.left + rect.width / 2,
+                        y: rect.top
+                    });
                 }
             });
         }
@@ -2351,7 +2493,8 @@ class Canvas {
             [NodeType.PDF]: 'PDF',
             [NodeType.OPINION]: 'Opinion',
             [NodeType.SYNTHESIS]: 'Synthesis',
-            [NodeType.REVIEW]: 'Review'
+            [NodeType.REVIEW]: 'Review',
+            [NodeType.IMAGE]: 'Image'
         };
         return labels[type] || type;
     }
@@ -2374,9 +2517,26 @@ class Canvas {
             [NodeType.PDF]: '📑',
             [NodeType.OPINION]: '🗣️',
             [NodeType.SYNTHESIS]: '⚖️',
-            [NodeType.REVIEW]: '🔍'
+            [NodeType.REVIEW]: '🔍',
+            [NodeType.IMAGE]: '🖼️'
         };
         return icons[type] || '📄';
+    }
+    
+    /**
+     * Check if a node type can contain rich content (markdown with images)
+     * Used to determine if image click handlers should be attached
+     */
+    isRichContentNodeType(type) {
+        const richTypes = [
+            NodeType.FETCH_RESULT,
+            NodeType.PDF,
+            NodeType.NOTE,
+            NodeType.AI,
+            NodeType.RESEARCH,
+            NodeType.REFERENCE
+        ];
+        return richTypes.includes(type);
     }
 
     getNodeSummaryText(node) {
@@ -2407,6 +2567,47 @@ class Canvas {
         if (!text) return '';
         if (text.length <= maxLength) return text;
         return text.slice(0, maxLength - 1) + '…';
+    }
+    
+    /**
+     * Copy an image to the clipboard.
+     * Converts base64 image data to a PNG blob and writes to clipboard.
+     * 
+     * @param {string} imageData - Base64 encoded image data (without data URL prefix)
+     * @param {string} mimeType - MIME type of the image (e.g., 'image/png', 'image/jpeg')
+     */
+    async copyImageToClipboard(imageData, mimeType) {
+        // Convert base64 to blob
+        const byteCharacters = atob(imageData);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        
+        // Clipboard API only supports PNG for images
+        // If the source is not PNG, we need to convert it
+        if (mimeType === 'image/png') {
+            const blob = new Blob([byteArray], { type: 'image/png' });
+            await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': blob })
+            ]);
+        } else {
+            // Convert to PNG using canvas
+            const blob = new Blob([byteArray], { type: mimeType || 'image/png' });
+            const imageBitmap = await createImageBitmap(blob);
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = imageBitmap.width;
+            canvas.height = imageBitmap.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(imageBitmap, 0, 0);
+            
+            const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': pngBlob })
+            ]);
+        }
     }
     
     /**

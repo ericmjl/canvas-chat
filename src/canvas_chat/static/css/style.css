@@ -41,6 +41,8 @@
     --node-review-border: #ffb74d;
     --node-pdf: #e8f4f8;
     --node-pdf-border: #4db6ac;
+    --node-image: #fce4ec;
+    --node-image-border: #f48fb1;
     
     /* UI colors */
     --edge-color: #495057;
@@ -107,6 +109,8 @@
         --node-review-border: #ffa726;
         --node-pdf: #1a3d3d;
         --node-pdf-border: #26a69a;
+        --node-image: #3d2d35;
+        --node-image-border: #f06292;
         
         --edge-color: #9ca3af;
         --edge-color-light: #4b5563;
@@ -433,6 +437,30 @@ html, body {
     color: var(--text-primary);
 }
 
+/* Canvas hint notification */
+#canvas-hint {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    padding: 12px 24px;
+    background: var(--bg-primary);
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    font-size: 14px;
+    color: var(--text-primary);
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#canvas-hint.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
 /* Edges */
 .edge {
     fill: none;
@@ -576,6 +604,11 @@ html, body {
 .node.pdf {
     background: var(--node-pdf);
     border-color: var(--node-pdf-border);
+}
+
+.node.image {
+    background: var(--node-image);
+    border-color: var(--node-image-border);
 }
 
 /* Source text highlight - shown in parent node when a highlight excerpt is selected */
@@ -854,6 +887,63 @@ html, body {
 }
 
 .reply-tooltip-btn:active {
+    transform: scale(0.98);
+}
+
+/* Image Action Tooltip */
+.image-tooltip {
+    position: fixed;
+    z-index: 10000;
+    background: var(--bg-primary);
+    border: 1px solid var(--edge-color-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 8px;
+    width: 200px;
+    animation: tooltipFadeIn 0.15s ease-out;
+}
+
+.image-tooltip-preview {
+    width: 100%;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.image-tooltip-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.image-tooltip-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.image-tooltip-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.image-tooltip-btn:hover {
+    background: var(--accent);
+    color: white;
+}
+
+.image-tooltip-btn:active {
     transform: scale(0.98);
 }
 
@@ -1342,6 +1432,29 @@ html, body {
     max-width: 100%;
     height: auto;
     border-radius: var(--radius-sm);
+}
+
+/* Image node content (for IMAGE type nodes) */
+.image-node-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    height: 100%;
+    min-height: 150px;
+}
+
+.node-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.node-image:hover {
+    transform: scale(1.02);
 }
 
 /* Dark mode adjustments for markdown */

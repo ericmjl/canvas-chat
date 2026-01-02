@@ -73,6 +73,115 @@ function formatUserError(error) {
     };
 }
 
+/**
+ * Build messages for LLM API from resolved context.
+ * Handles multimodal content (images + text).
+ * 
+ * When a user sends a message with image nodes in context, the images
+ * should be combined with the user's text into a single multimodal message.
+ * 
+ * @param {Array} contextMessages - Messages from graph.resolveContext()
+ * @returns {Array} - Messages formatted for the LLM API
+ */
+function buildMessagesForApi(contextMessages) {
+    const result = [];
+    let pendingImages = [];  // Collect consecutive image messages
+    
+    for (let i = 0; i < contextMessages.length; i++) {
+        const msg = contextMessages[i];
+        
+        if (msg.imageData) {
+            // Collect image for potential merging
+            pendingImages.push({
+                type: 'image_url',
+                image_url: {
+                    url: `data:${msg.mimeType};base64,${msg.imageData}`
+                }
+            });
+        } else if (msg.content) {
+            // Text message - check if we should merge with pending images
+            if (pendingImages.length > 0 && msg.role === 'user') {
+                // Merge images with this text message
+                result.push({
+                    role: 'user',
+                    content: [
+                        ...pendingImages,
+                        { type: 'text', text: msg.content }
+                    ]
+                });
+                pendingImages = [];
+            } else {
+                // Flush any pending images as separate messages first
+                for (const imgPart of pendingImages) {
+                    result.push({
+                        role: 'user',
+                        content: [imgPart]
+                    });
+                }
+                pendingImages = [];
+                
+                // Add text message
+                result.push({
+                    role: msg.role,
+                    content: msg.content
+                });
+            }
+        }
+    }
+    
+    // Flush any remaining pending images
+    for (const imgPart of pendingImages) {
+        result.push({
+            role: 'user',
+            content: [imgPart]
+        });
+    }
+    
+    return result;
+}
+
+/**
+ * Resize an image file to max dimensions, returns base64 data URL.
+ * 
+ * @param {File} file - The image file to resize
+ * @param {number} maxDimension - Maximum width or height (default 2048)
+ * @returns {Promise<string>} - The resized image as a data URL
+ */
+async function resizeImage(file, maxDimension = 2048) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            let { width, height } = img;
+            
+            // Only resize if needed
+            if (width > maxDimension || height > maxDimension) {
+                const ratio = Math.min(maxDimension / width, maxDimension / height);
+                width = Math.round(width * ratio);
+                height = Math.round(height * ratio);
+            }
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // JPEG for photos (smaller), PNG if original was PNG (transparency)
+            const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+            const quality = outputType === 'image/jpeg' ? 0.85 : undefined;
+            const dataUrl = canvas.toDataURL(outputType, quality);
+            
+            URL.revokeObjectURL(img.src);  // Clean up
+            resolve(dataUrl);
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(img.src);
+            reject(new Error('Failed to load image'));
+        };
+        img.src = URL.createObjectURL(file);
+    });
+}
+
 // Slash command definitions
 const SLASH_COMMANDS = [
     { command: '/note', description: 'Add a note or fetch URL content', placeholder: 'markdown or https://...' },
@@ -430,6 +539,12 @@ class App {
         // PDF drag & drop callback
         this.canvas.onPdfDrop = this.handlePdfDrop.bind(this);
         
+        // Image drag & drop callback
+        this.canvas.onImageDrop = this.handleImageDrop.bind(this);
+        
+        // Image click callback (for images in node content)
+        this.canvas.onImageClick = this.handleImageClick.bind(this);
+        
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
         if (replyInput) {
@@ -713,7 +828,17 @@ class App {
         });
         document.getElementById('pdf-file-input').addEventListener('change', async (e) => {
             if (e.target.files.length > 0) {
-                await this.handlePdfUpload(e.target.files[0]);
+                const file = e.target.files[0];
+                
+                // Route to appropriate handler based on file type
+                if (file.type === 'application/pdf') {
+                    await this.handlePdfUpload(file);
+                } else if (file.type.startsWith('image/')) {
+                    await this.handleImageUpload(file);
+                } else {
+                    alert('Please select a PDF or image file.');
+                }
+                
                 e.target.value = ''; // Reset for next upload
             }
         });
@@ -929,6 +1054,29 @@ class App {
             }
         });
         
+        // Clipboard paste handler for images
+        document.addEventListener('paste', async (e) => {
+            // Don't intercept if user is focused on an input/textarea
+            if (e.target.matches('input, textarea')) {
+                return;
+            }
+            
+            // Check for image in clipboard
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (file) {
+                        await this.handleImageUpload(file, null, true);  // showHint=true
+                    }
+                    return;
+                }
+            }
+        });
+        
         // Search button
         document.getElementById('search-btn').addEventListener('click', () => {
             this.openSearch();
@@ -1094,7 +1242,7 @@ class App {
         
         // Build context and send to LLM
         const context = this.graph.resolveContext([humanNode.id]);
-        const messages = context.map(m => ({ role: m.role, content: m.content }));
+        const messages = buildMessagesForApi(context);
         
         // Create AbortController for this stream
         const abortController = new AbortController();
@@ -1315,13 +1463,26 @@ class App {
                 await this.handleNoteFromUrl(url);
             }
         } else {
+            // Get selected nodes (if any) to link the note to
+            const parentIds = this.canvas.getSelectedNodeIds();
+            
             // Create NOTE node with the provided content
             const noteNode = createNode(NodeType.NOTE, content, {
-                position: this.graph.autoPosition([])
+                position: this.graph.autoPosition(parentIds)
             });
             
             this.graph.addNode(noteNode);
             this.canvas.renderNode(noteNode);
+            
+            // Create edges from parents (if replying to selected nodes)
+            for (const parentId of parentIds) {
+                const edge = createEdge(parentId, noteNode.id, 
+                    parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
+                this.graph.addEdge(edge);
+                
+                const parentNode = this.graph.getNode(parentId);
+                this.canvas.renderEdge(edge, parentNode.position, noteNode.position);
+            }
             
             // Clear input and save
             this.chatInput.value = '';
@@ -1353,13 +1514,26 @@ class App {
      * @param {string} url - The URL to fetch
      */
     async handleNoteFromUrl(url) {
+        // Get selected nodes (if any) to link the fetched content to
+        const parentIds = this.canvas.getSelectedNodeIds();
+        
         // Create a placeholder node while fetching
         const fetchNode = createNode(NodeType.FETCH_RESULT, `Fetching content from:\n${url}...`, {
-            position: this.graph.autoPosition([])
+            position: this.graph.autoPosition(parentIds)
         });
         
         this.graph.addNode(fetchNode);
         this.canvas.renderNode(fetchNode);
+        
+        // Create edges from parents (if replying to selected nodes)
+        for (const parentId of parentIds) {
+            const edge = createEdge(parentId, fetchNode.id, 
+                parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
+            this.graph.addEdge(edge);
+            
+            const parentNode = this.graph.getNode(parentId);
+            this.canvas.renderEdge(edge, parentNode.position, fetchNode.position);
+        }
         
         // Clear input
         this.chatInput.value = '';
@@ -1418,13 +1592,26 @@ class App {
      * @param {string} url - The URL of the PDF to fetch
      */
     async handleNoteFromPdfUrl(url) {
+        // Get selected nodes (if any) to link the PDF to
+        const parentIds = this.canvas.getSelectedNodeIds();
+        
         // Create a placeholder node while fetching
         const pdfNode = createNode(NodeType.PDF, `Fetching PDF from:\n${url}...`, {
-            position: this.graph.autoPosition([])
+            position: this.graph.autoPosition(parentIds)
         });
         
         this.graph.addNode(pdfNode);
         this.canvas.renderNode(pdfNode);
+        
+        // Create edges from parents (if replying to selected nodes)
+        for (const parentId of parentIds) {
+            const edge = createEdge(parentId, pdfNode.id, 
+                parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
+            this.graph.addEdge(edge);
+            
+            const parentNode = this.graph.getNode(parentId);
+            this.canvas.renderEdge(edge, parentNode.position, pdfNode.position);
+        }
         
         // Clear input
         this.chatInput.value = '';
@@ -1556,6 +1743,208 @@ class App {
      */
     async handlePdfDrop(file, position) {
         await this.handlePdfUpload(file, position);
+    }
+    
+    /**
+     * Handle image file upload (from paperclip button, drag & drop, or paste).
+     * 
+     * @param {File} file - The image file to upload
+     * @param {Object} position - Optional position for the node (for drag & drop)
+     * @param {boolean} showHint - Whether to show a canvas hint after upload
+     */
+    async handleImageUpload(file, position = null, showHint = false) {
+        // Validate image type
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file.');
+            return;
+        }
+        
+        // Validate size (20 MB raw limit)
+        const MAX_SIZE = 20 * 1024 * 1024;
+        if (file.size > MAX_SIZE) {
+            alert('Image is too large. Maximum size is 20 MB.');
+            return;
+        }
+        
+        try {
+            // Resize and convert to base64
+            const dataUrl = await resizeImage(file);
+            const [header, base64Data] = dataUrl.split(',');
+            const mimeMatch = header.match(/data:(.*);base64/);
+            const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+            
+            // Create IMAGE node
+            const nodePosition = position || this.graph.autoPosition([]);
+            const imageNode = createNode(NodeType.IMAGE, '', {
+                position: nodePosition,
+                imageData: base64Data,
+                mimeType: mimeType
+            });
+            
+            this.graph.addNode(imageNode);
+            this.canvas.renderNode(imageNode);
+            
+            this.canvas.clearSelection();
+            this.canvas.selectNode(imageNode.id);  // Select the new image
+            this.saveSession();
+            this.updateEmptyState();
+            
+            // Pan to the new node
+            this.canvas.centerOnAnimated(
+                imageNode.position.x + 160,
+                imageNode.position.y + 100,
+                300
+            );
+            
+            // Show hint if requested (e.g., from paste)
+            if (showHint) {
+                this.showCanvasHint('Image added! Select it and type a message to ask about it.');
+            }
+            
+        } catch (err) {
+            alert(`Failed to process image: ${err.message}`);
+        }
+    }
+    
+    /**
+     * Handle image drop on canvas (from drag & drop).
+     * 
+     * @param {File} file - The image file that was dropped
+     * @param {Object} position - The drop position in canvas coordinates
+     */
+    async handleImageDrop(file, position) {
+        await this.handleImageUpload(file, position);
+    }
+    
+    /**
+     * Handle click on an image in node content.
+     * Called when user triggers Ask or Extract action from image tooltip.
+     * 
+     * @param {string} nodeId - The ID of the node containing the image
+     * @param {string} imgSrc - The src of the clicked image (data URL or URL)
+     * @param {Object} options - Action info: { action: 'ask' | 'extract' }
+     */
+    async handleImageClick(nodeId, imgSrc, options = {}) {
+        const action = options.action;
+        
+        if (action === 'ask') {
+            // Extract image to a new node, select it, and focus chat input
+            await this.extractImageToNode(nodeId, imgSrc);
+            this.chatInput.focus();
+            this.showCanvasHint('Image extracted! Type a question about it.');
+        } else if (action === 'extract') {
+            // Just extract image to a new node
+            await this.extractImageToNode(nodeId, imgSrc);
+        }
+    }
+    
+    /**
+     * Extract an image from a node's content and create a new IMAGE node.
+     * 
+     * @param {string} parentNodeId - The ID of the node containing the image
+     * @param {string} imgSrc - The src of the image (data URL or external URL)
+     */
+    async extractImageToNode(parentNodeId, imgSrc) {
+        const parentNode = this.graph.getNode(parentNodeId);
+        if (!parentNode) return;
+        
+        try {
+            let base64Data, mimeType;
+            
+            // Check if it's already a data URL
+            if (imgSrc.startsWith('data:')) {
+                const match = imgSrc.match(/^data:(.*?);base64,(.*)$/);
+                if (match) {
+                    mimeType = match[1];
+                    base64Data = match[2];
+                } else {
+                    throw new Error('Invalid data URL format');
+                }
+            } else {
+                // External URL - need to fetch and convert
+                // Use canvas to convert to base64
+                const dataUrl = await this.fetchImageAsDataUrl(imgSrc);
+                const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);
+                if (match) {
+                    mimeType = match[1];
+                    base64Data = match[2];
+                } else {
+                    throw new Error('Failed to convert image');
+                }
+            }
+            
+            // Create IMAGE node
+            const imageNode = createNode(NodeType.IMAGE, '', {
+                position: this.graph.autoPosition([parentNodeId]),
+                imageData: base64Data,
+                mimeType: mimeType
+            });
+            
+            this.graph.addNode(imageNode);
+            this.canvas.renderNode(imageNode);
+            
+            // Create edge from parent
+            const edge = createEdge(parentNodeId, imageNode.id, EdgeType.HIGHLIGHT);
+            this.graph.addEdge(edge);
+            this.canvas.renderEdge(edge, parentNode.position, imageNode.position);
+            
+            // Select the new image node
+            this.canvas.clearSelection();
+            this.canvas.selectNode(imageNode.id);
+            
+            // Pan to the new node
+            this.canvas.centerOnAnimated(
+                imageNode.position.x + 160,
+                imageNode.position.y + 100,
+                300
+            );
+            
+            this.saveSession();
+            
+        } catch (err) {
+            console.error('Failed to extract image:', err);
+            alert('Failed to extract image: ' + err.message);
+        }
+    }
+    
+    /**
+     * Fetch an external image and convert to data URL.
+     * 
+     * @param {string} url - The image URL
+     * @returns {Promise<string>} - The image as a data URL
+     */
+    async fetchImageAsDataUrl(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';  // Try to avoid CORS issues
+            
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                
+                // Try to determine format from URL
+                let format = 'image/png';
+                if (url.toLowerCase().includes('.jpg') || url.toLowerCase().includes('.jpeg')) {
+                    format = 'image/jpeg';
+                }
+                
+                try {
+                    const dataUrl = canvas.toDataURL(format, 0.9);
+                    resolve(dataUrl);
+                } catch (e) {
+                    reject(new Error('Cannot access image due to CORS restrictions'));
+                }
+            };
+            
+            img.onerror = () => {
+                reject(new Error('Failed to load image'));
+            };
+            
+            img.src = url;
+        });
     }
 
     /**
@@ -2477,7 +2866,7 @@ class App {
                 row_item: rowItem,
                 col_item: colItem,
                 context: context,
-                messages: messages.map(m => ({ role: m.role, content: m.content })),
+                messages: buildMessagesForApi(messages),
                 model,
                 api_key: apiKey
             };
@@ -3001,7 +3390,7 @@ class App {
                 
                 // Build context and stream LLM response
                 const context = this.graph.resolveContext([humanNode.id]);
-                const messages = context.map(m => ({ role: m.role, content: m.content }));
+                const messages = buildMessagesForApi(context);
                 
                 // Create AbortController for this stream
                 const abortController = new AbortController();
@@ -3090,7 +3479,7 @@ class App {
         this.canvas.renderEdge(edge, parentNode.position, summaryNode.position);
         
         try {
-            const messages = context.map(m => ({ role: m.role, content: m.content }));
+            const messages = buildMessagesForApi(context);
             const summary = await chat.summarize(messages, model);
             
             this.canvas.updateNodeContent(summaryNode.id, summary, false);
@@ -3916,18 +4305,25 @@ class App {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
         
-        let textToCopy;
-        
-        if (node.type === NodeType.MATRIX) {
-            // Format matrix as markdown table
-            textToCopy = this.formatMatrixAsText(node);
-        } else {
-            textToCopy = node.content;
-        }
-        
-        if (!textToCopy) return;
-        
         try {
+            if (node.imageData) {
+                // For image nodes, copy the image to clipboard
+                await this.canvas.copyImageToClipboard(node.imageData, node.mimeType);
+                this.canvas.showCopyFeedback(nodeId);
+                return;
+            }
+            
+            let textToCopy;
+            
+            if (node.type === NodeType.MATRIX) {
+                // Format matrix as markdown table
+                textToCopy = this.formatMatrixAsText(node);
+            } else {
+                textToCopy = node.content;
+            }
+            
+            if (!textToCopy) return;
+            
             await navigator.clipboard.writeText(textToCopy);
             // Show brief visual feedback via the canvas
             this.canvas.showCopyFeedback(nodeId);
@@ -4236,11 +4632,16 @@ class App {
             });
             
             if (!response.ok) {
-                console.warn(`Failed to generate summary for node ${nodeId}`);
+                // API failed - keep truncated fallback
                 return;
             }
             
             const data = await response.json();
+            
+            // If summary is empty, don't update (keep the truncated content fallback)
+            if (!data.summary || data.summary.trim() === '') {
+                return;
+            }
             
             // Update node with summary
             this.graph.updateNode(nodeId, { summary: data.summary });
@@ -4257,7 +4658,6 @@ class App {
             this.saveSession();
             
         } catch (err) {
-            console.warn('Failed to generate node summary:', err);
             // Fail silently - truncation fallback will be used
         }
     }
@@ -4328,6 +4728,41 @@ class App {
         } else if (emptyState) {
             emptyState.remove();
         }
+    }
+    
+    /**
+     * Show a temporary hint message on the canvas.
+     * Used to provide contextual guidance to users.
+     * 
+     * @param {string} message - The hint message to display
+     * @param {number} duration - How long to show the hint (ms), default 3000
+     */
+    showCanvasHint(message, duration = 3000) {
+        const hint = document.getElementById('canvas-hint');
+        if (!hint) return;
+        
+        const textEl = hint.querySelector('.hint-text');
+        if (textEl) {
+            textEl.textContent = message;
+        } else {
+            hint.textContent = message;
+        }
+        
+        hint.style.display = 'block';
+        hint.classList.add('visible');
+        
+        // Clear any existing timeout
+        if (this._canvasHintTimeout) {
+            clearTimeout(this._canvasHintTimeout);
+        }
+        
+        // Fade out after duration
+        this._canvasHintTimeout = setTimeout(() => {
+            hint.classList.remove('visible');
+            setTimeout(() => {
+                hint.style.display = 'none';
+            }, 300);  // Match CSS transition
+        }, duration);
     }
 
     // --- Settings Modal ---
