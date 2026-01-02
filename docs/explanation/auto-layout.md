@@ -20,7 +20,7 @@ We use a **topological sort + greedy placement** algorithm that:
 
 We first sort all nodes so that parent nodes come before their children. This ensures that when we position a child node, all of its parents have already been placed.
 
-```
+```text
 Initialize in-degree count for each node
 Queue = nodes with in-degree 0 (root nodes)
 While queue is not empty:

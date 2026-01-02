@@ -95,6 +95,7 @@ The following actions can be undone with `Cmd/Ctrl + Z`:
 - Creating edges (replies, branches, etc.)
 
 **Note:** Some actions cannot be undone:
+
 - Changing settings
 - Importing/exporting sessions
 - API calls already in progress
@@ -142,6 +143,7 @@ Currently, keyboard shortcuts are not customizable. If you need different bindin
 Canvas Chat aims to be keyboard-accessible. If you find operations that require a mouse and shouldn't, please report them as accessibility issues.
 
 Current limitations:
+
 - Resizing nodes requires mouse drag (no keyboard alternative)
 - Some tooltips only appear on mouse hover
 - Canvas panning requires mouse or trackpad (keyboard pan not implemented)
@@ -157,6 +159,7 @@ Some shortcuts may conflict with browser defaults:
 | `Cmd + Z` | Browser undo | Canvas Chat's undo takes precedence when app has focus |
 
 If a shortcut doesn't work, check that:
+
 1. The canvas or an input field has focus (click on it first)
 2. You're not typing in a text editor where the shortcut means something else
 3. No browser extension is intercepting the shortcut

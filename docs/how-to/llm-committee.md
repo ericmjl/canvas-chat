@@ -25,7 +25,7 @@ Each model you select must have a valid API key for its provider.
 
 Type `/committee` followed by your question:
 
-```
+```text
 /committee What are the main risks of using microservices architecture for a small startup?
 ```
 
@@ -43,14 +43,17 @@ Click "Start Committee" to begin.
 ### Selecting committee members
 
 The modal shows all available models as checkboxes. By default, Canvas Chat pre-selects:
+
 - Your currently selected model
 - Up to 2 other recently used models
 
 **Requirements:**
+
 - Minimum: 2 models
 - Maximum: 5 models
 
 **Tips for selection:**
+
 - Mix model families for diversity (e.g., GPT-4, Claude, Gemini)
 - Include both large and small models (small models run faster)
 - For technical questions, include models known for reasoning (Claude, o1)
@@ -59,6 +62,7 @@ The modal shows all available models as checkboxes. By default, Canvas Chat pre-
 ### Choosing a chairman
 
 The chairman model receives all committee opinions and synthesizes a final answer. Choose a model that's good at:
+
 - Analyzing multiple perspectives
 - Identifying consensus and disagreement
 - Providing balanced summaries
@@ -74,11 +78,13 @@ When enabled, the committee process includes an extra step:
 3. The chairman sees both opinions and reviews when synthesizing
 
 **Enable review when:**
+
 - The question is particularly complex
 - You want to see how models critique each other
 - Time is not a constraint (review adds 30-60 seconds)
 
 **Disable review when:**
+
 - You want faster results
 - The question is straightforward
 - Cost is a concern (review doubles the API calls)
@@ -89,7 +95,7 @@ When enabled, the committee process includes an extra step:
 
 All selected models respond to your question in parallel. You'll see:
 
-```
+```text
 [OPINION] GPT-4o: streaming response...
 [OPINION] Claude Sonnet 4: streaming response...
 [OPINION] Gemini 1.5 Pro: streaming response...
@@ -101,12 +107,13 @@ Each model's opinion streams in real-time, appearing in its own OPINION node on 
 
 If enabled, each model reviews the others' opinions:
 
-```
+```text
 [REVIEW] GPT-4o reviewing other opinions...
 [REVIEW] Claude Sonnet 4 reviewing other opinions...
 ```
 
 Reviews include:
+
 - Strengths of each opinion
 - Weaknesses or gaps
 - Ranking from best to worst
@@ -115,11 +122,12 @@ Reviews include:
 
 The chairman model receives all opinions (and reviews, if applicable) and synthesizes:
 
-```
+```text
 [SYNTHESIS] Claude Opus 4: synthesizing final answer...
 ```
 
 The synthesis typically includes:
+
 - Areas of agreement among models
 - Points of disagreement and their significance
 - The chairman's assessment of the most accurate/helpful answer
@@ -135,6 +143,7 @@ The canvas will show:
 4. **Synthesis node** (the final answer)
 
 All nodes are connected with edges showing the flow:
+
 - Question → Opinions (solid lines)
 - Opinions → Reviews (dashed lines)
 - Opinions/Reviews → Synthesis (solid lines)
@@ -142,6 +151,7 @@ All nodes are connected with edges showing the flow:
 ### Reading the synthesis
 
 The synthesis node contains the chairman's analysis. It should answer:
+
 - Where did models agree?
 - Where did they disagree, and why?
 - What's the recommended answer based on all perspectives?
@@ -150,7 +160,7 @@ The synthesis node contains the chairman's analysis. It should answer:
 
 Reply to the synthesis node to ask follow-up questions:
 
-```
+```text
 Can you elaborate on the disagreement about database scaling?
 ```
 
@@ -159,6 +169,7 @@ The AI has access to all committee opinions and can reference specific model per
 ### Branching from opinions
 
 Select text from any opinion or review node and click **🌿 Branch** to:
+
 - Ask a model to elaborate on a specific point
 - Challenge an assumption in an opinion
 - Explore a disagreement in depth
@@ -182,18 +193,21 @@ All committee members receive the research context, leading to more informed opi
 ### Ask clear, scoped questions
 
 ✅ Good:
-```
+
+```text
 /committee For a Python data pipeline processing 10M records/day, should we use Apache Spark or stick with pandas + multiprocessing?
 ```
 
 ❌ Too vague:
-```
+
+```text
 /committee which technology is better?
 ```
 
 ### Use review for high-stakes decisions
 
 Enable review when:
+
 - Making architectural decisions
 - Evaluating business strategy
 - Analyzing security/privacy concerns
@@ -202,25 +216,30 @@ Enable review when:
 ### Mix model strengths
 
 **Reasoning-heavy questions:**
+
 - Include: Claude Sonnet 4, o1, Gemini 1.5 Pro
 - Chairman: Claude Opus 4
 
 **Creative questions:**
+
 - Include: GPT-4o, Claude 3.5 Sonnet, Gemini
 - Chairman: GPT-4o
 
 **Coding questions:**
+
 - Include: GPT-4o, Claude 3.5 Sonnet, Llama models
 - Chairman: Claude Sonnet 4
 
 ### Manage costs
 
 Committee runs can be expensive:
+
 - 3 models without review: ~3-5 API calls
 - 3 models with review: ~7-10 API calls
 - 5 models with review: ~16-20 API calls
 
 **Cost-saving strategies:**
+
 - Use smaller models for opinions (GPT-4o-mini, Haiku)
 - Reserve large models for chairman role
 - Disable review for exploratory questions
@@ -236,19 +255,23 @@ Committee runs can be expensive:
 ## Troubleshooting
 
 **"At least 2 committee models required"**
+
 - You must select at least 2 models
 - Click checkboxes to select more models
 
 **"API key missing for [provider]"**
+
 - One of your selected models needs an API key
 - Go to Settings and add the missing key, or deselect that model
 
 **One opinion fails but others succeed**
+
 - The committee continues with working models
 - The failed model's opinion won't appear
 - Synthesis will note which models contributed
 
 **Committee stuck on "Gathering opinions..."**
+
 - Check browser console for errors (F12)
 - One model may be timing out (wait up to 60 seconds)
 - Refresh the page if it exceeds 2 minutes

@@ -15,7 +15,7 @@ You need an Exa API key configured in Settings. If you haven't set one up:
 
 Type `/search` followed by your query in the chat input:
 
-```
+```text
 /search latest research on mRNA vaccines
 ```
 
@@ -27,6 +27,7 @@ Press Enter. Canvas Chat will:
 4. Connect them to the search node with dashed lines
 
 Each reference node shows:
+
 - The page title
 - The URL
 - A snippet of the content
@@ -63,6 +64,7 @@ Click the **"Fetch & Summarize"** button on a reference node to:
 3. Generate an AI summary automatically
 
 This creates two new nodes connected to the reference:
+
 - **Fetch result** (full content as markdown)
 - **Summary** (concise AI-generated summary)
 
@@ -83,10 +85,12 @@ Search nodes are positioned automatically:
 ## Tips
 
 **Use specific queries** for better results:
+
 - ✅ Good: `/search transformer attention mechanism pytorch implementation`
 - ❌ Vague: `/search machine learning`
 
 **Combine with context** for conversational searches:
+
 1. Discuss a topic in several nodes
 2. Select the relevant nodes
 3. Type `/search what are alternatives?` — the AI resolves "alternatives" based on your conversation
@@ -94,6 +98,7 @@ Search nodes are positioned automatically:
 **Fetch selectively** - Don't fetch all results. Read the snippets first, then fetch only the most promising 1-2 pages to avoid clutter.
 
 **Use in research workflows:**
+
 1. Start with `/search` to find sources
 2. Fetch full content for 2-3 best results
 3. Use `/research` for comprehensive synthesis (see [How to conduct deep research](deep-research.md))

@@ -18,7 +18,7 @@ Matrices are useful when you need to evaluate combinations systematically:
 1. Select one or more nodes that contain relevant context for your matrix
 2. Type `/matrix` followed by a description of what rows and columns you want:
 
-```
+```text
 /matrix evaluate marketing channels (rows) against customer segments (columns)
 ```
 
