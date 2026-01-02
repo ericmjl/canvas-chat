@@ -549,6 +549,10 @@ class App {
         // Image click callback (for images in node content)
         this.canvas.onImageClick = this.handleImageClick.bind(this);
 
+        // Navigation callbacks - for parent/child node navigation
+        this.canvas.onGetParents = (nodeId) => this.graph.getParents(nodeId);
+        this.canvas.onGetChildren = (nodeId) => this.graph.getChildren(nodeId);
+
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
         if (replyInput) {

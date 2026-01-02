@@ -66,6 +66,10 @@ class Canvas {
         // Image click callback (for images in node content)
         this.onImageClick = null;  // For handling clicks on images in node content
 
+        // Navigation callbacks - for parent/child node navigation
+        this.onGetParents = null;  // Returns parent nodes for a given node ID
+        this.onGetChildren = null;  // Returns child nodes for a given node ID
+
         // Reply tooltip state
         this.branchTooltip = null;
         this.activeSelectionNodeId = null;
@@ -1006,6 +1010,192 @@ class Canvas {
     }
 
     /**
+     * Handle navigation to parent node(s)
+     * @param {string} nodeId - Current node ID
+     * @param {HTMLElement} buttonElement - The button that was clicked (for popover positioning)
+     */
+    handleNavigateToParent(nodeId, buttonElement) {
+        if (!this.onGetParents) return;
+
+        const parents = this.onGetParents(nodeId);
+        if (!parents || parents.length === 0) {
+            // No parents - this is a root node
+            this.showNavigationFeedback(buttonElement, 'No parent nodes');
+            return;
+        }
+
+        if (parents.length === 1) {
+            // Single parent - navigate directly
+            this.navigateToNode(parents[0].id);
+        } else {
+            // Multiple parents - show popover
+            this.showNavigationPopover(buttonElement, parents, 'parent');
+        }
+    }
+
+    /**
+     * Handle navigation to child node(s)
+     * @param {string} nodeId - Current node ID
+     * @param {HTMLElement} buttonElement - The button that was clicked (for popover positioning)
+     */
+    handleNavigateToChild(nodeId, buttonElement) {
+        if (!this.onGetChildren) return;
+
+        const children = this.onGetChildren(nodeId);
+        if (!children || children.length === 0) {
+            // No children - this is a leaf node
+            this.showNavigationFeedback(buttonElement, 'No child nodes');
+            return;
+        }
+
+        if (children.length === 1) {
+            // Single child - navigate directly
+            this.navigateToNode(children[0].id);
+        } else {
+            // Multiple children - show popover
+            this.showNavigationPopover(buttonElement, children, 'child');
+        }
+    }
+
+    /**
+     * Navigate to a specific node - select it and pan to it
+     * @param {string} nodeId - The node ID to navigate to
+     */
+    navigateToNode(nodeId) {
+        // Clear current selection and select the target node
+        this.clearSelection();
+        this.selectNode(nodeId, false);
+
+        // Pan to the node
+        this.panToNodeAnimated(nodeId, 300);
+    }
+
+    /**
+     * Show a brief feedback message when navigation is not possible
+     * @param {HTMLElement} buttonElement - The button element for positioning
+     * @param {string} message - The message to display
+     */
+    showNavigationFeedback(buttonElement, message) {
+        // Create a temporary tooltip with the message
+        const tooltip = document.createElement('div');
+        tooltip.className = 'nav-feedback-tooltip';
+        tooltip.textContent = message;
+
+        // Position near the button
+        const rect = buttonElement.getBoundingClientRect();
+        tooltip.style.position = 'fixed';
+        tooltip.style.left = `${rect.left + rect.width / 2}px`;
+        tooltip.style.top = `${rect.top - 30}px`;
+        tooltip.style.transform = 'translateX(-50%)';
+
+        document.body.appendChild(tooltip);
+
+        // Remove after a short delay
+        setTimeout(() => {
+            tooltip.classList.add('fade-out');
+            setTimeout(() => tooltip.remove(), 200);
+        }, 1500);
+    }
+
+    /**
+     * Show a popover with multiple navigation options
+     * @param {HTMLElement} buttonElement - The button element for positioning
+     * @param {Array} nodes - Array of nodes to display as options
+     * @param {string} direction - 'parent' or 'child' for labeling
+     */
+    showNavigationPopover(buttonElement, nodes, direction) {
+        // Remove any existing popover
+        this.hideNavigationPopover();
+
+        const popover = document.createElement('div');
+        popover.className = 'nav-popover';
+        popover.id = 'nav-popover';
+
+        // Create header
+        const header = document.createElement('div');
+        header.className = 'nav-popover-header';
+        header.textContent = `${nodes.length} ${direction}${nodes.length > 1 ? 's' : ''}`;
+        popover.appendChild(header);
+
+        // Create list of nodes
+        const list = document.createElement('div');
+        list.className = 'nav-popover-list';
+
+        nodes.forEach((node, index) => {
+            const item = document.createElement('div');
+            item.className = 'nav-popover-item';
+
+            // Get a preview of the node content
+            const typeIcon = this.getNodeTypeIcon(node.type);
+            const preview = this.getNodeSummaryText(node);
+
+            item.innerHTML = `
+                <span class="nav-popover-item-icon">${typeIcon}</span>
+                <span class="nav-popover-item-text">${this.escapeHtml(preview)}</span>
+            `;
+
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.hideNavigationPopover();
+                this.navigateToNode(node.id);
+            });
+
+            list.appendChild(item);
+        });
+
+        popover.appendChild(list);
+
+        // Position the popover near the button
+        document.body.appendChild(popover);
+
+        const rect = buttonElement.getBoundingClientRect();
+        const popoverRect = popover.getBoundingClientRect();
+
+        // Position below the button by default, or above if not enough space
+        let top = rect.bottom + 8;
+        if (top + popoverRect.height > window.innerHeight - 20) {
+            top = rect.top - popoverRect.height - 8;
+        }
+
+        let left = rect.left + rect.width / 2 - popoverRect.width / 2;
+        // Keep within viewport
+        left = Math.max(10, Math.min(left, window.innerWidth - popoverRect.width - 10));
+
+        popover.style.position = 'fixed';
+        popover.style.left = `${left}px`;
+        popover.style.top = `${top}px`;
+
+        // Close popover when clicking outside
+        const closeHandler = (e) => {
+            if (!popover.contains(e.target) && e.target !== buttonElement) {
+                this.hideNavigationPopover();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+
+        // Add listener after a brief delay to avoid immediate close
+        setTimeout(() => {
+            document.addEventListener('click', closeHandler);
+        }, 10);
+
+        // Store reference to close handler for cleanup
+        popover._closeHandler = closeHandler;
+    }
+
+    /**
+     * Hide the navigation popover if visible
+     */
+    hideNavigationPopover() {
+        const existing = document.getElementById('nav-popover');
+        if (existing) {
+            if (existing._closeHandler) {
+                document.removeEventListener('click', existing._closeHandler);
+            }
+            existing.remove();
+        }
+    }
+
+    /**
      * Animate nodes to new positions with smooth transitions
      * @param {Object} graph - The graph with updated node positions
      * @param {Object} options - Animation options
@@ -1354,6 +1544,8 @@ class Canvas {
                     <span class="node-model">${node.model || ''}</span>
                     ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="header-btn stop-btn" title="Stop generating" style="display:none;">⏹</button>' : ''}
                     ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="header-btn continue-btn" title="Continue generating" style="display:none;">▶</button>' : ''}
+                    <button class="header-btn nav-parent-btn" title="Go to parent node (↑)">↑</button>
+                    <button class="header-btn nav-child-btn" title="Go to child node (↓)">↓</button>
                     <button class="header-btn reset-size-btn" title="Reset to default size">↺</button>
                     <button class="header-btn fit-viewport-btn" title="Fit to viewport (f)">⤢</button>
                     <button class="node-action delete-btn" title="Delete node">🗑️</button>
@@ -1654,6 +1846,24 @@ class Canvas {
             resetSizeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onNodeResetSize) this.onNodeResetSize(node.id);
+            });
+        }
+
+        // Parent navigation button
+        const navParentBtn = div.querySelector('.nav-parent-btn');
+        if (navParentBtn) {
+            navParentBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.handleNavigateToParent(node.id, navParentBtn);
+            });
+        }
+
+        // Child navigation button
+        const navChildBtn = div.querySelector('.nav-child-btn');
+        if (navChildBtn) {
+            navChildBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.handleNavigateToChild(node.id, navChildBtn);
             });
         }
 
