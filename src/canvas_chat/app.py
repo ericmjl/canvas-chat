@@ -47,6 +47,28 @@ STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+@app.get("/health")
+async def health_check(request: Request):
+    """Simple health check endpoint used by CI to verify deployment.
+
+    Returns a short JSON payload with status and optional service info.
+    Attempts a lightweight readiness probe for optional local services (e.g., Ollama).
+    If the optional service is not reachable, the endpoint still returns 200 but includes
+    the service status so CI can choose how to interpret it.
+    """
+    result = {"status": "ok", "service": "canvas-chat"}
+
+    # Check optional Ollama readiness (non-fatal)
+    try:
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            result["ollama"] = resp.status_code == 200
+    except Exception:
+        result["ollama"] = False
+
+    return result
+
+
 # --- Pydantic Models ---
 
 
