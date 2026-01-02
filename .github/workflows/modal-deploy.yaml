@@ -26,12 +26,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          # For pull_request_target, checkout the PR head commit, not the base branch
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
       - name: Deploy to test environment (PR)
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request_target'
         id: deploy-test
         run: |
           OUTPUT=$(uv run --with modal modal deploy modal_app.py -e test 2>&1)
@@ -49,7 +52,7 @@ jobs:
           echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Health check (test deploy)
-        if: github.event_name == 'pull_request' && steps.deploy-test.outputs.url != ''
+        if: github.event_name == 'pull_request_target' && steps.deploy-test.outputs.url != ''
         run: |
           URL=${{ steps.deploy-test.outputs.url }}
           echo "Checking health for $URL"
@@ -86,7 +89,7 @@ jobs:
         run: |
           echo "## 🚀 Modal Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
+          if [ "${{ github.event_name }}" == "pull_request_target" ]; then
             echo "**Environment:** test" >> $GITHUB_STEP_SUMMARY
             echo "**URL:** ${{ steps.deploy-test.outputs.url }}" >> $GITHUB_STEP_SUMMARY
           else
@@ -99,7 +102,7 @@ jobs:
     name: Post PR comment
     runs-on: ubuntu-latest
     needs: deploy
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target'
     steps:
       - name: Post or update PR comment
         uses: actions/github-script@v7
