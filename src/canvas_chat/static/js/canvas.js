@@ -2793,13 +2793,14 @@ class Canvas {
             try {
                 // Protect math delimiters from Markdown's backslash escaping
                 // Marked processes backslashes as escape characters before extensions see them,
-                // so we temporarily replace delimiters with placeholders
+                // so we temporarily replace delimiters with placeholders that won't be interpreted as markdown
                 const mathPlaceholders = new Map();
                 let placeholderIndex = 0;
 
                 // Protect \[...\] display math (non-greedy match)
+                // Use HTML comment-style placeholders that markdown won't interpret
                 let protectedText = text.replace(/\\\[([\s\S]*?)\\\]/g, (match) => {
-                    const placeholder = `__MATH_DISPLAY_${placeholderIndex}__`;
+                    const placeholder = `<!--MATH_DISPLAY_${placeholderIndex}-->`;
                     placeholderIndex++;
                     mathPlaceholders.set(placeholder, match);
                     return placeholder;
@@ -2807,7 +2808,7 @@ class Canvas {
 
                 // Protect \(...\) inline math (non-greedy match)
                 protectedText = protectedText.replace(/\\\(([\s\S]*?)\\\)/g, (match) => {
-                    const placeholder = `__MATH_INLINE_${placeholderIndex}__`;
+                    const placeholder = `<!--MATH_INLINE_${placeholderIndex}-->`;
                     placeholderIndex++;
                     mathPlaceholders.set(placeholder, match);
                     return placeholder;
@@ -2815,7 +2816,7 @@ class Canvas {
 
                 // Protect $$...$$ blocks (already safe from backslash escaping)
                 protectedText = protectedText.replace(/\$\$([\s\S]*?)\$\$/g, (match) => {
-                    const placeholder = `__MATH_DOLLAR_${placeholderIndex}__`;
+                    const placeholder = `<!--MATH_DOLLAR_${placeholderIndex}-->`;
                     placeholderIndex++;
                     mathPlaceholders.set(placeholder, match);
                     return placeholder;
@@ -2825,6 +2826,7 @@ class Canvas {
                 let result = marked.parse(protectedText);
 
                 // Restore math delimiters (they'll be processed by KaTeX extension)
+                // HTML comments pass through marked.parse() unchanged, so we can restore them
                 for (const [placeholder, original] of mathPlaceholders) {
                     result = result.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), original);
                 }
