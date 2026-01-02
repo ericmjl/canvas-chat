@@ -9,9 +9,8 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+  pull_request_target:
+    types: [opened, synchronize, reopened]
 
 jobs:
   deploy:
@@ -45,6 +44,40 @@ jobs:
           echo "$OUTPUT"
           URL=$(echo "$OUTPUT" | grep -oE 'https://modal\.com/apps/[^ ]+' | head -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Health check (test deploy)
+        if: github.event_name == 'pull_request' && steps.deploy-test.outputs.url != ''
+        run: |
+          URL=${{ steps.deploy-test.outputs.url }}
+          echo "Checking health for $URL"
+          for i in 1 2 3 4 5; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 "$URL" || echo "000")
+            echo "Attempt $i: HTTP $status"
+            if [ "$status" = "200" ] || [ "$status" = "301" ] || [ "$status" = "302" ]; then
+              echo "Deployment healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Deployment health check failed for $URL"
+          exit 1
+
+      - name: Health check (main deploy)
+        if: github.event_name == 'push' && steps.deploy-main.outputs.url != ''
+        run: |
+          URL=${{ steps.deploy-main.outputs.url }}
+          echo "Checking health for $URL"
+          for i in 1 2 3 4 5; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 "$URL" || echo "000")
+            echo "Attempt $i: HTTP $status"
+            if [ "$status" = "200" ] || [ "$status" = "301" ] || [ "$status" = "302" ]; then
+              echo "Deployment healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Deployment health check failed for $URL"
+          exit 1
 
       - name: Write deployment summary
         run: |
