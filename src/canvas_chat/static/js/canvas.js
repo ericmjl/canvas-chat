@@ -2732,17 +2732,32 @@ class Canvas {
      * Configure marked.js with KaTeX and other extensions (called once)
      */
     static configureMarked() {
-        if (Canvas.markedConfigured || typeof marked === 'undefined') {
+        if (Canvas.markedConfigured) {
+            console.log('[Canvas] marked already configured, skipping');
             return;
         }
+
+        if (typeof marked === 'undefined') {
+            console.warn('[Canvas] marked.js not available yet');
+            return;
+        }
+
+        console.log('[Canvas] Configuring marked.js...');
+        console.log('[Canvas] marked available:', typeof marked !== 'undefined');
+        console.log('[Canvas] markedKatex available:', typeof markedKatex !== 'undefined');
+        console.log('[Canvas] katex available:', typeof katex !== 'undefined');
 
         try {
             // Configure KaTeX extension first (if available)
             if (typeof markedKatex !== 'undefined') {
+                console.log('[Canvas] Configuring KaTeX extension...');
                 marked.use(markedKatex({
                     throwOnError: false,
                     nonStandard: true  // Enables \(...\) and \[...\] delimiters
                 }));
+                console.log('[Canvas] KaTeX extension configured');
+            } else {
+                console.warn('[Canvas] markedKatex not available - math rendering will not work');
             }
 
             // Configure marked with custom link renderer and other options
@@ -2758,8 +2773,9 @@ class Canvas {
             });
 
             Canvas.markedConfigured = true;
+            console.log('[Canvas] marked.js configuration complete');
         } catch (e) {
-            console.error('Error configuring marked:', e);
+            console.error('[Canvas] Error configuring marked:', e);
         }
     }
 
@@ -2775,14 +2791,25 @@ class Canvas {
         // Check if marked is available
         if (typeof marked !== 'undefined') {
             try {
-                return marked.parse(text);
+                const result = marked.parse(text);
+                // Debug logging for math content
+                if (text.includes('\\[') || text.includes('\\(') || text.includes('$$') || text.includes('$')) {
+                    console.log('[Canvas] Rendering markdown with math:', {
+                        input: text.substring(0, 100),
+                        output: result.substring(0, 200),
+                        hasKatex: result.includes('katex'),
+                        markedConfigured: Canvas.markedConfigured
+                    });
+                }
+                return result;
             } catch (e) {
-                console.error('Markdown parsing error:', e);
+                console.error('[Canvas] Markdown parsing error:', e);
                 return this.escapeHtml(text);
             }
         }
 
         // Fallback to escaped HTML if marked not loaded
+        console.warn('[Canvas] marked not available, escaping HTML');
         return this.escapeHtml(text);
     }
 
