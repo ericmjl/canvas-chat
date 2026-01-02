@@ -26,6 +26,7 @@ image = (
     # Copy project files needed for pixi install (copy=True required for subsequent run_commands)
     .add_local_file("pyproject.toml", remote_path="/app/pyproject.toml", copy=True)
     .add_local_file("pixi.lock", remote_path="/app/pixi.lock", copy=True)
+    .add_local_file("README.md", remote_path="/app/README.md", copy=True)
     .add_local_dir("src", remote_path="/app/src", copy=True)
     # Install dependencies using pixi
     .run_commands(
