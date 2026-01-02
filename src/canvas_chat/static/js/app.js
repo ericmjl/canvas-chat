@@ -534,6 +534,7 @@ class App {
 
         // Node resize to viewport callback
         this.canvas.onNodeFitToViewport = this.handleNodeFitToViewport.bind(this);
+        this.canvas.onNodeResetSize = this.handleNodeResetSize.bind(this);
 
         // Content editing callbacks (for FETCH_RESULT nodes)
         this.canvas.onNodeEditContent = this.handleNodeEditContent.bind(this);
@@ -4086,6 +4087,65 @@ class App {
      */
     handleNodeFitToViewport(nodeId) {
         this.canvas.resizeNodeToViewport(nodeId);
+    }
+
+    /**
+     * Handle resetting a node to its default size
+     */
+    handleNodeResetSize(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        const wrapper = this.canvas.nodeElements.get(nodeId);
+        if (!wrapper) return;
+
+        const div = wrapper.querySelector('.node');
+        if (!div) return;
+
+        const isScrollableType = SCROLLABLE_NODE_TYPES.includes(node.type);
+        const isMatrixNode = node.type === NodeType.MATRIX;
+
+        let defaultWidth, defaultHeight;
+
+        if (isScrollableType) {
+            // Use fixed default size for scrollable types
+            defaultWidth = SCROLLABLE_NODE_SIZE.width;
+            defaultHeight = SCROLLABLE_NODE_SIZE.height;
+        } else if (isMatrixNode) {
+            // Matrix nodes keep their current dimensions (they have special sizing)
+            return;
+        } else {
+            // For non-scrollable types, calculate based on content
+            // Temporarily remove constraints to measure natural size
+            const oldMinHeight = div.style.minHeight;
+            div.style.minHeight = 'auto';
+            const contentHeight = div.scrollHeight + 10;
+            div.style.minHeight = oldMinHeight;
+
+            // Use stored width or calculate from content
+            defaultWidth = node.width || 400;
+            defaultHeight = Math.max(100, contentHeight);
+        }
+
+        // Apply new dimensions
+        wrapper.setAttribute('width', defaultWidth);
+        wrapper.setAttribute('height', defaultHeight);
+
+        // Remove viewport-fitted class to restore natural sizing
+        div.classList.remove('viewport-fitted');
+        div.style.height = '';
+
+        // Update edges
+        const x = parseFloat(wrapper.getAttribute('x'));
+        const y = parseFloat(wrapper.getAttribute('y'));
+        this.canvas.updateEdgesForNode(nodeId, { x, y });
+
+        // Persist dimensions
+        this.graph.updateNode(nodeId, {
+            width: defaultWidth,
+            height: defaultHeight
+        });
+        this.saveSession();
     }
 
     /**

@@ -1140,7 +1140,8 @@ html, body {
     background: #2f9e44;
 }
 
-.header-btn.fit-viewport-btn {
+.header-btn.fit-viewport-btn,
+.header-btn.reset-size-btn {
     display: inline-flex;
     background: var(--bg-secondary);
     color: var(--text-secondary);
@@ -1148,11 +1149,13 @@ html, body {
     transition: opacity 0.15s, background 0.15s;
 }
 
-.node:hover .header-btn.fit-viewport-btn {
+.node:hover .header-btn.fit-viewport-btn,
+.node:hover .header-btn.reset-size-btn {
     opacity: 0.6;
 }
 
-.header-btn.fit-viewport-btn:hover {
+.header-btn.fit-viewport-btn:hover,
+.header-btn.reset-size-btn:hover {
     opacity: 1;
     background: var(--accent);
     color: white;

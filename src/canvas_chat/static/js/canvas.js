@@ -53,6 +53,7 @@ class Canvas {
         this.onNodeRetry = null;  // For retrying failed operations
         this.onNodeDismissError = null;  // For dismissing error nodes
         this.onNodeFitToViewport = null;  // For resizing node to 80% of viewport
+        this.onNodeResetSize = null;  // For resetting node to default size
         this.onNodeEditContent = null;  // For editing node content (FETCH_RESULT)
         this.onNodeResummarize = null;  // For re-summarizing edited content
 
@@ -1353,17 +1354,18 @@ class Canvas {
                     <span class="node-model">${node.model || ''}</span>
                     ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="header-btn stop-btn" title="Stop generating" style="display:none;">⏹</button>' : ''}
                     ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="header-btn continue-btn" title="Continue generating" style="display:none;">▶</button>' : ''}
+                    <button class="header-btn reset-size-btn" title="Reset to default size">↺</button>
                     <button class="header-btn fit-viewport-btn" title="Fit to viewport (f)">⤢</button>
                     <button class="node-action delete-btn" title="Delete node">🗑️</button>
                 </div>
                 <div class="node-content">${contentHtml}</div>
                 <div class="node-actions">
-                    <button class="node-action reply-btn" title="Reply">↩️ Reply</button>
+                    <button class="node-action reply-btn" title="Reply (r)">↩️ Reply (r)</button>
                     ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="node-action summarize-btn" title="Summarize">📝 Summarize</button>' : ''}
                     ${node.type === NodeType.REFERENCE ? '<button class="node-action fetch-summarize-btn" title="Fetch full content and summarize">📄 Fetch & Summarize</button>' : ''}
                     ${[NodeType.FETCH_RESULT, NodeType.NOTE].includes(node.type) ? '<button class="node-action edit-content-btn" title="Edit content">✏️ Edit</button>' : ''}
                     ${node.type === NodeType.FETCH_RESULT ? '<button class="node-action resummarize-btn" title="Create new summary from edited content">📝 Re-summarize</button>' : ''}
-                    <button class="node-action copy-btn" title="Copy content">📋 Copy</button>
+                    <button class="node-action copy-btn" title="Copy (c)">📋 Copy (c)</button>
                 </div>
                 <div class="resize-handle resize-e" data-resize="e"></div>
                 <div class="resize-handle resize-s" data-resize="s"></div>
@@ -1501,25 +1503,22 @@ class Canvas {
 
                     wrapper.setAttribute('width', newWidth);
 
-                    // Get minimum content height (needed for both width-only and height resizing)
                     const isMatrixNode = div.classList.contains('matrix');
-                    let minContentHeight = 100;
-
-                    if (!isMatrixNode) {
-                        // Temporarily remove min-height to get natural content height
-                        const oldMinHeight = div.style.minHeight;
-                        div.style.minHeight = 'auto';
-                        minContentHeight = div.scrollHeight + 10;
-                        div.style.minHeight = oldMinHeight;
-                    }
 
                     if (resizeType.includes('s')) {
-                        // When resizing south, don't allow smaller than content height
-                        newHeight = Math.max(minContentHeight, startHeight + dy);
+                        // Allow height to shrink freely (just usability minimum)
+                        // Mark as viewport-fitted so content scrolls when needed
+                        newHeight = Math.max(100, startHeight + dy);
                         wrapper.setAttribute('height', newHeight);
+                        div.classList.add('viewport-fitted');
+                        div.style.height = '100%';
                     } else if (resizeType === 'e' && !isMatrixNode) {
-                        // If only resizing width (east), auto-adjust height based on content
-                        wrapper.setAttribute('height', Math.max(100, minContentHeight));
+                        // If only resizing width (east), keep height the same
+                        // Content will wrap, and if it overflows, scrollbar will appear
+                        // Mark as viewport-fitted so content scrolls when needed
+                        div.classList.add('viewport-fitted');
+                        div.style.height = '100%';
+                        // Height stays at startHeight (already set above)
                     }
                     // If just resizing east on a matrix, don't change height at all
 
@@ -1646,6 +1645,15 @@ class Canvas {
             fitViewportBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onNodeFitToViewport) this.onNodeFitToViewport(node.id);
+            });
+        }
+
+        // Reset size button
+        const resetSizeBtn = div.querySelector('.reset-size-btn');
+        if (resetSizeBtn) {
+            resetSizeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.onNodeResetSize) this.onNodeResetSize(node.id);
             });
         }
 
@@ -2708,6 +2716,7 @@ class Canvas {
                 </div>
                 <span class="node-type">Matrix</span>
                 <button class="header-btn stop-btn" title="Stop filling cells" style="display:none;">⏹</button>
+                <button class="header-btn reset-size-btn" title="Reset to default size">↺</button>
                 <button class="header-btn fit-viewport-btn" title="Fit to viewport (f)">⤢</button>
                 <button class="node-action delete-btn" title="Delete node">🗑️</button>
             </div>
