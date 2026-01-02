@@ -92,25 +92,33 @@ Note: Currently, highlighting captures the entire image. Cropping specific regio
 ## Use cases
 
 ### Code review
+
 Upload a screenshot of code and ask:
+
 - "What bugs do you see in this code?"
 - "How would you refactor this?"
 - "Explain what this function does"
 
 ### Diagram analysis
+
 Upload architecture diagrams, flowcharts, or wireframes:
+
 - "Describe the data flow in this architecture"
 - "What are the potential failure points?"
 - "Convert this flowchart to pseudocode"
 
 ### Document extraction
+
 Upload photos of documents, whiteboards, or handwritten notes:
+
 - "Transcribe this handwritten text"
 - "Summarize the key points from this whiteboard"
 - "Extract the table data as markdown"
 
 ### Visual debugging
+
 Upload error screenshots, UI issues, or log outputs:
+
 - "What does this error message mean?"
 - "Why might this UI look broken?"
 - "Parse these logs and find the issue"

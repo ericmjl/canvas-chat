@@ -15,7 +15,7 @@ You need an Exa API key configured in Settings:
 
 Type `/research` followed by your research topic:
 
-```
+```text
 /research recent advances in CRISPR gene editing for treating sickle cell disease
 ```
 
@@ -37,6 +37,7 @@ Exa's research API:
 4. **Cites sources** - Includes links to the pages used
 
 You'll see status updates as it progresses:
+
 - "Planning research..."
 - "Searching sources..."
 - "Synthesizing report..."
@@ -90,7 +91,7 @@ Select specific text in the research report and click **🌿 Branch** to create 
 
 Reply to the research node to ask clarifying questions:
 
-```
+```text
 Can you explain the third-generation CRISPR tools mentioned in the report?
 ```
 
@@ -110,17 +111,20 @@ Research nodes are **500px wide** (vs 360px for normal nodes) to better display 
 ### Be specific but not narrow
 
 ✅ Good:
-```
+
+```text
 /research quantum error correction techniques used in superconducting qubits, including surface codes and recent improvements
 ```
 
 ❌ Too vague:
-```
+
+```text
 /research quantum computing
 ```
 
 ❌ Too narrow (use /search instead):
-```
+
+```text
 /research exact page count of Nature paper 10.1038/12345
 ```
 
@@ -128,7 +132,7 @@ Research nodes are **500px wide** (vs 360px for normal nodes) to better display 
 
 After getting initial results, select the research node and run a follow-up:
 
-```
+```text
 /research how could these techniques be applied to topological qubits?
 ```
 
@@ -137,11 +141,13 @@ The AI uses your first research as context for the second.
 ### Combine with other features
 
 **Research → Matrix evaluation:**
+
 1. Research multiple competing approaches
 2. Select the research node
 3. Run `/matrix compare these approaches against ease of implementation, scalability, and cost`
 
 **Research → Committee:**
+
 1. Get research findings
 2. Run `/committee what are the biggest risks with this approach?`
 3. Multiple AI models debate the risks based on your research
@@ -149,11 +155,13 @@ The AI uses your first research as context for the second.
 ### When to use /research vs /search
 
 Use `/search` when you want to:
+
 - Browse multiple sources yourself
 - Quickly find a specific page or fact
 - See what information is available
 
 Use `/research` when you want:
+
 - A synthesized report combining multiple sources
 - Comprehensive coverage of a topic
 - Citation-backed analysis
@@ -168,15 +176,18 @@ Use `/research` when you want:
 ## Troubleshooting
 
 **"Research failed: 402 Payment Required"**
+
 - Your Exa account has run out of credits
 - Add credits at https://exa.ai/
 
 **Research returns very brief results**
+
 - Topic may be too narrow or too obscure
 - Try rephrasing with more context
 - Consider using `/search` for niche topics
 
 **Sources are not clickable**
+
 - Check that the research completed successfully
 - Sources should appear as markdown links `[text](url)`
 - If plain URLs appear, the research may have been interrupted

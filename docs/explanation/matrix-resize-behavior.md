@@ -19,6 +19,7 @@ Matrix nodes contain a table with rows and columns of content. When users resize
 **All rows should always remain visible, but cell content should dynamically truncate/fade based on available space per row.**
 
 This means:
+
 - When you make the node taller, each row gets more height and shows more content
 - When you make the node shorter, each row gets less height and content fades out
 - You always see the full matrix structure (all rows and columns)
@@ -116,7 +117,7 @@ if (isMatrix) {
 
 The full hierarchy for height to flow correctly:
 
-```
+```text
 foreignObject (wrapper) - explicit width/height from resize
 └── .node.matrix - height: 100%
     └── .node-header - fixed height
@@ -131,6 +132,7 @@ foreignObject (wrapper) - explicit width/height from resize
 ```
 
 Each level must have:
+
 - Explicit height or `flex: 1` to fill parent
 - `min-height: 0` to allow shrinking
 - `overflow: hidden` to clip content

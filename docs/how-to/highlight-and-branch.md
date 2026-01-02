@@ -11,6 +11,7 @@ When you select text within a node and create a highlight:
 3. You can reply to or branch from the highlight independently
 
 This is useful for:
+
 - Responding to a specific point in a long message
 - Extracting key quotes or findings for later reference
 - Branching the conversation in a new direction from one specific idea
@@ -40,7 +41,8 @@ A highlight node appears near the viewport center, connected to the source node 
 ### Without a reply
 
 Just creates the highlight node:
-```
+
+```text
 Original node: "Quantum computing uses qubits which can exist in superposition..."
 
 Highlight node: "> Quantum computing uses qubits which can exist in superposition"
@@ -71,6 +73,7 @@ The selected text becomes context for the slash command, helping the AI refine i
 ### Highlight nodes are full nodes
 
 They work exactly like other nodes:
+
 - Reply to them
 - Select them as context for new messages
 - Delete them if no longer needed
@@ -84,7 +87,7 @@ The dashed line from source → highlight is a HIGHLIGHT edge type. This visuall
 
 You can create many highlights from the same node:
 
-```
+```text
 Research paper node
   ↦ "Methodology section" (highlight)
   ↦ "Key finding #1" (highlight)
@@ -113,13 +116,15 @@ In a long AI response with multiple ideas:
 3. The conversation focuses without repeating the entire context
 
 **Without highlights:**
-```
+
+```text
 You: "Can you elaborate on the third paragraph about database indexing?"
 AI: [has to re-identify which part you meant]
 ```
 
 **With highlights:**
-```
+
+```text
 You: [highlight third paragraph]
 You: "Can you elaborate on this?"
 AI: [knows exactly what "this" refers to]
@@ -141,12 +146,14 @@ This works like text highlighting but for visual content.
 ### Keep highlights focused
 
 ✅ Good: Highlight a single idea or finding
-```
+
+```text
 > "The model achieved 94% accuracy on the validation set"
 ```
 
 ❌ Too broad: Highlighting multiple paragraphs
-```
+
+```text
 > [giant wall of text spanning 5 different topics]
 ```
 
@@ -155,6 +162,7 @@ For large sections, just reply to the full node instead.
 ### Use highlights for non-linear reading
 
 When reading a long document:
+
 - Don't read top-to-bottom
 - Scan for interesting parts
 - Highlight and explore each in depth
@@ -171,7 +179,7 @@ After highlighting several key points:
 
 Highlights can themselves be highlighted:
 
-```
+```text
 Research node
   ↦ Highlight A
       ↦ Highlight A.1 (specific sentence within A)
@@ -197,6 +205,7 @@ The vague pronoun "this" is resolved using your highlighted text as context.
 ### Why this matters
 
 It enables conversational slash commands:
+
 - `/search what are alternatives?` — alternatives to what? Your highlight!
 - `/research explain the implications` — implications of what? Your highlight!
 
@@ -212,21 +221,25 @@ It enables conversational slash commands:
 ## Troubleshooting
 
 **"🌿 Branch" button doesn't appear**
+
 - Make sure you've selected text (click and drag)
 - Try selecting text again
 - Some nodes may not support text selection (check node type)
 
 **Highlight appears in wrong location**
+
 - Highlights appear near the viewport center
 - Move them manually by dragging
 - Or use auto-layout (🔀 button) to reorganize
 
 **Selected text is not visible in highlight node**
+
 - Check that you selected text before clicking Branch
 - Highlights should show the text with `>` prefix (blockquote)
 - If empty, try creating the highlight again
 
 **Can't highlight images**
+
 - Images use a different mechanism: right-click → "Extract as separate node"
 - This creates an IMAGE node, not a HIGHLIGHT node
 - Connected with the same dashed line style

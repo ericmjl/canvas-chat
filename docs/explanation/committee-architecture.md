@@ -35,11 +35,13 @@ All phases stream in real-time, creating nodes on the canvas as responses arrive
 **Implementation:** `stream_single_opinion()` in `app.py`
 
 Each committee member's opinion is streamed concurrently using:
+
 - Python's `asyncio.create_task()` for parallelization
 - `asyncio.Queue` for event communication
 - Server-Sent Events (SSE) to stream to the frontend
 
 Why parallel?
+
 - Faster total time (3 models in ~10s vs ~30s sequential)
 - All models receive the question simultaneously
 - No model is influenced by others' opinions (independence)
@@ -49,11 +51,13 @@ Why parallel?
 **Implementation:** `stream_single_review()` in `app.py`
 
 When enabled, each model receives:
+
 - The original question
 - All other models' opinions (anonymized as "Opinion A", "Opinion B", etc.)
 - Instructions to review, critique, and rank the opinions
 
 Why optional?
+
 - **Cost:** Review phase doubles the API calls (5 opinions → 5 reviews)
 - **Time:** Adds 30-60 seconds to total duration
 - **Value:** Most useful for high-stakes decisions, less useful for exploratory questions
@@ -63,17 +67,20 @@ Why optional?
 **Implementation:** Final phase in `/api/committee` endpoint
 
 The chairman model receives:
+
 - The original question
 - All committee opinions (with model names)
 - All reviews (if review phase was enabled)
 
 The chairman is prompted to:
+
 - Identify areas of agreement
 - Note significant disagreements
 - Assess which perspectives are most accurate/helpful
 - Provide a comprehensive final answer
 
 Why a separate synthesis step?
+
 - Avoids "tyranny of the majority" (chairman can disagree with consensus if justified)
 - Provides meta-analysis (what does the pattern of agreement/disagreement tell us?)
 - Single coherent answer (vs requiring user to read 3-5 separate opinions)
@@ -84,7 +91,7 @@ Why a separate synthesis step?
 
 The committee uses SSE events to communicate progress:
 
-```
+```text
 opinion_start → opinion_chunk* → opinion_done
 review_start → review_chunk* → review_done
 synthesis_start → synthesis_chunk* → synthesis_done
@@ -95,11 +102,13 @@ Frontend creates nodes progressively as each phase completes.
 ### Concurrency Management
 
 Key technical challenge: Multiple async streams (3-5 opinions) need to:
+
 1. Stream concurrently (not sequentially)
 2. Send events to a single SSE response stream
 3. Handle failures gracefully (one model failing doesn't break others)
 
 Solution: `asyncio.Queue` as a shared event bus
+
 - Each opinion task pushes events to the queue
 - Main generator pulls from queue and yields SSE events
 - Tasks continue even if one fails
@@ -107,6 +116,7 @@ Solution: `asyncio.Queue` as a shared event bus
 ### Error Handling
 
 Robust failure modes:
+
 - **One opinion fails:** Committee continues with remaining models; synthesis notes which models contributed
 - **Review fails:** Reviews are optional; synthesis works without them
 - **Synthesis fails:** User still has all individual opinions as fallback
@@ -115,7 +125,7 @@ Robust failure modes:
 
 Committee creates a specific graph pattern:
 
-```
+```text
 HUMAN (question)
   ├─→ OPINION (model 1)
   ├─→ OPINION (model 2)
@@ -127,6 +137,7 @@ HUMAN (question)
 ```
 
 Edge types:
+
 - HUMAN → OPINION: `opinion` edge (how the question reached each model)
 - OPINION → REVIEW: `review` edge (opinions being reviewed)
 - OPINION/REVIEW → SYNTHESIS: `synthesis` edge (inputs to final answer)
@@ -138,10 +149,12 @@ Edge types:
 Ask model 1, then show model 2 what model 1 said, etc.
 
 **Advantages:**
+
 - Models can build on each other's ideas
 - More conversational/deliberative
 
 **Disadvantages:**
+
 - Slower (sequential = 3x longer for 3 models)
 - Order bias (later models influenced by earlier ones)
 - Lost model independence
@@ -151,10 +164,12 @@ Ask model 1, then show model 2 what model 1 said, etc.
 Each model votes yes/no on a proposition.
 
 **Advantages:**
+
 - Simple aggregation (majority wins)
 - Clear decision output
 
 **Disadvantages:**
+
 - Only works for yes/no questions
 - Doesn't capture nuance or reasoning
 - Loses rich explanations
@@ -164,10 +179,12 @@ Each model votes yes/no on a proposition.
 Models argue with each other across multiple rounds.
 
 **Advantages:**
+
 - More thorough exploration of ideas
 - Weaknesses get challenged directly
 
 **Disadvantages:**
+
 - Very expensive (many back-and-forth rounds)
 - Very slow (minutes to complete)
 - Risk of models "agreeing to agree" or getting stuck
@@ -177,10 +194,12 @@ Models argue with each other across multiple rounds.
 Take the average of multiple model responses.
 
 **Advantages:**
+
 - Fully automated (no synthesis needed)
 - Simple aggregation
 
 **Disadvantages:**
+
 - Doesn't work for text (what's the "average" of two paragraphs?)
 - Loses individual perspectives
 - No meta-analysis of agreement/disagreement
@@ -204,6 +223,7 @@ Take the average of multiple model responses.
 - 5 models, with review: ~60-90 seconds
 
 Time is dominated by:
+
 - Slowest model in each phase (parallelization limited by slowest member)
 - Chairman synthesis (usually 10-20 seconds)
 
@@ -214,6 +234,7 @@ Time is dominated by:
 - 5 models, with review: ~20-25 calls
 
 Cost-saving strategies:
+
 - Use smaller models for opinions (GPT-4o-mini, Claude Haiku)
 - Reserve large models for chairman
 - Disable review for exploratory questions
@@ -221,6 +242,7 @@ Cost-saving strategies:
 ### API Key Management
 
 Each model requires its provider's API key:
+
 - OpenAI models → `openai` key
 - Anthropic models → `anthropic` key
 - Google models → `google` key
@@ -240,6 +262,7 @@ When user selects nodes or text before running `/committee`:
 4. All committee members receive the refined question + conversation history
 
 This enables conversational committees:
+
 - "What do you think about this?" (where "this" = selected research paper)
 - "Should we use this approach?" (where "this" = architecture discussion from earlier nodes)
 
@@ -248,21 +271,27 @@ This enables conversational committees:
 Potential improvements:
 
 ### Configurable synthesis prompts
+
 Allow users to customize how the chairman synthesizes (focus on pros/cons, focus on consensus, etc.)
 
 ### Model expertise hints
+
 Let users tag models with domains ("good at math", "good at creative writing") and have chairman weight opinions accordingly
 
 ### Iterative refinement
+
 After synthesis, allow user to ask follow-up questions that trigger a second committee round
 
 ### Cost estimation
+
 Show estimated API cost before starting committee
 
 ### Parallel synthesis
+
 If multiple chairman candidates are selected, run multiple syntheses in parallel and let user compare
 
 ### Tournament bracket
+
 For very large model sets (10+ models), run multiple committees and have winners face off
 
 ## Testing Committee Behavior
@@ -282,6 +311,7 @@ To verify the committee works correctly:
 ## Summary
 
 The committee architecture balances:
+
 - **Independence** (parallel opinions)
 - **Thoroughness** (optional review)
 - **Synthesis** (chairman meta-analysis)

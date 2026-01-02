@@ -10,7 +10,7 @@ There are three ways to import a PDF:
 
 Use the `/note` command with a PDF URL:
 
-```
+```text
 /note https://arxiv.org/pdf/2301.12345.pdf
 ```
 

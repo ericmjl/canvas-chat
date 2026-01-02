@@ -225,6 +225,7 @@ if (tagsHtml) {
 ```
 
 **Important CSS considerations:**
+
 - Tags are positioned with `position: absolute; right: 100%` (outside the left edge of the node)
 - The `.node` container must NOT have `overflow: hidden` or tags will be clipped
 - Inner containers (`.node-content`, `.matrix-table-container`) handle their own overflow for scrolling
@@ -293,6 +294,7 @@ node --check static/js/app.js
 ```
 
 Common issues to watch for:
+
 - Variable name collisions (e.g., reusing `context` in different scopes)
 - Missing imports or incorrect function names
 
@@ -306,6 +308,7 @@ that are hard to debug because they only appear when the code path is triggered.
 **Verification steps:**
 
 1. Search for the method definition in the source file:
+
    ```bash
    grep -n "methodName\s*(" static/js/chat.js
    ```
@@ -325,12 +328,14 @@ that are hard to debug because they only appear when the code path is triggered.
 **Key methods that DO exist:**
 
 `chat.js`:
+
 - `getApiKeyForModel(model)` - Get API key for a model
 - `sendMessage(messages, model, onChunk, onDone, onError)` - Stream LLM response
 - `summarize(messages, model)` - Get a summary (non-streaming)
 - `estimateTokens(text, model)` - Estimate token count
 
 `canvas.js`:
+
 - `getSelectedNodeIds()` - Get array of selected node IDs
 - `updateNodeContent(nodeId, content, isStreaming)` - Update node text
 - `showStopButton(nodeId)` / `hideStopButton(nodeId)` - Streaming controls
@@ -339,6 +344,7 @@ that are hard to debug because they only appear when the code path is triggered.
 - `panToNodeAnimated(nodeId)` - Navigate to a node
 
 `storage.js`:
+
 - `getApiKeys()` - Get all stored API keys object
 - `getApiKeyForProvider(provider)` - Get key for specific provider
 - `getExaApiKey()` - Get Exa search API key

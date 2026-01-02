@@ -1,0 +1,16 @@
+{
+  // Disable line length rule - 80 chars is too restrictive for prose
+  "MD013": false,
+  
+  // Disable bare URL rule - URLs in docs are intentional
+  "MD034": false,
+  
+  // Disable emphasis as heading - sometimes used stylistically
+  "MD036": false,
+  
+  // Disable first-line heading rule - some docs don't need H1
+  "MD041": false,
+  
+  // Disable table column style - tables are formatted for readability
+  "MD060": false
+}
