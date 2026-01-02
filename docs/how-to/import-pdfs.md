@@ -47,7 +47,7 @@ This reminds you that:
 
 - OCR and text extraction can introduce errors
 - Complex layouts (tables, multi-column) may not extract cleanly
-- Mathematical formulas often don't survive extraction
+- Mathematical formulas may not extract cleanly, but you can edit the note and add LaTeX math notation (e.g., `\(E = mc^2\)` or `\[...\]`) which will render properly
 - You should verify critical information against the original
 
 ## Working with imported PDFs

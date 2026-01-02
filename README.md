@@ -32,6 +32,7 @@ Your browser will open automatically to the local server.
 - **Web Research**: Use `/research <topic>` to generate research reports via Exa
 - **Web Search**: Use `/search <query>` to search the web via Exa
 - **Image Analysis**: Upload, paste, or drag-and-drop images for multimodal AI analysis
+- **Markdown & Math Rendering**: Full markdown support with LaTeX math rendering (KaTeX) for inline `\(...\)` and display `\[...\]` math
 - **Multiple LLM Providers**: Support for OpenAI, Anthropic, Google, Groq, GitHub Models, and local models via Ollama
 - **Local-First**: All data stored in your browser (IndexedDB)
 - **Export/Import**: Save sessions as `.canvaschat` files
