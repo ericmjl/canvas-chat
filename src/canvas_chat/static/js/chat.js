@@ -91,7 +91,7 @@ class Chat {
                 api_key: apiKey,
                 temperature: 0.7,
             };
-            
+
             if (baseUrl) {
                 requestBody.base_url = baseUrl;
             }
@@ -110,7 +110,7 @@ class Chat {
             }
 
             let fullContent = '';
-            
+
             await SSE.readSSEStream(response, {
                 onEvent: (eventType, data) => {
                     if (eventType === 'message' && data) {
@@ -131,11 +131,11 @@ class Chat {
                 console.log('Request aborted');
                 return;
             }
-            
+
             console.error('Chat error:', err);
             onError(err);
         }
-        
+
         return abortController;
     }
 
@@ -152,7 +152,7 @@ class Chat {
                 model,
                 api_key: apiKey,
             };
-            
+
             if (baseUrl) {
                 requestBody.base_url = baseUrl;
             }

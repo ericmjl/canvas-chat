@@ -16,9 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup uv
-        # Install latest uv version using the installer
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
 
       - name: Setup Pixi Environment
         uses: prefix-dev/setup-pixi@v0.9.3
@@ -27,7 +26,5 @@ jobs:
           cache: true
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
 
-      - name: Set up Python
-        run: uv python install
-
-      - uses: pre-commit/action@v3.0.1
+      - name: Run pre-commit
+        run: uvx pre-commit run --all-files

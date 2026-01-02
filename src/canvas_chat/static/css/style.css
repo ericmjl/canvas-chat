@@ -15,7 +15,7 @@
     --text-primary: #1e1e1e;
     --text-secondary: #6b7280;
     --text-muted: #9ca3af;
-    
+
     /* Node colors */
     --node-human: #e3f2fd;
     --node-human-border: #90caf9;
@@ -43,7 +43,7 @@
     --node-pdf-border: #4db6ac;
     --node-image: #fce4ec;
     --node-image-border: #f48fb1;
-    
+
     /* UI colors */
     --edge-color: #495057;
     --edge-color-light: #adb5bd;
@@ -55,20 +55,20 @@
     --danger: #fa5252;
     --success: #40c057;
     --warning: #fab005;
-    
+
     /* Shadows */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.06);
     --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
-    
+
     /* Spacing */
     --toolbar-height: 48px;
     --input-height: 60px;
-    
+
     /* Typography */
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
-    
+
     /* Border radius - slightly rounded for hand-drawn feel */
     --radius-sm: 4px;
     --radius-md: 8px;
@@ -84,7 +84,7 @@
         --text-primary: #e4e4e7;
         --text-secondary: #a1a1aa;
         --text-muted: #71717a;
-        
+
         --node-human: #1e3a5f;
         --node-human-border: #2563eb;
         --node-ai: #3b2d4a;
@@ -111,10 +111,10 @@
         --node-pdf-border: #26a69a;
         --node-image: #3d2d35;
         --node-image-border: #f06292;
-        
+
         --edge-color: #9ca3af;
         --edge-color-light: #4b5563;
-        
+
         --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
         --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
         --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
@@ -360,7 +360,7 @@ html, body {
 
 /* Grid pattern for canvas (subtle) */
 #canvas {
-    background-image: 
+    background-image:
         radial-gradient(circle, var(--edge-color-light) 1px, transparent 1px);
     background-size: 24px 24px;
     background-position: center center;
@@ -642,10 +642,10 @@ html, body {
 }
 
 @keyframes sourceHighlightPulse {
-    0%, 100% { 
+    0%, 100% {
         background: var(--node-highlight);
     }
-    50% { 
+    50% {
         background: color-mix(in srgb, var(--node-highlight) 70%, var(--node-highlight-border));
     }
 }
@@ -1462,7 +1462,7 @@ html, body {
     .node-content code {
         background: rgba(255, 255, 255, 0.1);
     }
-    
+
     .node-content pre {
         background: rgba(255, 255, 255, 0.08);
     }
@@ -3194,4 +3194,3 @@ kbd {
 .search-result-nav-hint kbd {
     margin: 0 4px;
 }
-

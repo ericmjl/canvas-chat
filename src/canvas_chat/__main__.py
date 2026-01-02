@@ -10,7 +10,10 @@ import uvicorn
 
 app = typer.Typer(
     name="canvas-chat",
-    help="A visual, non-linear chat interface where conversations are nodes on an infinite canvas.",
+    help=(
+        "A visual, non-linear chat interface where conversations are "
+        "nodes on an infinite canvas."
+    ),
     add_completion=False,
 )
 

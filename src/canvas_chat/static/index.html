@@ -68,7 +68,7 @@
             <!-- Nodes layer -->
             <g id="nodes-layer"></g>
         </svg>
-        
+
         <!-- Hint overlay when no nodes visible -->
         <div id="no-nodes-hint" class="no-nodes-hint" style="display: none;">
             <div class="hint-content">
@@ -76,7 +76,7 @@
                 <span class="hint-text">Double-click to zoom out and see all nodes</span>
             </div>
         </div>
-        
+
         <!-- Drop zone overlay for file drag & drop -->
         <div id="drop-zone-overlay" class="drop-zone-overlay" style="display: none;">
             <div class="drop-zone-content">
@@ -84,7 +84,7 @@
                 <span class="drop-zone-text">Drop file here</span>
             </div>
         </div>
-        
+
         <!-- Node template (cloned when creating nodes) -->
         <template id="node-template">
             <foreignObject class="node-wrapper" width="320" height="auto">
@@ -103,12 +103,12 @@
             </foreignObject>
         </template>
     </div>
-    
+
     <!-- Canvas hint (temporary notification) -->
     <div id="canvas-hint" class="canvas-hint" style="display: none;">
         <span class="hint-text"></span>
     </div>
-    
+
     <!-- Tag Drawer (Right Side) -->
     <div id="tag-drawer" class="tag-drawer">
         <div class="tag-drawer-header">
@@ -137,8 +137,8 @@
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
                 </svg>
             </button>
-            <textarea 
-                id="chat-input" 
+            <textarea
+                id="chat-input"
                 placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
                 rows="1"
             ></textarea>
@@ -161,53 +161,53 @@
             <div class="modal-body">
                 <h3>API Keys</h3>
                 <p class="settings-note">Keys are stored locally in your browser and sent directly to providers.</p>
-                
+
                 <div class="api-key-group">
                     <label for="openai-key">OpenAI API Key</label>
                     <input type="password" id="openai-key" placeholder="sk-...">
                 </div>
-                
+
                 <div class="api-key-group">
                     <label for="anthropic-key">Anthropic API Key</label>
                     <input type="password" id="anthropic-key" placeholder="sk-ant-...">
                 </div>
-                
+
                 <div class="api-key-group">
                     <label for="google-key">Google AI API Key</label>
                     <input type="password" id="google-key" placeholder="AI...">
                 </div>
-                
+
                 <div class="api-key-group">
                     <label for="groq-key">Groq API Key</label>
                     <input type="password" id="groq-key" placeholder="gsk_...">
                 </div>
-                
+
                 <div class="api-key-group">
                     <label for="github-key">GitHub Token (for GitHub Models)</label>
                     <input type="password" id="github-key" placeholder="ghp_... or github_pat_...">
                     <small class="key-hint">PAT with <code>models:read</code> scope. <a href="https://github.com/settings/tokens" target="_blank">Create token</a></small>
                 </div>
-                
+
                 <div class="api-key-group copilot-note">
                     <strong>GitHub Copilot Models</strong>
                     <small class="key-hint">Copilot models (e.g., <code>github_copilot/gpt-4</code>) require device authentication. On first use, check your <strong>server terminal</strong> for a device code and URL to authenticate with GitHub.</small>
                 </div>
-                
+
                 <div class="api-key-group">
                     <label for="exa-key">Exa API Key (for web search)</label>
                     <input type="password" id="exa-key" placeholder="exa-...">
                     <small class="key-hint">Use <code>/search query</code> to search the web. <a href="https://dashboard.exa.ai/api-keys" target="_blank">Get API key</a></small>
                 </div>
-                
+
                 <h3>LLM Proxy</h3>
                 <p class="settings-note">Configure a custom base URL to use your own LLM proxy (e.g., LiteLLM proxy, OpenRouter).</p>
-                
+
                 <div class="api-key-group">
                     <label for="base-url">Base URL (optional)</label>
                     <input type="text" id="base-url" placeholder="https://your-proxy.example.com/v1">
                     <small class="key-hint">Leave empty to use default provider endpoints. Supports OpenAI-compatible APIs.</small>
                 </div>
-                
+
                 <button id="save-settings-btn" class="primary-btn">Save Settings</button>
             </div>
         </div>
@@ -231,7 +231,7 @@
 
     <!-- Hidden file input for import -->
     <input type="file" id="import-file-input" accept=".canvaschat" style="display: none;">
-    
+
     <!-- Hidden file input for PDF and image upload -->
     <input type="file" id="pdf-file-input" accept=".pdf,application/pdf,image/*" style="display: none;">
 
@@ -247,12 +247,12 @@
                     <label for="matrix-context">Matrix Context</label>
                     <input type="text" id="matrix-context" placeholder="e.g., evaluate ideas against criteria" readonly>
                 </div>
-                
+
                 <div id="matrix-loading" class="matrix-loading" style="display: none;">
                     <div class="loading-spinner"></div>
                     <span>Extracting rows and columns...</span>
                 </div>
-                
+
                 <div class="matrix-axes">
                     <div class="matrix-axis">
                         <div class="axis-header">
@@ -264,11 +264,11 @@
                         </ul>
                         <button class="axis-add-btn" id="add-row-btn">+ Add row</button>
                     </div>
-                    
+
                     <div class="matrix-swap">
                         <button id="swap-axes-btn" class="icon-btn" title="Swap Axes">⇄</button>
                     </div>
-                    
+
                     <div class="matrix-axis">
                         <div class="axis-header">
                             <h3>Columns</h3>
@@ -280,11 +280,11 @@
                         <button class="axis-add-btn" id="add-col-btn">+ Add column</button>
                     </div>
                 </div>
-                
+
                 <div class="matrix-warning" id="matrix-warning" style="display: none;">
                     ⚠️ Maximum 10 items per axis. Some items have been truncated.
                 </div>
-                
+
                 <div class="modal-actions">
                     <button id="matrix-cancel-btn" class="secondary-btn">Cancel</button>
                     <button id="matrix-create-btn" class="primary-btn">Create Matrix</button>
@@ -311,11 +311,11 @@
                         </ul>
                         <button class="axis-add-btn" id="edit-add-row-btn">+ Add row</button>
                     </div>
-                    
+
                     <div class="matrix-swap">
                         <button id="edit-swap-axes-btn" class="icon-btn" title="Swap Axes">⇄</button>
                     </div>
-                    
+
                     <div class="matrix-axis">
                         <div class="axis-header">
                             <h3>Columns</h3>
@@ -326,7 +326,7 @@
                         <button class="axis-add-btn" id="edit-add-col-btn">+ Add column</button>
                     </div>
                 </div>
-                
+
                 <div class="modal-actions">
                     <button id="edit-matrix-cancel-btn" class="secondary-btn">Cancel</button>
                     <button id="edit-matrix-save-btn" class="primary-btn">Save Changes</button>
@@ -392,9 +392,9 @@
         <div class="search-container">
             <div class="search-input-wrapper">
                 <span class="search-icon">🔍</span>
-                <input 
-                    type="text" 
-                    id="search-input" 
+                <input
+                    type="text"
+                    id="search-input"
                     class="search-input"
                     placeholder="Search nodes..."
                     autocomplete="off"
@@ -425,7 +425,7 @@
                         <li>Double-click empty space to fit all nodes in view</li>
                     </ul>
                 </section>
-                
+
                 <section class="help-section">
                     <h3>Keyboard Shortcuts</h3>
                     <table class="shortcuts-table">
@@ -444,7 +444,7 @@
                         </tbody>
                     </table>
                 </section>
-                
+
                 <section class="help-section">
                     <h3>Slash Commands</h3>
                     <table class="shortcuts-table">
@@ -457,7 +457,7 @@
                         </tbody>
                     </table>
                 </section>
-                
+
                 <section class="help-section">
                     <h3>Tips</h3>
                     <ul>
@@ -509,7 +509,7 @@
                     <label for="committee-question">Question</label>
                     <textarea id="committee-question" rows="3" readonly placeholder="Your question will appear here..."></textarea>
                 </div>
-                
+
                 <div class="committee-models-group">
                     <div class="committee-models-header">
                         <label>Committee Members</label>
@@ -519,14 +519,14 @@
                         <!-- Model checkboxes will be populated by JS -->
                     </div>
                 </div>
-                
+
                 <div class="committee-chairman-group">
                     <label for="committee-chairman">Chairman (synthesizes opinions)</label>
                     <select id="committee-chairman" class="committee-chairman-select">
                         <!-- Options populated by JS -->
                     </select>
                 </div>
-                
+
                 <div class="committee-options-group">
                     <label class="committee-checkbox-label">
                         <input type="checkbox" id="committee-include-review">
@@ -534,7 +534,7 @@
                         <span class="checkbox-hint">Each model reviews all other opinions before synthesis</span>
                     </label>
                 </div>
-                
+
                 <div class="modal-actions">
                     <button id="committee-cancel-btn" class="secondary-btn">Cancel</button>
                     <button id="committee-execute-btn" class="primary-btn" disabled>Consult Committee</button>
