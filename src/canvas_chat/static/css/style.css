@@ -1468,6 +1468,16 @@ html, body {
     }
 }
 
+/* Math rendering adjustments */
+.node-content .katex-display {
+    margin: 0.5em 0;
+    overflow-x: auto;
+}
+
+.node-content .katex {
+    font-size: 1em;
+}
+
 /* Chat Input */
 #chat-input-container {
     position: fixed;
