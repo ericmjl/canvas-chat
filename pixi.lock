@@ -880,7 +880,7 @@ packages:
 - pypi: ./
   name: canvas-chat
   version: 0.1.10
-  sha256: c4c19c6afbafd93460530d639b23e5d7df1bb83ae3d657957d0b637a689f6b34
+  sha256: 8665ca166ec431b9ec86c12e3b919cf301ac6b3ef748c8f5d7540df1b61838c8
   requires_dist:
   - fastapi>=0.115.0
   - uvicorn>=0.32.0
@@ -896,9 +896,11 @@ packages:
   - html2text>=2025.4.15,<2026
   - pymupdf>=1.24.0
   - python-multipart>=0.0.9
+  - typer
   - pytest>=8.0.0 ; extra == 'dev'
   - httpx>=0.27.0 ; extra == 'dev'
   requires_python: '>=3.11'
+  editable: true
 - pypi: https://files.pythonhosted.org/packages/4b/0c/0654233d7543ac8a50f4785f172430ddc97538ba418eb305d6e529d1a120/cbor2-5.8.0-cp314-cp314-macosx_11_0_arm64.whl
   name: cbor2
   version: 5.8.0
