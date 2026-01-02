@@ -21,7 +21,7 @@ import json
 import logging
 import traceback
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import litellm
 import httpx
@@ -51,10 +51,14 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 class Message(BaseModel):
-    """A single message in the conversation."""
+    """A single message in the conversation.
+
+    Content can be a string (text-only) or a list of content parts (multimodal).
+    Multimodal format: [{"type": "text", "text": "..."}, {"type": "image_url", "image_url": {"url": "data:..."}}]
+    """
 
     role: str  # "user", "assistant", "system"
-    content: str
+    content: Union[str, list]
 
 
 class ChatRequest(BaseModel):
@@ -1732,10 +1736,22 @@ Examples:
         add_copilot_headers(kwargs, request.model)
 
         response = await litellm.acompletion(**kwargs)
-        summary = response.choices[0].message.content.strip()
+        content = response.choices[0].message.content
+
+        # Handle None or empty content from LLM
+        if not content:
+            logger.warning(f"LLM returned empty content for summary")
+            raise HTTPException(status_code=422, detail="LLM returned empty summary")
+
+        summary = content.strip()
 
         # Clean up any quotes or extra formatting
         summary = summary.strip("\"'")
+
+        # Final check for empty summary after cleanup
+        if not summary:
+            logger.warning(f"Summary is empty after cleanup")
+            raise HTTPException(status_code=422, detail="LLM returned empty summary")
 
         logger.info(f"Generated summary: {summary}")
         return {"summary": summary}

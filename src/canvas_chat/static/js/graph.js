@@ -13,7 +13,7 @@ const NodeType = {
     REFERENCE: 'reference',
     SEARCH: 'search',      // Web search query node
     RESEARCH: 'research',  // Exa deep research node
-    HIGHLIGHT: 'highlight', // Excerpted text from another node
+    HIGHLIGHT: 'highlight', // Excerpted text or image from another node
     MATRIX: 'matrix',      // Cross-product evaluation table
     CELL: 'cell',          // Pinned cell from a matrix
     ROW: 'row',            // Extracted row from a matrix
@@ -22,7 +22,8 @@ const NodeType = {
     PDF: 'pdf',            // Imported PDF document
     OPINION: 'opinion',    // Committee member's opinion
     SYNTHESIS: 'synthesis', // Chairman's synthesized answer
-    REVIEW: 'review'       // Committee member's review of other opinions
+    REVIEW: 'review',      // Committee member's review of other opinions
+    IMAGE: 'image'         // Uploaded image for analysis
 };
 
 /**
@@ -38,7 +39,8 @@ const SCROLLABLE_NODE_TYPES = [
     NodeType.OPINION,
     NodeType.SYNTHESIS,
     NodeType.REVIEW,
-    NodeType.NOTE
+    NodeType.NOTE,
+    NodeType.IMAGE
 ];
 
 /**
@@ -534,12 +536,20 @@ class Graph {
         
         // Convert to message format for API
         // User-generated content types are mapped to 'user' role, AI-generated to 'assistant'
-        const userTypes = [NodeType.HUMAN, NodeType.HIGHLIGHT, NodeType.NOTE];
-        return sorted.map(node => ({
-            role: userTypes.includes(node.type) ? 'user' : 'assistant',
-            content: node.content,
-            nodeId: node.id
-        }));
+        const userTypes = [NodeType.HUMAN, NodeType.HIGHLIGHT, NodeType.NOTE, NodeType.IMAGE];
+        return sorted.map(node => {
+            const msg = {
+                role: userTypes.includes(node.type) ? 'user' : 'assistant',
+                content: node.content,
+                nodeId: node.id
+            };
+            // Include image data if present (for IMAGE and HIGHLIGHT nodes with images)
+            if (node.imageData) {
+                msg.imageData = node.imageData;
+                msg.mimeType = node.mimeType;
+            }
+            return msg;
+        });
     }
 
     /**
