@@ -4295,15 +4295,35 @@ class App {
         let emptyState = container.querySelector('.empty-state');
         
         if (this.graph.isEmpty()) {
+            const hasApiKeys = storage.hasAnyLLMApiKey();
+            
             if (!emptyState) {
                 emptyState = document.createElement('div');
                 emptyState.className = 'empty-state';
+                container.appendChild(emptyState);
+            }
+            
+            if (hasApiKeys) {
+                // User has API keys configured - show normal onboarding
                 emptyState.innerHTML = `
                     <h2>Start a conversation</h2>
                     <p>Type a message below to begin exploring ideas on the canvas.</p>
                     <p><kbd>Cmd/Ctrl+Click</kbd> to multi-select nodes</p>
                 `;
-                container.appendChild(emptyState);
+            } else {
+                // No API keys - guide user to settings first
+                emptyState.innerHTML = `
+                    <h2>Welcome to Canvas Chat</h2>
+                    <p>To get started, add an API key in <a href="#" class="empty-state-settings-link">Settings</a>.</p>
+                `;
+                // Add click handler for the settings link
+                const settingsLink = emptyState.querySelector('.empty-state-settings-link');
+                if (settingsLink) {
+                    settingsLink.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.showSettingsModal();
+                    });
+                }
             }
         } else if (emptyState) {
             emptyState.remove();
@@ -4575,6 +4595,9 @@ class App {
         
         // Reload models to reflect newly configured API keys
         this.loadModels();
+        
+        // Update empty state in case API key status changed
+        this.updateEmptyState();
         
         this.hideSettingsModal();
     }

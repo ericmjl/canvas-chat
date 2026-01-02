@@ -235,6 +235,16 @@ class Storage {
     }
 
     /**
+     * Check if any LLM API keys are configured (excludes Exa which is search-only)
+     * @returns {boolean} - True if at least one LLM provider key is configured
+     */
+    hasAnyLLMApiKey() {
+        const keys = this.getApiKeys();
+        const llmProviders = ['openai', 'anthropic', 'google', 'groq', 'github'];
+        return llmProviders.some(provider => keys[provider] && keys[provider].trim() !== '');
+    }
+
+    /**
      * Build an API keys dict for a list of models.
      * Used by endpoints that need multiple provider keys (e.g., committee).
      * @param {string[]} modelIds - Array of model IDs (e.g., ["openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"])

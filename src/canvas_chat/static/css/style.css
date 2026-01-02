@@ -1725,6 +1725,16 @@ html, body {
     font-size: 14px;
 }
 
+.empty-state a {
+    color: var(--accent-color);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.empty-state a:hover {
+    color: var(--accent-hover);
+}
+
 /* Keyboard shortcut hints */
 kbd {
     display: inline-block;
