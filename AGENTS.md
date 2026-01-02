@@ -78,6 +78,37 @@ After completing a task, take a moment to review the code you've written and loo
 
 It's fine if there's nothing to refactor, but if improvements exist, address them before committing.
 
+## Git workflow
+
+### Pre-commit hooks
+
+**NEVER use `--no-verify` or `-n` when committing.** Pre-commit hooks ensure code quality and must always run.
+
+If pre-commit hooks fail:
+
+1. Fix the issues reported by the hooks
+2. Run `uvx pre-commit run --all-files` to verify fixes
+3. Commit again without `--no-verify`
+
+If hooks fail due to sandbox restrictions (e.g., `PermissionError`), use `required_permissions: ['all']` when running git commands, but still ensure hooks pass before committing.
+
+**Example of what NOT to do:**
+
+```bash
+# WRONG - Never do this
+git commit --no-verify -m "message"
+```
+
+**Example of correct workflow:**
+
+```bash
+# Fix issues first
+uvx pre-commit run --all-files
+
+# Then commit normally (hooks will run automatically)
+git commit -m "message"
+```
+
 ## Architecture patterns
 
 ### API key access
