@@ -5415,11 +5415,13 @@ class App {
 
         // Track nodes that need position animation
         const positionChanges = [];
+        // Track nodes that need full re-render (structural changes like tags, matrix edits)
+        const needsRerender = [];
 
         // Process each new node
         for (const node of newNodes) {
             if (currentNodeIds.has(node.id)) {
-                // Node exists - check for position/content changes
+                // Node exists - check for changes
                 const wrapper = this.canvas.nodeElements.get(node.id);
                 if (wrapper) {
                     const currentX = parseFloat(wrapper.getAttribute('x'));
@@ -5438,13 +5440,30 @@ class App {
                         });
                     }
 
-                    // Update content if changed (non-animated)
-                    this.canvas.updateNodeContent(node.id, node.content, false);
+                    // Check if node needs full re-render (tags, matrix structure, etc.)
+                    if (this.nodeNeedsRerender(node, wrapper)) {
+                        needsRerender.push(node);
+                    } else {
+                        // Incremental updates for content/title
+                        this.canvas.updateNodeContent(node.id, node.content, false);
+                        this.canvas.updateNodeSummary(node.id, node);
+
+                        // Update matrix cells if applicable
+                        if (node.type === NodeType.MATRIX && node.cells) {
+                            this.updateRemoteMatrixCells(node);
+                        }
+                    }
                 }
             } else {
                 // New node - render it
                 this.canvas.renderNode(node);
             }
+        }
+
+        // Re-render nodes that need structural updates
+        for (const node of needsRerender) {
+            this.canvas.removeNode(node.id);
+            this.canvas.renderNode(node);
         }
 
         // Remove deleted nodes
@@ -5464,6 +5483,57 @@ class App {
 
         // Save the session to persist remote changes locally
         this.saveSession();
+    }
+
+    /**
+     * Check if a node needs full re-render (structural changes).
+     * Returns true if tags or matrix structure changed.
+     */
+    nodeNeedsRerender(node, wrapper) {
+        // Check if tag count changed (simple heuristic)
+        const tagEls = wrapper.querySelectorAll('.node-tag');
+        const currentTagCount = tagEls.length;
+        const newTagCount = (node.tags || []).length;
+        if (currentTagCount !== newTagCount) {
+            return true;
+        }
+
+        // Check if tag colors match
+        const currentTagColors = Array.from(tagEls).map(el => {
+            // Extract color from class like "tag-red" -> "red"
+            const match = el.className.match(/tag-(\w+)/);
+            return match ? match[1] : null;
+        }).filter(Boolean).sort();
+        const newTagColors = [...(node.tags || [])].sort();
+        if (JSON.stringify(currentTagColors) !== JSON.stringify(newTagColors)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Update matrix cell contents from remote changes.
+     */
+    updateRemoteMatrixCells(node) {
+        const wrapper = this.canvas.nodeElements.get(node.id);
+        if (!wrapper || !node.cells) return;
+
+        for (const [cellKey, cellData] of Object.entries(node.cells)) {
+            const [row, col] = cellKey.split('-').map(Number);
+            const cellEl = wrapper.querySelector(`.matrix-cell[data-row="${row}"][data-col="${col}"]`);
+            if (cellEl) {
+                const contentEl = cellEl.querySelector('.matrix-cell-content');
+                if (contentEl && cellData.content) {
+                    contentEl.textContent = cellData.content;
+                    cellEl.classList.remove('empty');
+                    cellEl.classList.add('filled');
+                } else if (!cellData.content) {
+                    cellEl.classList.add('empty');
+                    cellEl.classList.remove('filled');
+                }
+            }
+        }
     }
 
     /**

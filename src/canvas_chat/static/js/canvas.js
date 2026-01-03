@@ -2182,6 +2182,25 @@ class Canvas {
     }
 
     /**
+     * Update node title/summary text (for remote sync)
+     * @param {string} nodeId - Node ID
+     * @param {Object} node - Full node object with title, summary, content
+     */
+    updateNodeSummary(nodeId, node) {
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) return;
+
+        const summaryTextEl = wrapper.querySelector('.node-summary .summary-text');
+        if (summaryTextEl) {
+            // Priority: title > summary > truncated content
+            const displayText = node.title ||
+                                node.summary ||
+                                this.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
+            summaryTextEl.textContent = displayText;
+        }
+    }
+
+    /**
      * Update a matrix cell (for streaming cell fills)
      */
     updateMatrixCell(nodeId, row, col, content, isStreaming = false) {
