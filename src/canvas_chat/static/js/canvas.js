@@ -43,6 +43,7 @@ class Canvas {
         this.onNodeMove = null;
         this.onNodeDrag = null;  // For real-time position updates during drag (multiplayer sync)
         this.onNodeResize = null;
+        this.onNodeResizing = null;  // For real-time size updates during resize (multiplayer sync)
         this.onNodeReply = null;
         this.onNodeBranch = null;
         this.onNodeSummarize = null;
@@ -1815,6 +1816,11 @@ class Canvas {
 
                     // Update edges
                     this.updateEdgesForNode(node.id, node.position);
+
+                    // Notify for real-time multiplayer sync
+                    if (this.onNodeResizing) {
+                        this.onNodeResizing(node.id, newWidth, newHeight);
+                    }
                 };
 
                 const onMouseUp = () => {
