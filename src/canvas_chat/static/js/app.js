@@ -7,7 +7,7 @@
  * Set to true to enable Yjs-based graph with automatic persistence
  * Set to false for legacy Map-based graph
  */
-const USE_CRDT_GRAPH = false;
+const USE_CRDT_GRAPH = true;
 
 /**
  * Detect if content is a URL (used by handleNote to route to handleNoteFromUrl)
@@ -937,6 +937,11 @@ class App {
 
         // Wire up undo manager state changes
         this.undoManager.onStateChange = () => this.updateUndoButtons();
+
+        // Multiplayer button
+        this.multiplayerBtn = document.getElementById('multiplayer-btn');
+        this.peerCountEl = document.getElementById('peer-count');
+        this.multiplayerBtn.addEventListener('click', () => this.toggleMultiplayer());
 
         // Export/Import
         document.getElementById('export-btn').addEventListener('click', () => {
@@ -5113,6 +5118,122 @@ class App {
         if (this.redoBtn) {
             this.redoBtn.disabled = !this.undoManager.canRedo();
         }
+    }
+
+    // =========================================================================
+    // Multiplayer
+    // =========================================================================
+
+    /**
+     * Toggle multiplayer sync on/off
+     */
+    toggleMultiplayer() {
+        // Check if CRDT graph with multiplayer support
+        if (!this.graph.enableMultiplayer) {
+            console.warn('Multiplayer requires CRDT graph mode');
+            alert('Multiplayer requires CRDT mode. Please refresh the page.');
+            return;
+        }
+
+        // Ensure we have a session
+        if (!this.session || !this.session.id) {
+            console.warn('No session loaded');
+            alert('Please wait for session to load.');
+            return;
+        }
+
+        const status = this.graph.getMultiplayerStatus();
+
+        if (status.enabled) {
+            // Disable multiplayer
+            this.graph.disableMultiplayer();
+            this.updateMultiplayerUI(false);
+            console.log('Multiplayer disabled');
+        } else {
+            // Enable multiplayer using session ID as room
+            this.multiplayerBtn.classList.add('connecting');
+            this.multiplayerBtn.title = 'Connecting...';
+
+            const roomId = this.session.id;
+            const provider = this.graph.enableMultiplayer(roomId);
+
+            if (provider) {
+                // Set up remote change handler to re-render canvas
+                this.graph.onRemoteChange((type, events) => {
+                    console.log('[App] Remote change received:', type);
+                    this.handleRemoteChange(type, events);
+                });
+
+                // Set up peer count updates
+                provider.on('peers', ({ webrtcPeers, bcPeers }) => {
+                    const peerCount = webrtcPeers.length + bcPeers.length;
+                    this.updatePeerCount(peerCount);
+                });
+
+                // Update UI when synced
+                provider.on('synced', ({ synced }) => {
+                    this.multiplayerBtn.classList.remove('connecting');
+                    this.updateMultiplayerUI(true);
+                    console.log('Multiplayer synced:', synced);
+                });
+
+                // Initial UI update
+                setTimeout(() => {
+                    this.multiplayerBtn.classList.remove('connecting');
+                    this.updateMultiplayerUI(true);
+                }, 1000);
+
+                console.log('Multiplayer enabled for room:', roomId);
+            } else {
+                this.multiplayerBtn.classList.remove('connecting');
+                console.error('Failed to enable multiplayer');
+            }
+        }
+    }
+
+    /**
+     * Handle remote changes from other peers
+     */
+    handleRemoteChange(type, events) {
+        console.log('[App] Handling remote change:', type);
+
+        // Re-render the entire canvas to reflect remote changes
+        // This is a simple approach - could be optimized to only update changed nodes
+        this.canvas.clear();
+
+        // Re-render all nodes
+        for (const node of this.graph.getAllNodes()) {
+            this.canvas.renderNode(node);
+        }
+
+        // Re-render all edges
+        this.canvas.renderEdges(this.graph.getAllEdges(), this.graph);
+
+        // Save the session to persist remote changes locally
+        this.saveSession();
+    }
+
+    /**
+     * Update the multiplayer button UI state
+     */
+    updateMultiplayerUI(enabled) {
+        if (enabled) {
+            this.multiplayerBtn.classList.add('active');
+            this.multiplayerBtn.title = 'Multiplayer active (click to disable)';
+            this.peerCountEl.style.display = 'inline';
+        } else {
+            this.multiplayerBtn.classList.remove('active');
+            this.multiplayerBtn.title = 'Enable multiplayer sync';
+            this.peerCountEl.style.display = 'none';
+        }
+    }
+
+    /**
+     * Update the peer count display
+     */
+    updatePeerCount(count) {
+        this.peerCountEl.textContent = count;
+        this.peerCountEl.style.display = count > 0 ? 'inline' : 'none';
     }
 
     /**

@@ -156,6 +156,113 @@ class CRDTGraph {
         }
     }
 
+    // =========================================================================
+    // WebRTC Multiplayer
+    // =========================================================================
+
+    /**
+     * Enable WebRTC-based multiplayer sync.
+     * Peers with the same room ID will sync in real-time via WebRTC.
+     *
+     * @param {string} roomId - Room identifier (defaults to sessionId)
+     * @param {Object} options - WebrtcProvider options
+     * @returns {Object|null} - WebrtcProvider instance or null if unavailable
+     */
+    enableMultiplayer(roomId = null, options = {}) {
+        if (typeof WebrtcProvider === 'undefined') {
+            console.warn('[CRDTGraph] WebrtcProvider not available, skipping multiplayer');
+            return null;
+        }
+
+        // Use session ID as room ID by default
+        const room = roomId || this.sessionId;
+        if (!room) {
+            console.warn('[CRDTGraph] No room ID, skipping multiplayer');
+            return null;
+        }
+
+        // Build signaling server URL
+        // Default to local signaling server, can be overridden in options
+        const signalingUrl = options.signaling || this._getSignalingUrl();
+
+        console.log('%c[CRDTGraph] Enabling multiplayer', 'color: #2196F3; font-weight: bold');
+        console.log('[CRDTGraph] Room:', room);
+        console.log('[CRDTGraph] Signaling:', signalingUrl);
+
+        try {
+            // Create WebRTC provider
+            this.webrtcProvider = new WebrtcProvider(room, this.ydoc, {
+                signaling: [signalingUrl],
+                // Password for encrypted signaling (optional)
+                password: options.password || null,
+                // Max connections (default 20-35 with random factor)
+                maxConns: options.maxConns || 20 + Math.floor(Math.random() * 15),
+                // Filter browser tab connections (use BroadcastChannel instead)
+                filterBcConns: options.filterBcConns !== false,
+                ...options
+            });
+
+            // Log connection events
+            this.webrtcProvider.on('synced', ({ synced }) => {
+                console.log('[CRDTGraph] WebRTC synced:', synced);
+            });
+
+            this.webrtcProvider.on('peers', ({ added, removed, webrtcPeers, bcPeers }) => {
+                console.log('[CRDTGraph] Peers changed:', {
+                    added: added.length,
+                    removed: removed.length,
+                    webrtc: webrtcPeers.length,
+                    broadcast: bcPeers.length
+                });
+            });
+
+            console.log('[CRDTGraph] Multiplayer enabled');
+            return this.webrtcProvider;
+
+        } catch (error) {
+            console.error('[CRDTGraph] Failed to enable multiplayer:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Disable WebRTC multiplayer.
+     */
+    disableMultiplayer() {
+        if (this.webrtcProvider) {
+            console.log('[CRDTGraph] Disabling multiplayer');
+            this.webrtcProvider.destroy();
+            this.webrtcProvider = null;
+        }
+    }
+
+    /**
+     * Get the current signaling server URL.
+     * Uses the current page's host for the signaling endpoint.
+     */
+    _getSignalingUrl() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        return `${protocol}//${host}/signal`;
+    }
+
+    /**
+     * Get multiplayer connection status.
+     * @returns {Object} Status with peer counts and connection state
+     */
+    getMultiplayerStatus() {
+        if (!this.webrtcProvider) {
+            return { enabled: false, peers: 0, connected: false };
+        }
+
+        return {
+            enabled: true,
+            connected: this.webrtcProvider.connected,
+            room: this.webrtcProvider.roomName,
+            peers: this.webrtcProvider.awareness?.getStates().size - 1 || 0
+        };
+    }
+
     /**
      * Clear CRDT data and reload from legacy format.
      * This ensures legacy DB is always source of truth.
@@ -193,7 +300,7 @@ class CRDTGraph {
                     this.yTags.set(color, yTag);
                 }
             }
-        });
+        }, 'local');  // Mark as local change
 
         console.log('[CRDTGraph] Loaded from legacy:', {
             nodes: this.yNodes.size,
@@ -265,12 +372,47 @@ class CRDTGraph {
     // =========================================================================
 
     _setupObservers() {
+        // Observe node changes for remote sync notifications
+        this.yNodes.observeDeep((events, transaction) => {
+            // Only notify for remote changes (not local)
+            if (transaction.origin !== null && transaction.origin !== 'local') {
+                console.log('[CRDTGraph] Remote node change detected');
+                this._notifyChange('nodes', events);
+            }
+        });
+
         // Observe edge changes to maintain indexes
-        this.yEdges.observe((event) => {
+        this.yEdges.observe((event, transaction) => {
             // Rebuild indexes on any edge change
             // This is simpler than tracking individual changes
             this._rebuildIndexes();
+
+            // Notify for remote changes
+            if (transaction.origin !== null && transaction.origin !== 'local') {
+                console.log('[CRDTGraph] Remote edge change detected');
+                this._notifyChange('edges', event);
+            }
         });
+    }
+
+    /**
+     * Set a callback to be notified of remote changes.
+     * The callback receives (type, events) where type is 'nodes' or 'edges'.
+     * Use this to trigger canvas re-renders when remote peers make changes.
+     *
+     * @param {Function} callback - Function to call on remote changes
+     */
+    onRemoteChange(callback) {
+        this._remoteChangeCallback = callback;
+    }
+
+    /**
+     * Notify the change callback if set
+     */
+    _notifyChange(type, events) {
+        if (this._remoteChangeCallback) {
+            this._remoteChangeCallback(type, events);
+        }
     }
 
     _rebuildIndexes() {
@@ -384,7 +526,7 @@ class CRDTGraph {
     addNode(node) {
         this.ydoc.transact(() => {
             this._addNodeToCRDT(node);
-        });
+        }, 'local');  // Mark as local change
         return node;
     }
 
@@ -458,7 +600,7 @@ class CRDTGraph {
                     yNode.set(key, value);
                 }
             }
-        });
+        }, 'local');  // Mark as local change
 
         return this.getNode(id);
     }
@@ -478,7 +620,7 @@ class CRDTGraph {
 
             // Remove node
             this.yNodes.delete(id);
-        });
+        }, 'local');  // Mark as local change
 
         // Clear from local indexes
         this.incomingEdges.delete(id);
@@ -507,7 +649,7 @@ class CRDTGraph {
     addEdge(edge) {
         this.ydoc.transact(() => {
             this._addEdgeToCRDT(edge);
-        });
+        }, 'local');  // Mark as local change
 
         // Update local indexes
         if (!this.outgoingEdges.has(edge.source)) {
@@ -738,7 +880,7 @@ class CRDTGraph {
             yTag.set('name', name);
             yTag.set('color', color);
             this.yTags.set(color, yTag);
-        });
+        }, 'local');  // Mark as local change
     }
 
     /**
@@ -769,7 +911,7 @@ class CRDTGraph {
                     }
                 }
             });
-        });
+        }, 'local');  // Mark as local change
     }
 
     /**
@@ -826,7 +968,7 @@ class CRDTGraph {
             if (!tags.includes(color)) {
                 yTags.push([color]);
             }
-        });
+        }, 'local');  // Mark as local change
     }
 
     /**

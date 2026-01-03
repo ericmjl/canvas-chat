@@ -45,6 +45,10 @@
                 <button id="undo-btn" class="icon-btn" title="Undo (Cmd/Ctrl+Z)" disabled>↶</button>
                 <button id="redo-btn" class="icon-btn" title="Redo (Cmd/Ctrl+Shift+Z)" disabled>↷</button>
             </div>
+            <div class="multiplayer-controls">
+                <button id="multiplayer-btn" class="icon-btn multiplayer-btn" title="Enable multiplayer sync">👥</button>
+                <span id="peer-count" class="peer-count" style="display: none;">0</span>
+            </div>
             <button id="tags-btn" class="icon-btn" title="Tags">🏷️</button>
             <button id="search-btn" class="icon-btn" title="Search nodes (Cmd/Ctrl+K)">🔍</button>
             <button id="new-canvas-btn" class="icon-btn" title="New Canvas">📄</button>
@@ -571,19 +575,22 @@
     {
         "imports": {
             "yjs": "https://esm.sh/yjs@13.6.24",
-            "y-indexeddb": "https://esm.sh/y-indexeddb@9.0.12?external=yjs"
+            "y-indexeddb": "https://esm.sh/y-indexeddb@9.0.12?external=yjs",
+            "y-webrtc": "https://esm.sh/y-webrtc@10.3.0?external=yjs"
         }
     }
     </script>
     <script type="module">
-        // Import Yjs and y-indexeddb using import map
-        // The ?external=yjs flag ensures y-indexeddb uses our single Yjs instance
+        // Import Yjs and providers using import map
+        // The ?external=yjs flag ensures providers use our single Yjs instance
         import * as Y from 'yjs';
         import { IndexeddbPersistence } from 'y-indexeddb';
+        import { WebrtcProvider } from 'y-webrtc';
 
         // Expose globally for non-module scripts
         window.Y = Y;
         window.IndexeddbPersistence = IndexeddbPersistence;
+        window.WebrtcProvider = WebrtcProvider;
 
         // Signal that Yjs is ready
         window.dispatchEvent(new CustomEvent('yjs-ready'));

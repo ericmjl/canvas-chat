@@ -25,7 +25,15 @@ import httpx
 import litellm
 import pymupdf
 from exa_py import Exa
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -2261,3 +2269,166 @@ Provide your own assessment of the most accurate and helpful response."""
             yield {"event": "error", "data": json.dumps({"message": str(e)})}
 
     return EventSourceResponse(generate())
+
+
+# --- WebRTC Signaling Server ---
+# Compatible with y-webrtc signaling protocol
+# Stateless, room-based peer discovery for local-first multiplayer
+
+
+class SignalingConnectionManager:
+    """
+    Manages WebSocket connections for WebRTC signaling.
+
+    This is a stateless, in-memory implementation that:
+    - Groups connections by topic (room ID)
+    - Relays messages between peers in the same topic
+    - Automatically cleans up when connections close
+    - Compatible with y-webrtc's signaling protocol
+    """
+
+    def __init__(self):
+        # topic -> set of websockets
+        self.topics: dict[str, set[WebSocket]] = {}
+        # websocket -> set of subscribed topics
+        self.subscriptions: dict[WebSocket, set[str]] = {}
+
+    async def connect(self, websocket: WebSocket):
+        """Accept a new WebSocket connection."""
+        await websocket.accept()
+        self.subscriptions[websocket] = set()
+        logger.info(f"Signaling: New connection, total={len(self.subscriptions)}")
+
+    def disconnect(self, websocket: WebSocket):
+        """Clean up when a connection closes."""
+        # Remove from all subscribed topics
+        topics_to_check = self.subscriptions.get(websocket, set()).copy()
+        for topic in topics_to_check:
+            if topic in self.topics:
+                self.topics[topic].discard(websocket)
+                if not self.topics[topic]:
+                    del self.topics[topic]
+                    logger.debug(f"Signaling: Topic '{topic}' removed (empty)")
+
+        # Remove subscription record
+        self.subscriptions.pop(websocket, None)
+        logger.info(f"Signaling: Connection closed, total={len(self.subscriptions)}")
+
+    def subscribe(self, websocket: WebSocket, topics: list[str]):
+        """Subscribe a connection to topics."""
+        for topic in topics:
+            if topic not in self.topics:
+                self.topics[topic] = set()
+            self.topics[topic].add(websocket)
+            self.subscriptions[websocket].add(topic)
+            peer_count = len(self.topics[topic])
+            logger.debug(f"Signaling: Subscribed to '{topic}', peers={peer_count}")
+
+    def unsubscribe(self, websocket: WebSocket, topics: list[str]):
+        """Unsubscribe a connection from topics."""
+        for topic in topics:
+            if topic in self.topics:
+                self.topics[topic].discard(websocket)
+                if not self.topics[topic]:
+                    del self.topics[topic]
+            if websocket in self.subscriptions:
+                self.subscriptions[websocket].discard(topic)
+
+    async def broadcast(self, topic: str, message: dict, exclude: WebSocket):
+        """Broadcast a message to all peers in a topic except the sender."""
+        if topic not in self.topics:
+            return
+
+        peers = self.topics[topic]
+        message["clients"] = len(peers)
+
+        disconnected = []
+        for peer in peers:
+            if peer == exclude:
+                continue
+            try:
+                await peer.send_json(message)
+            except Exception:
+                disconnected.append(peer)
+
+        # Clean up disconnected peers
+        for peer in disconnected:
+            self.disconnect(peer)
+
+    def get_peer_count(self, topic: str) -> int:
+        """Get number of peers in a topic."""
+        return len(self.topics.get(topic, set()))
+
+
+# Singleton connection manager
+signaling_manager = SignalingConnectionManager()
+
+
+@app.websocket("/signal")
+async def signaling_endpoint(websocket: WebSocket):
+    """
+    WebRTC signaling endpoint compatible with y-webrtc.
+
+    Protocol:
+    - subscribe: {"type": "subscribe", "topics": ["room-id"]}
+    - unsubscribe: {"type": "unsubscribe", "topics": ["room-id"]}
+    - publish: {"type": "publish", "topic": "room-id", ...}
+    - ping: {"type": "ping"} -> responds with {"type": "pong"}
+
+    The server relays publish messages to all other peers in the same topic.
+    No message content is stored - purely ephemeral relay.
+    """
+    await signaling_manager.connect(websocket)
+
+    try:
+        while True:
+            try:
+                data = await websocket.receive_json()
+            except Exception:
+                # Connection closed or invalid JSON
+                break
+
+            msg_type = data.get("type")
+
+            if msg_type == "subscribe":
+                topics = data.get("topics", [])
+                if isinstance(topics, list):
+                    signaling_manager.subscribe(websocket, topics)
+
+            elif msg_type == "unsubscribe":
+                topics = data.get("topics", [])
+                if isinstance(topics, list):
+                    signaling_manager.unsubscribe(websocket, topics)
+
+            elif msg_type == "publish":
+                topic = data.get("topic")
+                if topic:
+                    await signaling_manager.broadcast(topic, data, exclude=websocket)
+
+            elif msg_type == "ping":
+                try:
+                    await websocket.send_json({"type": "pong"})
+                except Exception:
+                    break
+
+    except WebSocketDisconnect:
+        pass
+    finally:
+        signaling_manager.disconnect(websocket)
+
+
+@app.get("/api/signaling/status")
+async def signaling_status():
+    """
+    Get current signaling server status.
+
+    Returns topic counts for monitoring. No sensitive data exposed.
+    """
+    return {
+        "status": "ok",
+        "connections": len(signaling_manager.subscriptions),
+        "topics": len(signaling_manager.topics),
+        "topic_sizes": {
+            topic: len(peers) for topic, peers in signaling_manager.topics.items()
+        },
+    }
