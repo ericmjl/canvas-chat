@@ -83,6 +83,37 @@ const TAG_COLORS = [
 ];
 
 /**
+ * Check if a position would overlap with existing nodes
+ * Utility function for overlap detection (used by Graph class and tests)
+ * @param {Object} pos - Position {x, y}
+ * @param {number} width - Width of the candidate node
+ * @param {number} height - Height of the candidate node
+ * @param {Array} nodes - Array of existing nodes
+ * @returns {boolean} True if there would be overlap
+ */
+function wouldOverlapNodes(pos, width, height, nodes) {
+    const PADDING = 20;  // Minimum gap between nodes
+
+    for (const node of nodes) {
+        const nodeWidth = node.width || 420;
+        const nodeHeight = node.height || 200;
+
+        // Check bounding box overlap
+        const noOverlap =
+            pos.x + width + PADDING < node.position.x ||  // new is left of existing
+            pos.x > node.position.x + nodeWidth + PADDING ||  // new is right of existing
+            pos.y + height + PADDING < node.position.y ||  // new is above existing
+            pos.y > node.position.y + nodeHeight + PADDING;   // new is below existing
+
+        if (!noOverlap) {
+            return true;  // There is overlap
+        }
+    }
+
+    return false;  // No overlap with any node
+}
+
+/**
  * Create a new node
  */
 function createNode(type, content, options = {}) {
@@ -667,19 +698,19 @@ class Graph {
         let attempts = 0;
         const maxAttempts = 20;
 
-        while (attempts < maxAttempts && this.wouldOverlap(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+        while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
             // Move down to find free space
             candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
             attempts++;
         }
 
         // If still overlapping after max attempts, try moving right
-        if (this.wouldOverlap(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+        if (wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
             candidatePos.x += NODE_WIDTH + HORIZONTAL_GAP;
             candidatePos.y = initialY;
 
             attempts = 0;
-            while (attempts < maxAttempts && this.wouldOverlap(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+            while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
                 candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
                 attempts++;
             }
@@ -692,25 +723,7 @@ class Graph {
      * Check if a position would overlap with existing nodes
      */
     wouldOverlap(pos, width, height, nodes) {
-        const PADDING = 20;  // Minimum gap between nodes
-
-        for (const node of nodes) {
-            const nodeWidth = node.width || 420;
-            const nodeHeight = node.height || 200;
-
-            // Check bounding box overlap
-            const noOverlap =
-                pos.x + width + PADDING < node.position.x ||  // new is left of existing
-                pos.x > node.position.x + nodeWidth + PADDING ||  // new is right of existing
-                pos.y + height + PADDING < node.position.y ||  // new is above existing
-                pos.y > node.position.y + nodeHeight + PADDING;   // new is below existing
-
-            if (!noOverlap) {
-                return true;  // There is overlap
-            }
-        }
-
-        return false;  // No overlap with any node
+        return wouldOverlapNodes(pos, width, height, nodes);
     }
 
     /**
@@ -1243,3 +1256,4 @@ window.createMatrixNode = createMatrixNode;
 window.createCellNode = createCellNode;
 window.createRowNode = createRowNode;
 window.createColumnNode = createColumnNode;
+window.wouldOverlapNodes = wouldOverlapNodes;

@@ -3,7 +3,58 @@
  * Run with: node tests/test_utils.js
  *
  * Tests pure functions that don't require DOM or API calls.
+ *
+ * NOTE: This file loads actual source files to test real implementations,
+ * not copies. This ensures tests catch bugs in production code.
  */
+
+// Load source files to test actual implementations (not copies)
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+// Set up minimal browser-like environment for source files
+global.window = global;
+global.document = { createElement: () => ({ textContent: '', innerHTML: '' }) };
+global.NodeType = {
+    HUMAN: 'human', AI: 'ai', NOTE: 'note', SUMMARY: 'summary', REFERENCE: 'reference',
+    SEARCH: 'search', RESEARCH: 'research', HIGHLIGHT: 'highlight', MATRIX: 'matrix',
+    CELL: 'cell', ROW: 'row', COLUMN: 'column', FETCH_RESULT: 'fetch_result',
+    PDF: 'pdf', OPINION: 'opinion', SYNTHESIS: 'synthesis', REVIEW: 'review', IMAGE: 'image'
+};
+
+// Load graph.js first (defines NodeType, etc. and exports wouldOverlapNodes)
+const graphPath = path.join(__dirname, '../src/canvas_chat/static/js/graph.js');
+const graphCode = fs.readFileSync(graphPath, 'utf8');
+vm.runInThisContext(graphCode, { filename: graphPath });
+
+// Load search.js (defines tokenize, calculateIDF, SearchIndex)
+const searchPath = path.join(__dirname, '../src/canvas_chat/static/js/search.js');
+const searchCode = fs.readFileSync(searchPath, 'utf8');
+vm.runInThisContext(searchCode, { filename: searchPath });
+
+// Load app.js (defines formatUserError, buildMessagesForApi)
+// Note: app.js has DOM dependencies, but formatUserError and buildMessagesForApi are pure functions
+const appPath = path.join(__dirname, '../src/canvas_chat/static/js/app.js');
+const appCode = fs.readFileSync(appPath, 'utf8');
+vm.runInThisContext(appCode, { filename: appPath });
+
+// Extract functions and constants from window (actual implementations, not copies)
+const {
+    formatUserError,
+    buildMessagesForApi,
+    tokenize,
+    calculateIDF,
+    SearchIndex,
+    wouldOverlapNodes,
+    createNode: createNodeReal,
+    createMatrixNode: createMatrixNodeReal,
+    createRowNode: createRowNodeReal,
+    createColumnNode: createColumnNodeReal,
+    NodeType,
+    SCROLLABLE_NODE_TYPES,
+    SCROLLABLE_NODE_SIZE
+} = global.window;
 
 // Simple test runner
 let passed = 0;
@@ -57,7 +108,8 @@ function assertDeepEqual(actual, expected) {
 
 /**
  * Extract URL from Reference node content (format: **[Title](url)**)
- * This is a copy of the function from app.js for testing
+ * NOTE: This is a simple utility function used in app.js but not exported.
+ * Keeping a copy here for testing since it's a pure function with no dependencies.
  */
 function extractUrlFromReferenceNode(content) {
     // Match markdown link pattern: [text](url)
@@ -124,7 +176,9 @@ Rising temperatures and changing precipitation patterns are affecting crop yield
 
 /**
  * Format a matrix node as a markdown table
- * Copy of function from app.js for testing
+ * NOTE: This is an App class method, not a standalone function.
+ * Keeping a copy here for testing since it's pure logic with no DOM dependencies.
+ * In the future, consider extracting this as a utility function.
  */
 function formatMatrixAsText(matrixNode) {
     const { context, rowItems, colItems, cells } = matrixNode;
@@ -465,30 +519,8 @@ test('Graph: topologicalSort handles multiple roots', () => {
 // wouldOverlap tests
 // ============================================================
 
-/**
- * Check if a position would overlap with existing nodes
- * Copy of function from graph.js for testing
- */
-function wouldOverlap(pos, width, height, nodes) {
-    const PADDING = 20;
-
-    for (const node of nodes) {
-        const nodeWidth = node.width || 420;
-        const nodeHeight = node.height || 200;
-
-        const noOverlap =
-            pos.x + width + PADDING < node.position.x ||
-            pos.x > node.position.x + nodeWidth + PADDING ||
-            pos.y + height + PADDING < node.position.y ||
-            pos.y > node.position.y + nodeHeight + PADDING;
-
-        if (!noOverlap) {
-            return true;
-        }
-    }
-
-    return false;
-}
+// Use actual implementation from graph.js (exported as wouldOverlapNodes)
+const wouldOverlap = wouldOverlapNodes;
 
 test('wouldOverlap: no overlap when far apart', () => {
     const nodes = [
@@ -534,7 +566,9 @@ test('wouldOverlap: returns false for empty nodes array', () => {
 
 /**
  * Escape HTML special characters
- * Copy of function from app.js/canvas.js for testing
+ * NOTE: This is a Canvas class method that uses document.createElement.
+ * Keeping a copy here for testing since it's pure logic. In the future,
+ * consider extracting this as a utility function.
  */
 function escapeHtml(text) {
     if (!text) return '';
@@ -576,7 +610,8 @@ test('escapeHtml: handles null/undefined', () => {
 
 /**
  * Truncate text to a maximum length
- * Copy of function from app.js for testing
+ * NOTE: This is a Canvas class method. Keeping a copy here for testing.
+ * In the future, consider extracting this as a utility function.
  */
 function truncate(text, maxLength) {
     if (!text) return '';
@@ -611,7 +646,9 @@ test('truncate: handles null/undefined', () => {
 
 /**
  * Calculate overlap between two nodes.
- * Copy of function from graph.js for testing
+ * NOTE: This is a Graph class method (used internally by resolveOverlaps).
+ * Keeping a copy here for testing the overlap calculation logic.
+ * In the future, consider extracting this as a utility function.
  */
 function getOverlap(nodeA, nodeB, padding = 40) {
     const getNodeSize = (node) => ({
@@ -643,7 +680,9 @@ function getOverlap(nodeA, nodeB, padding = 40) {
 
 /**
  * Resolve overlapping nodes.
- * Copy of function from graph.js for testing
+ * NOTE: This is a Graph class method. Keeping a copy here for testing
+ * the overlap resolution algorithm. In the future, consider extracting
+ * this as a utility function or testing via Graph instances.
  */
 function resolveOverlaps(nodes, padding = 40, maxIterations = 50) {
     const getNodeSize = (node) => ({
@@ -1406,7 +1445,8 @@ test('getApiKeysForModels: empty array returns empty object', () => {
 
 /**
  * Detect if content is a URL (used by handleNote to route to handleNoteFromUrl)
- * This is a copy of the logic from app.js for testing
+ * NOTE: This is a simple utility function used in app.js but not exported.
+ * Keeping a copy here for testing since it's a pure function with no dependencies.
  */
 function isUrl(content) {
     const urlPattern = /^https?:\/\/[^\s]+$/;
@@ -1815,76 +1855,7 @@ test('MatrixCellTracker: same cell can be restarted after completion', () => {
 // ============================================================
 // formatUserError tests
 // ============================================================
-
-/**
- * Format a technical error into a user-friendly message
- * Copy of function from app.js for testing
- */
-function formatUserError(error) {
-    const errMsg = error?.message || String(error);
-    const errLower = errMsg.toLowerCase();
-
-    // Timeout errors
-    if (errLower.includes('timeout') || errLower.includes('etimedout') || errLower.includes('took too long')) {
-        return {
-            title: 'Request timed out',
-            description: 'The server is taking too long to respond. This may be due to high load.',
-            canRetry: true
-        };
-    }
-
-    // Authentication errors
-    if (errLower.includes('401') || errLower.includes('unauthorized') || errLower.includes('invalid api key')) {
-        return {
-            title: 'Authentication failed',
-            description: 'Your API key may be invalid or expired. Please check your settings.',
-            canRetry: false
-        };
-    }
-
-    // Rate limit errors
-    if (errLower.includes('429') || errLower.includes('rate limit') || errLower.includes('too many requests')) {
-        return {
-            title: 'Rate limit reached',
-            description: 'Too many requests. Please wait a moment before trying again.',
-            canRetry: true
-        };
-    }
-
-    // Server errors
-    if (errLower.includes('500') || errLower.includes('502') || errLower.includes('503') || errLower.includes('server error')) {
-        return {
-            title: 'Server error',
-            description: 'The server encountered an error. Please try again later.',
-            canRetry: true
-        };
-    }
-
-    // Network errors
-    if (errLower.includes('failed to fetch') || errLower.includes('network') || errLower.includes('connection')) {
-        return {
-            title: 'Network error',
-            description: 'Could not connect to the server. Please check your internet connection.',
-            canRetry: true
-        };
-    }
-
-    // Context length errors
-    if (errLower.includes('context length') || errLower.includes('too long') || errLower.includes('maximum context')) {
-        return {
-            title: 'Message too long',
-            description: 'The conversation is too long for this model. Try selecting fewer nodes.',
-            canRetry: false
-        };
-    }
-
-    // Default error
-    return {
-        title: 'Something went wrong',
-        description: errMsg || 'An unexpected error occurred. Please try again.',
-        canRetry: true
-    };
-}
+// Using actual implementation from app.js (exported to window)
 
 test('formatUserError: timeout detection', () => {
     const result = formatUserError({ message: 'Request timeout' });
@@ -1955,61 +1926,7 @@ test('formatUserError: handles null/undefined', () => {
 // ============================================================
 // buildMessagesForApi tests
 // ============================================================
-
-/**
- * Build messages for LLM API from resolved context
- * Copy of function from app.js for testing
- */
-function buildMessagesForApi(contextMessages) {
-    const result = [];
-    let pendingImages = [];
-
-    for (let i = 0; i < contextMessages.length; i++) {
-        const msg = contextMessages[i];
-
-        if (msg.imageData) {
-            pendingImages.push({
-                type: 'image_url',
-                image_url: {
-                    url: `data:${msg.mimeType};base64,${msg.imageData}`
-                }
-            });
-        } else if (msg.content) {
-            if (pendingImages.length > 0 && msg.role === 'user') {
-                result.push({
-                    role: 'user',
-                    content: [
-                        ...pendingImages,
-                        { type: 'text', text: msg.content }
-                    ]
-                });
-                pendingImages = [];
-            } else {
-                for (const imgPart of pendingImages) {
-                    result.push({
-                        role: 'user',
-                        content: [imgPart]
-                    });
-                }
-                pendingImages = [];
-
-                result.push({
-                    role: msg.role,
-                    content: msg.content
-                });
-            }
-        }
-    }
-
-    for (const imgPart of pendingImages) {
-        result.push({
-            role: 'user',
-            content: [imgPart]
-        });
-    }
-
-    return result;
-}
+// Using actual implementation from app.js (exported to window)
 
 test('buildMessagesForApi: simple text messages', () => {
     const messages = [
@@ -2127,55 +2044,19 @@ test('getZoomClass: scale 0.1 returns zoom-mini', () => {
 // ============================================================
 // Node creation tests
 // ============================================================
-
-/**
- * Node type constants (simplified for testing)
- */
-const NodeType = {
-    HUMAN: 'human',
-    AI: 'ai',
-    NOTE: 'note',
-    SUMMARY: 'summary',
-    MATRIX: 'matrix',
-    CELL: 'cell',
-    ROW: 'row',
-    COLUMN: 'column'
-};
-
-const SCROLLABLE_NODE_TYPES = [
-    NodeType.AI,
-    NodeType.SUMMARY,
-    NodeType.NOTE
-];
-
-const SCROLLABLE_NODE_SIZE = {
-    width: 640,
-    height: 480
-};
+// NodeType, SCROLLABLE_NODE_TYPES, and SCROLLABLE_NODE_SIZE are loaded from graph.js via window
 
 /**
  * Create a new node
- * Copy of function from graph.js for testing
+ * NOTE: Using actual implementation from graph.js, but with test-specific ID generation
+ * for predictable test IDs. The real createNode uses crypto.randomUUID() which is harder to test.
  */
 function createNode(type, content, options = {}) {
-    const isScrollable = SCROLLABLE_NODE_TYPES.includes(type);
-    const defaultWidth = isScrollable ? SCROLLABLE_NODE_SIZE.width : undefined;
-    const defaultHeight = isScrollable ? SCROLLABLE_NODE_SIZE.height : undefined;
-
-    return {
-        id: 'test-id-' + Math.random().toString(36).substr(2, 9),
-        type,
-        content,
-        position: options.position || { x: 0, y: 0 },
-        width: options.width || defaultWidth,
-        height: options.height || defaultHeight,
-        created_at: Date.now(),
-        model: options.model || null,
-        tags: options.tags || [],
-        title: options.title || null,
-        summary: options.summary || null,
-        ...options
-    };
+    // Use real implementation but override ID generation for tests
+    const realNode = createNodeReal(type, content, options);
+    // Override ID with test-specific format for easier test assertions
+    realNode.id = 'test-id-' + Math.random().toString(36).substr(2, 9);
+    return realNode;
 }
 
 test('createNode: basic node creation', () => {
@@ -2225,29 +2106,13 @@ test('createNode: custom tags', () => {
 
 /**
  * Create a matrix node
- * Copy of function from graph.js for testing
+ * NOTE: Using actual implementation from graph.js, but with test-specific ID generation
  */
 function createMatrixNode(context, contextNodeIds, rowItems, colItems, options = {}) {
-    const cells = {};
-    for (let r = 0; r < rowItems.length; r++) {
-        for (let c = 0; c < colItems.length; c++) {
-            cells[`${r}-${c}`] = { content: null, filled: false };
-        }
-    }
-
-    return {
-        id: 'test-id-' + Math.random().toString(36).substr(2, 9),
-        type: NodeType.MATRIX,
-        content: '',
-        context,
-        contextNodeIds,
-        rowItems,
-        colItems,
-        cells,
-        position: options.position || { x: 0, y: 0 },
-        created_at: Date.now(),
-        ...options
-    };
+    const realNode = createMatrixNodeReal(context, contextNodeIds, rowItems, colItems, options);
+    // Override ID with test-specific format for easier test assertions
+    realNode.id = 'test-id-' + Math.random().toString(36).substr(2, 9);
+    return realNode;
 }
 
 test('createMatrixNode: creates matrix with cells', () => {
@@ -2271,30 +2136,13 @@ test('createMatrixNode: initializes all cells as empty', () => {
 
 /**
  * Create a row node
- * Copy of function from graph.js for testing
+ * NOTE: Using actual implementation from graph.js, but with test-specific ID generation
  */
 function createRowNode(matrixId, rowIndex, rowItem, colItems, cellContents, options = {}) {
-    let content = `**Row: ${rowItem}**\n\n`;
-    for (let c = 0; c < colItems.length; c++) {
-        const cellContent = cellContents[c];
-        if (cellContent) {
-            content += `### ${colItems[c]}\n${cellContent}\n\n`;
-        } else {
-            content += `### ${colItems[c]}\n*(empty)*\n\n`;
-        }
-    }
-
-    return {
-        id: 'test-id-' + Math.random().toString(36).substr(2, 9),
-        type: NodeType.ROW,
-        content: content.trim(),
-        matrixId,
-        rowIndex,
-        rowItem,
-        position: options.position || { x: 0, y: 0 },
-        created_at: Date.now(),
-        ...options
-    };
+    const realNode = createRowNodeReal(matrixId, rowIndex, rowItem, colItems, cellContents, options);
+    // Override ID with test-specific format for easier test assertions
+    realNode.id = 'test-id-' + Math.random().toString(36).substr(2, 9);
+    return realNode;
 }
 
 test('createRowNode: formats row content correctly', () => {
@@ -2313,30 +2161,13 @@ test('createRowNode: handles empty cells', () => {
 
 /**
  * Create a column node
- * Copy of function from graph.js for testing
+ * NOTE: Using actual implementation from graph.js, but with test-specific ID generation
  */
 function createColumnNode(matrixId, colIndex, colItem, rowItems, cellContents, options = {}) {
-    let content = `**Column: ${colItem}**\n\n`;
-    for (let r = 0; r < rowItems.length; r++) {
-        const cellContent = cellContents[r];
-        if (cellContent) {
-            content += `### ${rowItems[r]}\n${cellContent}\n\n`;
-        } else {
-            content += `### ${rowItems[r]}\n*(empty)*\n\n`;
-        }
-    }
-
-    return {
-        id: 'test-id-' + Math.random().toString(36).substr(2, 9),
-        type: NodeType.COLUMN,
-        content: content.trim(),
-        matrixId,
-        colIndex,
-        colItem,
-        position: options.position || { x: 0, y: 0 },
-        created_at: Date.now(),
-        ...options
-    };
+    const realNode = createColumnNodeReal(matrixId, colIndex, colItem, rowItems, cellContents, options);
+    // Override ID with test-specific format for easier test assertions
+    realNode.id = 'test-id-' + Math.random().toString(36).substr(2, 9);
+    return realNode;
 }
 
 test('createColumnNode: formats column content correctly', () => {

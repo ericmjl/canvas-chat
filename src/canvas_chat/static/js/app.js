@@ -5585,6 +5585,10 @@ class App {
     }
 }
 
+// Export pure functions for testing
+window.formatUserError = formatUserError;
+window.buildMessagesForApi = buildMessagesForApi;
+
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new App();

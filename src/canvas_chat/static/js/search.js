@@ -322,3 +322,5 @@ function getNodeTypeIcon(type) {
 // Export for use in other modules
 window.SearchIndex = SearchIndex;
 window.getNodeTypeIcon = getNodeTypeIcon;
+window.tokenize = tokenize;
+window.calculateIDF = calculateIDF;

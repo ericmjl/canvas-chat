@@ -9,5 +9,6 @@
   "devDependencies": {
     "jsdom": "^24.0.0"
   },
-  "private": true
+  "private": true,
+  "_comment": "test script duplicates pyproject.toml test-js task - both must be kept in sync. package.json is for npm users, pyproject.toml is for pixi users."
 }
