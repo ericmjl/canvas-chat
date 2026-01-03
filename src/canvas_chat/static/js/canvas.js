@@ -41,6 +41,7 @@ class Canvas {
         this.onNodeSelect = null;
         this.onNodeDeselect = null;
         this.onNodeMove = null;
+        this.onNodeDrag = null;  // For real-time position updates during drag (multiplayer sync)
         this.onNodeResize = null;
         this.onNodeReply = null;
         this.onNodeBranch = null;
@@ -884,6 +885,11 @@ class Canvas {
 
             // Update edges
             this.updateEdgesForNode(this.draggedNode.id, { x: newX, y: newY });
+
+            // Callback for real-time sync (e.g., multiplayer)
+            if (this.onNodeDrag) {
+                this.onNodeDrag(this.draggedNode.id, { x: newX, y: newY });
+            }
         }
     }
 

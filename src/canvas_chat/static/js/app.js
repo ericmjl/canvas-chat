@@ -602,6 +602,7 @@ class App {
         this.canvas.onNodeSelect = this.handleNodeSelect.bind(this);
         this.canvas.onNodeDeselect = this.handleNodeDeselect.bind(this);
         this.canvas.onNodeMove = this.handleNodeMove.bind(this);
+        this.canvas.onNodeDrag = this.handleNodeDrag.bind(this);  // Real-time drag for multiplayer
         this.canvas.onNodeResize = this.handleNodeResize.bind(this);
         this.canvas.onNodeReply = this.handleNodeReply.bind(this);
         this.canvas.onNodeBranch = this.handleNodeBranch.bind(this);
@@ -744,6 +745,21 @@ class App {
     }
 
     async loadSession() {
+        // Check for session ID in URL (for shared multiplayer links)
+        const urlParams = new URLSearchParams(window.location.search);
+        const sharedSessionId = urlParams.get('session');
+        const autoMultiplayer = urlParams.get('multiplayer') === 'true';
+
+        if (sharedSessionId) {
+            // Joining a shared session
+            console.log('[App] Joining shared session:', sharedSessionId);
+            await this.joinSharedSession(sharedSessionId, autoMultiplayer);
+
+            // Clear URL params after joining (keeps URL clean)
+            window.history.replaceState({}, '', window.location.pathname);
+            return;
+        }
+
         // Try to load last session
         const lastSessionId = storage.getLastSessionId();
 
@@ -799,6 +815,62 @@ class App {
 
         // Generate summaries for existing nodes that don't have them (lazy/background)
         this.generateMissingSummaries();
+    }
+
+    /**
+     * Join a shared multiplayer session.
+     * Creates an empty local session with the shared ID, then syncs via WebRTC.
+     * @param {string} sessionId - The shared session ID
+     * @param {boolean} autoMultiplayer - Whether to auto-enable multiplayer
+     */
+    async joinSharedSession(sessionId, autoMultiplayer = true) {
+        console.log('[App] Joining shared session:', sessionId, 'auto-multiplayer:', autoMultiplayer);
+
+        // Check if we already have this session locally
+        const existingSession = await storage.getSession(sessionId);
+
+        if (existingSession) {
+            // We have it - load and optionally enable multiplayer
+            await this.loadSessionData(existingSession);
+        } else {
+            // Create a new empty session with the shared ID
+            // Content will sync via WebRTC from the host
+            this.session = {
+                id: sessionId,
+                name: 'Shared Session',
+                created_at: Date.now(),
+                updated_at: Date.now(),
+                nodes: [],
+                edges: [],
+                tags: {},
+                viewport: { x: 0, y: 0, scale: 1 }
+            };
+
+            if (USE_CRDT_GRAPH) {
+                console.log('%c[App] Creating empty CRDT Graph for shared session', 'color: #2196F3; font-weight: bold');
+                this.graph = new CRDTGraph(sessionId);
+                await this.graph.enablePersistence();
+            } else {
+                console.log('[App] Using legacy Graph mode');
+                this.graph = new Graph(this.session);
+            }
+
+            // Render empty graph (will populate via sync)
+            this.canvas.renderGraph(this.graph);
+
+            // Update UI
+            this.sessionName.textContent = this.session.name;
+            storage.setLastSessionId(sessionId);
+            this.updateEmptyState();
+        }
+
+        // Auto-enable multiplayer to sync with host
+        if (autoMultiplayer && USE_CRDT_GRAPH) {
+            // Small delay to ensure graph is ready
+            setTimeout(() => {
+                this.toggleMultiplayer();
+            }, 500);
+        }
     }
 
     async createNewSession() {
@@ -3177,10 +3249,11 @@ class App {
                 }
             });
 
-            // Update the graph data
+            // Update the graph data (immutable pattern)
             const oldCell = matrixNode.cells[cellKey] ? { ...matrixNode.cells[cellKey] } : { content: null, filled: false };
-            matrixNode.cells[cellKey] = { content: cellContent, filled: true };
-            this.graph.updateNode(nodeId, { cells: matrixNode.cells });
+            const newCell = { content: cellContent, filled: true };
+            const updatedCells = { ...matrixNode.cells, [cellKey]: newCell };
+            this.graph.updateNode(nodeId, { cells: updatedCells });
 
             // Push undo action for cell fill
             this.undoManager.push({
@@ -3189,7 +3262,7 @@ class App {
                 row,
                 col,
                 oldCell,
-                newCell: { content: cellContent, filled: true }
+                newCell
             });
 
             this.saveSession();
@@ -3961,6 +4034,28 @@ class App {
         this.saveSession();
     }
 
+    /**
+     * Handle real-time node dragging (for multiplayer sync).
+     * Updates graph position during drag, throttled to avoid network spam.
+     */
+    handleNodeDrag(nodeId, newPos) {
+        // Only sync if multiplayer is enabled
+        const status = this.graph.getMultiplayerStatus?.();
+        if (!status?.enabled) return;
+
+        // Throttle updates to ~30fps (every 33ms)
+        const now = Date.now();
+        if (!this._lastDragSync) this._lastDragSync = {};
+
+        if (this._lastDragSync[nodeId] && now - this._lastDragSync[nodeId] < 33) {
+            return;  // Skip this update, too soon
+        }
+        this._lastDragSync[nodeId] = now;
+
+        // Update graph position (will sync via CRDT)
+        this.graph.updateNode(nodeId, { position: newPos });
+    }
+
     handleNodeResize(nodeId, width, height) {
         this.graph.updateNode(nodeId, { width, height });
         this.saveSession();
@@ -4484,27 +4579,32 @@ class App {
             return;
         }
 
-        // Initialize versions array if needed
-        if (!node.versions) {
-            node.versions = [{
+        // Build new versions array (immutable pattern - don't mutate node directly)
+        const existingVersions = node.versions || [];
+        const newVersions = [
+            ...existingVersions,
+            // Add initial version if this is the first edit
+            ...(existingVersions.length === 0 ? [{
                 content: node.content,
                 timestamp: node.createdAt || Date.now(),
                 reason: 'initial'
-            }];
-        }
+            }] : []),
+            // Add current content as version before the edit
+            {
+                content: node.content,
+                timestamp: Date.now(),
+                reason: 'before edit'
+            }
+        ];
 
-        // Store current content as a version before updating
-        node.versions.push({
-            content: node.content,
-            timestamp: Date.now(),
-            reason: 'before edit'
+        // Update content via graph (triggers CRDT sync for multiplayer)
+        this.graph.updateNode(this.editingNodeId, {
+            content: newContent,
+            versions: newVersions
         });
 
-        // Update content
-        node.content = newContent;
-
         // Re-render node
-        this.canvas.updateNodeContent(this.editingNodeId, this.canvas.renderMarkdown(newContent));
+        this.canvas.updateNodeContent(this.editingNodeId, newContent, false);
 
         // Close modal and save
         this.hideEditContentModal();
@@ -5183,12 +5283,69 @@ class App {
                     this.updateMultiplayerUI(true);
                 }, 1000);
 
+                // Copy shareable link to clipboard
+                this.copyMultiplayerLink();
+
                 console.log('Multiplayer enabled for room:', roomId);
             } else {
                 this.multiplayerBtn.classList.remove('connecting');
                 console.error('Failed to enable multiplayer');
             }
         }
+    }
+
+    /**
+     * Copy the multiplayer session link to clipboard.
+     * Shows visual feedback to the user.
+     */
+    async copyMultiplayerLink() {
+        const url = new URL(window.location.href);
+        url.searchParams.set('session', this.session.id);
+        url.searchParams.set('multiplayer', 'true');
+
+        const shareUrl = url.toString();
+
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            console.log('[App] Multiplayer link copied:', shareUrl);
+
+            // Show visual feedback
+            this.showToast('Link copied! Share it to invite others.');
+        } catch (err) {
+            console.error('[App] Failed to copy link:', err);
+            // Fallback: show the URL in an alert
+            alert(`Share this link:\n${shareUrl}`);
+        }
+    }
+
+    /**
+     * Show a temporary toast notification
+     * @param {string} message - Message to display
+     * @param {number} duration - Duration in ms (default 3000)
+     */
+    showToast(message, duration = 3000) {
+        // Remove existing toast if any
+        const existingToast = document.querySelector('.toast-notification');
+        if (existingToast) {
+            existingToast.remove();
+        }
+
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = 'toast-notification';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        // Trigger animation
+        requestAnimationFrame(() => {
+            toast.classList.add('show');
+        });
+
+        // Remove after duration
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
     }
 
     /**
@@ -5207,7 +5364,7 @@ class App {
         }
 
         // Re-render all edges
-        this.canvas.renderEdges(this.graph.getAllEdges(), this.graph);
+        this.canvas.updateAllEdges(this.graph);
 
         // Save the session to persist remote changes locally
         this.saveSession();
@@ -5332,12 +5489,12 @@ class App {
                 break;
 
             case 'FILL_CELL':
-                // Restore old cell state
+                // Restore old cell state (immutable pattern)
                 const matrixNodeUndo = this.graph.getNode(action.nodeId);
                 if (matrixNodeUndo && matrixNodeUndo.type === NodeType.MATRIX) {
                     const cellKey = `${action.row}-${action.col}`;
-                    matrixNodeUndo.cells[cellKey] = { ...action.oldCell };
-                    this.graph.updateNode(action.nodeId, { cells: matrixNodeUndo.cells });
+                    const updatedCells = { ...matrixNodeUndo.cells, [cellKey]: { ...action.oldCell } };
+                    this.graph.updateNode(action.nodeId, { cells: updatedCells });
                     this.canvas.updateMatrixCell(action.nodeId, action.row, action.col,
                         action.oldCell.filled ? action.oldCell.content : null, false);
                 }
@@ -5419,12 +5576,12 @@ class App {
                 break;
 
             case 'FILL_CELL':
-                // Re-apply cell fill
+                // Re-apply cell fill (immutable pattern)
                 const matrixNodeRedo = this.graph.getNode(action.nodeId);
                 if (matrixNodeRedo && matrixNodeRedo.type === NodeType.MATRIX) {
                     const cellKey = `${action.row}-${action.col}`;
-                    matrixNodeRedo.cells[cellKey] = { ...action.newCell };
-                    this.graph.updateNode(action.nodeId, { cells: matrixNodeRedo.cells });
+                    const updatedCells = { ...matrixNodeRedo.cells, [cellKey]: { ...action.newCell } };
+                    this.graph.updateNode(action.nodeId, { cells: updatedCells });
                     this.canvas.updateMatrixCell(action.nodeId, action.row, action.col,
                         action.newCell.content, false);
                 }
