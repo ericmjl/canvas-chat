@@ -4,11 +4,10 @@
   "description": "A visual, non-linear chat interface where conversations are nodes on an infinite canvas",
   "type": "module",
   "scripts": {
-    "test": "node tests/test_utils.js && node tests/test_search.js && node tests/test_ui.js"
+    "test": "bash scripts/test-js.sh"
   },
   "devDependencies": {
     "jsdom": "^24.0.0"
   },
-  "private": true,
-  "_comment": "test script duplicates pyproject.toml test-js task - both must be kept in sync. package.json is for npm users, pyproject.toml is for pixi users."
+  "private": true
 }
