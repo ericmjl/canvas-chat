@@ -604,6 +604,7 @@ class App {
         this.canvas.onNodeMove = this.handleNodeMove.bind(this);
         this.canvas.onNodeDrag = this.handleNodeDrag.bind(this);  // Real-time drag for multiplayer
         this.canvas.onNodeResize = this.handleNodeResize.bind(this);
+        this.canvas.onNodeResizing = this.handleNodeResizing.bind(this);  // Real-time resize for multiplayer
         this.canvas.onNodeReply = this.handleNodeReply.bind(this);
         this.canvas.onNodeBranch = this.handleNodeBranch.bind(this);
         this.canvas.onNodeSummarize = this.handleNodeSummarize.bind(this);
@@ -4078,6 +4079,28 @@ class App {
         this.saveSession();
     }
 
+    /**
+     * Handle real-time node resizing (for multiplayer sync).
+     * Updates graph dimensions during resize, throttled to avoid network spam.
+     */
+    handleNodeResizing(nodeId, width, height) {
+        // Only sync if multiplayer is enabled
+        const status = this.graph.getMultiplayerStatus?.();
+        if (!status?.enabled) return;
+
+        // Throttle updates to ~60fps (every 16ms) for smooth experience
+        const now = Date.now();
+        if (!this._lastResizeSync) this._lastResizeSync = {};
+
+        if (this._lastResizeSync[nodeId] && now - this._lastResizeSync[nodeId] < 16) {
+            return;  // Skip this update, too soon
+        }
+        this._lastResizeSync[nodeId] = now;
+
+        // Update graph dimensions (will sync via CRDT)
+        this.graph.updateNode(nodeId, { width, height });
+    }
+
     handleNodeDelete(nodeId) {
         // No confirmation needed - undo (Ctrl+Z) provides recovery
 
@@ -5404,7 +5427,7 @@ class App {
 
     /**
      * Handle remote changes from other peers.
-     * Uses smart diffing to animate position changes smoothly.
+     * Uses smart diffing to animate position and size changes smoothly.
      */
     handleRemoteChange(type, events) {
         console.log('[App] Handling remote change:', type);
@@ -5413,8 +5436,8 @@ class App {
         const newNodes = this.graph.getAllNodes();
         const newNodeIds = new Set(newNodes.map(n => n.id));
 
-        // Track nodes that need position animation
-        const positionChanges = [];
+        // Track nodes that need position/size animation
+        const transformChanges = [];
         // Track nodes that need full re-render (structural changes like tags, matrix edits)
         const needsRerender = [];
 
@@ -5426,17 +5449,29 @@ class App {
                 if (wrapper) {
                     const currentX = parseFloat(wrapper.getAttribute('x'));
                     const currentY = parseFloat(wrapper.getAttribute('y'));
+                    const currentWidth = parseFloat(wrapper.getAttribute('width')) || node.width;
+                    const currentHeight = parseFloat(wrapper.getAttribute('height')) || node.height;
 
-                    // Check if position changed
-                    if (Math.abs(currentX - node.position.x) > 0.5 ||
-                        Math.abs(currentY - node.position.y) > 0.5) {
-                        positionChanges.push({
+                    // Check if position or size changed
+                    const posChanged = Math.abs(currentX - node.position.x) > 0.5 ||
+                        Math.abs(currentY - node.position.y) > 0.5;
+                    const sizeChanged = (node.width && Math.abs(currentWidth - node.width) > 1) ||
+                        (node.height && Math.abs(currentHeight - node.height) > 1);
+
+                    if (posChanged || sizeChanged) {
+                        transformChanges.push({
                             nodeId: node.id,
                             wrapper,
                             startX: currentX,
                             startY: currentY,
                             endX: node.position.x,
-                            endY: node.position.y
+                            endY: node.position.y,
+                            startWidth: currentWidth,
+                            startHeight: currentHeight,
+                            endWidth: node.width || currentWidth,
+                            endHeight: node.height || currentHeight,
+                            hasPositionChange: posChanged,
+                            hasSizeChange: sizeChanged
                         });
                     }
 
@@ -5473,11 +5508,11 @@ class App {
             }
         }
 
-        // Animate position changes if any
-        if (positionChanges.length > 0) {
-            this.animateRemotePositions(positionChanges);
+        // Animate position and size changes if any
+        if (transformChanges.length > 0) {
+            this.animateRemoteTransforms(transformChanges);
         } else {
-            // No position changes, just update edges
+            // No changes, just update edges
             this.canvas.updateAllEdges(this.graph);
         }
 
@@ -5537,10 +5572,10 @@ class App {
     }
 
     /**
-     * Animate node positions for remote changes.
+     * Animate node positions and sizes for remote changes.
      * Uses smooth easing to match local layout animations.
      */
-    animateRemotePositions(animations) {
+    animateRemoteTransforms(animations) {
         const duration = 400;  // Slightly faster than local (500ms)
         const startTime = performance.now();
 
@@ -5551,13 +5586,23 @@ class App {
             // Ease-out cubic for smooth deceleration
             const eased = 1 - Math.pow(1 - progress, 3);
 
-            // Update each node position
+            // Update each node position and size
             for (const anim of animations) {
-                const x = anim.startX + (anim.endX - anim.startX) * eased;
-                const y = anim.startY + (anim.endY - anim.startY) * eased;
+                // Animate position
+                if (anim.hasPositionChange) {
+                    const x = anim.startX + (anim.endX - anim.startX) * eased;
+                    const y = anim.startY + (anim.endY - anim.startY) * eased;
+                    anim.wrapper.setAttribute('x', x);
+                    anim.wrapper.setAttribute('y', y);
+                }
 
-                anim.wrapper.setAttribute('x', x);
-                anim.wrapper.setAttribute('y', y);
+                // Animate size
+                if (anim.hasSizeChange) {
+                    const width = anim.startWidth + (anim.endWidth - anim.startWidth) * eased;
+                    const height = anim.startHeight + (anim.endHeight - anim.startHeight) * eased;
+                    anim.wrapper.setAttribute('width', width);
+                    anim.wrapper.setAttribute('height', height);
+                }
             }
 
             // Update edges during animation
