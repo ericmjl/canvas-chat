@@ -3237,7 +3237,7 @@ class App {
             let cellContent = '';
             // Throttle state for streaming sync
             let lastStreamSync = 0;
-            const streamSyncInterval = 100;  // Sync every 100ms during streaming
+            const streamSyncInterval = 50;  // Sync every 50ms during streaming
 
             await SSE.streamSSEContent(response, {
                 onContent: (chunk, fullContent) => {
