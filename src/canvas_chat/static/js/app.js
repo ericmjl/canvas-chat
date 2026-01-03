@@ -1336,6 +1336,11 @@ class App {
         searchInput.addEventListener('keydown', (e) => {
             this.handleSearchKeydown(e);
         });
+
+        // Release all locks on page unload (multiplayer cleanup)
+        window.addEventListener('beforeunload', () => {
+            this.graph.releaseAllLocks?.();
+        });
     }
 
     // --- Node Operations ---
@@ -4115,6 +4120,18 @@ class App {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
 
+        // Check if node is locked by another user in multiplayer
+        if (this.graph.isNodeLockedByOther?.(nodeId)) {
+            this.showToast('This node is being edited by another user');
+            return;
+        }
+
+        // Try to acquire lock
+        if (this.graph.lockNode?.(nodeId) === false) {
+            this.showToast('Could not lock node for editing');
+            return;
+        }
+
         // Store the node ID for the save handler
         this._editTitleNodeId = nodeId;
 
@@ -4129,6 +4146,10 @@ class App {
     }
 
     hideEditTitleModal() {
+        // Release lock when closing modal
+        if (this._editTitleNodeId) {
+            this.graph.unlockNode?.(this._editTitleNodeId);
+        }
         document.getElementById('edit-title-modal').style.display = 'none';
         this._editTitleNodeId = null;
     }
@@ -4530,6 +4551,18 @@ class App {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
 
+        // Check if node is locked by another user in multiplayer
+        if (this.graph.isNodeLockedByOther?.(nodeId)) {
+            this.showToast('This node is being edited by another user');
+            return;
+        }
+
+        // Try to acquire lock
+        if (this.graph.lockNode?.(nodeId) === false) {
+            this.showToast('Could not lock node for editing');
+            return;
+        }
+
         this.editingNodeId = nodeId;
         const textarea = document.getElementById('edit-content-textarea');
         const preview = document.getElementById('edit-content-preview');
@@ -4566,6 +4599,10 @@ class App {
      * Hide the edit content modal
      */
     hideEditContentModal() {
+        // Release lock when closing modal
+        if (this.editingNodeId) {
+            this.graph.unlockNode?.(this.editingNodeId);
+        }
         document.getElementById('edit-content-modal').style.display = 'none';
         document.getElementById('edit-content-textarea').oninput = null;
         this.editingNodeId = null;
@@ -5276,6 +5313,11 @@ class App {
                     this.handleRemoteChange(type, events);
                 });
 
+                // Set up lock change handler for visual indicators
+                this.graph.onLocksChange?.((lockedNodes) => {
+                    this.handleLocksChange(lockedNodes);
+                });
+
                 // Set up peer count updates
                 provider.on('peers', ({ webrtcPeers, bcPeers }) => {
                     const peerCount = webrtcPeers.length + bcPeers.length;
@@ -5403,6 +5445,28 @@ class App {
     updatePeerCount(count) {
         this.peerCountEl.textContent = count;
         this.peerCountEl.style.display = count > 0 ? 'inline' : 'none';
+    }
+
+    /**
+     * Handle lock changes from other peers.
+     * Updates visual indicators on locked nodes.
+     * @param {Map<string, Object>} lockedNodes - Map of nodeId -> lock info
+     */
+    handleLocksChange(lockedNodes) {
+        // Remove lock indicators from all nodes
+        for (const [nodeId, wrapper] of this.canvas.nodeElements) {
+            wrapper.classList.remove('node-locked-by-other');
+        }
+
+        // Add lock indicators to nodes locked by others
+        for (const [nodeId, lockInfo] of lockedNodes) {
+            if (!lockInfo.isOurs) {
+                const wrapper = this.canvas.nodeElements.get(nodeId);
+                if (wrapper) {
+                    wrapper.classList.add('node-locked-by-other');
+                }
+            }
+        }
     }
 
     /**

@@ -400,6 +400,28 @@ html, body {
     transform: translateX(-50%) translateY(0);
 }
 
+/* Node locked by another user (multiplayer) */
+.node-wrapper.node-locked-by-other .node {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.node-wrapper.node-locked-by-other::after {
+    content: 'Being edited...';
+    position: absolute;
+    top: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--warning);
+    color: #1e1e1e;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    z-index: 10;
+}
+
 /* Canvas Container */
 #canvas-container {
     position: fixed;
