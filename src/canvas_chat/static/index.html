@@ -565,11 +565,36 @@
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- Yjs CRDT library for collaborative editing -->
+    <!-- Use import map to ensure single Yjs instance (y-indexeddb must use same Yjs) -->
+    <script type="importmap">
+    {
+        "imports": {
+            "yjs": "https://esm.sh/yjs@13.6.24",
+            "y-indexeddb": "https://esm.sh/y-indexeddb@9.0.12?external=yjs"
+        }
+    }
+    </script>
+    <script type="module">
+        // Import Yjs and y-indexeddb using import map
+        // The ?external=yjs flag ensures y-indexeddb uses our single Yjs instance
+        import * as Y from 'yjs';
+        import { IndexeddbPersistence } from 'y-indexeddb';
+
+        // Expose globally for non-module scripts
+        window.Y = Y;
+        window.IndexeddbPersistence = IndexeddbPersistence;
+
+        // Signal that Yjs is ready
+        window.dispatchEvent(new CustomEvent('yjs-ready'));
+    </script>
+
+    <!-- Scripts (loaded after Yjs is ready) -->
     <script src="/static/js/sse.js"></script>
     <script src="/static/js/search.js"></script>
     <script src="/static/js/storage.js"></script>
     <script src="/static/js/graph.js"></script>
+    <script src="/static/js/crdt-graph.js"></script>
     <script src="/static/js/node-protocols.js"></script>
     <script src="/static/js/canvas.js"></script>
     <script src="/static/js/chat.js"></script>
