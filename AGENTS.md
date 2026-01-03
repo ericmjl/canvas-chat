@@ -328,6 +328,15 @@ pixi run test-js   # JavaScript tests (runs all JS test files)
 pixi run npm install  # Installs jsdom for DOM simulation tests
 ```
 
+### Test command source of truth
+
+**pixi (`pyproject.toml`) is the single source of truth for test commands.**
+
+- Test commands are defined in `[tool.pixi.tasks]` in `pyproject.toml`
+- `package.json` scripts delegate to pixi (e.g., `"test": "pixi run test-js"`)
+- When modifying test commands, update `pyproject.toml`, not `package.json`
+- This ensures consistency across all environments (local, CI/CD, pixi users, npm users)
+
 ### Syntax checking
 
 Always check JavaScript for syntax errors before considering a change complete:

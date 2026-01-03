@@ -47,6 +47,7 @@ class Canvas {
         this.onNodeSummarize = null;
         this.onNodeFetchSummarize = null;
         this.onNodeDelete = null;
+        this.onNodeCopy = null;  // For copying node content
         this.onNodeTitleEdit = null;  // For editing node title in semantic zoom
         this.onNodeStopGeneration = null;  // For stopping LLM generation
         this.onNodeContinueGeneration = null;  // For continuing stopped generation
@@ -74,6 +75,10 @@ class Canvas {
         // No-nodes-visible hint
         this.noNodesHint = document.getElementById('no-nodes-hint');
         this.noNodesHintTimeout = null;
+
+        // Cache for node type labels and icons (avoid creating wrapper instances repeatedly)
+        this.nodeTypeLabelCache = new Map();
+        this.nodeTypeIconCache = new Map();
 
         this.init();
     }
@@ -1288,6 +1293,9 @@ class Canvas {
         // Remove existing if present
         this.removeNode(node.id);
 
+        // Wrap node with protocol class
+        const wrapped = wrapNode(node);
+
         // Use stored dimensions or defaults
         // Matrix nodes need more width
         const isMatrix = node.type === NodeType.MATRIX;
@@ -1303,7 +1311,7 @@ class Canvas {
         wrapper.setAttribute('height', minHeight);
         wrapper.setAttribute('data-node-id', node.id);
 
-        // Create node HTML - different for matrix nodes
+        // Create node HTML
         const div = document.createElement('div');
         // Apply viewport-fitted class if node has explicit stored dimensions (enables scrollable content)
         const hasExplicitSize = node.width && node.height;
@@ -1321,23 +1329,35 @@ class Canvas {
             div.style.minHeight = '100%';
         }
 
+        // Matrix nodes return full HTML structure from renderContent()
         if (isMatrix) {
-            div.innerHTML = this.renderMatrixNodeContent(node);
+            div.innerHTML = wrapped.renderContent(this);
         } else {
-            // Get summary text for semantic zoom
-            const summaryText = this.getNodeSummaryText(node);
-            const typeIcon = this.getNodeTypeIcon(node.type);
+            // Get values from protocol
+            const summaryText = wrapped.getSummaryText(this);
+            const typeIcon = wrapped.getTypeIcon();
+            const typeLabel = wrapped.getTypeLabel();
+            const contentHtml = wrapped.renderContent(this);
+            const actions = wrapped.getActions();
+            const headerButtons = wrapped.getHeaderButtons();
 
-            // Determine content HTML based on node type
-            let contentHtml;
-            if (node.imageData) {
-                // IMAGE node or HIGHLIGHT node with image
-                const imgSrc = `data:${node.mimeType || 'image/png'};base64,${node.imageData}`;
-                contentHtml = `<div class="image-node-content"><img src="${imgSrc}" class="node-image" alt="Image"></div>`;
-            } else {
-                // Standard text content
-                contentHtml = this.renderMarkdown(node.content);
-            }
+            // Build action buttons HTML
+            const actionsHtml = actions.map(action => {
+                const actionClass = action.id === 'reply' ? 'reply-btn' :
+                                  action.id === 'branch' ? 'branch-btn' :
+                                  action.id === 'summarize' ? 'summarize-btn' :
+                                  action.id === 'fetch-summarize' ? 'fetch-summarize-btn' :
+                                  action.id === 'edit-content' ? 'edit-content-btn' :
+                                  action.id === 'resummarize' ? 'resummarize-btn' :
+                                  action.id === 'copy' ? 'copy-btn' : '';
+                return `<button class="node-action ${actionClass}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
+            }).join('');
+
+            // Build header buttons HTML
+            const headerButtonsHtml = headerButtons.map(btn => {
+                const displayStyle = btn.hidden ? 'style="display:none;"' : '';
+                return `<button class="header-btn ${btn.id}-btn" title="${this.escapeHtml(btn.title)}" ${displayStyle}>${this.escapeHtml(btn.label)}</button>`;
+            }).join('');
 
             div.innerHTML = `
                 <div class="node-summary" title="Double-click to edit title">
@@ -1350,22 +1370,13 @@ class Canvas {
                         <span class="grip-dot"></span><span class="grip-dot"></span>
                         <span class="grip-dot"></span><span class="grip-dot"></span>
                     </div>
-                    <span class="node-type">${node.type === NodeType.CELL && node.title ? node.title : this.getNodeTypeLabel(node.type)}</span>
-                    <span class="node-model">${node.model || ''}</span>
-                    ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="header-btn stop-btn" title="Stop generating" style="display:none;">⏹</button>' : ''}
-                    ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="header-btn continue-btn" title="Continue generating" style="display:none;">▶</button>' : ''}
-                    <button class="header-btn reset-size-btn" title="Reset to default size">↺</button>
-                    <button class="header-btn fit-viewport-btn" title="Fit to viewport (f)">⤢</button>
-                    <button class="node-action delete-btn" title="Delete node">🗑️</button>
+                    <span class="node-type">${this.escapeHtml(typeLabel)}</span>
+                    <span class="node-model">${this.escapeHtml(node.model || '')}</span>
+                    ${headerButtonsHtml}
                 </div>
                 <div class="node-content">${contentHtml}</div>
                 <div class="node-actions">
-                    <button class="node-action reply-btn" title="Reply (r)">↩️ Reply (r)</button>
-                    ${[NodeType.AI, NodeType.OPINION, NodeType.SYNTHESIS, NodeType.REVIEW].includes(node.type) ? '<button class="node-action summarize-btn" title="Summarize">📝 Summarize</button>' : ''}
-                    ${node.type === NodeType.REFERENCE ? '<button class="node-action fetch-summarize-btn" title="Fetch full content and summarize">📄 Fetch & Summarize</button>' : ''}
-                    ${[NodeType.FETCH_RESULT, NodeType.NOTE].includes(node.type) ? '<button class="node-action edit-content-btn" title="Edit content">✏️ Edit</button>' : ''}
-                    ${node.type === NodeType.FETCH_RESULT ? '<button class="node-action resummarize-btn" title="Create new summary from edited content">📝 Re-summarize</button>' : ''}
-                    <button class="node-action copy-btn" title="Copy (c)">📋 Copy (c)</button>
+                    ${actionsHtml}
                 </div>
                 <div class="resize-handle resize-e" data-resize="e"></div>
                 <div class="resize-handle resize-s" data-resize="s"></div>
@@ -1386,7 +1397,7 @@ class Canvas {
 
         // Auto-size height after render based on actual content
         // Skip auto-sizing for scrollable node types - they have fixed dimensions
-        const isScrollableType = SCROLLABLE_NODE_TYPES.includes(node.type);
+        const isScrollableType = wrapped.isScrollable();
         if (!isScrollableType) {
             // Use requestAnimationFrame to ensure DOM has rendered
             requestAnimationFrame(() => {
@@ -1578,27 +1589,52 @@ class Canvas {
             });
         }
 
-        // Copy button
+        // Copy button - use callback if available, otherwise use protocol directly
         const copyBtn = div.querySelector('.copy-btn');
         if (copyBtn) {
             copyBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                try {
-                    if (node.imageData) {
-                        // For image nodes, copy the image to clipboard
-                        await this.copyImageToClipboard(node.imageData, node.mimeType);
-                    } else {
-                        // For text nodes, copy text content
-                        await navigator.clipboard.writeText(node.content);
+                if (this.onNodeCopy) {
+                    // Use app callback (handles matrix formatting)
+                    await this.onNodeCopy(node.id);
+                } else {
+                    // Fallback: use protocol directly, providing a minimal app for matrix formatting
+                    try {
+                        const wrapped = wrapNode(node);
+                        const fallbackApp = {
+                            // Generic matrix formatting to avoid errors when app is not available
+                            formatMatrixAsText(matrix) {
+                                try {
+                                    const { context, rowItems, colItems, cells } = matrix;
+                                    let text = `## ${context}\n\n| |`;
+                                    for (const colItem of colItems) {
+                                        text += ` ${colItem} |`;
+                                    }
+                                    text += '\n|---|';
+                                    for (let c = 0; c < colItems.length; c++) {
+                                        text += '---|';
+                                    }
+                                    text += '\n';
+                                    for (let r = 0; r < rowItems.length; r++) {
+                                        text += `| ${rowItems[r]} |`;
+                                        for (let c = 0; c < colItems.length; c++) {
+                                            const cellKey = `${r}-${c}`;
+                                            const cell = cells[cellKey];
+                                            const content = cell && cell.content ? cell.content.replace(/\n/g, ' ').replace(/\|/g, '\\|') : '';
+                                            text += ` ${content} |`;
+                                        }
+                                        text += '\n';
+                                    }
+                                    return text;
+                                } catch (e) {
+                                    return JSON.stringify(matrix);
+                                }
+                            },
+                        };
+                        await wrapped.copyToClipboard(this, fallbackApp);
+                    } catch (err) {
+                        console.error('Failed to copy:', err);
                     }
-                    // Visual feedback
-                    const originalText = copyBtn.textContent;
-                    copyBtn.textContent = '✓ Copied';
-                    setTimeout(() => {
-                        copyBtn.textContent = originalText;
-                    }, 1500);
-                } catch (err) {
-                    console.error('Failed to copy:', err);
                 }
             });
         }
@@ -2487,51 +2523,29 @@ class Canvas {
     // --- Utilities ---
 
     getNodeTypeLabel(type) {
-        const labels = {
-            [NodeType.HUMAN]: 'You',
-            [NodeType.AI]: 'AI',
-            [NodeType.NOTE]: 'Note',
-            [NodeType.SUMMARY]: 'Summary',
-            [NodeType.REFERENCE]: 'Reference',
-            [NodeType.SEARCH]: 'Search',
-            [NodeType.RESEARCH]: 'Research',
-            [NodeType.HIGHLIGHT]: 'Highlight',
-            [NodeType.MATRIX]: 'Matrix',
-            [NodeType.CELL]: 'Cell',
-            [NodeType.ROW]: 'Row',
-            [NodeType.COLUMN]: 'Column',
-            [NodeType.FETCH_RESULT]: 'Fetched Content',
-            [NodeType.PDF]: 'PDF',
-            [NodeType.OPINION]: 'Opinion',
-            [NodeType.SYNTHESIS]: 'Synthesis',
-            [NodeType.REVIEW]: 'Review',
-            [NodeType.IMAGE]: 'Image'
-        };
-        return labels[type] || type;
+        // Use cached value if available
+        if (this.nodeTypeLabelCache.has(type)) {
+            return this.nodeTypeLabelCache.get(type);
+        }
+        // Use protocol pattern for consistency
+        const mockNode = { type, content: '' };
+        const wrapped = wrapNode(mockNode);
+        const label = wrapped.getTypeLabel();
+        this.nodeTypeLabelCache.set(type, label);
+        return label;
     }
 
     getNodeTypeIcon(type) {
-        const icons = {
-            [NodeType.HUMAN]: '💬',
-            [NodeType.AI]: '🤖',
-            [NodeType.NOTE]: '📝',
-            [NodeType.SUMMARY]: '📋',
-            [NodeType.REFERENCE]: '🔗',
-            [NodeType.SEARCH]: '🔍',
-            [NodeType.RESEARCH]: '📚',
-            [NodeType.HIGHLIGHT]: '✨',
-            [NodeType.MATRIX]: '📊',
-            [NodeType.CELL]: '📦',
-            [NodeType.ROW]: '↔️',
-            [NodeType.COLUMN]: '↕️',
-            [NodeType.FETCH_RESULT]: '📄',
-            [NodeType.PDF]: '📑',
-            [NodeType.OPINION]: '🗣️',
-            [NodeType.SYNTHESIS]: '⚖️',
-            [NodeType.REVIEW]: '🔍',
-            [NodeType.IMAGE]: '🖼️'
-        };
-        return icons[type] || '📄';
+        // Use cached value if available
+        if (this.nodeTypeIconCache.has(type)) {
+            return this.nodeTypeIconCache.get(type);
+        }
+        // Use protocol pattern for consistency
+        const mockNode = { type, content: '' };
+        const wrapped = wrapNode(mockNode);
+        const icon = wrapped.getTypeIcon();
+        this.nodeTypeIconCache.set(type, icon);
+        return icon;
     }
 
     /**
@@ -2551,33 +2565,17 @@ class Canvas {
     }
 
     getNodeSummaryText(node) {
-        // Priority: user-set title > LLM summary > generated fallback
-        if (node.title) return node.title;
-        if (node.summary) return node.summary;
-
-        // For matrix nodes, generate from context and dimensions
-        if (node.type === NodeType.MATRIX) {
-            const context = node.context || 'Matrix';
-            const rows = node.rowItems?.length || 0;
-            const cols = node.colItems?.length || 0;
-            return `${context} (${rows}×${cols})`;
-        }
-
-        // For other nodes, strip markdown and truncate content
-        const plainText = (node.content || '').replace(/[#*_`>\[\]()!]/g, '').trim();
-        return this.truncate(plainText, 60);
+        // Use protocol pattern
+        const wrapped = wrapNode(node);
+        return wrapped.getSummaryText(this);
     }
 
     escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        return escapeHtmlText(text);
     }
 
     truncate(text, maxLength) {
-        if (!text) return '';
-        if (text.length <= maxLength) return text;
-        return text.slice(0, maxLength - 1) + '…';
+        return truncateText(text, maxLength);
     }
 
     /**
@@ -2644,98 +2642,6 @@ class Canvas {
         return `<div class="node-tags">${tagsHtml}</div>`;
     }
 
-    /**
-     * Render matrix node HTML content
-     */
-    renderMatrixNodeContent(node) {
-        const { context, rowItems, colItems, cells } = node;
-
-        // Get summary text for semantic zoom (reuse same logic as other nodes)
-        const summaryText = this.getNodeSummaryText(node);
-        const typeIcon = this.getNodeTypeIcon(node.type);
-
-        // Note: Tags are rendered by renderNode() for ALL node types
-
-        // Build table HTML
-        let tableHtml = '<table class="matrix-table"><thead><tr>';
-
-        // Corner cell with context
-        tableHtml += `<th class="corner-cell" title="${this.escapeHtml(context)}"><span class="matrix-header-text">${this.escapeHtml(context)}</span></th>`;
-
-        // Column headers - clickable to extract column
-        for (let c = 0; c < colItems.length; c++) {
-            const colItem = colItems[c];
-            tableHtml += `<th class="col-header" data-col="${c}" title="Click to extract column: ${this.escapeHtml(colItem)}">
-                <span class="matrix-header-text">${this.escapeHtml(colItem)}</span>
-            </th>`;
-        }
-        tableHtml += '</tr></thead><tbody>';
-
-        // Data rows
-        for (let r = 0; r < rowItems.length; r++) {
-            const rowItem = rowItems[r];
-            tableHtml += '<tr>';
-
-            // Row header - clickable to extract row
-            tableHtml += `<td class="row-header" data-row="${r}" title="Click to extract row: ${this.escapeHtml(rowItem)}">
-                <span class="matrix-header-text">${this.escapeHtml(rowItem)}</span>
-            </td>`;
-
-            // Cells
-            for (let c = 0; c < colItems.length; c++) {
-                const cellKey = `${r}-${c}`;
-                const cell = cells[cellKey];
-                const isFilled = cell && cell.filled && cell.content;
-
-                if (isFilled) {
-                    tableHtml += `<td class="matrix-cell filled" data-row="${r}" data-col="${c}" title="Click to view details">
-                        <div class="matrix-cell-content">${this.escapeHtml(cell.content)}</div>
-                    </td>`;
-                } else {
-                    tableHtml += `<td class="matrix-cell empty" data-row="${r}" data-col="${c}">
-                        <div class="matrix-cell-empty">
-                            <button class="matrix-cell-fill" title="Fill with concise AI evaluation">+</button>
-                        </div>
-                    </td>`;
-                }
-            }
-            tableHtml += '</tr>';
-        }
-        tableHtml += '</tbody></table>';
-
-        return `
-            <div class="node-summary" title="Double-click to edit title">
-                <span class="node-type-icon">${typeIcon}</span>
-                <span class="summary-text">${this.escapeHtml(summaryText)}</span>
-            </div>
-            <div class="node-header">
-                <div class="drag-handle" title="Drag to move">
-                    <span class="grip-dot"></span><span class="grip-dot"></span>
-                    <span class="grip-dot"></span><span class="grip-dot"></span>
-                    <span class="grip-dot"></span><span class="grip-dot"></span>
-                </div>
-                <span class="node-type">Matrix</span>
-                <button class="header-btn stop-btn" title="Stop filling cells" style="display:none;">⏹</button>
-                <button class="header-btn reset-size-btn" title="Reset to default size">↺</button>
-                <button class="header-btn fit-viewport-btn" title="Fit to viewport (f)">⤢</button>
-                <button class="node-action delete-btn" title="Delete node">🗑️</button>
-            </div>
-            <div class="matrix-context">
-                <span class="matrix-context-text">${this.escapeHtml(context)}</span>
-                <button class="matrix-context-copy" title="Copy context">📋</button>
-            </div>
-            <div class="node-content matrix-table-container">
-                ${tableHtml}
-            </div>
-            <div class="matrix-actions">
-                <button class="matrix-edit-btn" title="Edit rows and columns">Edit</button>
-                <button class="matrix-fill-all-btn" title="Fill all empty cells with concise AI evaluations (2-3 sentences each)">Fill All</button>
-            </div>
-            <div class="resize-handle resize-e" data-resize="e"></div>
-            <div class="resize-handle resize-s" data-resize="s"></div>
-            <div class="resize-handle resize-se" data-resize="se"></div>
-        `;
-    }
 
     /**
      * Configure marked.js with KaTeX and other extensions (called once)
