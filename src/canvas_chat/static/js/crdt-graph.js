@@ -263,6 +263,169 @@ class CRDTGraph {
         };
     }
 
+    // =========================================================================
+    // Node Locking (for collaborative editing)
+    // =========================================================================
+
+    /**
+     * Get the awareness instance for presence/locking.
+     * @returns {Object|null} Yjs Awareness instance or null if not in multiplayer
+     */
+    getAwareness() {
+        return this.webrtcProvider?.awareness || null;
+    }
+
+    /**
+     * Get our unique client ID in the awareness system.
+     * @returns {number|null} Client ID or null if not in multiplayer
+     */
+    getClientId() {
+        return this.webrtcProvider?.awareness?.clientID || null;
+    }
+
+    /**
+     * Lock a node for editing by this client.
+     * @param {string} nodeId - The node to lock
+     * @returns {boolean} True if lock acquired, false if already locked by another
+     */
+    lockNode(nodeId) {
+        const awareness = this.getAwareness();
+        if (!awareness) return true;  // No multiplayer, always allow
+
+        // Check if already locked by another client
+        const lockInfo = this.getNodeLock(nodeId);
+        if (lockInfo && lockInfo.clientId !== awareness.clientID) {
+            console.log(`[CRDTGraph] Node ${nodeId} is locked by client ${lockInfo.clientId}`);
+            return false;
+        }
+
+        // Acquire lock
+        const currentState = awareness.getLocalState() || {};
+        const lockedNodes = { ...(currentState.lockedNodes || {}) };
+        lockedNodes[nodeId] = {
+            clientId: awareness.clientID,
+            timestamp: Date.now()
+        };
+
+        awareness.setLocalState({
+            ...currentState,
+            lockedNodes
+        });
+
+        console.log(`[CRDTGraph] Locked node ${nodeId}`);
+        return true;
+    }
+
+    /**
+     * Release a lock on a node.
+     * @param {string} nodeId - The node to unlock
+     */
+    unlockNode(nodeId) {
+        const awareness = this.getAwareness();
+        if (!awareness) return;
+
+        const currentState = awareness.getLocalState() || {};
+        const lockedNodes = { ...(currentState.lockedNodes || {}) };
+
+        // Only unlock if we own the lock
+        if (lockedNodes[nodeId]?.clientId === awareness.clientID) {
+            delete lockedNodes[nodeId];
+
+            awareness.setLocalState({
+                ...currentState,
+                lockedNodes
+            });
+
+            console.log(`[CRDTGraph] Unlocked node ${nodeId}`);
+        }
+    }
+
+    /**
+     * Check if a node is locked and by whom.
+     * @param {string} nodeId - The node to check
+     * @returns {Object|null} Lock info { clientId, timestamp } or null if not locked
+     */
+    getNodeLock(nodeId) {
+        const awareness = this.getAwareness();
+        if (!awareness) return null;
+
+        // Check all clients' awareness states
+        for (const [clientId, state] of awareness.getStates()) {
+            if (state.lockedNodes?.[nodeId]) {
+                return {
+                    clientId,
+                    timestamp: state.lockedNodes[nodeId].timestamp,
+                    isOurs: clientId === awareness.clientID
+                };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Check if a node is locked by another client (not us).
+     * @param {string} nodeId - The node to check
+     * @returns {boolean} True if locked by another client
+     */
+    isNodeLockedByOther(nodeId) {
+        const lock = this.getNodeLock(nodeId);
+        return lock !== null && !lock.isOurs;
+    }
+
+    /**
+     * Get all currently locked nodes across all clients.
+     * @returns {Map<string, Object>} Map of nodeId -> lock info
+     */
+    getAllLockedNodes() {
+        const awareness = this.getAwareness();
+        if (!awareness) return new Map();
+
+        const locks = new Map();
+        for (const [clientId, state] of awareness.getStates()) {
+            if (state.lockedNodes) {
+                for (const [nodeId, lockInfo] of Object.entries(state.lockedNodes)) {
+                    locks.set(nodeId, {
+                        clientId,
+                        timestamp: lockInfo.timestamp,
+                        isOurs: clientId === awareness.clientID
+                    });
+                }
+            }
+        }
+        return locks;
+    }
+
+    /**
+     * Release all locks held by this client.
+     * Call this on disconnect or page unload.
+     */
+    releaseAllLocks() {
+        const awareness = this.getAwareness();
+        if (!awareness) return;
+
+        const currentState = awareness.getLocalState() || {};
+        if (currentState.lockedNodes && Object.keys(currentState.lockedNodes).length > 0) {
+            awareness.setLocalState({
+                ...currentState,
+                lockedNodes: {}
+            });
+            console.log('[CRDTGraph] Released all locks');
+        }
+    }
+
+    /**
+     * Set a callback for when locks change (for UI updates).
+     * @param {Function} callback - Called with (lockedNodes: Map) when locks change
+     */
+    onLocksChange(callback) {
+        const awareness = this.getAwareness();
+        if (!awareness) return;
+
+        awareness.on('change', () => {
+            callback(this.getAllLockedNodes());
+        });
+    }
+
     /**
      * Clear CRDT data and reload from legacy format.
      * This ensures legacy DB is always source of truth.
