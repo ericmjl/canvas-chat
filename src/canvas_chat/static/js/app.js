@@ -1013,8 +1013,10 @@ class App {
 
         // Multiplayer button
         this.multiplayerBtn = document.getElementById('multiplayer-btn');
+        this.multiplayerLeaveBtn = document.getElementById('multiplayer-leave-btn');
         this.peerCountEl = document.getElementById('peer-count');
-        this.multiplayerBtn.addEventListener('click', () => this.toggleMultiplayer());
+        this.multiplayerBtn.addEventListener('click', () => this.handleMultiplayerClick());
+        this.multiplayerLeaveBtn.addEventListener('click', () => this.leaveMultiplayer());
 
         // Export/Import
         document.getElementById('export-btn').addEventListener('click', () => {
@@ -5268,9 +5270,38 @@ class App {
     // =========================================================================
 
     /**
-     * Toggle multiplayer sync on/off
+     * Handle click on multiplayer button.
+     * If not in MP mode: enable multiplayer.
+     * If in MP mode: copy the share link (don't disable).
      */
-    toggleMultiplayer() {
+    handleMultiplayerClick() {
+        const status = this.graph.getMultiplayerStatus?.();
+
+        if (status?.enabled) {
+            // Already in MP mode - copy the link
+            this.copyMultiplayerLink();
+        } else {
+            // Not in MP mode - enable it
+            this.enableMultiplayer();
+        }
+    }
+
+    /**
+     * Leave/disable multiplayer session
+     */
+    leaveMultiplayer() {
+        if (!this.graph.disableMultiplayer) return;
+
+        this.graph.disableMultiplayer();
+        this.updateMultiplayerUI(false);
+        this.showToast('Left multiplayer session');
+        console.log('Multiplayer disabled');
+    }
+
+    /**
+     * Enable multiplayer sync
+     */
+    enableMultiplayer() {
         // Check if CRDT graph with multiplayer support
         if (!this.graph.enableMultiplayer) {
             console.warn('Multiplayer requires CRDT graph mode');
@@ -5285,60 +5316,64 @@ class App {
             return;
         }
 
-        const status = this.graph.getMultiplayerStatus();
+        // Enable multiplayer using session ID as room
+        this.multiplayerBtn.classList.add('connecting');
+        this.multiplayerBtn.title = 'Connecting...';
 
-        if (status.enabled) {
-            // Disable multiplayer
-            this.graph.disableMultiplayer();
-            this.updateMultiplayerUI(false);
-            console.log('Multiplayer disabled');
-        } else {
-            // Enable multiplayer using session ID as room
-            this.multiplayerBtn.classList.add('connecting');
-            this.multiplayerBtn.title = 'Connecting...';
+        const roomId = this.session.id;
+        const provider = this.graph.enableMultiplayer(roomId);
 
-            const roomId = this.session.id;
-            const provider = this.graph.enableMultiplayer(roomId);
+        if (provider) {
+            // Set up remote change handler to re-render canvas
+            this.graph.onRemoteChange((type, events) => {
+                console.log('[App] Remote change received:', type);
+                this.handleRemoteChange(type, events);
+            });
 
-            if (provider) {
-                // Set up remote change handler to re-render canvas
-                this.graph.onRemoteChange((type, events) => {
-                    console.log('[App] Remote change received:', type);
-                    this.handleRemoteChange(type, events);
-                });
+            // Set up lock change handler for visual indicators
+            this.graph.onLocksChange?.((lockedNodes) => {
+                this.handleLocksChange(lockedNodes);
+            });
 
-                // Set up lock change handler for visual indicators
-                this.graph.onLocksChange?.((lockedNodes) => {
-                    this.handleLocksChange(lockedNodes);
-                });
+            // Set up peer count updates
+            provider.on('peers', ({ webrtcPeers, bcPeers }) => {
+                const peerCount = webrtcPeers.length + bcPeers.length;
+                this.updatePeerCount(peerCount);
+            });
 
-                // Set up peer count updates
-                provider.on('peers', ({ webrtcPeers, bcPeers }) => {
-                    const peerCount = webrtcPeers.length + bcPeers.length;
-                    this.updatePeerCount(peerCount);
-                });
-
-                // Update UI when synced
-                provider.on('synced', ({ synced }) => {
-                    this.multiplayerBtn.classList.remove('connecting');
-                    this.updateMultiplayerUI(true);
-                    console.log('Multiplayer synced:', synced);
-                });
-
-                // Initial UI update
-                setTimeout(() => {
-                    this.multiplayerBtn.classList.remove('connecting');
-                    this.updateMultiplayerUI(true);
-                }, 1000);
-
-                // Copy shareable link to clipboard
-                this.copyMultiplayerLink();
-
-                console.log('Multiplayer enabled for room:', roomId);
-            } else {
+            // Update UI when synced
+            provider.on('synced', ({ synced }) => {
                 this.multiplayerBtn.classList.remove('connecting');
-                console.error('Failed to enable multiplayer');
-            }
+                this.updateMultiplayerUI(true);
+                console.log('Multiplayer synced:', synced);
+            });
+
+            // Initial UI update
+            setTimeout(() => {
+                this.multiplayerBtn.classList.remove('connecting');
+                this.updateMultiplayerUI(true);
+            }, 1000);
+
+            // Copy shareable link to clipboard
+            this.copyMultiplayerLink();
+
+            console.log('Multiplayer enabled for room:', roomId);
+        } else {
+            this.multiplayerBtn.classList.remove('connecting');
+            console.error('Failed to enable multiplayer');
+        }
+    }
+
+    /**
+     * Toggle multiplayer sync on/off (legacy, kept for keyboard shortcut)
+     */
+    toggleMultiplayer() {
+        const status = this.graph.getMultiplayerStatus?.();
+
+        if (status?.enabled) {
+            this.leaveMultiplayer();
+        } else {
+            this.enableMultiplayer();
         }
     }
 
@@ -5593,11 +5628,13 @@ class App {
     updateMultiplayerUI(enabled) {
         if (enabled) {
             this.multiplayerBtn.classList.add('active');
-            this.multiplayerBtn.title = 'Multiplayer active (click to disable)';
+            this.multiplayerBtn.title = 'Click to copy share link';
+            this.multiplayerLeaveBtn.style.display = 'inline-flex';
             this.peerCountEl.style.display = 'inline';
         } else {
             this.multiplayerBtn.classList.remove('active');
             this.multiplayerBtn.title = 'Enable multiplayer sync';
+            this.multiplayerLeaveBtn.style.display = 'none';
             this.peerCountEl.style.display = 'none';
         }
     }

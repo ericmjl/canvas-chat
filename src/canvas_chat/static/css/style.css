@@ -376,6 +376,23 @@ html, body {
     text-align: center;
 }
 
+.multiplayer-leave-btn {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 12px;
+    background: var(--danger);
+    color: white;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.multiplayer-leave-btn:hover {
+    background: #c92a2a;
+}
+
 /* Toast notifications */
 .toast-notification {
     position: fixed;
