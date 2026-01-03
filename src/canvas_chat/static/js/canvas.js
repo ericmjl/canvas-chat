@@ -76,6 +76,10 @@ class Canvas {
         this.noNodesHint = document.getElementById('no-nodes-hint');
         this.noNodesHintTimeout = null;
 
+        // Cache for node type labels and icons (avoid creating wrapper instances repeatedly)
+        this.nodeTypeLabelCache = new Map();
+        this.nodeTypeIconCache = new Map();
+
         this.init();
     }
 
@@ -1594,10 +1598,40 @@ class Canvas {
                     // Use app callback (handles matrix formatting)
                     await this.onNodeCopy(node.id);
                 } else {
-                    // Fallback: use protocol directly (won't work for matrix nodes without app)
+                    // Fallback: use protocol directly, providing a minimal app for matrix formatting
                     try {
                         const wrapped = wrapNode(node);
-                        await wrapped.copyToClipboard(this, null);
+                        const fallbackApp = {
+                            // Generic matrix formatting to avoid errors when app is not available
+                            formatMatrixAsText(matrix) {
+                                try {
+                                    const { context, rowItems, colItems, cells } = matrix;
+                                    let text = `## ${context}\n\n| |`;
+                                    for (const colItem of colItems) {
+                                        text += ` ${colItem} |`;
+                                    }
+                                    text += '\n|---|';
+                                    for (let c = 0; c < colItems.length; c++) {
+                                        text += '---|';
+                                    }
+                                    text += '\n';
+                                    for (let r = 0; r < rowItems.length; r++) {
+                                        text += `| ${rowItems[r]} |`;
+                                        for (let c = 0; c < colItems.length; c++) {
+                                            const cellKey = `${r}-${c}`;
+                                            const cell = cells[cellKey];
+                                            const content = cell && cell.content ? cell.content.replace(/\n/g, ' ').replace(/\|/g, '\\|') : '';
+                                            text += ` ${content} |`;
+                                        }
+                                        text += '\n';
+                                    }
+                                    return text;
+                                } catch (e) {
+                                    return JSON.stringify(matrix);
+                                }
+                            },
+                        };
+                        await wrapped.copyToClipboard(this, fallbackApp);
                     } catch (err) {
                         console.error('Failed to copy:', err);
                     }
@@ -2489,17 +2523,29 @@ class Canvas {
     // --- Utilities ---
 
     getNodeTypeLabel(type) {
+        // Use cached value if available
+        if (this.nodeTypeLabelCache.has(type)) {
+            return this.nodeTypeLabelCache.get(type);
+        }
         // Use protocol pattern for consistency
         const mockNode = { type, content: '' };
         const wrapped = wrapNode(mockNode);
-        return wrapped.getTypeLabel();
+        const label = wrapped.getTypeLabel();
+        this.nodeTypeLabelCache.set(type, label);
+        return label;
     }
 
     getNodeTypeIcon(type) {
+        // Use cached value if available
+        if (this.nodeTypeIconCache.has(type)) {
+            return this.nodeTypeIconCache.get(type);
+        }
         // Use protocol pattern for consistency
         const mockNode = { type, content: '' };
         const wrapped = wrapNode(mockNode);
-        return wrapped.getTypeIcon();
+        const icon = wrapped.getTypeIcon();
+        this.nodeTypeIconCache.set(type, icon);
+        return icon;
     }
 
     /**

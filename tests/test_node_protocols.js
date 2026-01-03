@@ -28,21 +28,19 @@ global.NodeType = {
     IMAGE: 'image'
 };
 
-// Load node-protocols.js by reading and evaluating it
+// Load node-protocols.js by reading and safely executing it in this context
 const fs = require('fs');
 const path = require('path');
-const nodeProtocolsCode = fs.readFileSync(
-    path.join(__dirname, '../src/canvas_chat/static/js/node-protocols.js'),
-    'utf8'
-);
-eval(nodeProtocolsCode);
+const vm = require('vm');
+const nodeProtocolsPath = path.join(__dirname, '../src/canvas_chat/static/js/node-protocols.js');
+const nodeProtocolsCode = fs.readFileSync(nodeProtocolsPath, 'utf8');
+vm.runInThisContext(nodeProtocolsCode, { filename: nodeProtocolsPath });
 
 // Extract functions and classes from window
 const {
     wrapNode,
     validateNodeProtocol,
     Actions,
-    HeaderButtons,
     BaseNode,
     HumanNode,
     AINode,
@@ -116,17 +114,7 @@ const mockCanvas = {
     showCopyFeedback: () => {}
 };
 
-const mockApp = {
-    formatMatrixAsText: (node) => {
-        const { context, rowItems, colItems, cells } = node;
-        let text = `## ${context}\n\n| |`;
-        for (const colItem of colItems) {
-            text += ` ${colItem} |`;
-        }
-        text += '\n';
-        return text;
-    }
-};
+// Note: mockApp is not used in these tests - protocol classes are tested directly
 
 // ============================================================
 // Protocol Compliance Tests

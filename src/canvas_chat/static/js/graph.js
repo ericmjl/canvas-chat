@@ -89,9 +89,20 @@ function createNode(type, content, options = {}) {
     // Apply default fixed size for scrollable node types
     // These nodes have long content that should scroll rather than expand
     // Use protocol pattern to determine if scrollable (self-contained in node classes)
-    const mockNode = { type, content: '' };
-    const wrapped = typeof wrapNode !== 'undefined' ? wrapNode(mockNode) : null;
-    const isScrollable = wrapped ? wrapped.isScrollable() : SCROLLABLE_NODE_TYPES.includes(type);
+    let isScrollable;
+    if (typeof wrapNode === 'function') {
+        const mockNode = { type, content: '' };
+        const wrapped = wrapNode(mockNode);
+        if (wrapped && typeof wrapped.isScrollable === 'function') {
+            isScrollable = wrapped.isScrollable();
+        } else {
+            // Fallback to legacy type-based check if wrapper doesn't expose isScrollable
+            isScrollable = SCROLLABLE_NODE_TYPES.includes(type);
+        }
+    } else {
+        // Fallback to legacy type-based check if wrapNode is not defined
+        isScrollable = SCROLLABLE_NODE_TYPES.includes(type);
+    }
     const defaultWidth = isScrollable ? SCROLLABLE_NODE_SIZE.width : undefined;
     const defaultHeight = isScrollable ? SCROLLABLE_NODE_SIZE.height : undefined;
 

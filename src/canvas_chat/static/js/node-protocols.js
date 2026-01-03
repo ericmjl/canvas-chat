@@ -334,6 +334,10 @@ class MatrixNode extends BaseNode {
 
     async copyToClipboard(canvas, app) {
         // Format matrix as markdown table
+        if (!app?.formatMatrixAsText) {
+            console.error('MatrixNode.copyToClipboard: app.formatMatrixAsText is not available');
+            return;
+        }
         const text = app.formatMatrixAsText(this.node);
         if (!text) return;
         await navigator.clipboard.writeText(text);
@@ -481,6 +485,10 @@ class ImageNode extends BaseNode {
     }
 
     async copyToClipboard(canvas, app) {
+        if (!canvas?.copyImageToClipboard) {
+            console.error('ImageNode.copyToClipboard: canvas.copyImageToClipboard is not available');
+            return;
+        }
         await canvas.copyImageToClipboard(this.node.imageData, this.node.mimeType);
         canvas.showCopyFeedback(this.node.id);
     }
@@ -528,6 +536,38 @@ function wrapNode(node) {
 }
 
 /**
+ * Create a type-appropriate mock node for protocol validation
+ * @param {string} nodeType - The node type
+ * @returns {Object} Mock node with required properties for that type
+ */
+function createMockNodeForType(nodeType) {
+    const baseMock = { type: nodeType, content: '' };
+
+    // Add type-specific properties that methods might access
+    if (nodeType === NodeType.IMAGE) {
+        return { ...baseMock, imageData: 'mockImageData', mimeType: 'image/png' };
+    }
+    if (nodeType === NodeType.MATRIX) {
+        return {
+            ...baseMock,
+            context: 'Test Context',
+            rowItems: ['Row1'],
+            colItems: ['Col1'],
+            cells: {}
+        };
+    }
+    if (nodeType === NodeType.CELL) {
+        return { ...baseMock, title: 'Test Cell Title' };
+    }
+    if (nodeType === NodeType.HIGHLIGHT) {
+        // HighlightNode can have imageData or just content
+        return baseMock;
+    }
+
+    return baseMock;
+}
+
+/**
  * Validate that a node protocol class implements all required methods
  * Used for testing protocol compliance
  *
@@ -546,8 +586,31 @@ function validateNodeProtocol(NodeClass) {
         'isScrollable'
     ];
 
-    // Create a test instance (requires a mock node)
-    const mockNode = { type: NodeType.NOTE, content: '' };
+    // Try to determine the node type from the class name
+    // This is a heuristic - class names should match node types
+    let nodeType = NodeType.NOTE; // Default fallback
+    const className = NodeClass.name;
+    if (className.includes('Image')) nodeType = NodeType.IMAGE;
+    else if (className.includes('Matrix')) nodeType = NodeType.MATRIX;
+    else if (className.includes('Cell')) nodeType = NodeType.CELL;
+    else if (className.includes('Human')) nodeType = NodeType.HUMAN;
+    else if (className.includes('AI') && !className.includes('Human')) nodeType = NodeType.AI;
+    else if (className.includes('Note')) nodeType = NodeType.NOTE;
+    else if (className.includes('Summary')) nodeType = NodeType.SUMMARY;
+    else if (className.includes('Reference')) nodeType = NodeType.REFERENCE;
+    else if (className.includes('Search')) nodeType = NodeType.SEARCH;
+    else if (className.includes('Research')) nodeType = NodeType.RESEARCH;
+    else if (className.includes('Highlight')) nodeType = NodeType.HIGHLIGHT;
+    else if (className.includes('Row')) nodeType = NodeType.ROW;
+    else if (className.includes('Column')) nodeType = NodeType.COLUMN;
+    else if (className.includes('FetchResult')) nodeType = NodeType.FETCH_RESULT;
+    else if (className.includes('Pdf')) nodeType = NodeType.PDF;
+    else if (className.includes('Opinion')) nodeType = NodeType.OPINION;
+    else if (className.includes('Synthesis')) nodeType = NodeType.SYNTHESIS;
+    else if (className.includes('Review')) nodeType = NodeType.REVIEW;
+
+    // Create a type-appropriate mock node
+    const mockNode = createMockNodeForType(nodeType);
     const instance = new NodeClass(mockNode);
 
     for (const method of requiredMethods) {
