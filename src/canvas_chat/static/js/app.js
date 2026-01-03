@@ -4512,47 +4512,18 @@ class App {
         const div = wrapper.querySelector('.node');
         if (!div) return;
 
-        // Use protocol pattern to determine if scrollable (self-contained in node classes)
-        const wrapped = wrapNode(node);
-        const isScrollableType = wrapped.isScrollable();
-        const isMatrixNode = node.type === NodeType.MATRIX;
-
-        let defaultWidth, defaultHeight;
-
-        if (isScrollableType) {
-            // Use fixed default size for scrollable types
-            defaultWidth = SCROLLABLE_NODE_SIZE.width;
-            defaultHeight = SCROLLABLE_NODE_SIZE.height;
-        } else if (isMatrixNode) {
-            // Matrix nodes keep their current dimensions (they have special sizing)
-            return;
-        } else {
-            // For non-scrollable types, calculate based on content
-            // Temporarily remove constraints to measure natural size
-            const oldMinHeight = div.style.minHeight;
-            div.style.minHeight = 'auto';
-            const contentHeight = div.scrollHeight + 10;
-            div.style.minHeight = oldMinHeight;
-
-            // Use stored width or calculate from content
-            defaultWidth = node.width || 400;
-            defaultHeight = Math.max(100, contentHeight);
-        }
+        // All nodes now have fixed dimensions - get default size for this type
+        const defaultSize = getDefaultNodeSize(node.type);
+        const defaultWidth = defaultSize.width;
+        const defaultHeight = defaultSize.height;
 
         // Apply new dimensions
         wrapper.setAttribute('width', defaultWidth);
         wrapper.setAttribute('height', defaultHeight);
 
-        // For scrollable types, keep viewport-fitted so node renders at wrapper size with scrolling
-        // This prevents mismatch between wrapper dimensions and rendered dimensions during resize
-        if (isScrollableType) {
-            div.classList.add('viewport-fitted');
-            div.style.height = '100%';
-        } else {
-            // For non-scrollable types, remove constraints to allow natural sizing
-            div.classList.remove('viewport-fitted');
-            div.style.height = '';
-        }
+        // All nodes are scrollable with fixed dimensions
+        div.classList.add('viewport-fitted');
+        div.style.height = '100%';
 
         // Update edges
         const x = parseFloat(wrapper.getAttribute('x'));

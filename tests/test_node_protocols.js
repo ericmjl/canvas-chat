@@ -445,16 +445,16 @@ test('isScrollable: ImageNode returns true', () => {
     assertTrue(wrapped.isScrollable());
 });
 
-test('isScrollable: HumanNode returns false', () => {
+test('isScrollable: HumanNode returns true (all nodes are scrollable)', () => {
     const node = { type: NodeType.HUMAN, content: 'Hello' };
     const wrapped = wrapNode(node);
-    assertFalse(wrapped.isScrollable());
+    assertTrue(wrapped.isScrollable());
 });
 
-test('isScrollable: ReferenceNode returns false', () => {
+test('isScrollable: ReferenceNode returns true (all nodes are scrollable)', () => {
     const node = { type: NodeType.REFERENCE, content: 'Link' };
     const wrapped = wrapNode(node);
-    assertFalse(wrapped.isScrollable());
+    assertTrue(wrapped.isScrollable());
 });
 
 // ============================================================

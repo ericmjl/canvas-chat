@@ -118,11 +118,12 @@ class BaseNode {
     }
 
     /**
-     * Whether this node type has fixed scrollable dimensions
+     * Whether this node type has fixed scrollable dimensions.
+     * All nodes now have fixed dimensions with scrollable content.
      * @returns {boolean}
      */
     isScrollable() {
-        return false;
+        return true;
     }
 }
 
@@ -156,8 +157,6 @@ class AINode extends BaseNode {
             HeaderButtons.DELETE
         ];
     }
-
-    isScrollable() { return true; }
 }
 
 /**
@@ -170,8 +169,6 @@ class NoteNode extends BaseNode {
     getActions() {
         return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.COPY];
     }
-
-    isScrollable() { return true; }
 }
 
 /**
@@ -180,8 +177,6 @@ class NoteNode extends BaseNode {
 class SummaryNode extends BaseNode {
     getTypeLabel() { return 'Summary'; }
     getTypeIcon() { return '📋'; }
-
-    isScrollable() { return true; }
 }
 
 /**
@@ -210,8 +205,6 @@ class SearchNode extends BaseNode {
 class ResearchNode extends BaseNode {
     getTypeLabel() { return 'Research'; }
     getTypeIcon() { return '📚'; }
-
-    isScrollable() { return true; }
 }
 
 /**
@@ -388,8 +381,6 @@ class FetchResultNode extends BaseNode {
     getActions() {
         return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.RESUMMARIZE, Actions.COPY];
     }
-
-    isScrollable() { return true; }
 }
 
 /**
@@ -398,8 +389,6 @@ class FetchResultNode extends BaseNode {
 class PdfNode extends BaseNode {
     getTypeLabel() { return 'PDF'; }
     getTypeIcon() { return '📑'; }
-
-    isScrollable() { return true; }
 }
 
 /**
@@ -424,8 +413,6 @@ class OpinionNode extends BaseNode {
             HeaderButtons.DELETE
         ];
     }
-
-    isScrollable() { return true; }
 }
 
 /**
@@ -450,8 +437,6 @@ class SynthesisNode extends BaseNode {
             HeaderButtons.DELETE
         ];
     }
-
-    isScrollable() { return true; }
 }
 
 /**
@@ -476,8 +461,6 @@ class ReviewNode extends BaseNode {
             HeaderButtons.DELETE
         ];
     }
-
-    isScrollable() { return true; }
 }
 
 /**
@@ -504,8 +487,6 @@ class ImageNode extends BaseNode {
         await canvas.copyImageToClipboard(this.node.imageData, this.node.mimeType);
         canvas.showCopyFeedback(this.node.id);
     }
-
-    isScrollable() { return true; }
 }
 
 /**

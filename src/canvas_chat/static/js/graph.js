@@ -27,30 +27,45 @@ const NodeType = {
 };
 
 /**
- * Node types that should have fixed size with scrollable content
- * These nodes often have long streaming content (LLM responses, fetched articles, etc.)
+ * Default node sizes by type.
+ * All nodes have fixed dimensions with scrollable content.
+ * - Large (640x480): LLM-generated content, documents, research
+ * - Small (420x200): User input, short content, extracted items
  */
-const SCROLLABLE_NODE_TYPES = [
-    NodeType.AI,
-    NodeType.SUMMARY,
-    NodeType.RESEARCH,
-    NodeType.FETCH_RESULT,
-    NodeType.PDF,
-    NodeType.OPINION,
-    NodeType.SYNTHESIS,
-    NodeType.REVIEW,
-    NodeType.NOTE,
-    NodeType.IMAGE
-];
+const DEFAULT_NODE_SIZES = {
+    // Large nodes (640x480) - LLM content, documents
+    [NodeType.AI]: { width: 640, height: 480 },
+    [NodeType.SUMMARY]: { width: 640, height: 480 },
+    [NodeType.RESEARCH]: { width: 640, height: 480 },
+    [NodeType.FETCH_RESULT]: { width: 640, height: 480 },
+    [NodeType.PDF]: { width: 640, height: 480 },
+    [NodeType.OPINION]: { width: 640, height: 480 },
+    [NodeType.SYNTHESIS]: { width: 640, height: 480 },
+    [NodeType.REVIEW]: { width: 640, height: 480 },
+    [NodeType.NOTE]: { width: 640, height: 480 },
+    [NodeType.IMAGE]: { width: 640, height: 480 },
+
+    // Small nodes (420x200) - User input, short content
+    [NodeType.HUMAN]: { width: 420, height: 200 },
+    [NodeType.REFERENCE]: { width: 420, height: 200 },
+    [NodeType.SEARCH]: { width: 420, height: 200 },
+    [NodeType.HIGHLIGHT]: { width: 420, height: 300 },  // Slightly taller for excerpts
+    [NodeType.CELL]: { width: 420, height: 300 },
+    [NodeType.ROW]: { width: 500, height: 300 },
+    [NodeType.COLUMN]: { width: 500, height: 300 },
+
+    // Matrix nodes - wider for table layout
+    [NodeType.MATRIX]: { width: 600, height: 400 }
+};
 
 /**
- * Default fixed size for scrollable nodes (4:3 aspect ratio)
- * Prevents nodes from growing unboundedly during streaming
+ * Get default size for a node type
+ * @param {string} type - Node type
+ * @returns {{width: number, height: number}} Default dimensions
  */
-const SCROLLABLE_NODE_SIZE = {
-    width: 640,
-    height: 480
-};
+function getDefaultNodeSize(type) {
+    return DEFAULT_NODE_SIZES[type] || { width: 420, height: 200 };
+}
 
 /**
  * Edge types
@@ -117,33 +132,16 @@ function wouldOverlapNodes(pos, width, height, nodes) {
  * Create a new node
  */
 function createNode(type, content, options = {}) {
-    // Apply default fixed size for scrollable node types
-    // These nodes have long content that should scroll rather than expand
-    // Use protocol pattern to determine if scrollable (self-contained in node classes)
-    let isScrollable;
-    if (typeof wrapNode === 'function') {
-        const mockNode = { type, content: '' };
-        const wrapped = wrapNode(mockNode);
-        if (wrapped && typeof wrapped.isScrollable === 'function') {
-            isScrollable = wrapped.isScrollable();
-        } else {
-            // Fallback to legacy type-based check if wrapper doesn't expose isScrollable
-            isScrollable = SCROLLABLE_NODE_TYPES.includes(type);
-        }
-    } else {
-        // Fallback to legacy type-based check if wrapNode is not defined
-        isScrollable = SCROLLABLE_NODE_TYPES.includes(type);
-    }
-    const defaultWidth = isScrollable ? SCROLLABLE_NODE_SIZE.width : undefined;
-    const defaultHeight = isScrollable ? SCROLLABLE_NODE_SIZE.height : undefined;
+    // All nodes have fixed dimensions with scrollable content
+    const defaultSize = getDefaultNodeSize(type);
 
     return {
         id: crypto.randomUUID(),
         type,
         content,
         position: options.position || { x: 0, y: 0 },
-        width: options.width || defaultWidth,
-        height: options.height || defaultHeight,
+        width: options.width || defaultSize.width,
+        height: options.height || defaultSize.height,
         created_at: Date.now(),
         model: options.model || null,
         selection: options.selection || null, // For branch-from-selection
@@ -1248,8 +1246,8 @@ window.Graph = Graph;
 window.NodeType = NodeType;
 window.EdgeType = EdgeType;
 window.TAG_COLORS = TAG_COLORS;
-window.SCROLLABLE_NODE_TYPES = SCROLLABLE_NODE_TYPES;
-window.SCROLLABLE_NODE_SIZE = SCROLLABLE_NODE_SIZE;
+window.DEFAULT_NODE_SIZES = DEFAULT_NODE_SIZES;
+window.getDefaultNodeSize = getDefaultNodeSize;
 window.createNode = createNode;
 window.createEdge = createEdge;
 window.createMatrixNode = createMatrixNode;

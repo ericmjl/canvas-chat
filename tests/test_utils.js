@@ -85,8 +85,8 @@ const {
     escapeHtmlText,
     formatMatrixAsText,
     NodeType,
-    SCROLLABLE_NODE_TYPES,
-    SCROLLABLE_NODE_SIZE
+    DEFAULT_NODE_SIZES,
+    getDefaultNodeSize
 } = global.window;
 
 // Simple test runner
@@ -1999,7 +1999,7 @@ test('getZoomClass: scale 0.1 returns zoom-mini', () => {
 // ============================================================
 // Node creation tests
 // ============================================================
-// NodeType, SCROLLABLE_NODE_TYPES, and SCROLLABLE_NODE_SIZE are loaded from graph.js via window
+// NodeType, DEFAULT_NODE_SIZES, and getDefaultNodeSize are loaded from graph.js via window
 
 /**
  * Create a new node
@@ -2029,10 +2029,11 @@ test('createNode: scrollable node types get fixed size', () => {
     assertEqual(node.height, 480);
 });
 
-test('createNode: non-scrollable node types have no default size', () => {
+test('createNode: all node types have default sizes', () => {
+    // All nodes now have fixed dimensions (no more undefined)
     const node = createNode(NodeType.HUMAN, 'Hello');
-    assertEqual(node.width, undefined);
-    assertEqual(node.height, undefined);
+    assertEqual(node.width, 420);  // Small node default
+    assertEqual(node.height, 200);
 });
 
 test('createNode: custom position', () => {

@@ -1567,11 +1567,10 @@ class Canvas {
         // Wrap node with protocol class
         const wrapped = wrapNode(node);
 
-        // Use stored dimensions or defaults
-        // Matrix nodes need more width
-        const isMatrix = node.type === NodeType.MATRIX;
-        const width = node.width || (isMatrix ? 500 : 420);
-        const minHeight = node.height || (isMatrix ? 300 : 100);
+        // All nodes have fixed dimensions - use stored or get defaults
+        const defaultSize = getDefaultNodeSize(node.type);
+        const width = node.width || defaultSize.width;
+        const height = node.height || defaultSize.height;
 
         // Create foreignObject wrapper
         const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
@@ -1579,26 +1578,18 @@ class Canvas {
         wrapper.setAttribute('x', node.position.x);
         wrapper.setAttribute('y', node.position.y);
         wrapper.setAttribute('width', width);
-        wrapper.setAttribute('height', minHeight);
+        wrapper.setAttribute('height', height);
         wrapper.setAttribute('data-node-id', node.id);
 
         // Create node HTML
         const div = document.createElement('div');
-        // Apply viewport-fitted class if node has explicit stored dimensions (enables scrollable content)
-        const hasExplicitSize = node.width && node.height;
-        div.className = `node ${node.type}${hasExplicitSize ? ' viewport-fitted' : ''}`;
+        // All nodes are now viewport-fitted (fixed dimensions with scrollable content)
+        div.className = `node ${node.type} viewport-fitted`;
         div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
         div.style.width = '100%';
+        div.style.height = '100%';
 
-        // Matrix nodes need fixed height to allow shrinking; others use min-height
-        // Nodes with explicit dimensions also need fixed height for scrolling
-        // Note: We don't set overflow:hidden here - inner containers handle their own overflow
-        // This allows tags (positioned outside the node) to remain visible
-        if (isMatrix || hasExplicitSize) {
-            div.style.height = '100%';
-        } else {
-            div.style.minHeight = '100%';
-        }
+        const isMatrix = node.type === NodeType.MATRIX;
 
         // Matrix nodes return full HTML structure from renderContent()
         if (isMatrix) {
@@ -1665,19 +1656,6 @@ class Canvas {
         wrapper.appendChild(div);
         this.nodesLayer.appendChild(wrapper);
         this.nodeElements.set(node.id, wrapper);
-
-        // Auto-size height after render based on actual content
-        // Skip auto-sizing for scrollable node types - they have fixed dimensions
-        const isScrollableType = wrapped.isScrollable();
-        if (!isScrollableType) {
-            // Use requestAnimationFrame to ensure DOM has rendered
-            requestAnimationFrame(() => {
-                const contentHeight = div.offsetHeight;
-                // Use the larger of: stored height, content height, or minimum height
-                const finalHeight = Math.max(contentHeight + 10, node.height || 100, 100);
-                wrapper.setAttribute('height', finalHeight);
-            });
-        }
 
         // Setup node event listeners
         this.setupNodeEvents(wrapper, node);
