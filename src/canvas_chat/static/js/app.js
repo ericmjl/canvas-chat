@@ -637,6 +637,11 @@ class App {
         // Image click callback (for images in node content)
         this.canvas.onImageClick = this.handleImageClick.bind(this);
 
+        // Navigation callbacks for parent/child traversal
+        this.canvas.onNavParentClick = this.handleNavParentClick.bind(this);
+        this.canvas.onNavChildClick = this.handleNavChildClick.bind(this);
+        this.canvas.onNodeNavigate = this.handleNodeNavigate.bind(this);
+
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
         if (replyInput) {
@@ -753,6 +758,12 @@ class App {
 
         // Render graph
         this.canvas.renderGraph(this.graph);
+
+        // Update navigation button states after rendering
+        // Delay slightly to ensure nodes are rendered
+        requestAnimationFrame(() => {
+            this.canvas.updateAllNavButtonStates(this.graph);
+        });
 
         // Rebuild search index
         this.rebuildSearchIndex();
@@ -1927,6 +1938,73 @@ class App {
             // Just extract image to a new node
             await this.extractImageToNode(nodeId, imgSrc);
         }
+    }
+
+    /**
+     * Handle click on the parent navigation button.
+     * Gets the parent nodes and either navigates directly or shows a popover.
+     *
+     * @param {string} nodeId - The current node ID
+     * @param {HTMLElement} button - The button element that was clicked
+     */
+    handleNavParentClick(nodeId, button) {
+        const parents = this.graph.getParents(nodeId);
+        this.canvas.handleNavButtonClick(nodeId, 'parent', parents, button);
+    }
+
+    /**
+     * Handle click on the child navigation button.
+     * Gets the child nodes and either navigates directly or shows a popover.
+     *
+     * @param {string} nodeId - The current node ID
+     * @param {HTMLElement} button - The button element that was clicked
+     */
+    handleNavChildClick(nodeId, button) {
+        const children = this.graph.getChildren(nodeId);
+        this.canvas.handleNavButtonClick(nodeId, 'child', children, button);
+    }
+
+    /**
+     * Handle navigation to a specific node.
+     * Centers the view on the target node and selects it.
+     *
+     * @param {string} targetNodeId - The ID of the node to navigate to
+     */
+    handleNodeNavigate(targetNodeId) {
+        const node = this.graph.getNode(targetNodeId);
+        if (!node) return;
+
+        // Select the target node
+        this.canvas.clearSelection();
+        this.canvas.selectNode(targetNodeId);
+
+        // Center on the node with animation
+        const width = node.width || 420;
+        const height = node.height || 200;
+        this.canvas.centerOnAnimated(
+            node.position.x + width / 2,
+            node.position.y + height / 2,
+            300
+        );
+    }
+
+    /**
+     * Update navigation button states for nodes involved in an edge.
+     * Should be called after adding an edge to update both source and target.
+     *
+     * @param {string} sourceId - The source node ID
+     * @param {string} targetId - The target node ID
+     */
+    updateEdgeNavStates(sourceId, targetId) {
+        // Update source node (now has a child)
+        const sourceParents = this.graph.getParents(sourceId);
+        const sourceChildren = this.graph.getChildren(sourceId);
+        this.canvas.updateNavButtonStates(sourceId, sourceParents.length, sourceChildren.length);
+
+        // Update target node (now has a parent)
+        const targetParents = this.graph.getParents(targetId);
+        const targetChildren = this.graph.getChildren(targetId);
+        this.canvas.updateNavButtonStates(targetId, targetParents.length, targetChildren.length);
     }
 
     /**

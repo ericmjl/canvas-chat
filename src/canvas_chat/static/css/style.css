@@ -1161,6 +1161,108 @@ html, body {
     color: white;
 }
 
+/* Navigation buttons */
+.header-btn.nav-parent-btn,
+.header-btn.nav-child-btn {
+    display: inline-flex;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+    font-size: 14px;
+    font-weight: bold;
+    min-width: 24px;
+    justify-content: center;
+}
+
+.node:hover .header-btn.nav-parent-btn,
+.node:hover .header-btn.nav-child-btn {
+    opacity: 0.6;
+}
+
+.header-btn.nav-parent-btn:hover,
+.header-btn.nav-child-btn:hover {
+    opacity: 1;
+    background: var(--accent);
+    color: white;
+}
+
+/* Disabled state for nav buttons (no parent/child) */
+.header-btn.nav-parent-btn.disabled,
+.header-btn.nav-child-btn.disabled {
+    opacity: 0.2 !important;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.node:hover .header-btn.nav-parent-btn.disabled,
+.node:hover .header-btn.nav-child-btn.disabled {
+    opacity: 0.2 !important;
+}
+
+/* Navigation Popover */
+.nav-popover {
+    position: fixed;
+    z-index: 1001;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    min-width: 200px;
+    max-width: 320px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.nav-popover-title {
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    border-bottom: 1px solid var(--border);
+}
+
+.nav-popover-list {
+    padding: 4px;
+}
+
+.nav-popover-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.nav-popover-item:hover {
+    background: var(--selection-bg);
+}
+
+.nav-popover-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.nav-popover-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.nav-popover-summary {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
 /* Viewport-fitted nodes have scrollable content */
 .node.viewport-fitted {
     display: flex;

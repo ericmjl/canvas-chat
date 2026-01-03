@@ -23,6 +23,8 @@ const Actions = {
  * Header button definitions for node headers
  */
 const HeaderButtons = {
+    NAV_PARENT: { id: 'nav-parent', label: '↑', title: 'Go to parent node' },
+    NAV_CHILD: { id: 'nav-child', label: '↓', title: 'Go to child node' },
     STOP: { id: 'stop', label: '⏹', title: 'Stop generating', hidden: true },
     CONTINUE: { id: 'continue', label: '▶', title: 'Continue generating', hidden: true },
     RESET_SIZE: { id: 'reset-size', label: '↺', title: 'Reset to default size' },
@@ -94,6 +96,8 @@ class BaseNode {
      */
     getHeaderButtons() {
         return [
+            HeaderButtons.NAV_PARENT,
+            HeaderButtons.NAV_CHILD,
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,
             HeaderButtons.DELETE
@@ -143,6 +147,8 @@ class AINode extends BaseNode {
 
     getHeaderButtons() {
         return [
+            HeaderButtons.NAV_PARENT,
+            HeaderButtons.NAV_CHILD,
             HeaderButtons.STOP,
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,
@@ -409,6 +415,8 @@ class OpinionNode extends BaseNode {
 
     getHeaderButtons() {
         return [
+            HeaderButtons.NAV_PARENT,
+            HeaderButtons.NAV_CHILD,
             HeaderButtons.STOP,
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,
@@ -433,6 +441,8 @@ class SynthesisNode extends BaseNode {
 
     getHeaderButtons() {
         return [
+            HeaderButtons.NAV_PARENT,
+            HeaderButtons.NAV_CHILD,
             HeaderButtons.STOP,
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,
@@ -457,6 +467,8 @@ class ReviewNode extends BaseNode {
 
     getHeaderButtons() {
         return [
+            HeaderButtons.NAV_PARENT,
+            HeaderButtons.NAV_CHILD,
             HeaderButtons.STOP,
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,

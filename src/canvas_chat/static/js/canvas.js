@@ -57,6 +57,9 @@ class Canvas {
         this.onNodeResetSize = null;  // For resetting node to default size
         this.onNodeEditContent = null;  // For editing node content (FETCH_RESULT)
         this.onNodeResummarize = null;  // For re-summarizing edited content
+        this.onNodeNavigate = null;  // For navigating to parent/child nodes
+        this.onNavParentClick = null;  // For handling parent navigation button click
+        this.onNavChildClick = null;  // For handling child navigation button click
 
         // PDF drag & drop callback
         this.onPdfDrop = null;  // For handling PDF file drops
@@ -71,6 +74,10 @@ class Canvas {
         this.branchTooltip = null;
         this.activeSelectionNodeId = null;
         this.pendingSelectedText = null;  // Store selected text when tooltip opens
+
+        // Navigation popover state
+        this.navPopover = null;
+        this.activeNavNodeId = null;
 
         // No-nodes-visible hint
         this.noNodesHint = document.getElementById('no-nodes-hint');
@@ -89,6 +96,7 @@ class Canvas {
         this.handleResize();
         this.createBranchTooltip();
         this.createImageTooltip();
+        this.createNavPopover();
     }
 
     /**
@@ -299,6 +307,161 @@ class Canvas {
     }
 
     /**
+     * Create the navigation popover for showing multiple parent/child nodes
+     */
+    createNavPopover() {
+        this.navPopover = document.createElement('div');
+        this.navPopover.className = 'nav-popover';
+        this.navPopover.innerHTML = `
+            <div class="nav-popover-title"></div>
+            <div class="nav-popover-list"></div>
+        `;
+        this.navPopover.style.display = 'none';
+        document.body.appendChild(this.navPopover);
+
+        // Prevent click inside popover from triggering outside click handler
+        this.navPopover.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
+    }
+
+    /**
+     * Show the navigation popover with a list of nodes to navigate to
+     * @param {string} direction - 'parent' or 'child'
+     * @param {Array} nodes - Array of node objects to show
+     * @param {Object} position - {x, y} position for the popover
+     */
+    showNavPopover(direction, nodes, position) {
+        if (!nodes || nodes.length === 0) return;
+
+        const titleEl = this.navPopover.querySelector('.nav-popover-title');
+        const listEl = this.navPopover.querySelector('.nav-popover-list');
+
+        // Set title
+        titleEl.textContent = direction === 'parent' ? 'Parents' : 'Children';
+
+        // Build list items
+        listEl.innerHTML = nodes.map(node => {
+            const wrapped = wrapNode(node);
+            const icon = wrapped.getTypeIcon();
+            const label = wrapped.getTypeLabel();
+            const summary = wrapped.getSummaryText(this);
+            const truncatedSummary = summary.length > 40 ? summary.slice(0, 40) + '...' : summary;
+
+            return `
+                <div class="nav-popover-item" data-node-id="${node.id}">
+                    <span class="nav-popover-icon">${icon}</span>
+                    <span class="nav-popover-label">${this.escapeHtml(label)}</span>
+                    <span class="nav-popover-summary">${this.escapeHtml(truncatedSummary)}</span>
+                </div>
+            `;
+        }).join('');
+
+        // Add click handlers to items
+        listEl.querySelectorAll('.nav-popover-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                const nodeId = item.getAttribute('data-node-id');
+                this.hideNavPopover();
+                if (this.onNodeNavigate) {
+                    this.onNodeNavigate(nodeId);
+                }
+            });
+        });
+
+        // Position and show
+        this.navPopover.style.display = 'block';
+        this.navPopover.style.left = `${position.x}px`;
+        this.navPopover.style.top = `${position.y}px`;
+    }
+
+    /**
+     * Hide the navigation popover
+     */
+    hideNavPopover() {
+        this.navPopover.style.display = 'none';
+        this.activeNavNodeId = null;
+    }
+
+    /**
+     * Handle navigation button click
+     * @param {string} nodeId - The current node ID
+     * @param {string} direction - 'parent' or 'child'
+     * @param {Array} nodes - Array of parent or child nodes
+     * @param {HTMLElement} button - The button element that was clicked
+     */
+    handleNavButtonClick(nodeId, direction, nodes, button) {
+        if (!nodes || nodes.length === 0) {
+            // No nodes to navigate to - do nothing
+            return;
+        }
+
+        if (nodes.length === 1) {
+            // Single node - navigate directly
+            if (this.onNodeNavigate) {
+                this.onNodeNavigate(nodes[0].id);
+            }
+        } else {
+            // Multiple nodes - show popover
+            const rect = button.getBoundingClientRect();
+            const position = {
+                x: rect.left,
+                y: direction === 'parent' ? rect.top - 10 : rect.bottom + 10
+            };
+            this.activeNavNodeId = nodeId;
+            this.showNavPopover(direction, nodes, position);
+        }
+    }
+
+    /**
+     * Update the navigation button states for a node.
+     * Enables/disables buttons based on whether there are parents/children.
+     *
+     * @param {string} nodeId - The node ID
+     * @param {number} parentCount - Number of parent nodes
+     * @param {number} childCount - Number of child nodes
+     */
+    updateNavButtonStates(nodeId, parentCount, childCount) {
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) return;
+
+        const navParentBtn = wrapper.querySelector('.nav-parent-btn');
+        const navChildBtn = wrapper.querySelector('.nav-child-btn');
+
+        if (navParentBtn) {
+            if (parentCount === 0) {
+                navParentBtn.classList.add('disabled');
+                navParentBtn.title = 'No parent nodes';
+            } else {
+                navParentBtn.classList.remove('disabled');
+                navParentBtn.title = parentCount === 1 ? 'Go to parent node' : `Go to parent (${parentCount} available)`;
+            }
+        }
+
+        if (navChildBtn) {
+            if (childCount === 0) {
+                navChildBtn.classList.add('disabled');
+                navChildBtn.title = 'No child nodes';
+            } else {
+                navChildBtn.classList.remove('disabled');
+                navChildBtn.title = childCount === 1 ? 'Go to child node' : `Go to child (${childCount} available)`;
+            }
+        }
+    }
+
+    /**
+     * Update navigation button states for all nodes in a graph.
+     *
+     * @param {Graph} graph - The graph instance with parent/child relationships
+     */
+    updateAllNavButtonStates(graph) {
+        for (const node of graph.getAllNodes()) {
+            const parents = graph.getParents(node.id);
+            const children = graph.getChildren(node.id);
+            this.updateNavButtonStates(node.id, parents.length, children.length);
+        }
+    }
+
+    /**
      * Get the center of the visible viewport in SVG coordinates
      */
     getViewportCenter() {
@@ -337,12 +500,15 @@ class Canvas {
         // Text selection handling for reply tooltip
         document.addEventListener('selectionchange', this.handleSelectionChange.bind(this));
         document.addEventListener('mousedown', (e) => {
-            // Hide tooltips when clicking outside of them
+            // Hide tooltips/popovers when clicking outside of them
             if (!e.target.closest('.reply-tooltip')) {
                 this.hideBranchTooltip();
             }
             if (!e.target.closest('.image-tooltip')) {
                 this.hideImageTooltip();
+            }
+            if (!e.target.closest('.nav-popover') && !e.target.closest('.nav-parent-btn') && !e.target.closest('.nav-child-btn')) {
+                this.hideNavPopover();
             }
         });
 
@@ -1690,6 +1856,28 @@ class Canvas {
             resetSizeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onNodeResetSize) this.onNodeResetSize(node.id);
+            });
+        }
+
+        // Navigation buttons - parent
+        const navParentBtn = div.querySelector('.nav-parent-btn');
+        if (navParentBtn) {
+            navParentBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.onNavParentClick) {
+                    this.onNavParentClick(node.id, navParentBtn);
+                }
+            });
+        }
+
+        // Navigation buttons - child
+        const navChildBtn = div.querySelector('.nav-child-btn');
+        if (navChildBtn) {
+            navChildBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.onNavChildClick) {
+                    this.onNavChildClick(node.id, navChildBtn);
+                }
             });
         }
 
