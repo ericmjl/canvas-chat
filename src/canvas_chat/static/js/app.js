@@ -1095,14 +1095,46 @@ class App {
                 return;
             }
 
-            // Escape to close search or clear selection
+            // Escape to close popover, search, or clear selection
             if (e.key === 'Escape') {
-                if (this.isSearchOpen()) {
+                if (this.canvas.isNavPopoverOpen()) {
+                    this.canvas.hideNavPopover();
+                } else if (this.isSearchOpen()) {
                     this.closeSearch();
                 } else if (this.isHelpOpen()) {
                     this.hideHelpModal();
                 } else {
                     this.canvas.clearSelection();
+                }
+            }
+
+            // Enter to confirm popover selection
+            if (e.key === 'Enter' && this.canvas.isNavPopoverOpen()) {
+                e.preventDefault();
+                this.canvas.confirmPopoverSelection();
+                return;
+            }
+
+            // Arrow Up/Down for parent/child navigation
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                // If popover is open, navigate within it
+                if (this.canvas.isNavPopoverOpen()) {
+                    e.preventDefault();
+                    this.canvas.navigatePopoverSelection(e.key === 'ArrowUp' ? -1 : 1);
+                    return;
+                }
+
+                // Otherwise, if node is selected and not in input, navigate to parent/child
+                if (!e.target.matches('input, textarea')) {
+                    const selectedNodeIds = this.canvas.getSelectedNodeIds();
+                    if (selectedNodeIds.length === 1) {
+                        e.preventDefault();
+                        if (e.key === 'ArrowUp') {
+                            this.navigateToParentKeyboard(selectedNodeIds[0]);
+                        } else {
+                            this.navigateToChildKeyboard(selectedNodeIds[0]);
+                        }
+                    }
                 }
             }
 
@@ -1962,6 +1994,44 @@ class App {
     handleNavChildClick(nodeId, button) {
         const children = this.graph.getChildren(nodeId);
         this.canvas.handleNavButtonClick(nodeId, 'child', children, button);
+    }
+
+    /**
+     * Handle keyboard navigation to parent node(s).
+     * Shows toast if no parents, navigates directly if one, shows popover if multiple.
+     * @param {string} nodeId - The selected node ID
+     */
+    navigateToParentKeyboard(nodeId) {
+        const parents = this.graph.getParents(nodeId);
+        if (parents.length === 0) {
+            this.canvas.showNavToast('No parent nodes', nodeId);
+        } else if (parents.length === 1) {
+            this.handleNodeNavigate(parents[0].id);
+        } else {
+            const button = this.canvas.getNavButton(nodeId, 'parent');
+            if (button) {
+                this.canvas.handleNavButtonClick(nodeId, 'parent', parents, button);
+            }
+        }
+    }
+
+    /**
+     * Handle keyboard navigation to child node(s).
+     * Shows toast if no children, navigates directly if one, shows popover if multiple.
+     * @param {string} nodeId - The selected node ID
+     */
+    navigateToChildKeyboard(nodeId) {
+        const children = this.graph.getChildren(nodeId);
+        if (children.length === 0) {
+            this.canvas.showNavToast('No child nodes', nodeId);
+        } else if (children.length === 1) {
+            this.handleNodeNavigate(children[0].id);
+        } else {
+            const button = this.canvas.getNavButton(nodeId, 'child');
+            if (button) {
+                this.canvas.handleNavButtonClick(nodeId, 'child', children, button);
+            }
+        }
     }
 
     /**

@@ -78,6 +78,7 @@ class Canvas {
         // Navigation popover state
         this.navPopover = null;
         this.activeNavNodeId = null;
+        this.navPopoverSelectedIndex = 0;  // Currently selected item in popover
 
         // No-nodes-visible hint
         this.noNodesHint = document.getElementById('no-nodes-hint');
@@ -368,6 +369,13 @@ class Canvas {
             });
         });
 
+        // Reset selection and highlight first item for keyboard navigation
+        this.navPopoverSelectedIndex = 0;
+        const firstItem = listEl.querySelector('.nav-popover-item');
+        if (firstItem) {
+            firstItem.classList.add('selected');
+        }
+
         // Position and show
         this.navPopover.style.display = 'block';
         this.navPopover.style.left = `${position.x}px`;
@@ -380,6 +388,96 @@ class Canvas {
     hideNavPopover() {
         this.navPopover.style.display = 'none';
         this.activeNavNodeId = null;
+        this.navPopoverSelectedIndex = 0;  // Reset selection
+    }
+
+    /**
+     * Check if the navigation popover is currently visible
+     * @returns {boolean}
+     */
+    isNavPopoverOpen() {
+        return this.navPopover && this.navPopover.style.display !== 'none';
+    }
+
+    /**
+     * Navigate the popover selection up or down
+     * @param {number} direction - -1 for up, +1 for down
+     */
+    navigatePopoverSelection(direction) {
+        if (!this.isNavPopoverOpen()) return;
+
+        const items = this.navPopover.querySelectorAll('.nav-popover-item');
+        if (items.length === 0) return;
+
+        // Remove selection from current item
+        items[this.navPopoverSelectedIndex]?.classList.remove('selected');
+
+        // Calculate new index with wrapping
+        this.navPopoverSelectedIndex =
+            (this.navPopoverSelectedIndex + direction + items.length) % items.length;
+
+        // Add selection to new item and scroll into view
+        const newSelected = items[this.navPopoverSelectedIndex];
+        newSelected.classList.add('selected');
+        newSelected.scrollIntoView({ block: 'nearest' });
+    }
+
+    /**
+     * Confirm the current popover selection (navigate to selected node)
+     */
+    confirmPopoverSelection() {
+        if (!this.isNavPopoverOpen()) return;
+
+        const items = this.navPopover.querySelectorAll('.nav-popover-item');
+        const selected = items[this.navPopoverSelectedIndex];
+        if (selected) {
+            const nodeId = selected.getAttribute('data-node-id');
+            this.hideNavPopover();
+            if (this.onNodeNavigate) {
+                this.onNodeNavigate(nodeId);
+            }
+        }
+    }
+
+    /**
+     * Get the navigation button element for a node
+     * @param {string} nodeId - The node ID
+     * @param {string} type - 'parent' or 'child'
+     * @returns {HTMLElement|null}
+     */
+    getNavButton(nodeId, type) {
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) return null;
+        return wrapper.querySelector(`.nav-${type}-btn`);
+    }
+
+    /**
+     * Show a temporary toast message near a node
+     * @param {string} message - The message to display
+     * @param {string} nodeId - The node ID to position near
+     */
+    showNavToast(message, nodeId) {
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) return;
+
+        // Get node position in viewport
+        const rect = wrapper.getBoundingClientRect();
+
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = 'nav-toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        // Position above the node center (need to measure after adding to DOM)
+        const toastRect = toast.getBoundingClientRect();
+        toast.style.left = `${rect.left + rect.width / 2 - toastRect.width / 2}px`;
+        toast.style.top = `${rect.top - toastRect.height - 10}px`;
+
+        // Remove after animation completes
+        toast.addEventListener('animationend', () => {
+            toast.remove();
+        });
     }
 
     /**

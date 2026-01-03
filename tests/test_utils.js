@@ -2256,6 +2256,85 @@ test('Graph.resolveContext: sorts by created_at', () => {
 });
 
 // ============================================================
+// Navigation popover selection logic tests
+// ============================================================
+
+/**
+ * Tests for the navigation popover keyboard selection logic.
+ * When navigating parent/child nodes with Arrow Up/Down, if multiple
+ * connections exist, a popover opens. Arrow keys cycle through options
+ * with wrapping (going past last item wraps to first, and vice versa).
+ *
+ * The selection logic uses modular arithmetic:
+ *   newIndex = (currentIndex + direction + itemCount) % itemCount
+ * where direction is +1 for down, -1 for up.
+ */
+
+test('Popover selection: wraps from last to first when going down', () => {
+    const itemCount = 5;
+    let selectedIndex = 4;  // Last item
+    const direction = 1;    // Down
+    selectedIndex = (selectedIndex + direction + itemCount) % itemCount;
+    assertEqual(selectedIndex, 0);  // Should wrap to first
+});
+
+test('Popover selection: wraps from first to last when going up', () => {
+    const itemCount = 5;
+    let selectedIndex = 0;  // First item
+    const direction = -1;   // Up
+    selectedIndex = (selectedIndex + direction + itemCount) % itemCount;
+    assertEqual(selectedIndex, 4);  // Should wrap to last
+});
+
+test('Popover selection: moves down normally in middle of list', () => {
+    const itemCount = 5;
+    let selectedIndex = 2;  // Middle item
+    const direction = 1;    // Down
+    selectedIndex = (selectedIndex + direction + itemCount) % itemCount;
+    assertEqual(selectedIndex, 3);
+});
+
+test('Popover selection: moves up normally in middle of list', () => {
+    const itemCount = 5;
+    let selectedIndex = 2;  // Middle item
+    const direction = -1;   // Up
+    selectedIndex = (selectedIndex + direction + itemCount) % itemCount;
+    assertEqual(selectedIndex, 1);
+});
+
+test('Popover selection: handles single item list going down', () => {
+    const itemCount = 1;
+    let selectedIndex = 0;
+    const direction = 1;    // Down
+    selectedIndex = (selectedIndex + direction + itemCount) % itemCount;
+    assertEqual(selectedIndex, 0);  // Should stay on same item
+});
+
+test('Popover selection: handles single item list going up', () => {
+    const itemCount = 1;
+    let selectedIndex = 0;
+    const direction = -1;   // Up
+    selectedIndex = (selectedIndex + direction + itemCount) % itemCount;
+    assertEqual(selectedIndex, 0);  // Should stay on same item
+});
+
+test('Popover selection: handles two item list wrapping down', () => {
+    const itemCount = 2;
+    let selectedIndex = 1;  // Last item
+    const direction = 1;    // Down
+    selectedIndex = (selectedIndex + direction + itemCount) % itemCount;
+    assertEqual(selectedIndex, 0);  // Wrap to first
+});
+
+test('Popover selection: handles two item list wrapping up', () => {
+    const itemCount = 2;
+    let selectedIndex = 0;  // First item
+    const direction = -1;   // Up
+    selectedIndex = (selectedIndex + direction + itemCount) % itemCount;
+    assertEqual(selectedIndex, 1);  // Wrap to last
+});
+
+// ============================================================
 // Summary
 // ============================================================
 

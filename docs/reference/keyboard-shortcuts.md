@@ -26,6 +26,8 @@ These shortcuts work when nodes are selected or when the canvas has focus:
 | `Delete` or `Backspace` | Delete selected nodes | Only when not typing in an input |
 | `R` | Focus reply input | When a node is selected |
 | `C` | Center view on content | Centers viewport on all nodes |
+| `Arrow Up` | Navigate to parent | Shows menu if multiple parents; message if none |
+| `Arrow Down` | Navigate to child | Shows menu if multiple children; message if none |
 
 ## Chat Input
 
@@ -58,6 +60,17 @@ All modal dialogs support:
 | -------- | ------ | ----- |
 | `Esc` | Close modal | Works for settings, help, etc. |
 | `Enter` | Confirm action | When editing text fields |
+
+## Navigation Popover
+
+When navigating to a node with multiple parents or children, a selection menu appears:
+
+| Shortcut | Action | Notes |
+| -------- | ------ | ----- |
+| `Arrow Up` | Select previous | Wraps from first to last |
+| `Arrow Down` | Select next | Wraps from last to first |
+| `Enter` | Confirm selection | Navigates to highlighted node |
+| `Esc` | Close menu | Returns focus to selected node |
 
 ## Canvas Navigation
 

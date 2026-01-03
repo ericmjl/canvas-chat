@@ -1241,6 +1241,34 @@ html, body {
     background: var(--selection-bg);
 }
 
+.nav-popover-item.selected {
+    background: var(--selection-bg);
+    outline: 2px solid var(--border);
+    outline-offset: -2px;
+}
+
+/* Navigation toast message */
+.nav-toast {
+    position: fixed;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    box-shadow: var(--shadow-md);
+    pointer-events: none;
+    z-index: 1002;
+    animation: nav-toast-fade 2s ease-in-out forwards;
+}
+
+@keyframes nav-toast-fade {
+    0% { opacity: 0; transform: translateY(8px); }
+    12% { opacity: 1; transform: translateY(0); }
+    88% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-8px); }
+}
+
 .nav-popover-icon {
     font-size: 14px;
     flex-shrink: 0;
