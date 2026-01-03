@@ -9,13 +9,41 @@
  */
 
 // Load source files to test actual implementations (not copies)
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 // Set up minimal browser-like environment for source files
 global.window = global;
-global.document = { createElement: () => ({ textContent: '', innerHTML: '' }) };
+global.document = {
+    createElement: (tagName) => {
+        const element = { textContent: '', innerHTML: '' };
+        // Mock textContent setter to update innerHTML (for escapeHtmlText)
+        Object.defineProperty(element, 'textContent', {
+            get: () => element._textContent || '',
+            set: (value) => {
+                element._textContent = value;
+                // Simple HTML escaping for tests
+                element.innerHTML = value
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+        });
+        return element;
+    },
+    addEventListener: () => {} // Mock event listener (no-op for tests)
+};
 global.NodeType = {
     HUMAN: 'human', AI: 'ai', NOTE: 'note', SUMMARY: 'summary', REFERENCE: 'reference',
     SEARCH: 'search', RESEARCH: 'research', HIGHLIGHT: 'highlight', MATRIX: 'matrix',
@@ -557,7 +585,8 @@ test('truncate: returns original if shorter than max', () => {
 });
 
 test('truncate: truncates and adds ellipsis', () => {
-    assertEqual(truncateTest('hello world', 8), 'hello wo…');
+    // truncateText uses slice(0, maxLength - 1) + '…', so maxLength=8 gives 7 chars + ellipsis
+    assertEqual(truncateTest('hello world', 8), 'hello w…');
 });
 
 test('truncate: handles exact length', () => {
@@ -1380,7 +1409,7 @@ test('getApiKeysForModels: empty array returns empty object', () => {
 const isUrlTest = isUrlContent;
 
 test('isUrl: detects http URL', () => {
-    assertTrue(isUrl('http://example.com'));
+    assertTrue(isUrlTest('http://example.com'));
 });
 
 test('isUrl: detects https URL', () => {
