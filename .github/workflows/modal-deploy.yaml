@@ -19,9 +19,14 @@ jobs:
     env:
       MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      # Deployed app URLs (not Modal dashboard URLs)
+      TEST_APP_URL: "https://ericmjl-test--canvas-chat-fastapi-app.modal.run"
+      MAIN_APP_URL: "https://ericmjl--canvas-chat-fastapi-app.modal.run"
     outputs:
       test_url: ${{ steps.deploy-test.outputs.url }}
       main_url: ${{ steps.deploy-main.outputs.url }}
+      test_app_url: ${{ steps.deploy-test.outputs.app_url }}
+      main_app_url: ${{ steps.deploy-main.outputs.app_url }}
 
     steps:
       - name: Checkout repository
@@ -38,6 +43,7 @@ jobs:
           echo "$OUTPUT"
           URL=$(echo "$OUTPUT" | grep -oE 'https://modal\.com/apps/[^ ]+' | head -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "app_url=$TEST_APP_URL" >> $GITHUB_OUTPUT
 
       - name: Deploy to main environment (push to main)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -47,37 +53,38 @@ jobs:
           echo "$OUTPUT"
           URL=$(echo "$OUTPUT" | grep -oE 'https://modal\.com/apps/[^ ]+' | head -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "app_url=$MAIN_APP_URL" >> $GITHUB_OUTPUT
 
       - name: Health check (test deploy)
-        if: github.event_name == 'pull_request' && steps.deploy-test.outputs.url != ''
+        if: github.event_name == 'pull_request'
         run: |
-          URL=${{ steps.deploy-test.outputs.url }}
+          URL="${TEST_APP_URL}/health"
           echo "Checking health for $URL"
           for i in 1 2 3 4 5; do
             status=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 "$URL" || echo "000")
             echo "Attempt $i: HTTP $status"
-            if [ "$status" = "200" ] || [ "$status" = "301" ] || [ "$status" = "302" ]; then
+            if [ "$status" = "200" ]; then
               echo "Deployment healthy"
               exit 0
             fi
-            sleep 2
+            sleep 3
           done
           echo "Deployment health check failed for $URL"
           exit 1
 
       - name: Health check (main deploy)
-        if: github.event_name == 'push' && steps.deploy-main.outputs.url != ''
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          URL=${{ steps.deploy-main.outputs.url }}
+          URL="${MAIN_APP_URL}/health"
           echo "Checking health for $URL"
           for i in 1 2 3 4 5; do
             status=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 "$URL" || echo "000")
             echo "Attempt $i: HTTP $status"
-            if [ "$status" = "200" ] || [ "$status" = "301" ] || [ "$status" = "302" ]; then
+            if [ "$status" = "200" ]; then
               echo "Deployment healthy"
               exit 0
             fi
-            sleep 2
+            sleep 3
           done
           echo "Deployment health check failed for $URL"
           exit 1
@@ -88,10 +95,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             echo "**Environment:** test" >> $GITHUB_STEP_SUMMARY
-            echo "**URL:** ${{ steps.deploy-test.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+            echo "**App URL:** ${TEST_APP_URL}" >> $GITHUB_STEP_SUMMARY
+            echo "**Dashboard:** ${{ steps.deploy-test.outputs.url }}" >> $GITHUB_STEP_SUMMARY
           else
             echo "**Environment:** main" >> $GITHUB_STEP_SUMMARY
-            echo "**URL:** ${{ steps.deploy-main.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+            echo "**App URL:** ${MAIN_APP_URL}" >> $GITHUB_STEP_SUMMARY
+            echo "**Dashboard:** ${{ steps.deploy-main.outputs.url }}" >> $GITHUB_STEP_SUMMARY
           fi
 
 
@@ -106,12 +115,14 @@ jobs:
         with:
           script: |
             const marker = '<!-- modal-deploy-comment -->';
-            const url = '${{ needs.deploy.outputs.test_url }}';
+            const appUrl = '${{ needs.deploy.outputs.test_app_url }}';
+            const dashboardUrl = '${{ needs.deploy.outputs.test_url }}';
             const body = `${marker}
             ## 🚀 Modal Deployment
 
             **Environment:** test
-            **URL:** ${url}
+            **App URL:** ${appUrl}
+            **Dashboard:** ${dashboardUrl}
 
             _This comment is automatically updated on each push._`;
 
