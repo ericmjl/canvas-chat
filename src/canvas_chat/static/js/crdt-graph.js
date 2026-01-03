@@ -26,13 +26,15 @@ function isYMap(value) {
 
 /**
  * Check if value is a Y.Text-like object
+ * Note: Must check for toDelta to distinguish from Y.Array (both have insert/delete)
  */
 function isYText(value) {
     return value !== null &&
            typeof value === 'object' &&
            typeof value.toString === 'function' &&
            typeof value.insert === 'function' &&
-           typeof value.delete === 'function';
+           typeof value.delete === 'function' &&
+           typeof value.toDelta === 'function';  // Y.Array doesn't have toDelta
 }
 
 /**
@@ -302,18 +304,21 @@ class CRDTGraph {
     /**
      * Extract a plain JS value from a potentially Y-typed value.
      * Uses duck typing to avoid instanceof issues.
+     * Note: Check Y.Array BEFORE Y.Text because Y.Array passes the old Y.Text check
      */
     _extractValue(value) {
         if (value === null || value === undefined) {
             return value;
         }
 
-        if (isYText(value)) {
-            return value.toString();
+        // Check Y.Array first (more specific check)
+        if (isYArray(value)) {
+            const arr = value.toArray();
+            return arr.map(v => this._extractValue(v));
         }
 
-        if (isYArray(value)) {
-            return value.toArray().map(v => this._extractValue(v));
+        if (isYText(value)) {
+            return value.toString();
         }
 
         if (isYMap(value)) {
@@ -341,8 +346,13 @@ class CRDTGraph {
             node[key] = this._extractValue(value);
         });
 
-        // Ensure required fields exist
-        if (!node.tags) node.tags = [];
+        // Ensure required fields exist and have correct types
+        if (!node.tags || !Array.isArray(node.tags)) {
+            node.tags = [];
+        } else {
+            // Flatten in case of nested arrays (Y.Array extraction edge case)
+            node.tags = node.tags.flat();
+        }
         if (!node.position) node.position = { x: 0, y: 0 };
 
         return node;
@@ -795,7 +805,15 @@ class CRDTGraph {
      */
     addTagToNode(nodeId, color) {
         const yNode = this.yNodes.get(nodeId);
-        if (!yNode || !this.yTags.has(color)) return;
+
+        if (!yNode) {
+            console.warn('[CRDTGraph] addTagToNode: node not found:', nodeId);
+            return;
+        }
+        if (!this.yTags.has(color)) {
+            console.warn('[CRDTGraph] addTagToNode: tag not found:', color);
+            return;
+        }
 
         this.ydoc.transact(() => {
             let yTags = yNode.get('tags');
