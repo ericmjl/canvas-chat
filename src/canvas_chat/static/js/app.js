@@ -3,6 +3,13 @@
  */
 
 /**
+ * Feature flag for CRDT-backed graph (local-first multiplayer foundation)
+ * Set to true to enable Yjs-based graph with automatic persistence
+ * Set to false for legacy Map-based graph
+ */
+const USE_CRDT_GRAPH = false;
+
+/**
  * Detect if content is a URL (used by handleNote to route to handleNoteFromUrl)
  * @param {string} content - The content to check
  * @returns {boolean} True if content is a URL
@@ -743,18 +750,28 @@ class App {
         if (lastSessionId) {
             const session = await storage.getSession(lastSessionId);
             if (session) {
-                this.loadSessionData(session);
+                await this.loadSessionData(session);
                 return;
             }
         }
 
         // Create new session
-        this.createNewSession();
+        await this.createNewSession();
     }
 
-    loadSessionData(session) {
+    async loadSessionData(session) {
         this.session = session;
-        this.graph = new Graph(session);
+
+        if (USE_CRDT_GRAPH) {
+            // CRDT mode: create CRDTGraph with automatic persistence
+            console.log('%c[App] Using CRDT Graph mode', 'color: #2196F3; font-weight: bold');
+            this.graph = new CRDTGraph(session.id, session);
+            await this.graph.enablePersistence();
+        } else {
+            // Legacy mode
+            console.log('[App] Using legacy Graph mode');
+            this.graph = new Graph(session);
+        }
 
         // Render graph
         this.canvas.renderGraph(this.graph);
@@ -784,9 +801,10 @@ class App {
         this.generateMissingSummaries();
     }
 
-    createNewSession() {
+    async createNewSession() {
+        const sessionId = crypto.randomUUID();
         this.session = {
-            id: crypto.randomUUID(),
+            id: sessionId,
             name: 'Untitled Session',
             created_at: Date.now(),
             updated_at: Date.now(),
@@ -796,7 +814,16 @@ class App {
             viewport: { x: 0, y: 0, scale: 1 }
         };
 
-        this.graph = new Graph();
+        if (USE_CRDT_GRAPH) {
+            // CRDT mode
+            console.log('%c[App] Creating new session with CRDT Graph', 'color: #2196F3; font-weight: bold');
+            this.graph = new CRDTGraph(sessionId);
+            await this.graph.enablePersistence();
+        } else {
+            // Legacy mode
+            this.graph = new Graph();
+        }
+
         this.canvas.clear();
 
         this.sessionName.textContent = this.session.name;
@@ -947,9 +974,9 @@ class App {
         });
 
         // New Canvas button
-        document.getElementById('new-canvas-btn').addEventListener('click', () => {
+        document.getElementById('new-canvas-btn').addEventListener('click', async () => {
             // No confirmation needed - current session is auto-saved
-            this.createNewSession();
+            await this.createNewSession();
         });
 
         // Auto Layout button
@@ -964,9 +991,9 @@ class App {
         document.getElementById('session-close').addEventListener('click', () => {
             this.hideSessionsModal();
         });
-        document.getElementById('new-session-btn').addEventListener('click', () => {
+        document.getElementById('new-session-btn').addEventListener('click', async () => {
             this.hideSessionsModal();
-            this.createNewSession();
+            await this.createNewSession();
         });
 
         // Matrix modal
@@ -4734,13 +4761,34 @@ class App {
         }
 
         this.saveTimeout = setTimeout(async () => {
-            this.session = {
-                ...this.session,
-                ...this.graph.toJSON(),
-                updated_at: Date.now()
-            };
-
-            await storage.saveSession(this.session);
+            if (USE_CRDT_GRAPH) {
+                // CRDT mode: y-indexeddb handles graph persistence automatically
+                // But we ALSO save the full graph data as a backup for migration safety
+                // This ensures we don't lose data if CRDT persistence fails
+                const graphData = this.graph.toJSON();
+                const sessionData = {
+                    id: this.session.id,
+                    name: this.session.name,
+                    created_at: this.session.created_at,
+                    updated_at: Date.now(),
+                    useCRDT: true,
+                    viewport: this.session.viewport,
+                    // Keep graph data as backup - this ensures migration can be retried
+                    // if CRDT persistence fails or IndexedDB is cleared
+                    nodes: graphData.nodes,
+                    edges: graphData.edges,
+                    tags: graphData.tags
+                };
+                await storage.saveSession(sessionData);
+            } else {
+                // Legacy mode: serialize entire graph
+                this.session = {
+                    ...this.session,
+                    ...this.graph.toJSON(),
+                    updated_at: Date.now()
+                };
+                await storage.saveSession(this.session);
+            }
         }, 500);
     }
 
@@ -4935,7 +4983,7 @@ class App {
     async importSession(file) {
         try {
             const session = await storage.importSession(file);
-            this.loadSessionData(session);
+            await this.loadSessionData(session);
         } catch (err) {
             alert(`Import failed: ${err.message}`);
         }
@@ -5320,7 +5368,7 @@ class App {
                 const sessionId = item.dataset.sessionId;
                 const session = await storage.getSession(sessionId);
                 if (session) {
-                    this.loadSessionData(session);
+                    await this.loadSessionData(session);
                     this.hideSessionsModal();
                 }
             });
@@ -5335,7 +5383,7 @@ class App {
                 await storage.deleteSession(sessionId);
                 // If deleting current session, create new one
                 if (this.session.id === sessionId) {
-                    this.createNewSession();
+                    await this.createNewSession();
                 }
                 this.showSessionsModal(); // Refresh list
             });
@@ -5797,5 +5845,24 @@ window.formatMatrixAsText = formatMatrixAsText;
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    window.app = new App();
+    if (USE_CRDT_GRAPH) {
+        // CRDT mode: wait for Yjs to load before initializing
+        // Yjs loads as an ES module which is async, so we need to wait for the yjs-ready event
+        const initWithYjs = () => {
+            console.log('%c[App] Yjs ready, initializing app', 'color: #4CAF50');
+            window.app = new App();
+        };
+
+        if (window.Y) {
+            // Yjs already loaded
+            initWithYjs();
+        } else {
+            // Wait for Yjs to load
+            console.log('[App] Waiting for Yjs to load...');
+            window.addEventListener('yjs-ready', initWithYjs, { once: true });
+        }
+    } else {
+        // Legacy mode: initialize immediately
+        window.app = new App();
+    }
 });
