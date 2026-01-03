@@ -25,5 +25,4 @@ repos:
         name: Update pixi.lock
         entry: pixi lock
         language: system
-        files: ^pyproject\.toml$
         pass_filenames: false
