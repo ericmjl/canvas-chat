@@ -1,0 +1,1346 @@
+/**
+ * CRDT-backed Graph using Yjs for conflict-free collaborative editing.
+ * API-compatible with the legacy Graph class.
+ *
+ * Key design decisions:
+ * - Duck typing instead of instanceof (avoids Yjs duplicate instance issues)
+ * - Y.Text for node content (future collaborative editing)
+ * - Legacy DB is source of truth (CRDT DB is overlay for real-time sync)
+ * - Defensive value extraction (always convert Y types to plain JS)
+ */
+
+// =============================================================================
+// Duck Type Checks (avoid instanceof which breaks after IndexedDB round-trip)
+// =============================================================================
+
+/**
+ * Check if value is a Y.Map-like object
+ */
+function isYMap(value) {
+    return value !== null &&
+           typeof value === 'object' &&
+           typeof value.get === 'function' &&
+           typeof value.set === 'function' &&
+           typeof value.has === 'function';
+}
+
+/**
+ * Check if value is a Y.Text-like object
+ */
+function isYText(value) {
+    return value !== null &&
+           typeof value === 'object' &&
+           typeof value.toString === 'function' &&
+           typeof value.insert === 'function' &&
+           typeof value.delete === 'function';
+}
+
+/**
+ * Check if value is a Y.Array-like object
+ */
+function isYArray(value) {
+    return value !== null &&
+           typeof value === 'object' &&
+           typeof value.toArray === 'function' &&
+           typeof value.push === 'function' &&
+           typeof value.delete === 'function';
+}
+
+// =============================================================================
+// CRDTGraph Class
+// =============================================================================
+
+class CRDTGraph {
+    /**
+     * Create a new CRDT-backed graph
+     * @param {string} sessionId - Unique session identifier for persistence
+     * @param {Object} legacyData - Legacy data to load (nodes, edges, tags)
+     */
+    constructor(sessionId = null, legacyData = {}) {
+        // Safety check: ensure Yjs is loaded
+        if (typeof Y === 'undefined') {
+            throw new Error(
+                '[CRDTGraph] Yjs (Y) is not defined. ' +
+                'Ensure the Yjs ES module has loaded before instantiating CRDTGraph. ' +
+                'Wait for the "yjs-ready" event on window.'
+            );
+        }
+
+        console.log('%c[CRDTGraph] Initializing CRDT-backed graph', 'color: #4CAF50; font-weight: bold');
+        console.log('[CRDTGraph] Session ID:', sessionId);
+
+        // Yjs document - the root of all CRDT data
+        this.ydoc = new Y.Doc();
+
+        // CRDT data structures
+        this.yNodes = this.ydoc.getMap('nodes');      // nodeId -> Y.Map (node properties)
+        this.yEdges = this.ydoc.getArray('edges');    // Array of edge objects
+        this.yTags = this.ydoc.getMap('tags');        // color -> Y.Map { name, color }
+
+        // Local indexes (rebuilt from CRDT state, not synced)
+        // These provide fast lookups for graph traversal
+        this.outgoingEdges = new Map(); // nodeId -> [edges where node is source]
+        this.incomingEdges = new Map(); // nodeId -> [edges where node is target]
+
+        // Session ID and persistence
+        this.sessionId = sessionId;
+        this.persistence = null;
+        this._synced = false;
+
+        // Store legacy data for loading after persistence sync
+        this._legacyData = legacyData;
+
+        // Set up observers for index maintenance
+        this._setupObservers();
+    }
+
+    // =========================================================================
+    // Persistence
+    // =========================================================================
+
+    /**
+     * Enable IndexedDB persistence for this graph.
+     * Always loads from legacy data (source of truth) to ensure consistency.
+     */
+    async enablePersistence() {
+        if (!this.sessionId) {
+            console.warn('[CRDTGraph] No session ID, skipping persistence');
+            return;
+        }
+
+        if (typeof IndexeddbPersistence === 'undefined') {
+            console.warn('[CRDTGraph] IndexeddbPersistence not available, skipping persistence');
+            return;
+        }
+
+        const dbName = `crdt-${this.sessionId}`;
+        console.log('[CRDTGraph] Enabling persistence:', dbName);
+
+        try {
+            this.persistence = new IndexeddbPersistence(dbName, this.ydoc);
+
+            // Wait for initial sync with IndexedDB
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    console.warn('[CRDTGraph] Persistence sync timeout, continuing anyway');
+                    resolve();
+                }, 5000);
+
+                this.persistence.on('synced', () => {
+                    clearTimeout(timeout);
+                    console.log('[CRDTGraph] Synced with IndexedDB');
+                    this._synced = true;
+                    resolve();
+                });
+            });
+
+            // ALWAYS load from legacy data (source of truth)
+            // This ensures toggle safety - legacy DB always wins
+            if (this._legacyData.nodes?.length > 0 ||
+                this._legacyData.edges?.length > 0 ||
+                Object.keys(this._legacyData.tags || {}).length > 0) {
+                console.log('[CRDTGraph] Loading from legacy data (source of truth)');
+                this._clearAndLoadFromLegacy();
+            }
+
+            // Rebuild indexes after loading
+            this._rebuildIndexes();
+
+            console.log('[CRDTGraph] Persistence enabled, nodes:', this.yNodes.size);
+
+        } catch (error) {
+            console.error('[CRDTGraph] Failed to enable persistence:', error);
+            // Continue without persistence - still usable in memory
+        }
+    }
+
+    /**
+     * Clear CRDT data and reload from legacy format.
+     * This ensures legacy DB is always source of truth.
+     */
+    _clearAndLoadFromLegacy() {
+        // Use a transaction to batch all changes
+        this.ydoc.transact(() => {
+            // Clear existing CRDT data
+            this.yNodes.clear();
+            while (this.yEdges.length > 0) {
+                this.yEdges.delete(0);
+            }
+            this.yTags.clear();
+
+            // Load nodes
+            if (this._legacyData.nodes) {
+                for (const node of this._legacyData.nodes) {
+                    this._addNodeToCRDT(node);
+                }
+            }
+
+            // Load edges
+            if (this._legacyData.edges) {
+                for (const edge of this._legacyData.edges) {
+                    this._addEdgeToCRDT(edge);
+                }
+            }
+
+            // Load tags
+            if (this._legacyData.tags) {
+                for (const [color, tag] of Object.entries(this._legacyData.tags)) {
+                    const yTag = new Y.Map();
+                    yTag.set('name', tag.name);
+                    yTag.set('color', tag.color);
+                    this.yTags.set(color, yTag);
+                }
+            }
+        });
+
+        console.log('[CRDTGraph] Loaded from legacy:', {
+            nodes: this.yNodes.size,
+            edges: this.yEdges.length,
+            tags: this.yTags.size
+        });
+    }
+
+    /**
+     * Add a node to CRDT structures (internal helper)
+     */
+    _addNodeToCRDT(node) {
+        const yNode = new Y.Map();
+
+        for (const [key, value] of Object.entries(node)) {
+            if (key === 'content') {
+                // Use Y.Text for content (enables collaborative editing)
+                const yText = new Y.Text();
+                yText.insert(0, value || '');
+                yNode.set('content', yText);
+            } else if (key === 'position' && value) {
+                // Use Y.Map for position
+                const yPos = new Y.Map();
+                yPos.set('x', value.x || 0);
+                yPos.set('y', value.y || 0);
+                yNode.set('position', yPos);
+            } else if (key === 'tags' && Array.isArray(value)) {
+                // Use Y.Array for tags
+                const yTags = new Y.Array();
+                yTags.push(value);
+                yNode.set('tags', yTags);
+            } else if (key === 'cells' && value) {
+                // Matrix cells - store as Y.Map
+                const yCells = new Y.Map();
+                for (const [cellKey, cellValue] of Object.entries(value)) {
+                    const yCell = new Y.Map();
+                    yCell.set('content', cellValue.content);
+                    yCell.set('filled', cellValue.filled || false);
+                    yCells.set(cellKey, yCell);
+                }
+                yNode.set('cells', yCells);
+            } else if (Array.isArray(value)) {
+                // Other arrays (rowItems, colItems, contextNodeIds)
+                const yArr = new Y.Array();
+                yArr.push(value);
+                yNode.set(key, yArr);
+            } else {
+                // Primitives
+                yNode.set(key, value);
+            }
+        }
+
+        this.yNodes.set(node.id, yNode);
+    }
+
+    /**
+     * Add an edge to CRDT structures (internal helper)
+     */
+    _addEdgeToCRDT(edge) {
+        const yEdge = new Y.Map();
+        for (const [key, value] of Object.entries(edge)) {
+            yEdge.set(key, value);
+        }
+        this.yEdges.push([yEdge]);
+    }
+
+    // =========================================================================
+    // Observers for Index Maintenance
+    // =========================================================================
+
+    _setupObservers() {
+        // Observe edge changes to maintain indexes
+        this.yEdges.observe((event) => {
+            // Rebuild indexes on any edge change
+            // This is simpler than tracking individual changes
+            this._rebuildIndexes();
+        });
+    }
+
+    _rebuildIndexes() {
+        this.outgoingEdges.clear();
+        this.incomingEdges.clear();
+
+        for (let i = 0; i < this.yEdges.length; i++) {
+            const yEdge = this.yEdges.get(i);
+            const edge = this._extractEdge(yEdge);
+
+            if (!edge.source || !edge.target) continue;
+
+            // Outgoing
+            if (!this.outgoingEdges.has(edge.source)) {
+                this.outgoingEdges.set(edge.source, []);
+            }
+            this.outgoingEdges.get(edge.source).push(edge);
+
+            // Incoming
+            if (!this.incomingEdges.has(edge.target)) {
+                this.incomingEdges.set(edge.target, []);
+            }
+            this.incomingEdges.get(edge.target).push(edge);
+        }
+    }
+
+    // =========================================================================
+    // Value Extraction (Y types -> plain JS)
+    // =========================================================================
+
+    /**
+     * Extract a plain JS value from a potentially Y-typed value.
+     * Uses duck typing to avoid instanceof issues.
+     */
+    _extractValue(value) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+
+        if (isYText(value)) {
+            return value.toString();
+        }
+
+        if (isYArray(value)) {
+            return value.toArray().map(v => this._extractValue(v));
+        }
+
+        if (isYMap(value)) {
+            const obj = {};
+            value.forEach((v, k) => {
+                obj[k] = this._extractValue(v);
+            });
+            return obj;
+        }
+
+        // Primitive value
+        return value;
+    }
+
+    /**
+     * Extract a node from Y.Map to plain JS object
+     */
+    _extractNode(yNode) {
+        if (!yNode || !isYMap(yNode)) {
+            return null;
+        }
+
+        const node = {};
+        yNode.forEach((value, key) => {
+            node[key] = this._extractValue(value);
+        });
+
+        // Ensure required fields exist
+        if (!node.tags) node.tags = [];
+        if (!node.position) node.position = { x: 0, y: 0 };
+
+        return node;
+    }
+
+    /**
+     * Extract an edge from Y.Map to plain JS object
+     */
+    _extractEdge(yEdge) {
+        if (!yEdge || !isYMap(yEdge)) {
+            return null;
+        }
+
+        const edge = {};
+        yEdge.forEach((value, key) => {
+            edge[key] = this._extractValue(value);
+        });
+
+        return edge;
+    }
+
+    // =========================================================================
+    // Node CRUD Operations
+    // =========================================================================
+
+    /**
+     * Add a node to the graph
+     */
+    addNode(node) {
+        this.ydoc.transact(() => {
+            this._addNodeToCRDT(node);
+        });
+        return node;
+    }
+
+    /**
+     * Get a node by ID (returns plain JS object)
+     */
+    getNode(id) {
+        const yNode = this.yNodes.get(id);
+        if (!yNode) return undefined;
+        return this._extractNode(yNode);
+    }
+
+    /**
+     * Update a node's properties
+     */
+    updateNode(id, updates) {
+        const yNode = this.yNodes.get(id);
+        if (!yNode) return undefined;
+
+        this.ydoc.transact(() => {
+            for (const [key, value] of Object.entries(updates)) {
+                if (key === 'content') {
+                    // Get existing Y.Text or create new one
+                    let yText = yNode.get('content');
+                    if (!isYText(yText)) {
+                        yText = new Y.Text();
+                        yNode.set('content', yText);
+                    }
+                    // Replace content
+                    yText.delete(0, yText.length);
+                    yText.insert(0, value || '');
+                } else if (key === 'position' && value) {
+                    let yPos = yNode.get('position');
+                    if (!isYMap(yPos)) {
+                        yPos = new Y.Map();
+                        yNode.set('position', yPos);
+                    }
+                    yPos.set('x', value.x);
+                    yPos.set('y', value.y);
+                } else if (key === 'tags' && Array.isArray(value)) {
+                    let yTags = yNode.get('tags');
+                    if (!isYArray(yTags)) {
+                        yTags = new Y.Array();
+                        yNode.set('tags', yTags);
+                    }
+                    // Replace tags
+                    while (yTags.length > 0) {
+                        yTags.delete(0);
+                    }
+                    if (value.length > 0) {
+                        yTags.push(value);
+                    }
+                } else if (key === 'cells' && value) {
+                    // Matrix cells update
+                    let yCells = yNode.get('cells');
+                    if (!isYMap(yCells)) {
+                        yCells = new Y.Map();
+                        yNode.set('cells', yCells);
+                    }
+                    for (const [cellKey, cellValue] of Object.entries(value)) {
+                        let yCell = yCells.get(cellKey);
+                        if (!isYMap(yCell)) {
+                            yCell = new Y.Map();
+                            yCells.set(cellKey, yCell);
+                        }
+                        yCell.set('content', cellValue.content);
+                        yCell.set('filled', cellValue.filled || false);
+                    }
+                } else {
+                    // Primitives
+                    yNode.set(key, value);
+                }
+            }
+        });
+
+        return this.getNode(id);
+    }
+
+    /**
+     * Remove a node and its connected edges
+     */
+    removeNode(id) {
+        this.ydoc.transact(() => {
+            // Remove connected edges
+            const incoming = this.incomingEdges.get(id) || [];
+            const outgoing = this.outgoingEdges.get(id) || [];
+
+            for (const edge of [...incoming, ...outgoing]) {
+                this._removeEdgeById(edge.id);
+            }
+
+            // Remove node
+            this.yNodes.delete(id);
+        });
+
+        // Clear from local indexes
+        this.incomingEdges.delete(id);
+        this.outgoingEdges.delete(id);
+    }
+
+    /**
+     * Get all nodes as array of plain JS objects
+     */
+    getAllNodes() {
+        const nodes = [];
+        this.yNodes.forEach((yNode, id) => {
+            const node = this._extractNode(yNode);
+            if (node) nodes.push(node);
+        });
+        return nodes;
+    }
+
+    // =========================================================================
+    // Edge CRUD Operations
+    // =========================================================================
+
+    /**
+     * Add an edge to the graph
+     */
+    addEdge(edge) {
+        this.ydoc.transact(() => {
+            this._addEdgeToCRDT(edge);
+        });
+
+        // Update local indexes
+        if (!this.outgoingEdges.has(edge.source)) {
+            this.outgoingEdges.set(edge.source, []);
+        }
+        this.outgoingEdges.get(edge.source).push(edge);
+
+        if (!this.incomingEdges.has(edge.target)) {
+            this.incomingEdges.set(edge.target, []);
+        }
+        this.incomingEdges.get(edge.target).push(edge);
+
+        return edge;
+    }
+
+    /**
+     * Remove an edge by ID
+     */
+    removeEdge(edgeId) {
+        this._removeEdgeById(edgeId);
+        this._rebuildIndexes();
+    }
+
+    /**
+     * Internal helper to remove edge by ID
+     */
+    _removeEdgeById(edgeId) {
+        for (let i = 0; i < this.yEdges.length; i++) {
+            const yEdge = this.yEdges.get(i);
+            if (isYMap(yEdge) && yEdge.get('id') === edgeId) {
+                this.yEdges.delete(i);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Get all edges as array of plain JS objects
+     */
+    getAllEdges() {
+        const edges = [];
+        for (let i = 0; i < this.yEdges.length; i++) {
+            const yEdge = this.yEdges.get(i);
+            const edge = this._extractEdge(yEdge);
+            if (edge) edges.push(edge);
+        }
+        return edges;
+    }
+
+    /**
+     * Getter for edges array (compatibility with legacy Graph)
+     */
+    get edges() {
+        return this.getAllEdges();
+    }
+
+    // =========================================================================
+    // Graph Traversal
+    // =========================================================================
+
+    /**
+     * Get parent nodes (nodes that have edges pointing to this node)
+     */
+    getParents(nodeId) {
+        const incoming = this.incomingEdges.get(nodeId) || [];
+        return incoming.map(edge => this.getNode(edge.source)).filter(Boolean);
+    }
+
+    /**
+     * Get child nodes (nodes that this node has edges pointing to)
+     */
+    getChildren(nodeId) {
+        const outgoing = this.outgoingEdges.get(nodeId) || [];
+        return outgoing.map(edge => this.getNode(edge.target)).filter(Boolean);
+    }
+
+    /**
+     * Get all ancestors of a node (for context resolution)
+     * Returns nodes in topological order (oldest first)
+     */
+    getAncestors(nodeId, visited = new Set()) {
+        if (visited.has(nodeId)) return [];
+        visited.add(nodeId);
+
+        const ancestors = [];
+        const parents = this.getParents(nodeId);
+
+        for (const parent of parents) {
+            ancestors.push(...this.getAncestors(parent.id, visited));
+            ancestors.push(parent);
+        }
+
+        return ancestors;
+    }
+
+    /**
+     * Get all ancestor edges (for highlighting context path)
+     */
+    getAncestorEdges(nodeId, visited = new Set()) {
+        if (visited.has(nodeId)) return [];
+        visited.add(nodeId);
+
+        const edges = [];
+        const incoming = this.incomingEdges.get(nodeId) || [];
+
+        for (const edge of incoming) {
+            edges.push(edge);
+            edges.push(...this.getAncestorEdges(edge.source, visited));
+        }
+
+        return edges;
+    }
+
+    /**
+     * Get all ancestor node IDs for highlighting
+     */
+    getAncestorIds(nodeIds) {
+        const ancestorIds = new Set();
+
+        for (const nodeId of nodeIds) {
+            ancestorIds.add(nodeId);
+            const ancestors = this.getAncestors(nodeId);
+            for (const ancestor of ancestors) {
+                ancestorIds.add(ancestor.id);
+            }
+        }
+
+        return ancestorIds;
+    }
+
+    /**
+     * Find root nodes (nodes with no parents)
+     */
+    getRootNodes() {
+        const roots = [];
+        this.yNodes.forEach((yNode, id) => {
+            const incoming = this.incomingEdges.get(id) || [];
+            if (incoming.length === 0) {
+                const node = this._extractNode(yNode);
+                if (node) roots.push(node);
+            }
+        });
+        return roots;
+    }
+
+    /**
+     * Find leaf nodes (nodes with no children)
+     */
+    getLeafNodes() {
+        const leaves = [];
+        this.yNodes.forEach((yNode, id) => {
+            const outgoing = this.outgoingEdges.get(id) || [];
+            if (outgoing.length === 0) {
+                const node = this._extractNode(yNode);
+                if (node) leaves.push(node);
+            }
+        });
+        return leaves;
+    }
+
+    // =========================================================================
+    // Context Resolution
+    // =========================================================================
+
+    /**
+     * Resolve context for one or more nodes
+     * Returns messages in chronological order, deduplicated
+     */
+    resolveContext(nodeIds) {
+        const allAncestors = new Map();
+
+        // Collect ancestors from all selected nodes
+        for (const nodeId of nodeIds) {
+            const node = this.getNode(nodeId);
+            if (node) {
+                allAncestors.set(node.id, node);
+            }
+
+            const ancestors = this.getAncestors(nodeId);
+            for (const ancestor of ancestors) {
+                allAncestors.set(ancestor.id, ancestor);
+            }
+        }
+
+        // Convert to array and sort by created_at
+        const sorted = Array.from(allAncestors.values())
+            .sort((a, b) => a.created_at - b.created_at);
+
+        // Convert to message format for API
+        const userTypes = [NodeType.HUMAN, NodeType.HIGHLIGHT, NodeType.NOTE, NodeType.IMAGE];
+        return sorted.map(node => {
+            const msg = {
+                role: userTypes.includes(node.type) ? 'user' : 'assistant',
+                content: node.content,
+                nodeId: node.id
+            };
+            if (node.imageData) {
+                msg.imageData = node.imageData;
+                msg.mimeType = node.mimeType;
+            }
+            return msg;
+        });
+    }
+
+    /**
+     * Estimate token count for context
+     */
+    estimateTokens(nodeIds) {
+        const context = this.resolveContext(nodeIds);
+        const totalChars = context.reduce((sum, msg) => sum + (msg.content?.length || 0), 0);
+        return Math.ceil(totalChars / 4);
+    }
+
+    // =========================================================================
+    // Tag Management
+    // =========================================================================
+
+    /**
+     * Create or update a tag for a color
+     */
+    createTag(color, name) {
+        if (!TAG_COLORS.includes(color)) {
+            throw new Error(`Invalid tag color: ${color}`);
+        }
+
+        this.ydoc.transact(() => {
+            const yTag = new Y.Map();
+            yTag.set('name', name);
+            yTag.set('color', color);
+            this.yTags.set(color, yTag);
+        });
+    }
+
+    /**
+     * Update a tag's name
+     */
+    updateTag(color, name) {
+        const yTag = this.yTags.get(color);
+        if (yTag && isYMap(yTag)) {
+            yTag.set('name', name);
+        }
+    }
+
+    /**
+     * Delete a tag and remove it from all nodes
+     */
+    deleteTag(color) {
+        this.ydoc.transact(() => {
+            this.yTags.delete(color);
+
+            // Remove from all nodes
+            this.yNodes.forEach((yNode) => {
+                const yTags = yNode.get('tags');
+                if (isYArray(yTags)) {
+                    const tags = yTags.toArray();
+                    const index = tags.indexOf(color);
+                    if (index !== -1) {
+                        yTags.delete(index);
+                    }
+                }
+            });
+        });
+    }
+
+    /**
+     * Get a tag by color
+     */
+    getTag(color) {
+        const yTag = this.yTags.get(color);
+        if (!yTag || !isYMap(yTag)) return null;
+        return {
+            name: yTag.get('name'),
+            color: yTag.get('color')
+        };
+    }
+
+    /**
+     * Get all defined tags
+     */
+    getAllTags() {
+        const tags = {};
+        this.yTags.forEach((yTag, color) => {
+            if (isYMap(yTag)) {
+                tags[color] = {
+                    name: yTag.get('name'),
+                    color: yTag.get('color')
+                };
+            }
+        });
+        return tags;
+    }
+
+    /**
+     * Add a tag to a node
+     */
+    addTagToNode(nodeId, color) {
+        const yNode = this.yNodes.get(nodeId);
+        if (!yNode || !this.yTags.has(color)) return;
+
+        this.ydoc.transact(() => {
+            let yTags = yNode.get('tags');
+            if (!isYArray(yTags)) {
+                yTags = new Y.Array();
+                yNode.set('tags', yTags);
+            }
+
+            const tags = yTags.toArray();
+            if (!tags.includes(color)) {
+                yTags.push([color]);
+            }
+        });
+    }
+
+    /**
+     * Remove a tag from a node
+     */
+    removeTagFromNode(nodeId, color) {
+        const yNode = this.yNodes.get(nodeId);
+        if (!yNode) return;
+
+        const yTags = yNode.get('tags');
+        if (isYArray(yTags)) {
+            const tags = yTags.toArray();
+            const index = tags.indexOf(color);
+            if (index !== -1) {
+                yTags.delete(index);
+            }
+        }
+    }
+
+    /**
+     * Check if a node has a tag
+     */
+    nodeHasTag(nodeId, color) {
+        const node = this.getNode(nodeId);
+        return node && node.tags && node.tags.includes(color);
+    }
+
+    // =========================================================================
+    // Layout Algorithms (delegated to shared functions)
+    // =========================================================================
+
+    /**
+     * Auto-position a new node relative to its parents, avoiding overlaps
+     */
+    autoPosition(parentIds) {
+        const NODE_WIDTH = 420;
+        const NODE_HEIGHT = 200;
+        const HORIZONTAL_GAP = 80;
+        const VERTICAL_GAP = 30;
+
+        let initialX, initialY;
+
+        if (parentIds.length === 0) {
+            initialX = 100;
+            initialY = 100;
+        } else {
+            const parents = parentIds.map(id => this.getNode(id)).filter(Boolean);
+
+            if (parents.length === 1) {
+                const parent = parents[0];
+                const parentWidth = parent.width || NODE_WIDTH;
+                initialX = parent.position.x + parentWidth + HORIZONTAL_GAP;
+                initialY = parent.position.y;
+            } else {
+                const rightmost = parents.reduce((max, p) => {
+                    const pRight = p.position.x + (p.width || NODE_WIDTH);
+                    const maxRight = max.position.x + (max.width || NODE_WIDTH);
+                    return pRight > maxRight ? p : max;
+                }, parents[0]);
+                const avgY = parents.reduce((sum, p) => sum + p.position.y, 0) / parents.length;
+
+                initialX = rightmost.position.x + (rightmost.width || NODE_WIDTH) + HORIZONTAL_GAP;
+                initialY = avgY;
+            }
+        }
+
+        const candidatePos = { x: initialX, y: initialY };
+        const allNodes = this.getAllNodes();
+
+        let attempts = 0;
+        const maxAttempts = 20;
+
+        while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+            candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
+            attempts++;
+        }
+
+        if (wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+            candidatePos.x += NODE_WIDTH + HORIZONTAL_GAP;
+            candidatePos.y = initialY;
+
+            attempts = 0;
+            while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+                candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
+                attempts++;
+            }
+        }
+
+        return candidatePos;
+    }
+
+    /**
+     * Check if a position would overlap with existing nodes
+     */
+    wouldOverlap(pos, width, height, nodes) {
+        return wouldOverlapNodes(pos, width, height, nodes);
+    }
+
+    /**
+     * Topological sort using Kahn's algorithm
+     */
+    topologicalSort() {
+        const allNodes = this.getAllNodes();
+        const inDegree = new Map();
+        const result = [];
+
+        for (const node of allNodes) {
+            const incoming = this.incomingEdges.get(node.id) || [];
+            inDegree.set(node.id, incoming.length);
+        }
+
+        const queue = allNodes.filter(n => inDegree.get(n.id) === 0);
+        queue.sort((a, b) => a.created_at - b.created_at);
+
+        while (queue.length > 0) {
+            const node = queue.shift();
+            result.push(node);
+
+            const children = this.getChildren(node.id);
+            children.sort((a, b) => a.created_at - b.created_at);
+
+            for (const child of children) {
+                const newDegree = inDegree.get(child.id) - 1;
+                inDegree.set(child.id, newDegree);
+                if (newDegree === 0) {
+                    queue.push(child);
+                }
+            }
+        }
+
+        for (const node of allNodes) {
+            if (!result.includes(node)) {
+                result.push(node);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Auto-layout all nodes using topological sort and greedy placement
+     */
+    autoLayout(dimensions = new Map()) {
+        const DEFAULT_WIDTH = 420;
+        const DEFAULT_HEIGHT = 220;
+        const HORIZONTAL_GAP = 120;
+        const VERTICAL_GAP = 40;
+        const START_X = 100;
+        const START_Y = 100;
+
+        const allNodes = this.getAllNodes();
+        if (allNodes.length === 0) return;
+
+        const getNodeSize = (node) => {
+            const dim = dimensions.get(node.id);
+            if (dim) return { width: dim.width, height: dim.height };
+            return { width: node.width || DEFAULT_WIDTH, height: node.height || DEFAULT_HEIGHT };
+        };
+
+        const sorted = this.topologicalSort();
+
+        const layers = new Map();
+        for (const node of sorted) {
+            const parents = this.getParents(node.id);
+            if (parents.length === 0) {
+                layers.set(node.id, 0);
+            } else {
+                const maxParentLayer = Math.max(...parents.map(p => layers.get(p.id) || 0));
+                layers.set(node.id, maxParentLayer + 1);
+            }
+        }
+
+        const layerMaxWidth = new Map();
+        for (const node of sorted) {
+            const layer = layers.get(node.id);
+            const { width } = getNodeSize(node);
+            const current = layerMaxWidth.get(layer) || 0;
+            layerMaxWidth.set(layer, Math.max(current, width));
+        }
+
+        const layerX = new Map();
+        let currentX = START_X;
+        const maxLayer = Math.max(...layers.values());
+        for (let l = 0; l <= maxLayer; l++) {
+            layerX.set(l, currentX);
+            currentX += (layerMaxWidth.get(l) || DEFAULT_WIDTH) + HORIZONTAL_GAP;
+        }
+
+        const positioned = [];
+
+        for (const node of sorted) {
+            const layer = layers.get(node.id);
+            const x = layerX.get(layer);
+            const { width: nodeWidth, height: nodeHeight } = getNodeSize(node);
+
+            let idealY = START_Y;
+            const parents = this.getParents(node.id);
+            if (parents.length > 0) {
+                const avgParentY = parents.reduce((sum, p) => sum + p.position.y, 0) / parents.length;
+                idealY = avgParentY;
+            }
+
+            let y = idealY;
+            let foundPosition = false;
+
+            const searchOffsets = [0];
+            for (let i = 1; i <= 30; i++) {
+                searchOffsets.push(i * (DEFAULT_HEIGHT / 2 + VERTICAL_GAP));
+                searchOffsets.push(-i * (DEFAULT_HEIGHT / 2 + VERTICAL_GAP));
+            }
+
+            for (const offset of searchOffsets) {
+                const testY = Math.max(START_Y, idealY + offset);
+
+                let hasOverlap = false;
+                for (const pos of positioned) {
+                    const horizontalOverlap = !(x + nodeWidth + 20 < pos.x || x > pos.x + pos.width + 20);
+                    const verticalOverlap = !(testY + nodeHeight + VERTICAL_GAP < pos.y || testY > pos.y + pos.height + VERTICAL_GAP);
+
+                    if (horizontalOverlap && verticalOverlap) {
+                        hasOverlap = true;
+                        break;
+                    }
+                }
+
+                if (!hasOverlap) {
+                    y = testY;
+                    foundPosition = true;
+                    break;
+                }
+            }
+
+            if (!foundPosition) {
+                const maxY = positioned.reduce((max, pos) => Math.max(max, pos.y + pos.height), START_Y);
+                y = maxY + VERTICAL_GAP;
+            }
+
+            // Update node position in CRDT
+            this.updateNode(node.id, { position: { x, y } });
+            positioned.push({ x, y, width: nodeWidth, height: nodeHeight });
+        }
+    }
+
+    /**
+     * Force-directed layout
+     */
+    forceDirectedLayout(dimensions = new Map()) {
+        const DEFAULT_WIDTH = 420;
+        const DEFAULT_HEIGHT = 220;
+        const ITERATIONS = 100;
+        const REPULSION = 50000;
+        const ATTRACTION = 0.05;
+        const DAMPING = 0.85;
+        const PADDING = 40;
+        const IDEAL_EDGE_LENGTH = 100;
+
+        const allNodes = this.getAllNodes();
+        if (allNodes.length === 0) return;
+
+        const getNodeSize = (node) => {
+            const dim = dimensions.get(node.id);
+            if (dim) return { width: dim.width, height: dim.height };
+            return { width: node.width || DEFAULT_WIDTH, height: node.height || DEFAULT_HEIGHT };
+        };
+
+        const velocities = new Map();
+        for (const node of allNodes) {
+            velocities.set(node.id, { x: 0, y: 0 });
+        }
+
+        const unpositioned = allNodes.filter(n => !n.position || (n.position.x === 0 && n.position.y === 0));
+        if (unpositioned.length > 0) {
+            const cols = Math.ceil(Math.sqrt(allNodes.length));
+            allNodes.forEach((node, i) => {
+                if (!node.position) {
+                    node.position = {
+                        x: 200 + (i % cols) * 400,
+                        y: 200 + Math.floor(i / cols) * 300
+                    };
+                }
+            });
+        }
+
+        for (let iter = 0; iter < ITERATIONS; iter++) {
+            const forces = new Map();
+            for (const node of allNodes) {
+                forces.set(node.id, { x: 0, y: 0 });
+            }
+
+            for (let i = 0; i < allNodes.length; i++) {
+                for (let j = i + 1; j < allNodes.length; j++) {
+                    const nodeA = allNodes[i];
+                    const nodeB = allNodes[j];
+                    const sizeA = getNodeSize(nodeA);
+                    const sizeB = getNodeSize(nodeB);
+
+                    const centerAx = nodeA.position.x + sizeA.width / 2;
+                    const centerAy = nodeA.position.y + sizeA.height / 2;
+                    const centerBx = nodeB.position.x + sizeB.width / 2;
+                    const centerBy = nodeB.position.y + sizeB.height / 2;
+
+                    const dx = centerBx - centerAx;
+                    const dy = centerBy - centerAy;
+                    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                    const aLeft = nodeA.position.x - PADDING;
+                    const aRight = nodeA.position.x + sizeA.width + PADDING;
+                    const aTop = nodeA.position.y - PADDING;
+                    const aBottom = nodeA.position.y + sizeA.height + PADDING;
+
+                    const bLeft = nodeB.position.x - PADDING;
+                    const bRight = nodeB.position.x + sizeB.width + PADDING;
+                    const bTop = nodeB.position.y - PADDING;
+                    const bBottom = nodeB.position.y + sizeB.height + PADDING;
+
+                    const overlapX = Math.min(aRight, bRight) - Math.max(aLeft, bLeft);
+                    const overlapY = Math.min(aBottom, bBottom) - Math.max(aTop, bTop);
+                    const isOverlapping = overlapX > 0 && overlapY > 0;
+
+                    const force = REPULSION / (distance * distance);
+                    const fx = (dx / distance) * force;
+                    const fy = (dy / distance) * force;
+
+                    forces.get(nodeA.id).x -= fx;
+                    forces.get(nodeA.id).y -= fy;
+                    forces.get(nodeB.id).x += fx;
+                    forces.get(nodeB.id).y += fy;
+
+                    if (isOverlapping) {
+                        const overlapForce = Math.min(overlapX, overlapY) * 5;
+                        const ofx = (dx / distance) * overlapForce;
+                        const ofy = (dy / distance) * overlapForce;
+                        forces.get(nodeA.id).x -= ofx;
+                        forces.get(nodeA.id).y -= ofy;
+                        forces.get(nodeB.id).x += ofx;
+                        forces.get(nodeB.id).y += ofy;
+                    }
+                }
+            }
+
+            for (const node of allNodes) {
+                const children = this.getChildren(node.id);
+                const parents = this.getParents(node.id);
+                const connected = [...children, ...parents];
+
+                for (const other of connected) {
+                    const sizeA = getNodeSize(node);
+                    const sizeB = getNodeSize(other);
+
+                    const centerAx = node.position.x + sizeA.width / 2;
+                    const centerAy = node.position.y + sizeA.height / 2;
+                    const centerBx = other.position.x + sizeB.width / 2;
+                    const centerBy = other.position.y + sizeB.height / 2;
+
+                    const dx = centerBx - centerAx;
+                    const dy = centerBy - centerAy;
+                    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                    const minSafeDistance = Math.max(
+                        (sizeA.width + sizeB.width) / 2 + PADDING,
+                        (sizeA.height + sizeB.height) / 2 + PADDING
+                    );
+                    const idealDistance = minSafeDistance + IDEAL_EDGE_LENGTH;
+
+                    const displacement = distance - idealDistance;
+                    const force = ATTRACTION * displacement;
+                    const fx = (dx / distance) * force;
+                    const fy = (dy / distance) * force;
+
+                    forces.get(node.id).x += fx;
+                    forces.get(node.id).y += fy;
+                }
+            }
+
+            for (const node of allNodes) {
+                const vel = velocities.get(node.id);
+                const force = forces.get(node.id);
+
+                vel.x = (vel.x + force.x) * DAMPING;
+                vel.y = (vel.y + force.y) * DAMPING;
+
+                const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+                if (speed > 50) {
+                    vel.x = (vel.x / speed) * 50;
+                    vel.y = (vel.y / speed) * 50;
+                }
+
+                node.position.x += vel.x;
+                node.position.y += vel.y;
+            }
+        }
+
+        let minX = Infinity, minY = Infinity;
+        for (const node of allNodes) {
+            minX = Math.min(minX, node.position.x);
+            minY = Math.min(minY, node.position.y);
+        }
+        for (const node of allNodes) {
+            node.position.x = node.position.x - minX + 100;
+            node.position.y = node.position.y - minY + 100;
+        }
+
+        this.resolveOverlaps(allNodes, dimensions);
+
+        // Persist positions to CRDT
+        for (const node of allNodes) {
+            this.updateNode(node.id, { position: node.position });
+        }
+    }
+
+    /**
+     * Resolve overlapping nodes
+     */
+    resolveOverlaps(nodes, dimensions = new Map()) {
+        const DEFAULT_WIDTH = 420;
+        const DEFAULT_HEIGHT = 220;
+        const PADDING = 40;
+        const MAX_ITERATIONS = 50;
+
+        const getNodeSize = (node) => {
+            const dim = dimensions.get(node.id);
+            if (dim) return { width: dim.width, height: dim.height };
+            return { width: node.width || DEFAULT_WIDTH, height: node.height || DEFAULT_HEIGHT };
+        };
+
+        const getOverlap = (nodeA, nodeB) => {
+            const sizeA = getNodeSize(nodeA);
+            const sizeB = getNodeSize(nodeB);
+
+            const aLeft = nodeA.position.x;
+            const aRight = nodeA.position.x + sizeA.width + PADDING;
+            const aTop = nodeA.position.y;
+            const aBottom = nodeA.position.y + sizeA.height + PADDING;
+
+            const bLeft = nodeB.position.x;
+            const bRight = nodeB.position.x + sizeB.width + PADDING;
+            const bTop = nodeB.position.y;
+            const bBottom = nodeB.position.y + sizeB.height + PADDING;
+
+            const overlapX = Math.min(aRight, bRight) - Math.max(aLeft, bLeft);
+            const overlapY = Math.min(aBottom, bBottom) - Math.max(aTop, bTop);
+
+            if (overlapX > 0 && overlapY > 0) {
+                return { overlapX, overlapY };
+            }
+            return { overlapX: 0, overlapY: 0 };
+        };
+
+        for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+            let hasOverlap = false;
+
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const nodeA = nodes[i];
+                    const nodeB = nodes[j];
+
+                    const { overlapX, overlapY } = getOverlap(nodeA, nodeB);
+
+                    if (overlapX > 0 && overlapY > 0) {
+                        hasOverlap = true;
+
+                        const sizeA = getNodeSize(nodeA);
+                        const sizeB = getNodeSize(nodeB);
+
+                        const centerAx = nodeA.position.x + sizeA.width / 2;
+                        const centerAy = nodeA.position.y + sizeA.height / 2;
+                        const centerBx = nodeB.position.x + sizeB.width / 2;
+                        const centerBy = nodeB.position.y + sizeB.height / 2;
+
+                        if (overlapX < overlapY) {
+                            const pushAmount = (overlapX / 2) + 1;
+                            if (centerBx >= centerAx) {
+                                nodeA.position.x -= pushAmount;
+                                nodeB.position.x += pushAmount;
+                            } else {
+                                nodeA.position.x += pushAmount;
+                                nodeB.position.x -= pushAmount;
+                            }
+                        } else {
+                            const pushAmount = (overlapY / 2) + 1;
+                            if (centerBy >= centerAy) {
+                                nodeA.position.y -= pushAmount;
+                                nodeB.position.y += pushAmount;
+                            } else {
+                                nodeA.position.y += pushAmount;
+                                nodeB.position.y -= pushAmount;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!hasOverlap) break;
+        }
+
+        let minX = Infinity, minY = Infinity;
+        for (const node of nodes) {
+            minX = Math.min(minX, node.position.x);
+            minY = Math.min(minY, node.position.y);
+        }
+        if (minX < 100 || minY < 100) {
+            const offsetX = minX < 100 ? 100 - minX : 0;
+            const offsetY = minY < 100 ? 100 - minY : 0;
+            for (const node of nodes) {
+                node.position.x += offsetX;
+                node.position.y += offsetY;
+            }
+        }
+    }
+
+    // =========================================================================
+    // Utility Methods
+    // =========================================================================
+
+    /**
+     * Check if graph is empty
+     */
+    isEmpty() {
+        return this.yNodes.size === 0;
+    }
+
+    /**
+     * Serialize graph to JSON-compatible object
+     */
+    toJSON() {
+        return {
+            nodes: this.getAllNodes(),
+            edges: this.getAllEdges(),
+            tags: this.getAllTags()
+        };
+    }
+}
+
+// Export for use in other modules
+window.CRDTGraph = CRDTGraph;
