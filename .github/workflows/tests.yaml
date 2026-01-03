@@ -59,13 +59,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "20"
+      - name: Install pixi
+        uses: prefix-dev/setup-pixi@v0
 
       - name: Install npm dependencies
-        run: npm install
+        run: pixi run npm install
 
       - name: Run JavaScript tests
-        run: npm test
+        run: pixi run test-js
