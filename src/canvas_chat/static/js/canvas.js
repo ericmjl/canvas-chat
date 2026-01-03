@@ -1713,13 +1713,18 @@ class Canvas {
                 this.isDraggingNode = true;
                 this.draggedNode = node;
 
+                // Get current position from wrapper (not stale node.position)
+                // This is critical after layout animations update wrapper x/y
+                const currentX = parseFloat(wrapper.getAttribute('x'));
+                const currentY = parseFloat(wrapper.getAttribute('y'));
+
                 // Store starting position for undo
-                this.dragStartPos = { ...node.position };
+                this.dragStartPos = { x: currentX, y: currentY };
 
                 const point = this.clientToSvg(e.clientX, e.clientY);
                 this.dragOffset = {
-                    x: point.x - node.position.x,
-                    y: point.y - node.position.y
+                    x: point.x - currentX,
+                    y: point.y - currentY
                 };
 
                 div.classList.add('dragging');
@@ -1740,13 +1745,18 @@ class Canvas {
             this.isDraggingNode = true;
             this.draggedNode = node;
 
+            // Get current position from wrapper (not stale node.position)
+            // This is critical after layout animations update wrapper x/y
+            const currentX = parseFloat(wrapper.getAttribute('x'));
+            const currentY = parseFloat(wrapper.getAttribute('y'));
+
             // Store starting position for undo
-            this.dragStartPos = { ...node.position };
+            this.dragStartPos = { x: currentX, y: currentY };
 
             const point = this.clientToSvg(e.clientX, e.clientY);
             this.dragOffset = {
-                x: point.x - node.position.x,
-                y: point.y - node.position.y
+                x: point.x - currentX,
+                y: point.y - currentY
             };
 
             div.classList.add('dragging');

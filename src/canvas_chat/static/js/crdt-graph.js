@@ -932,6 +932,7 @@ class CRDTGraph {
         const allNodes = this.getAllNodes();
         const inDegree = new Map();
         const result = [];
+        const resultIds = new Set();  // Track by ID to avoid duplicates
 
         for (const node of allNodes) {
             const incoming = this.incomingEdges.get(node.id) || [];
@@ -943,7 +944,10 @@ class CRDTGraph {
 
         while (queue.length > 0) {
             const node = queue.shift();
-            result.push(node);
+            if (!resultIds.has(node.id)) {
+                result.push(node);
+                resultIds.add(node.id);
+            }
 
             const children = this.getChildren(node.id);
             children.sort((a, b) => a.created_at - b.created_at);
@@ -951,15 +955,17 @@ class CRDTGraph {
             for (const child of children) {
                 const newDegree = inDegree.get(child.id) - 1;
                 inDegree.set(child.id, newDegree);
-                if (newDegree === 0) {
+                if (newDegree === 0 && !resultIds.has(child.id)) {
                     queue.push(child);
                 }
             }
         }
 
+        // Add any remaining nodes (disconnected components)
         for (const node of allNodes) {
-            if (!result.includes(node)) {
+            if (!resultIds.has(node.id)) {
                 result.push(node);
+                resultIds.add(node.id);
             }
         }
 
@@ -1015,7 +1021,9 @@ class CRDTGraph {
             currentX += (layerMaxWidth.get(l) || DEFAULT_WIDTH) + HORIZONTAL_GAP;
         }
 
+        // Track positioned nodes with their NEW positions (not stale graph positions)
         const positioned = [];
+        const newPositions = new Map();  // nodeId -> { x, y }
 
         for (const node of sorted) {
             const layer = layers.get(node.id);
@@ -1025,8 +1033,12 @@ class CRDTGraph {
             let idealY = START_Y;
             const parents = this.getParents(node.id);
             if (parents.length > 0) {
-                const avgParentY = parents.reduce((sum, p) => sum + p.position.y, 0) / parents.length;
-                idealY = avgParentY;
+                // Use NEW positions from this layout run, not stale graph positions
+                const parentYs = parents.map(p => {
+                    const newPos = newPositions.get(p.id);
+                    return newPos ? newPos.y : START_Y;
+                });
+                idealY = parentYs.reduce((sum, y) => sum + y, 0) / parentYs.length;
             }
 
             let y = idealY;
@@ -1064,6 +1076,9 @@ class CRDTGraph {
                 y = maxY + VERTICAL_GAP;
             }
 
+            // Store new position for child nodes to reference
+            newPositions.set(node.id, { x, y });
+
             // Update node position in CRDT
             this.updateNode(node.id, { position: { x, y } });
             positioned.push({ x, y, width: nodeWidth, height: nodeHeight });
@@ -1092,23 +1107,35 @@ class CRDTGraph {
             return { width: node.width || DEFAULT_WIDTH, height: node.height || DEFAULT_HEIGHT };
         };
 
+        // Use a positions map to track positions during iterations
+        // This avoids issues with getChildren/getParents returning stale positions
+        const positions = new Map();
         const velocities = new Map();
         for (const node of allNodes) {
+            positions.set(node.id, { ...node.position });
             velocities.set(node.id, { x: 0, y: 0 });
         }
 
-        const unpositioned = allNodes.filter(n => !n.position || (n.position.x === 0 && n.position.y === 0));
+        // Initialize unpositioned nodes in a grid
+        const unpositioned = allNodes.filter(n => {
+            const pos = positions.get(n.id);
+            return !pos || (pos.x === 0 && pos.y === 0);
+        });
         if (unpositioned.length > 0) {
             const cols = Math.ceil(Math.sqrt(allNodes.length));
             allNodes.forEach((node, i) => {
-                if (!node.position) {
-                    node.position = {
+                const pos = positions.get(node.id);
+                if (!pos || (pos.x === 0 && pos.y === 0)) {
+                    positions.set(node.id, {
                         x: 200 + (i % cols) * 400,
                         y: 200 + Math.floor(i / cols) * 300
-                    };
+                    });
                 }
             });
         }
+
+        // Helper to get position from our tracking map
+        const getPos = (nodeId) => positions.get(nodeId);
 
         for (let iter = 0; iter < ITERATIONS; iter++) {
             const forces = new Map();
@@ -1116,31 +1143,34 @@ class CRDTGraph {
                 forces.set(node.id, { x: 0, y: 0 });
             }
 
+            // Repulsion between all pairs
             for (let i = 0; i < allNodes.length; i++) {
                 for (let j = i + 1; j < allNodes.length; j++) {
                     const nodeA = allNodes[i];
                     const nodeB = allNodes[j];
                     const sizeA = getNodeSize(nodeA);
                     const sizeB = getNodeSize(nodeB);
+                    const posA = getPos(nodeA.id);
+                    const posB = getPos(nodeB.id);
 
-                    const centerAx = nodeA.position.x + sizeA.width / 2;
-                    const centerAy = nodeA.position.y + sizeA.height / 2;
-                    const centerBx = nodeB.position.x + sizeB.width / 2;
-                    const centerBy = nodeB.position.y + sizeB.height / 2;
+                    const centerAx = posA.x + sizeA.width / 2;
+                    const centerAy = posA.y + sizeA.height / 2;
+                    const centerBx = posB.x + sizeB.width / 2;
+                    const centerBy = posB.y + sizeB.height / 2;
 
                     const dx = centerBx - centerAx;
                     const dy = centerBy - centerAy;
                     const distance = Math.sqrt(dx * dx + dy * dy) || 1;
 
-                    const aLeft = nodeA.position.x - PADDING;
-                    const aRight = nodeA.position.x + sizeA.width + PADDING;
-                    const aTop = nodeA.position.y - PADDING;
-                    const aBottom = nodeA.position.y + sizeA.height + PADDING;
+                    const aLeft = posA.x - PADDING;
+                    const aRight = posA.x + sizeA.width + PADDING;
+                    const aTop = posA.y - PADDING;
+                    const aBottom = posA.y + sizeA.height + PADDING;
 
-                    const bLeft = nodeB.position.x - PADDING;
-                    const bRight = nodeB.position.x + sizeB.width + PADDING;
-                    const bTop = nodeB.position.y - PADDING;
-                    const bBottom = nodeB.position.y + sizeB.height + PADDING;
+                    const bLeft = posB.x - PADDING;
+                    const bRight = posB.x + sizeB.width + PADDING;
+                    const bTop = posB.y - PADDING;
+                    const bBottom = posB.y + sizeB.height + PADDING;
 
                     const overlapX = Math.min(aRight, bRight) - Math.max(aLeft, bLeft);
                     const overlapY = Math.min(aBottom, bBottom) - Math.max(aTop, bTop);
@@ -1167,19 +1197,25 @@ class CRDTGraph {
                 }
             }
 
+            // Attraction along edges
             for (const node of allNodes) {
                 const children = this.getChildren(node.id);
                 const parents = this.getParents(node.id);
-                const connected = [...children, ...parents];
+                const connectedIds = [...children.map(c => c.id), ...parents.map(p => p.id)];
 
-                for (const other of connected) {
+                for (const otherId of connectedIds) {
+                    const otherNode = allNodes.find(n => n.id === otherId);
+                    if (!otherNode) continue;
+
                     const sizeA = getNodeSize(node);
-                    const sizeB = getNodeSize(other);
+                    const sizeB = getNodeSize(otherNode);
+                    const posA = getPos(node.id);
+                    const posB = getPos(otherId);
 
-                    const centerAx = node.position.x + sizeA.width / 2;
-                    const centerAy = node.position.y + sizeA.height / 2;
-                    const centerBx = other.position.x + sizeB.width / 2;
-                    const centerBy = other.position.y + sizeB.height / 2;
+                    const centerAx = posA.x + sizeA.width / 2;
+                    const centerAy = posA.y + sizeA.height / 2;
+                    const centerBx = posB.x + sizeB.width / 2;
+                    const centerBy = posB.y + sizeB.height / 2;
 
                     const dx = centerBx - centerAx;
                     const dy = centerBy - centerAy;
@@ -1201,9 +1237,11 @@ class CRDTGraph {
                 }
             }
 
+            // Apply forces with velocity and damping
             for (const node of allNodes) {
                 const vel = velocities.get(node.id);
                 const force = forces.get(node.id);
+                const pos = getPos(node.id);
 
                 vel.x = (vel.x + force.x) * DAMPING;
                 vel.y = (vel.y + force.y) * DAMPING;
@@ -1214,19 +1252,24 @@ class CRDTGraph {
                     vel.y = (vel.y / speed) * 50;
                 }
 
-                node.position.x += vel.x;
-                node.position.y += vel.y;
+                pos.x += vel.x;
+                pos.y += vel.y;
             }
         }
 
+        // Normalize to start at (100, 100)
         let minX = Infinity, minY = Infinity;
         for (const node of allNodes) {
-            minX = Math.min(minX, node.position.x);
-            minY = Math.min(minY, node.position.y);
+            const pos = getPos(node.id);
+            minX = Math.min(minX, pos.x);
+            minY = Math.min(minY, pos.y);
         }
         for (const node of allNodes) {
-            node.position.x = node.position.x - minX + 100;
-            node.position.y = node.position.y - minY + 100;
+            const pos = getPos(node.id);
+            pos.x = pos.x - minX + 100;
+            pos.y = pos.y - minY + 100;
+            // Update node object for resolveOverlaps
+            node.position = { ...pos };
         }
 
         this.resolveOverlaps(allNodes, dimensions);
