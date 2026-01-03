@@ -5403,25 +5403,102 @@ class App {
     }
 
     /**
-     * Handle remote changes from other peers
+     * Handle remote changes from other peers.
+     * Uses smart diffing to animate position changes smoothly.
      */
     handleRemoteChange(type, events) {
         console.log('[App] Handling remote change:', type);
 
-        // Re-render the entire canvas to reflect remote changes
-        // This is a simple approach - could be optimized to only update changed nodes
-        this.canvas.clear();
+        const currentNodeIds = new Set(this.canvas.nodeElements.keys());
+        const newNodes = this.graph.getAllNodes();
+        const newNodeIds = new Set(newNodes.map(n => n.id));
 
-        // Re-render all nodes
-        for (const node of this.graph.getAllNodes()) {
-            this.canvas.renderNode(node);
+        // Track nodes that need position animation
+        const positionChanges = [];
+
+        // Process each new node
+        for (const node of newNodes) {
+            if (currentNodeIds.has(node.id)) {
+                // Node exists - check for position/content changes
+                const wrapper = this.canvas.nodeElements.get(node.id);
+                if (wrapper) {
+                    const currentX = parseFloat(wrapper.getAttribute('x'));
+                    const currentY = parseFloat(wrapper.getAttribute('y'));
+
+                    // Check if position changed
+                    if (Math.abs(currentX - node.position.x) > 0.5 ||
+                        Math.abs(currentY - node.position.y) > 0.5) {
+                        positionChanges.push({
+                            nodeId: node.id,
+                            wrapper,
+                            startX: currentX,
+                            startY: currentY,
+                            endX: node.position.x,
+                            endY: node.position.y
+                        });
+                    }
+
+                    // Update content if changed (non-animated)
+                    this.canvas.updateNodeContent(node.id, node.content, false);
+                }
+            } else {
+                // New node - render it
+                this.canvas.renderNode(node);
+            }
         }
 
-        // Re-render all edges
-        this.canvas.updateAllEdges(this.graph);
+        // Remove deleted nodes
+        for (const nodeId of currentNodeIds) {
+            if (!newNodeIds.has(nodeId)) {
+                this.canvas.removeNode(nodeId);
+            }
+        }
+
+        // Animate position changes if any
+        if (positionChanges.length > 0) {
+            this.animateRemotePositions(positionChanges);
+        } else {
+            // No position changes, just update edges
+            this.canvas.updateAllEdges(this.graph);
+        }
 
         // Save the session to persist remote changes locally
         this.saveSession();
+    }
+
+    /**
+     * Animate node positions for remote changes.
+     * Uses smooth easing to match local layout animations.
+     */
+    animateRemotePositions(animations) {
+        const duration = 400;  // Slightly faster than local (500ms)
+        const startTime = performance.now();
+
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Ease-out cubic for smooth deceleration
+            const eased = 1 - Math.pow(1 - progress, 3);
+
+            // Update each node position
+            for (const anim of animations) {
+                const x = anim.startX + (anim.endX - anim.startX) * eased;
+                const y = anim.startY + (anim.endY - anim.startY) * eased;
+
+                anim.wrapper.setAttribute('x', x);
+                anim.wrapper.setAttribute('y', y);
+            }
+
+            // Update edges during animation
+            this.canvas.updateAllEdges(this.graph);
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+
+        requestAnimationFrame(animate);
     }
 
     /**
