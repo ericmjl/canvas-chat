@@ -3235,10 +3235,22 @@ class App {
 
             // Stream the response using shared SSE utility
             let cellContent = '';
+            // Throttle state for streaming sync
+            let lastStreamSync = 0;
+            const streamSyncInterval = 100;  // Sync every 100ms during streaming
+
             await SSE.streamSSEContent(response, {
                 onContent: (chunk, fullContent) => {
                     cellContent = fullContent;
                     this.canvas.updateMatrixCell(nodeId, row, col, cellContent, true);
+
+                    // Sync streaming content to peers (throttled)
+                    const now = Date.now();
+                    if (now - lastStreamSync >= streamSyncInterval) {
+                        lastStreamSync = now;
+                        const streamingCells = { ...matrixNode.cells, [cellKey]: { content: cellContent, filled: false } };
+                        this.graph.updateNode(nodeId, { cells: streamingCells });
+                    }
                 },
                 onDone: (normalizedContent) => {
                     cellContent = normalizedContent;
@@ -4043,11 +4055,11 @@ class App {
         const status = this.graph.getMultiplayerStatus?.();
         if (!status?.enabled) return;
 
-        // Throttle updates to ~30fps (every 33ms)
+        // Throttle updates to ~60fps (every 16ms) for smooth experience
         const now = Date.now();
         if (!this._lastDragSync) this._lastDragSync = {};
 
-        if (this._lastDragSync[nodeId] && now - this._lastDragSync[nodeId] < 33) {
+        if (this._lastDragSync[nodeId] && now - this._lastDragSync[nodeId] < 16) {
             return;  // Skip this update, too soon
         }
         this._lastDragSync[nodeId] = now;
