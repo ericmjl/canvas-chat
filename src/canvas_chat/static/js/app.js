@@ -4360,9 +4360,16 @@ class App {
         wrapper.setAttribute('width', defaultWidth);
         wrapper.setAttribute('height', defaultHeight);
 
-        // Remove viewport-fitted class to restore natural sizing
-        div.classList.remove('viewport-fitted');
-        div.style.height = '';
+        // For scrollable types, keep viewport-fitted so node renders at wrapper size with scrolling
+        // This prevents mismatch between wrapper dimensions and rendered dimensions during resize
+        if (isScrollableType) {
+            div.classList.add('viewport-fitted');
+            div.style.height = '100%';
+        } else {
+            // For non-scrollable types, remove constraints to allow natural sizing
+            div.classList.remove('viewport-fitted');
+            div.style.height = '';
+        }
 
         // Update edges
         const x = parseFloat(wrapper.getAttribute('x'));
