@@ -1670,9 +1670,11 @@ class Canvas {
     setupNodeEvents(wrapper, node) {
         const div = wrapper.querySelector('.node');
 
-        // Click to select
+        // IMPORTANT: Use capture phase to ensure node selection happens BEFORE
+        // any child element's stopPropagation() can prevent it. This provides
+        // uniform selection behavior for ALL node types without special-casing.
         div.addEventListener('click', (e) => {
-            if (e.target.closest('.node-action')) return;
+            // Skip resize handles - they shouldn't select
             if (e.target.closest('.resize-handle')) return;
 
             if (e.ctrlKey || e.metaKey) {
@@ -1683,11 +1685,13 @@ class Canvas {
                     this.selectNode(node.id, true);
                 }
             } else {
-                // Single select
-                this.clearSelection();
-                this.selectNode(node.id, false);
+                // Single select (only if not already selected to avoid flicker)
+                if (!this.selectedNodes.has(node.id)) {
+                    this.clearSelection();
+                    this.selectNode(node.id, false);
+                }
             }
-        });
+        }, true);  // true = capture phase
 
         // Drag to move - only via drag handle
         const dragHandle = div.querySelector('.drag-handle');
