@@ -231,6 +231,17 @@ class MatrixNode extends BaseNode {
     getTypeLabel() { return 'Matrix'; }
     getTypeIcon() { return '📊'; }
 
+    getHeaderButtons() {
+        return [
+            HeaderButtons.NAV_PARENT,
+            HeaderButtons.NAV_CHILD,
+            HeaderButtons.STOP,  // For stopping cell fills
+            HeaderButtons.RESET_SIZE,
+            HeaderButtons.FIT_VIEWPORT,
+            HeaderButtons.DELETE
+        ];
+    }
+
     getSummaryText(canvas) {
         // Priority: user-set title > LLM summary > generated fallback
         if (this.node.title) return this.node.title;
@@ -297,6 +308,13 @@ class MatrixNode extends BaseNode {
         }
         tableHtml += '</tbody></table>';
 
+        // Build header buttons dynamically from getHeaderButtons()
+        const headerButtons = this.getHeaderButtons();
+        const headerButtonsHtml = headerButtons.map(btn => {
+            const displayStyle = btn.hidden ? 'style="display:none;"' : '';
+            return `<button class="header-btn ${btn.id}-btn" title="${canvas.escapeHtml(btn.title)}" ${displayStyle}>${canvas.escapeHtml(btn.label)}</button>`;
+        }).join('');
+
         return `
             <div class="node-summary" title="Double-click to edit title">
                 <span class="node-type-icon">${typeIcon}</span>
@@ -309,10 +327,7 @@ class MatrixNode extends BaseNode {
                     <span class="grip-dot"></span><span class="grip-dot"></span>
                 </div>
                 <span class="node-type">Matrix</span>
-                <button class="header-btn stop-btn" title="Stop filling cells" style="display:none;">⏹</button>
-                <button class="header-btn reset-size-btn" title="Reset to default size">↺</button>
-                <button class="header-btn fit-viewport-btn" title="Fit to viewport (f)">⤢</button>
-                <button class="node-action delete-btn" title="Delete node">🗑️</button>
+                ${headerButtonsHtml}
             </div>
             <div class="matrix-context">
                 <span class="matrix-context-text">${canvas.escapeHtml(context)}</span>
