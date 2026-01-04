@@ -97,6 +97,10 @@ Open your browser to the URL shown (usually `http://127.0.0.1:7865`).
 - **LLM**: LiteLLM (multi-provider support)
 - **Storage**: IndexedDB (browser-local)
 
+## Browser compatibility
+
+Canvas Chat works best on **Chromium-based browsers** (Chrome, Edge, Arc, Brave, etc.). Firefox and Safari have rendering issues with the SVG canvas that prevent full functionality.
+
 ## License
 
 MIT
