@@ -72,6 +72,9 @@ class Canvas {
         // Image click callback (for images in node content)
         this.onImageClick = null;  // For handling clicks on images in node content
 
+        // Tag chip click callback (for highlighting nodes by tag)
+        this.onTagChipClick = null;  // For handling clicks on tag chips
+
         // Reply tooltip state
         this.branchTooltip = null;
         this.activeSelectionNodeId = null;
@@ -1677,6 +1680,9 @@ class Canvas {
             // Skip resize handles - they shouldn't select
             if (e.target.closest('.resize-handle')) return;
 
+            // Skip tag chips - clicking a tag should highlight by tag, not select node
+            if (e.target.closest('.node-tag')) return;
+
             if (e.ctrlKey || e.metaKey) {
                 // Multi-select toggle
                 if (this.selectedNodes.has(node.id)) {
@@ -2131,6 +2137,18 @@ class Canvas {
                 }
             });
         }
+
+        // Tag chip click handlers (for highlighting nodes by tag)
+        const tagChips = div.querySelectorAll('.node-tag');
+        tagChips.forEach(chip => {
+            chip.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const color = chip.dataset.color;
+                if (this.onTagChipClick) {
+                    this.onTagChipClick(color);
+                }
+            });
+        });
     }
 
     /**
@@ -2646,6 +2664,57 @@ class Canvas {
             const wrapper = this.nodeElements.get(nodeId);
             if (wrapper && !this.selectedNodes.has(nodeId)) {
                 wrapper.querySelector('.node')?.classList.add('context-ancestor');
+            }
+        }
+    }
+
+    /**
+     * Highlight nodes that have a specific tag, fading out all other nodes.
+     * Pass null to clear the highlighting.
+     * @param {string|null} tagColor - The tag color to highlight, or null to clear
+     */
+    highlightNodesByTag(tagColor) {
+        // Clear previous tag highlighting
+        for (const wrapper of this.nodeElements.values()) {
+            const node = wrapper.querySelector('.node');
+            if (node) {
+                node.classList.remove('faded', 'tag-highlighted');
+            }
+        }
+
+        // Also clear faded state on edges
+        for (const edge of this.edgeElements.values()) {
+            edge.classList.remove('faded');
+        }
+
+        if (!tagColor) return; // Clear mode - just remove highlighting
+
+        // Apply faded to non-tagged nodes, highlight to tagged nodes
+        for (const wrapper of this.nodeElements.values()) {
+            const node = wrapper.querySelector('.node');
+            if (!node) continue;
+
+            const hasTag = wrapper.querySelector(`.node-tag[data-color="${tagColor}"]`);
+            if (hasTag) {
+                node.classList.add('tag-highlighted');
+            } else {
+                node.classList.add('faded');
+            }
+        }
+
+        // Fade edges that don't connect two highlighted nodes
+        for (const [edgeId, edgePath] of this.edgeElements) {
+            const sourceId = edgePath.dataset.source;
+            const targetId = edgePath.dataset.target;
+            const sourceWrapper = this.nodeElements.get(sourceId);
+            const targetWrapper = this.nodeElements.get(targetId);
+
+            const sourceHasTag = sourceWrapper?.querySelector(`.node-tag[data-color="${tagColor}"]`);
+            const targetHasTag = targetWrapper?.querySelector(`.node-tag[data-color="${tagColor}"]`);
+
+            // Fade edge unless both ends have the tag
+            if (!sourceHasTag || !targetHasTag) {
+                edgePath.classList.add('faded');
             }
         }
     }

@@ -575,6 +575,9 @@ class App {
         // Edit content modal state
         this.editingNodeId = null;
 
+        // Tag highlighting state
+        this.highlightedTagColor = null;  // Currently highlighted tag color, or null if none
+
         // Undo/Redo manager
         this.undoManager = new UndoManager();
 
@@ -646,6 +649,9 @@ class App {
 
         // Image click callback (for images in node content)
         this.canvas.onImageClick = this.handleImageClick.bind(this);
+
+        // Tag chip click callback (for highlighting nodes by tag)
+        this.canvas.onTagChipClick = this.handleTagChipClick.bind(this);
 
         // Navigation callbacks for parent/child traversal
         this.canvas.onNavParentClick = this.handleNavParentClick.bind(this);
@@ -2083,6 +2089,30 @@ class App {
         } else if (action === 'extract') {
             // Just extract image to a new node
             await this.extractImageToNode(nodeId, imgSrc);
+        }
+    }
+
+    /**
+     * Handle click on a tag chip to highlight all nodes with that tag.
+     * Clicking the same tag again clears the highlighting.
+     *
+     * @param {string} color - The tag color that was clicked
+     */
+    handleTagChipClick(color) {
+        if (this.highlightedTagColor === color) {
+            // Toggle off - clear highlighting
+            this.canvas.highlightNodesByTag(null);
+            this.highlightedTagColor = null;
+        } else {
+            // Highlight nodes with this tag
+            this.canvas.highlightNodesByTag(color);
+            this.highlightedTagColor = color;
+        }
+
+        // Update tag drawer UI if it's open
+        const drawer = document.getElementById('tag-drawer');
+        if (drawer && drawer.classList.contains('open')) {
+            this.renderTagSlots();
         }
     }
 
@@ -4055,6 +4085,12 @@ class App {
 
         // Clear source text highlights when deselecting
         this.canvas.clearSourceTextHighlights();
+
+        // Clear tag highlighting when clicking on canvas background (no nodes selected)
+        if (selectedIds.length === 0 && this.highlightedTagColor) {
+            this.canvas.highlightNodesByTag(null);
+            this.highlightedTagColor = null;
+        }
 
         // Update tag drawer state
         this.updateTagDrawer();
@@ -6054,6 +6090,11 @@ class App {
                 }
             }
 
+            // Check if this tag is currently highlighted
+            if (this.highlightedTagColor === color) {
+                slot.classList.add('highlighting');
+            }
+
             slot.innerHTML = `
                 <div class="tag-color-dot" style="background: ${color}"></div>
                 <div class="tag-slot-content">
@@ -6108,6 +6149,9 @@ class App {
         } else if (selectedIds.length > 0) {
             // Toggle tag on selected nodes
             this.toggleTagOnNodes(color, selectedIds);
+        } else {
+            // No nodes selected - toggle highlight for this tag
+            this.handleTagChipClick(color);
         }
     }
 

@@ -640,6 +640,17 @@ html, body {
     opacity: 0.85;
 }
 
+/* Nodes highlighted by tag filter */
+.node.tag-highlighted {
+    box-shadow: 0 0 0 3px var(--selection-color), var(--shadow-md);
+}
+
+/* Edges faded during tag highlighting */
+.edge.faded {
+    opacity: 0.15;
+    transition: opacity 0.2s ease;
+}
+
 .node.dragging {
     opacity: 0.8;
     transform: scale(1.02);
@@ -3129,6 +3140,18 @@ kbd {
     border-color: var(--accent);
 }
 
+.tag-slot.highlighting {
+    background: var(--selection-bg);
+    box-shadow: inset 0 0 0 2px var(--selection-color);
+}
+
+.tag-slot.highlighting::after {
+    content: '🔍';
+    font-size: 12px;
+    margin-left: auto;
+    padding-right: 8px;
+}
+
 .tag-color-dot {
     width: 20px;
     height: 20px;
@@ -3237,6 +3260,13 @@ kbd {
     white-space: nowrap;
     box-shadow: var(--shadow-sm);
     position: relative;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.node-tag:hover {
+    transform: scale(1.05);
+    box-shadow: var(--shadow-md);
 }
 
 .node-tag::after {

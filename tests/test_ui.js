@@ -360,6 +360,212 @@ test('Zoom class: removes old classes before adding new', () => {
 });
 
 // ============================================================
+// Tag highlighting tests
+// ============================================================
+
+/**
+ * Create a mock node element structure for tag highlighting tests
+ */
+function createMockNodeWithTags(document, nodeId, tags = []) {
+    const wrapper = document.createElement('foreignObject');
+    wrapper.setAttribute('data-node-id', nodeId);
+
+    const div = document.createElement('div');
+    div.className = 'node human';
+
+    // Add tag chips if tags provided
+    if (tags.length > 0) {
+        const tagsContainer = document.createElement('div');
+        tagsContainer.className = 'node-tags';
+        for (const color of tags) {
+            const tagChip = document.createElement('div');
+            tagChip.className = 'node-tag';
+            tagChip.dataset.color = color;
+            tagChip.textContent = 'Tag';
+            tagsContainer.appendChild(tagChip);
+        }
+        div.appendChild(tagsContainer);
+    }
+
+    wrapper.appendChild(div);
+    return wrapper;
+}
+
+/**
+ * Simulate the highlightNodesByTag logic
+ */
+function highlightNodesByTag(nodeElements, edgeElements, tagColor) {
+    // Clear previous highlights
+    for (const wrapper of nodeElements.values()) {
+        const node = wrapper.querySelector('.node');
+        if (node) {
+            node.classList.remove('faded', 'tag-highlighted');
+        }
+    }
+    for (const edge of edgeElements.values()) {
+        edge.classList.remove('faded');
+    }
+
+    if (!tagColor) return; // Clear mode
+
+    // Apply faded to non-tagged, highlight to tagged
+    for (const wrapper of nodeElements.values()) {
+        const node = wrapper.querySelector('.node');
+        if (!node) continue;
+
+        const hasTag = wrapper.querySelector(`.node-tag[data-color="${tagColor}"]`);
+        if (hasTag) {
+            node.classList.add('tag-highlighted');
+        } else {
+            node.classList.add('faded');
+        }
+    }
+}
+
+test('Tag highlighting: highlights nodes with matching tag', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div id="container"></div>');
+    const { document } = dom.window;
+
+    const nodeElements = new Map();
+    const node1 = createMockNodeWithTags(document, 'node-1', ['#ffc9c9']);
+    const node2 = createMockNodeWithTags(document, 'node-2', ['#a5d8ff']);
+    const node3 = createMockNodeWithTags(document, 'node-3', ['#ffc9c9']);
+    nodeElements.set('node-1', node1);
+    nodeElements.set('node-2', node2);
+    nodeElements.set('node-3', node3);
+
+    highlightNodesByTag(nodeElements, new Map(), '#ffc9c9');
+
+    // Nodes with matching tag should be highlighted
+    assertTrue(node1.querySelector('.node').classList.contains('tag-highlighted'));
+    assertTrue(node3.querySelector('.node').classList.contains('tag-highlighted'));
+    assertFalse(node1.querySelector('.node').classList.contains('faded'));
+    assertFalse(node3.querySelector('.node').classList.contains('faded'));
+
+    // Node without matching tag should be faded
+    assertTrue(node2.querySelector('.node').classList.contains('faded'));
+    assertFalse(node2.querySelector('.node').classList.contains('tag-highlighted'));
+});
+
+test('Tag highlighting: fades nodes without matching tag', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div id="container"></div>');
+    const { document } = dom.window;
+
+    const nodeElements = new Map();
+    const node1 = createMockNodeWithTags(document, 'node-1', ['#ffc9c9']);
+    const node2 = createMockNodeWithTags(document, 'node-2', []);  // No tags
+    nodeElements.set('node-1', node1);
+    nodeElements.set('node-2', node2);
+
+    highlightNodesByTag(nodeElements, new Map(), '#ffc9c9');
+
+    assertTrue(node2.querySelector('.node').classList.contains('faded'));
+    assertFalse(node2.querySelector('.node').classList.contains('tag-highlighted'));
+});
+
+test('Tag highlighting: clears all highlighting when null passed', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div id="container"></div>');
+    const { document } = dom.window;
+
+    const nodeElements = new Map();
+    const node1 = createMockNodeWithTags(document, 'node-1', ['#ffc9c9']);
+    const node2 = createMockNodeWithTags(document, 'node-2', ['#a5d8ff']);
+    nodeElements.set('node-1', node1);
+    nodeElements.set('node-2', node2);
+
+    // First highlight
+    highlightNodesByTag(nodeElements, new Map(), '#ffc9c9');
+    assertTrue(node1.querySelector('.node').classList.contains('tag-highlighted'));
+    assertTrue(node2.querySelector('.node').classList.contains('faded'));
+
+    // Then clear
+    highlightNodesByTag(nodeElements, new Map(), null);
+    assertFalse(node1.querySelector('.node').classList.contains('tag-highlighted'));
+    assertFalse(node1.querySelector('.node').classList.contains('faded'));
+    assertFalse(node2.querySelector('.node').classList.contains('tag-highlighted'));
+    assertFalse(node2.querySelector('.node').classList.contains('faded'));
+});
+
+test('Tag highlighting: switching tags updates highlighting', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div id="container"></div>');
+    const { document } = dom.window;
+
+    const nodeElements = new Map();
+    const node1 = createMockNodeWithTags(document, 'node-1', ['#ffc9c9']);
+    const node2 = createMockNodeWithTags(document, 'node-2', ['#a5d8ff']);
+    nodeElements.set('node-1', node1);
+    nodeElements.set('node-2', node2);
+
+    // Highlight red tags
+    highlightNodesByTag(nodeElements, new Map(), '#ffc9c9');
+    assertTrue(node1.querySelector('.node').classList.contains('tag-highlighted'));
+    assertTrue(node2.querySelector('.node').classList.contains('faded'));
+
+    // Switch to blue tags
+    highlightNodesByTag(nodeElements, new Map(), '#a5d8ff');
+    assertTrue(node2.querySelector('.node').classList.contains('tag-highlighted'));
+    assertTrue(node1.querySelector('.node').classList.contains('faded'));
+    assertFalse(node1.querySelector('.node').classList.contains('tag-highlighted'));
+});
+
+test('Tag highlighting: node with multiple tags matches any', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div id="container"></div>');
+    const { document } = dom.window;
+
+    const nodeElements = new Map();
+    const node1 = createMockNodeWithTags(document, 'node-1', ['#ffc9c9', '#a5d8ff']);  // Both tags
+    nodeElements.set('node-1', node1);
+
+    // Should match red
+    highlightNodesByTag(nodeElements, new Map(), '#ffc9c9');
+    assertTrue(node1.querySelector('.node').classList.contains('tag-highlighted'));
+
+    // Should also match blue
+    highlightNodesByTag(nodeElements, new Map(), '#a5d8ff');
+    assertTrue(node1.querySelector('.node').classList.contains('tag-highlighted'));
+});
+
+// ============================================================
+// Tag chip click behavior tests
+// ============================================================
+
+/**
+ * Simulate click target checking for node selection
+ * Returns true if the click should select the node
+ */
+function shouldSelectNodeOnClick(target) {
+    // Skip resize handles
+    if (target.closest('.resize-handle')) return false;
+    // Skip tag chips - clicking a tag should highlight by tag, not select node
+    if (target.closest('.node-tag')) return false;
+    return true;
+}
+
+test('Tag chip click: does not select node when clicking tag chip', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div class="node"><div class="node-tags"><div class="node-tag" data-color="#ffc9c9">Tag</div></div></div>');
+    const { document } = dom.window;
+
+    const tagChip = document.querySelector('.node-tag');
+    assertFalse(shouldSelectNodeOnClick(tagChip));
+});
+
+test('Tag chip click: selects node when clicking node content', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div class="node"><div class="node-content">Content</div></div>');
+    const { document } = dom.window;
+
+    const content = document.querySelector('.node-content');
+    assertTrue(shouldSelectNodeOnClick(content));
+});
+
+test('Tag chip click: does not select node when clicking resize handle', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div class="node"><div class="resize-handle"></div></div>');
+    const { document } = dom.window;
+
+    const handle = document.querySelector('.resize-handle');
+    assertFalse(shouldSelectNodeOnClick(handle));
+});
+
+// ============================================================
 // Summary
 // ============================================================
 
