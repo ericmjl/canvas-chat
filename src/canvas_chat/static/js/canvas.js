@@ -1589,62 +1589,63 @@ class Canvas {
         div.style.width = '100%';
         div.style.height = '100%';
 
-        const isMatrix = node.type === NodeType.MATRIX;
+        // Get values from protocol
+        const summaryText = wrapped.getSummaryText(this);
+        const typeIcon = wrapped.getTypeIcon();
+        const typeLabel = wrapped.getTypeLabel();
+        const contentHtml = wrapped.renderContent(this);
+        const actions = wrapped.getActions();
+        const headerButtons = wrapped.getHeaderButtons();
+        const contentClasses = wrapped.getContentClasses();
 
-        // Matrix nodes return full HTML structure from renderContent()
-        if (isMatrix) {
-            div.innerHTML = wrapped.renderContent(this);
-        } else {
-            // Get values from protocol
-            const summaryText = wrapped.getSummaryText(this);
-            const typeIcon = wrapped.getTypeIcon();
-            const typeLabel = wrapped.getTypeLabel();
-            const contentHtml = wrapped.renderContent(this);
-            const actions = wrapped.getActions();
-            const headerButtons = wrapped.getHeaderButtons();
+        // Build action buttons HTML (may be empty for some node types like Matrix)
+        const actionsHtml = actions.map(action => {
+            const actionClass = action.id === 'reply' ? 'reply-btn' :
+                              action.id === 'branch' ? 'branch-btn' :
+                              action.id === 'summarize' ? 'summarize-btn' :
+                              action.id === 'fetch-summarize' ? 'fetch-summarize-btn' :
+                              action.id === 'edit-content' ? 'edit-content-btn' :
+                              action.id === 'resummarize' ? 'resummarize-btn' :
+                              action.id === 'copy' ? 'copy-btn' : '';
+            return `<button class="node-action ${actionClass}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
+        }).join('');
 
-            // Build action buttons HTML
-            const actionsHtml = actions.map(action => {
-                const actionClass = action.id === 'reply' ? 'reply-btn' :
-                                  action.id === 'branch' ? 'branch-btn' :
-                                  action.id === 'summarize' ? 'summarize-btn' :
-                                  action.id === 'fetch-summarize' ? 'fetch-summarize-btn' :
-                                  action.id === 'edit-content' ? 'edit-content-btn' :
-                                  action.id === 'resummarize' ? 'resummarize-btn' :
-                                  action.id === 'copy' ? 'copy-btn' : '';
-                return `<button class="node-action ${actionClass}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
-            }).join('');
+        // Build header buttons HTML
+        const headerButtonsHtml = headerButtons.map(btn => {
+            const displayStyle = btn.hidden ? 'style="display:none;"' : '';
+            return `<button class="header-btn ${btn.id}-btn" title="${this.escapeHtml(btn.title)}" ${displayStyle}>${this.escapeHtml(btn.label)}</button>`;
+        }).join('');
 
-            // Build header buttons HTML
-            const headerButtonsHtml = headerButtons.map(btn => {
-                const displayStyle = btn.hidden ? 'style="display:none;"' : '';
-                return `<button class="header-btn ${btn.id}-btn" title="${this.escapeHtml(btn.title)}" ${displayStyle}>${this.escapeHtml(btn.label)}</button>`;
-            }).join('');
+        // Build content class string (node-content + any extra classes from protocol)
+        const contentClassStr = contentClasses ? `node-content ${contentClasses}` : 'node-content';
 
-            div.innerHTML = `
-                <div class="node-summary" title="Double-click to edit title">
-                    <span class="node-type-icon">${typeIcon}</span>
-                    <span class="summary-text">${this.escapeHtml(summaryText)}</span>
+        // Only render node-actions div if there are actions
+        const actionsSection = actions.length > 0 ? `
+            <div class="node-actions">
+                ${actionsHtml}
+            </div>` : '';
+
+        div.innerHTML = `
+            <div class="node-summary" title="Double-click to edit title">
+                <span class="node-type-icon">${typeIcon}</span>
+                <span class="summary-text">${this.escapeHtml(summaryText)}</span>
+            </div>
+            <div class="node-header">
+                <div class="drag-handle" title="Drag to move">
+                    <span class="grip-dot"></span><span class="grip-dot"></span>
+                    <span class="grip-dot"></span><span class="grip-dot"></span>
+                    <span class="grip-dot"></span><span class="grip-dot"></span>
                 </div>
-                <div class="node-header">
-                    <div class="drag-handle" title="Drag to move">
-                        <span class="grip-dot"></span><span class="grip-dot"></span>
-                        <span class="grip-dot"></span><span class="grip-dot"></span>
-                        <span class="grip-dot"></span><span class="grip-dot"></span>
-                    </div>
-                    <span class="node-type">${this.escapeHtml(typeLabel)}</span>
-                    <span class="node-model">${this.escapeHtml(node.model || '')}</span>
-                    ${headerButtonsHtml}
-                </div>
-                <div class="node-content">${contentHtml}</div>
-                <div class="node-actions">
-                    ${actionsHtml}
-                </div>
-                <div class="resize-handle resize-e" data-resize="e"></div>
-                <div class="resize-handle resize-s" data-resize="s"></div>
-                <div class="resize-handle resize-se" data-resize="se"></div>
-            `;
-        }
+                <span class="node-type">${this.escapeHtml(typeLabel)}</span>
+                <span class="node-model">${this.escapeHtml(node.model || '')}</span>
+                ${headerButtonsHtml}
+            </div>
+            <div class="${contentClassStr}">${contentHtml}</div>
+            ${actionsSection}
+            <div class="resize-handle resize-e" data-resize="e"></div>
+            <div class="resize-handle resize-s" data-resize="s"></div>
+            <div class="resize-handle resize-se" data-resize="se"></div>
+        `;
 
         // Render tags as a fundamental property of ALL nodes (regardless of type)
         // Tags are inserted as the first child so they render outside the left edge

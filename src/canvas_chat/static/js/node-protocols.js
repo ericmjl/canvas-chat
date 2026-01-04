@@ -125,6 +125,15 @@ class BaseNode {
     isScrollable() {
         return true;
     }
+
+    /**
+     * Get additional CSS classes for the node-content wrapper.
+     * Override in subclasses that need custom content container styling.
+     * @returns {string} Space-separated CSS class names
+     */
+    getContentClasses() {
+        return '';
+    }
 }
 
 /**
@@ -242,6 +251,22 @@ class MatrixNode extends BaseNode {
         ];
     }
 
+    /**
+     * Matrix nodes use internal actions (Edit, Fill All) instead of the standard footer
+     * @returns {Array}
+     */
+    getActions() {
+        return [];
+    }
+
+    /**
+     * Matrix needs special content container styling for the scrollable table
+     * @returns {string}
+     */
+    getContentClasses() {
+        return 'matrix-table-container';
+    }
+
     getSummaryText(canvas) {
         // Priority: user-set title > LLM summary > generated fallback
         if (this.node.title) return this.node.title;
@@ -254,12 +279,14 @@ class MatrixNode extends BaseNode {
         return `${context} (${rows}×${cols})`;
     }
 
+    /**
+     * Render matrix-specific content: context bar, table, and internal actions.
+     * The standard header/summary/resize-handles are rendered by canvas.js.
+     * @param {Canvas} canvas
+     * @returns {string} HTML for the content portion only
+     */
     renderContent(canvas) {
         const { context, rowItems, colItems, cells } = this.node;
-
-        // Get summary text for semantic zoom
-        const summaryText = this.getSummaryText(canvas);
-        const typeIcon = this.getTypeIcon();
 
         // Build table HTML
         let tableHtml = '<table class="matrix-table"><thead><tr>';
@@ -308,41 +335,17 @@ class MatrixNode extends BaseNode {
         }
         tableHtml += '</tbody></table>';
 
-        // Build header buttons dynamically from getHeaderButtons()
-        const headerButtons = this.getHeaderButtons();
-        const headerButtonsHtml = headerButtons.map(btn => {
-            const displayStyle = btn.hidden ? 'style="display:none;"' : '';
-            return `<button class="header-btn ${btn.id}-btn" title="${canvas.escapeHtml(btn.title)}" ${displayStyle}>${canvas.escapeHtml(btn.label)}</button>`;
-        }).join('');
-
+        // Matrix-specific content: context bar at top, table, and internal actions at bottom
         return `
-            <div class="node-summary" title="Double-click to edit title">
-                <span class="node-type-icon">${typeIcon}</span>
-                <span class="summary-text">${canvas.escapeHtml(summaryText)}</span>
-            </div>
-            <div class="node-header">
-                <div class="drag-handle" title="Drag to move">
-                    <span class="grip-dot"></span><span class="grip-dot"></span>
-                    <span class="grip-dot"></span><span class="grip-dot"></span>
-                    <span class="grip-dot"></span><span class="grip-dot"></span>
-                </div>
-                <span class="node-type">Matrix</span>
-                ${headerButtonsHtml}
-            </div>
             <div class="matrix-context">
                 <span class="matrix-context-text">${canvas.escapeHtml(context)}</span>
                 <button class="matrix-context-copy" title="Copy context">📋</button>
             </div>
-            <div class="node-content matrix-table-container">
-                ${tableHtml}
-            </div>
+            ${tableHtml}
             <div class="matrix-actions">
                 <button class="matrix-edit-btn" title="Edit rows and columns">Edit</button>
                 <button class="matrix-fill-all-btn" title="Fill all empty cells with concise AI evaluations (2-3 sentences each)">Fill All</button>
             </div>
-            <div class="resize-handle resize-e" data-resize="e"></div>
-            <div class="resize-handle resize-s" data-resize="s"></div>
-            <div class="resize-handle resize-se" data-resize="se"></div>
         `;
     }
 
