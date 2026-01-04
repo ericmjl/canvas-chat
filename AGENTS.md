@@ -80,6 +80,28 @@ It's fine if there's nothing to refactor, but if improvements exist, address the
 
 ## Git workflow
 
+### Branching strategy
+
+**NEVER push directly to main.** All changes must be made via pull request.
+
+1. Create a feature branch for your changes
+2. Make commits on the feature branch
+3. Push the feature branch and create a PR
+4. Merge via the PR after review/checks pass
+
+```bash
+# Create and switch to a new branch
+git checkout -b fix/descriptive-name
+
+# Make changes, commit, push
+git add .
+git commit -m "fix: description"
+git push -u origin fix/descriptive-name
+
+# Create PR
+gh pr create --title "Fix: Description" --body "Summary of changes"
+```
+
 ### Pre-commit hooks
 
 **NEVER use `--no-verify` or `-n` when committing.** Pre-commit hooks ensure code quality and must always run.
