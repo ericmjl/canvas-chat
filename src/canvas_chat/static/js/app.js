@@ -1202,14 +1202,15 @@ class App {
                 return;
             }
 
-            // Escape to close popover, search, or clear selection
+            // Escape to close modals, popover, search, or clear selection
             if (e.key === 'Escape') {
+                // Priority order: popover > search > any modal > clear selection
                 if (this.canvas.isNavPopoverOpen()) {
                     this.canvas.hideNavPopover();
                 } else if (this.isSearchOpen()) {
                     this.closeSearch();
-                } else if (this.isHelpOpen()) {
-                    this.hideHelpModal();
+                } else if (this.closeAnyOpenModal()) {
+                    // Modal was closed, nothing more to do
                 } else {
                     this.canvas.clearSelection();
                 }
@@ -5250,6 +5251,40 @@ class App {
 
     isHelpOpen() {
         return document.getElementById('help-modal').style.display === 'flex';
+    }
+
+    /**
+     * Close any open modal. Returns true if a modal was closed.
+     * Modals are checked in a priority order (most specific first).
+     * @returns {boolean}
+     */
+    closeAnyOpenModal() {
+        // List of all modal IDs in priority order
+        const modalIds = [
+            'edit-title-modal',
+            'edit-content-modal',
+            'cell-modal',
+            'slice-modal',
+            'edit-matrix-modal',
+            'matrix-modal',
+            'committee-modal',
+            'session-modal',
+            'settings-modal',
+            'help-modal'
+        ];
+
+        for (const id of modalIds) {
+            const modal = document.getElementById(id);
+            if (modal && modal.style.display === 'flex') {
+                modal.style.display = 'none';
+                // Release any edit locks if closing edit modals
+                if (id === 'edit-title-modal' || id === 'edit-content-modal') {
+                    this._editingNodeId = null;
+                }
+                return true;
+            }
+        }
+        return false;
     }
 
     // --- Undo/Redo ---
