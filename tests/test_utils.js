@@ -67,6 +67,11 @@ const appPath = path.join(__dirname, '../src/canvas_chat/static/js/app.js');
 const appCode = fs.readFileSync(appPath, 'utf8');
 vm.runInThisContext(appCode, { filename: appPath });
 
+// Load node-protocols.js (defines wrapNode, MatrixNode, etc.)
+const nodeProtocolsPath = path.join(__dirname, '../src/canvas_chat/static/js/node-protocols.js');
+const nodeProtocolsCode = fs.readFileSync(nodeProtocolsPath, 'utf8');
+vm.runInThisContext(nodeProtocolsCode, { filename: nodeProtocolsPath });
+
 // Extract functions and constants from window (actual implementations, not copies)
 const {
     formatUserError,
@@ -86,7 +91,8 @@ const {
     formatMatrixAsText,
     NodeType,
     DEFAULT_NODE_SIZES,
-    getDefaultNodeSize
+    getDefaultNodeSize,
+    wrapNode
 } = global.window;
 
 // Simple test runner
@@ -2333,6 +2339,63 @@ test('Popover selection: handles two item list wrapping up', () => {
     const direction = -1;   // Up
     selectedIndex = (selectedIndex + direction + itemCount) % itemCount;
     assertEqual(selectedIndex, 1);  // Wrap to last
+});
+
+// ============================================================
+// MatrixNode Rendering Tests (index column resize feature)
+// ============================================================
+
+// Mock canvas for testing renderContent
+const mockCanvas = {
+    escapeHtml: (text) => {
+        if (text == null) return '';
+        return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+};
+
+test('MatrixNode renderContent: includes resize handle', () => {
+    const node = {
+        type: NodeType.MATRIX,
+        context: 'Test Context',
+        rowItems: ['Row1'],
+        colItems: ['Col1'],
+        cells: {}
+    };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('index-col-resize-handle'), 'Should include resize handle div');
+    assertTrue(html.includes('corner-cell'), 'Should have corner cell');
+});
+
+test('MatrixNode renderContent: applies indexColWidth when set', () => {
+    const node = {
+        type: NodeType.MATRIX,
+        context: 'Test',
+        rowItems: ['A'],
+        colItems: ['X'],
+        cells: {},
+        indexColWidth: '35%'
+    };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('--index-col-width: 35%'), 'Should include CSS variable with width');
+    assertTrue(html.includes('style="--index-col-width: 35%"'), 'Should have style attribute on table');
+});
+
+test('MatrixNode renderContent: no style attr when indexColWidth not set', () => {
+    const node = {
+        type: NodeType.MATRIX,
+        context: 'Test',
+        rowItems: ['A'],
+        colItems: ['X'],
+        cells: {}
+        // No indexColWidth set
+    };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertFalse(html.includes('--index-col-width'), 'Should not include CSS variable');
+    // The table should start without a style attribute
+    assertTrue(html.includes('<table class="matrix-table"><thead>'), 'Table should have no style attr');
 });
 
 // ============================================================
