@@ -2858,7 +2858,7 @@ kbd {
 
 .matrix-table th:first-child,
 .matrix-table td:first-child {
-    flex: 0 0 25%;
+    flex: 0 0 var(--index-col-width, 25%);
 }
 
 .matrix-table th {
@@ -2895,6 +2895,25 @@ kbd {
 .matrix-table .corner-cell {
     background: var(--accent);
     color: white;
+    position: relative;
+}
+
+/* Index column resize handle */
+.index-col-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    background: transparent;
+    z-index: 10;
+}
+
+.index-col-resize-handle:hover,
+.index-col-resize-handle.dragging {
+    background: var(--accent);
+    opacity: 0.6;
 }
 
 .matrix-header-text {

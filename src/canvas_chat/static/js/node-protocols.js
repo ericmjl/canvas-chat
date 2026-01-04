@@ -286,13 +286,14 @@ class MatrixNode extends BaseNode {
      * @returns {string} HTML for the content portion only
      */
     renderContent(canvas) {
-        const { context, rowItems, colItems, cells } = this.node;
+        const { context, rowItems, colItems, cells, indexColWidth } = this.node;
 
-        // Build table HTML
-        let tableHtml = '<table class="matrix-table"><thead><tr>';
+        // Build table HTML with optional custom index column width
+        const styleAttr = indexColWidth ? ` style="--index-col-width: ${indexColWidth}"` : '';
+        let tableHtml = `<table class="matrix-table"${styleAttr}><thead><tr>`;
 
-        // Corner cell with context
-        tableHtml += `<th class="corner-cell" title="${canvas.escapeHtml(context)}"><span class="matrix-header-text">${canvas.escapeHtml(context)}</span></th>`;
+        // Corner cell with context and resize handle
+        tableHtml += `<th class="corner-cell" title="${canvas.escapeHtml(context)}"><span class="matrix-header-text">${canvas.escapeHtml(context)}</span><div class="index-col-resize-handle" title="Drag to resize index column"></div></th>`;
 
         // Column headers - clickable to extract column
         for (let c = 0; c < colItems.length; c++) {

@@ -2071,6 +2071,16 @@ class Canvas {
                     }
                 });
             });
+
+            // Index column resize handle
+            const resizeHandle = div.querySelector('.index-col-resize-handle');
+            if (resizeHandle) {
+                resizeHandle.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    this.startIndexColResize(e, node.id, div);
+                });
+            }
         }
 
         // Track user scroll to pause auto-scroll during streaming
@@ -2817,6 +2827,60 @@ class Canvas {
                 }
             }
         }
+    }
+
+    /**
+     * Start resizing the index column in a matrix node
+     * @param {MouseEvent} e - The mousedown event
+     * @param {string} nodeId - The matrix node's ID
+     * @param {HTMLElement} nodeDiv - The node's DOM element
+     */
+    startIndexColResize(e, nodeId, nodeDiv) {
+        const matrixTable = nodeDiv.querySelector('.matrix-table');
+        if (!matrixTable) return;
+
+        const handle = nodeDiv.querySelector('.index-col-resize-handle');
+        const tableRect = matrixTable.getBoundingClientRect();
+        const startX = e.clientX;
+
+        // Get current first column width
+        const firstCol = matrixTable.querySelector('th:first-child, td:first-child');
+        const startWidth = firstCol ? firstCol.getBoundingClientRect().width : tableRect.width * 0.25;
+
+        handle.classList.add('dragging');
+
+        const onMouseMove = (moveEvent) => {
+            const dx = moveEvent.clientX - startX;
+            let newWidth = startWidth + dx;
+
+            // Clamp to reasonable bounds (min 50px, max 70% of table width)
+            const minWidth = 50;
+            const maxWidth = tableRect.width * 0.7;
+            newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+
+            // Calculate percentage of table width
+            const widthPercent = (newWidth / tableRect.width) * 100;
+
+            // Apply the width via CSS variable on the table
+            matrixTable.style.setProperty('--index-col-width', `${widthPercent}%`);
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            handle.classList.remove('dragging');
+
+            // Get final width percentage and persist it
+            const finalWidth = matrixTable.style.getPropertyValue('--index-col-width') || '25%';
+
+            // Notify callback to persist the width in the node data
+            if (this.onMatrixIndexColResize) {
+                this.onMatrixIndexColResize(nodeId, finalWidth);
+            }
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
     }
 
     /**

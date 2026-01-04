@@ -620,6 +620,7 @@ class App {
         this.canvas.onMatrixRowExtract = this.handleMatrixRowExtract.bind(this);
         this.canvas.onMatrixColExtract = this.handleMatrixColExtract.bind(this);
         this.canvas.onMatrixEdit = this.handleMatrixEdit.bind(this);
+        this.canvas.onMatrixIndexColResize = this.handleMatrixIndexColResize.bind(this);
 
         // Streaming control callbacks
         this.canvas.onNodeStopGeneration = this.handleNodeStopGeneration.bind(this);
@@ -3394,6 +3395,22 @@ class App {
         document.getElementById('edit-col-count').textContent = `${this._editMatrixData.colItems.length} items`;
 
         document.getElementById('edit-matrix-modal').style.display = 'flex';
+    }
+
+    /**
+     * Handle index column resize in matrix nodes
+     * @param {string} nodeId - The matrix node ID
+     * @param {string} width - The new width as a CSS percentage (e.g., "30%")
+     */
+    handleMatrixIndexColResize(nodeId, width) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        // Update the node with the new index column width
+        this.graph.updateNode(nodeId, { indexColWidth: width });
+
+        // Save session to persist the change
+        this.saveSession();
     }
 
     swapEditMatrixAxes() {
