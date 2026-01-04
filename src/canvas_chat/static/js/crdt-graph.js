@@ -814,16 +814,8 @@ class CRDTGraph {
             this._addEdgeToCRDT(edge);
         }, 'local');  // Mark as local change
 
-        // Update local indexes
-        if (!this.outgoingEdges.has(edge.source)) {
-            this.outgoingEdges.set(edge.source, []);
-        }
-        this.outgoingEdges.get(edge.source).push(edge);
-
-        if (!this.incomingEdges.has(edge.target)) {
-            this.incomingEdges.set(edge.target, []);
-        }
-        this.incomingEdges.get(edge.target).push(edge);
+        // Note: indexes are automatically rebuilt by the yEdges observer
+        // after the transaction completes, so no manual update needed here
 
         return edge;
     }

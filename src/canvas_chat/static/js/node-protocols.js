@@ -389,6 +389,10 @@ class FetchResultNode extends BaseNode {
 class PdfNode extends BaseNode {
     getTypeLabel() { return 'PDF'; }
     getTypeIcon() { return '📑'; }
+
+    getActions() {
+        return [Actions.REPLY, Actions.SUMMARIZE, Actions.COPY];
+    }
 }
 
 /**

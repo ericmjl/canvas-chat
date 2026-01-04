@@ -3814,17 +3814,19 @@ class App {
 
     async handleNodeSummarize(nodeId) {
         const model = this.modelPicker.value;
+        const parentNode = this.graph.getNode(nodeId);
 
-        // Get context up to this node
+        // Get context up to this node (includes the node itself and all ancestors)
         const context = this.graph.resolveContext([nodeId]);
 
-        if (context.length < 2) {
-            alert('Not enough conversation to summarize');
+        if (context.length < 1) {
+            alert('No content to summarize');
             return;
         }
 
+        const messages = buildMessagesForApi(context);
+
         // Create summary node
-        const parentNode = this.graph.getNode(nodeId);
         const summaryNode = createNode(NodeType.SUMMARY, 'Generating summary...', {
             position: {
                 x: parentNode.position.x + 400,
@@ -3840,7 +3842,6 @@ class App {
         this.canvas.renderEdge(edge, parentNode.position, summaryNode.position);
 
         try {
-            const messages = buildMessagesForApi(context);
             const summary = await chat.summarize(messages, model);
 
             this.canvas.updateNodeContent(summaryNode.id, summary, false);
@@ -3853,7 +3854,7 @@ class App {
     }
 
     /**
-     * Handle fetching full content from a Reference node URL and summarizing it.
+      * Handle fetching full content from a Reference node URL and summarizing it.
      * Creates two nodes: FETCH_RESULT (raw content) → SUMMARY (AI summary)
      *
      * This uses Exa API (/api/exa/get-contents) which requires an API key but
