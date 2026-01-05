@@ -3584,15 +3584,40 @@ kbd {
     color: var(--text-primary);
 }
 
-/* Flashcard flip state - show answer when flipped */
-.node.flashcard-flipped .flashcard-back {
-    display: block !important;
+/* Flashcard 3D flip animation */
+.flashcard-container {
+    perspective: 1000px;
 }
 
-.node.flashcard-flipped .flashcard-front {
-    border-bottom: 1px dashed var(--border-color);
-    padding-bottom: 12px;
-    margin-bottom: 8px;
+.flashcard-card {
+    position: relative;
+    min-height: 120px;
+    transform-style: preserve-3d;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.flashcard-card .flashcard-front,
+.flashcard-card .flashcard-back {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.flashcard-card .flashcard-front {
+    z-index: 2;
+}
+
+.flashcard-card .flashcard-back {
+    transform: rotateY(180deg);
+    z-index: 1;
+}
+
+/* Flipped state */
+.node.flashcard-flipped .flashcard-card {
+    transform: rotateY(180deg);
 }
 
 /* Flashcard Generation Modal Styles */

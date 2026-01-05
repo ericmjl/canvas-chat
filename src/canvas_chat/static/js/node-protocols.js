@@ -564,13 +564,15 @@ class FlashcardNode extends BaseNode {
         return `
             <div class="flashcard-container">
                 <div class="flashcard-status ${statusClass}">${statusText}</div>
-                <div class="flashcard-front">
-                    <div class="flashcard-label">Question</div>
-                    <div class="flashcard-text">${front}</div>
-                </div>
-                <div class="flashcard-back" style="display: none;">
-                    <div class="flashcard-label">Answer</div>
-                    <div class="flashcard-text">${back}</div>
+                <div class="flashcard-card">
+                    <div class="flashcard-front">
+                        <div class="flashcard-label">Question</div>
+                        <div class="flashcard-text">${front}</div>
+                    </div>
+                    <div class="flashcard-back">
+                        <div class="flashcard-label">Answer</div>
+                        <div class="flashcard-text">${back}</div>
+                    </div>
                 </div>
             </div>
         `;
