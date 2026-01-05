@@ -545,16 +545,16 @@ class FlashcardNode extends BaseNode {
         let statusClass = 'new';
         let statusText = 'New';
         if (this.node.srs) {
-            const { nextReviewDate, repetitions } = this.node.srs;
+            const { nextReviewDate } = this.node.srs;
             if (nextReviewDate) {
                 const now = new Date();
                 const reviewDate = new Date(nextReviewDate);
                 if (reviewDate <= now) {
                     statusClass = 'due';
                     statusText = 'Due';
-                } else if (repetitions > 0) {
+                } else {
+                    // Card has been reviewed and has a future due date
                     statusClass = 'learning';
-                    // Calculate days until due
                     const daysUntil = Math.ceil((reviewDate - now) / 86400000);
                     statusText = daysUntil === 1 ? 'Due tomorrow' : `Due in ${daysUntil} days`;
                 }

@@ -2386,6 +2386,21 @@ test('FlashcardNode: renderContent shows learning status for future cards', () =
     assertTrue(html.includes('Due in'), 'Should show days until due');
 });
 
+test('FlashcardNode: renderContent shows learning status for failed cards (repetitions=0)', () => {
+    // When a card is failed, SM-2 resets repetitions to 0 but still sets a future nextReviewDate
+    const futureDate = new Date(Date.now() + 86400000).toISOString(); // Tomorrow
+    const node = {
+        type: NodeType.FLASHCARD,
+        content: 'Q',
+        back: 'A',
+        srs: { nextReviewDate: futureDate, repetitions: 0, easeFactor: 2.5, interval: 1 }
+    };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('flashcard-status learning'), 'Should have learning status class even with repetitions=0');
+    assertTrue(html.includes('Due tomorrow'), 'Should show Due tomorrow');
+});
+
 test('FlashcardNode: getActions includes FLIP_CARD', () => {
     const node = { type: NodeType.FLASHCARD, content: 'Q', back: 'A', srs: null };
     const wrapped = wrapNode(node);
