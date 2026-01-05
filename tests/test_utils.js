@@ -48,7 +48,8 @@ global.NodeType = {
     HUMAN: 'human', AI: 'ai', NOTE: 'note', SUMMARY: 'summary', REFERENCE: 'reference',
     SEARCH: 'search', RESEARCH: 'research', HIGHLIGHT: 'highlight', MATRIX: 'matrix',
     CELL: 'cell', ROW: 'row', COLUMN: 'column', FETCH_RESULT: 'fetch_result',
-    PDF: 'pdf', OPINION: 'opinion', SYNTHESIS: 'synthesis', REVIEW: 'review', IMAGE: 'image'
+    PDF: 'pdf', OPINION: 'opinion', SYNTHESIS: 'synthesis', REVIEW: 'review', IMAGE: 'image',
+    FLASHCARD: 'flashcard'
 };
 
 // Load graph.js first (defines NodeType, etc. and exports wouldOverlapNodes)
@@ -2396,6 +2397,98 @@ test('MatrixNode renderContent: no style attr when indexColWidth not set', () =>
     assertFalse(html.includes('--index-col-width'), 'Should not include CSS variable');
     // The table should start without a style attribute
     assertTrue(html.includes('<table class="matrix-table"><thead>'), 'Table should have no style attr');
+});
+
+// ============================================================
+// FlashcardNode tests
+// ============================================================
+
+test('FlashcardNode: getTypeLabel returns Flashcard', () => {
+    const node = { type: NodeType.FLASHCARD, content: 'Q', back: 'A', srs: null };
+    const wrapped = wrapNode(node);
+    assertEqual(wrapped.getTypeLabel(), 'Flashcard');
+});
+
+test('FlashcardNode: getTypeIcon returns card emoji', () => {
+    const node = { type: NodeType.FLASHCARD, content: 'Q', back: 'A', srs: null };
+    const wrapped = wrapNode(node);
+    assertEqual(wrapped.getTypeIcon(), '🎴');
+});
+
+test('FlashcardNode: getSummaryText returns truncated question', () => {
+    const node = { type: NodeType.FLASHCARD, content: 'What is the capital of France?', back: 'Paris', srs: null };
+    const mockCanvasWithTruncate = {
+        ...mockCanvas,
+        truncate: (text, len) => text.length > len ? text.slice(0, len - 1) + '…' : text
+    };
+    const wrapped = wrapNode(node);
+    const summary = wrapped.getSummaryText(mockCanvasWithTruncate);
+    assertTrue(summary.includes('What is the capital'), 'Should include question content');
+});
+
+test('FlashcardNode: getSummaryText prefers title over content', () => {
+    const node = { type: NodeType.FLASHCARD, content: 'Question', back: 'Answer', title: 'Geography Card', srs: null };
+    const mockCanvasWithTruncate = {
+        ...mockCanvas,
+        truncate: (text, len) => text.length > len ? text.slice(0, len - 1) + '…' : text
+    };
+    const wrapped = wrapNode(node);
+    assertEqual(wrapped.getSummaryText(mockCanvasWithTruncate), 'Geography Card');
+});
+
+test('FlashcardNode: renderContent includes question and answer', () => {
+    const node = { type: NodeType.FLASHCARD, content: 'Test Question', back: 'Test Answer', srs: null };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('Test Question'), 'Should include question');
+    assertTrue(html.includes('Test Answer'), 'Should include answer');
+    assertTrue(html.includes('flashcard-front'), 'Should have front section');
+    assertTrue(html.includes('flashcard-back'), 'Should have back section');
+});
+
+test('FlashcardNode: renderContent shows New status for new cards', () => {
+    const node = { type: NodeType.FLASHCARD, content: 'Q', back: 'A', srs: null };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('flashcard-status new'), 'Should have new status class');
+    assertTrue(html.includes('>New<'), 'Should show New text');
+});
+
+test('FlashcardNode: renderContent shows Due status for overdue cards', () => {
+    const pastDate = new Date(Date.now() - 86400000).toISOString(); // Yesterday
+    const node = {
+        type: NodeType.FLASHCARD,
+        content: 'Q',
+        back: 'A',
+        srs: { nextReviewDate: pastDate, repetitions: 1, easeFactor: 2.5, interval: 1 }
+    };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('flashcard-status due'), 'Should have due status class');
+    assertTrue(html.includes('>Due<'), 'Should show Due text');
+});
+
+test('FlashcardNode: renderContent shows learning status for future cards', () => {
+    const futureDate = new Date(Date.now() + 3 * 86400000).toISOString(); // 3 days from now
+    const node = {
+        type: NodeType.FLASHCARD,
+        content: 'Q',
+        back: 'A',
+        srs: { nextReviewDate: futureDate, repetitions: 2, easeFactor: 2.5, interval: 3 }
+    };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('flashcard-status learning'), 'Should have learning status class');
+    assertTrue(html.includes('Due in'), 'Should show days until due');
+});
+
+test('FlashcardNode: getActions includes FLIP_CARD', () => {
+    const node = { type: NodeType.FLASHCARD, content: 'Q', back: 'A', srs: null };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some(a => a.id === 'flip-card'), 'Should include flip-card action');
+    assertTrue(actions.some(a => a.id === 'edit-content'), 'Should include edit-content action');
+    assertTrue(actions.some(a => a.id === 'copy'), 'Should include copy action');
 });
 
 // ============================================================
