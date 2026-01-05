@@ -288,6 +288,20 @@ function isFlashcardDue(card) {
 }
 
 /**
+ * Filter an array of nodes to get only due flashcards.
+ * Pure function for testing.
+ *
+ * @param {Array} nodes - Array of node objects
+ * @returns {Array} - Array of flashcard nodes that are due for review
+ */
+function getDueFlashcards(nodes) {
+    const now = Date.now();
+    return nodes
+        .filter(n => n.type === NodeType.FLASHCARD)
+        .filter(n => !n.srs?.nextReviewDate || new Date(n.srs.nextReviewDate) <= now);
+}
+
+/**
  * Resize an image file to max dimensions, returns base64 data URL.
  *
  * @param {File} file - The image file to resize
@@ -882,6 +896,9 @@ class App {
 
         // Generate summaries for existing nodes that don't have them (lazy/background)
         this.generateMissingSummaries();
+
+        // Check for due flashcards and show notification
+        this.checkDueFlashcardsOnLoad();
     }
 
     /**
@@ -5462,6 +5479,79 @@ Rules:
     }
 
     /**
+     * Check for due flashcards and show toast notification if any
+     */
+    checkDueFlashcardsOnLoad() {
+        const dueCards = getDueFlashcards(this.graph.nodes);
+
+        if (dueCards.length > 0) {
+            const cardIds = dueCards.map(c => c.id);
+            this.showDueCardsToast(dueCards.length, cardIds);
+        }
+    }
+
+    /**
+     * Show a toast notification for due flashcards
+     * @param {number} count - Number of due cards
+     * @param {string[]} cardIds - Array of due card IDs
+     */
+    showDueCardsToast(count, cardIds) {
+        const toast = document.getElementById('flashcard-due-toast');
+        const messageEl = document.getElementById('due-toast-message');
+        const reviewBtn = document.getElementById('due-toast-review');
+        const laterBtn = document.getElementById('due-toast-later');
+
+        // Set message
+        const cardWord = count === 1 ? 'card' : 'cards';
+        messageEl.textContent = `You have ${count} ${cardWord} due for review`;
+
+        // Clone buttons to remove previous listeners
+        const newReviewBtn = reviewBtn.cloneNode(true);
+        reviewBtn.parentNode.replaceChild(newReviewBtn, reviewBtn);
+        const newLaterBtn = laterBtn.cloneNode(true);
+        laterBtn.parentNode.replaceChild(newLaterBtn, laterBtn);
+
+        // Add listeners
+        newReviewBtn.addEventListener('click', () => {
+            this.hideDueCardsToast();
+            this.showReviewModal(cardIds);
+        });
+
+        newLaterBtn.addEventListener('click', () => {
+            this.hideDueCardsToast();
+        });
+
+        // Show toast
+        toast.classList.remove('hiding');
+        toast.style.display = 'flex';
+
+        // Auto-dismiss after 10 seconds
+        this.dueToastTimeout = setTimeout(() => {
+            this.hideDueCardsToast();
+        }, 10000);
+    }
+
+    /**
+     * Hide the due cards toast notification
+     */
+    hideDueCardsToast() {
+        const toast = document.getElementById('flashcard-due-toast');
+
+        // Clear any pending timeout
+        if (this.dueToastTimeout) {
+            clearTimeout(this.dueToastTimeout);
+            this.dueToastTimeout = null;
+        }
+
+        // Animate out
+        toast.classList.add('hiding');
+        setTimeout(() => {
+            toast.style.display = 'none';
+            toast.classList.remove('hiding');
+        }, 300);
+    }
+
+    /**
      * Highlight the source text in the parent node when a highlight excerpt is selected
      * @param {Object} highlightNode - The highlight node that was selected
      */
@@ -7148,6 +7238,7 @@ window.escapeHtmlText = escapeHtmlText;
 window.formatMatrixAsText = formatMatrixAsText;
 window.applySM2 = applySM2;
 window.isFlashcardDue = isFlashcardDue;
+window.getDueFlashcards = getDueFlashcards;
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
