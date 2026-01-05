@@ -119,15 +119,11 @@ jobs:
         if: steps.check_release.outputs.already_released == 'false'
         run: bump2version ${{ env.VERSION_NAME }} --verbose
 
-      - name: Sync pixi.lock
+      - name: Setup pixi
         if: steps.check_release.outputs.already_released == 'false'
         uses: prefix-dev/setup-pixi@v0.9.3
         with:
           run-install: false
-
-      - name: Update pixi.lock
-        if: steps.check_release.outputs.already_released == 'false'
-        run: pixi lock
 
       - name: Ensure tag creation
         if: steps.check_release.outputs.already_released == 'false'
@@ -145,10 +141,20 @@ jobs:
           llamabot configure default-model --model-name="gpt-4.1-mini"
           llamabot git write-release-notes
 
-      - name: Commit release notes
+      - name: Fix formatting issues in generated release notes
         if: steps.check_release.outputs.already_released == 'false'
         run: |
-          git add .
+          # Strip trailing whitespace from release notes (LLM often adds trailing spaces)
+          sed -i 's/[[:space:]]*$//' docs/releases/v${{ env.version_number }}.md
+
+      - name: Update pixi.lock after all changes
+        if: steps.check_release.outputs.already_released == 'false'
+        run: pixi lock
+
+      - name: Commit release notes and lock file
+        if: steps.check_release.outputs.already_released == 'false'
+        run: |
+          git add docs/releases/v${{ env.version_number }}.md pixi.lock
           git commit -m "Add release notes for v${{ env.version_number }}"
 
       - name: Build package
