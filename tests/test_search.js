@@ -3,9 +3,37 @@
  * Run with: node tests/test_search.js
  *
  * Tests search/indexing functionality without external API calls.
+ *
+ * NOTE: This file loads actual source files to test real implementations,
+ * not copies. This ensures tests catch bugs in production code.
  */
 
-// Simple test runner (same as test_utils.js)
+import { createRequire } from 'module';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+// Load search.js using vm.runInThisContext so exports are available globally
+// This pattern is used because the source files use conditional CommonJS exports
+// that don't work well with require() in this Node.js/ESM environment
+const searchPath = path.join(__dirname, '../src/canvas_chat/static/js/search.js');
+const searchCode = fs.readFileSync(searchPath, 'utf8');
+
+// Set up minimal browser-like environment for source file
+global.window = global;
+
+vm.runInThisContext(searchCode, { filename: searchPath });
+
+// Functions are now in global scope: tokenize, calculateIDF, SearchIndex, etc.
+
+// Simple test runner
 let passed = 0;
 let failed = 0;
 
@@ -49,19 +77,6 @@ function assertGreaterThan(actual, expected, message = '') {
 // tokenize tests
 // ============================================================
 
-/**
- * Tokenize text into lowercase words
- * Copy of function from search.js for testing
- */
-function tokenize(text) {
-    if (!text) return [];
-    return text
-        .toLowerCase()
-        .replace(/[^\w\s]/g, ' ')
-        .split(/\s+/)
-        .filter(token => token.length > 0);
-}
-
 test('tokenize: splits and lowercases', () => {
     assertEqual(tokenize('Hello World!'), ['hello', 'world']);
 });
@@ -95,15 +110,6 @@ test('tokenize: handles special characters', () => {
 // calculateIDF tests
 // ============================================================
 
-/**
- * Calculate IDF (Inverse Document Frequency) for a term
- * Copy of function from search.js for testing
- */
-function calculateIDF(N, df) {
-    if (df === 0) return 0;
-    return Math.log((N - df + 0.5) / (df + 0.5) + 1);
-}
-
 test('calculateIDF: returns 0 for term not in any document', () => {
     assertEqual(calculateIDF(10, 0), 0);
 });
@@ -129,183 +135,6 @@ test('calculateIDF: decreases with document frequency', () => {
 // ============================================================
 // SearchIndex tests
 // ============================================================
-
-/**
- * BM25 Search Index
- * Copy of class from search.js for testing
- */
-const BM25_K1 = 1.2;
-const BM25_B = 0.75;
-
-class SearchIndex {
-    constructor() {
-        this.documents = new Map();
-        this.termFrequencies = new Map();
-        this.documentFrequencies = new Map();
-        this.avgDocLength = 0;
-        this.totalDocuments = 0;
-    }
-
-    clear() {
-        this.documents.clear();
-        this.termFrequencies.clear();
-        this.documentFrequencies.clear();
-        this.avgDocLength = 0;
-        this.totalDocuments = 0;
-    }
-
-    addDocument(nodeId, content, metadata = {}) {
-        const tokens = tokenize(content);
-
-        this.documents.set(nodeId, {
-            tokens,
-            length: tokens.length,
-            content,
-            ...metadata
-        });
-
-        const tf = new Map();
-        for (const token of tokens) {
-            tf.set(token, (tf.get(token) || 0) + 1);
-        }
-        this.termFrequencies.set(nodeId, tf);
-
-        const uniqueTerms = new Set(tokens);
-        for (const term of uniqueTerms) {
-            this.documentFrequencies.set(term, (this.documentFrequencies.get(term) || 0) + 1);
-        }
-
-        this.totalDocuments++;
-        this._updateAvgLength();
-    }
-
-    removeDocument(nodeId) {
-        const doc = this.documents.get(nodeId);
-        if (!doc) return;
-
-        const tf = this.termFrequencies.get(nodeId);
-        if (tf) {
-            for (const term of tf.keys()) {
-                const df = this.documentFrequencies.get(term) || 0;
-                if (df <= 1) {
-                    this.documentFrequencies.delete(term);
-                } else {
-                    this.documentFrequencies.set(term, df - 1);
-                }
-            }
-        }
-
-        this.documents.delete(nodeId);
-        this.termFrequencies.delete(nodeId);
-        this.totalDocuments--;
-        this._updateAvgLength();
-    }
-
-    _updateAvgLength() {
-        if (this.totalDocuments === 0) {
-            this.avgDocLength = 0;
-            return;
-        }
-
-        let totalLength = 0;
-        for (const doc of this.documents.values()) {
-            totalLength += doc.length;
-        }
-        this.avgDocLength = totalLength / this.totalDocuments;
-    }
-
-    _scoreBM25(nodeId, queryTokens) {
-        const doc = this.documents.get(nodeId);
-        const tf = this.termFrequencies.get(nodeId);
-
-        if (!doc || !tf) return 0;
-
-        const N = this.totalDocuments;
-        const avgdl = this.avgDocLength || 1;
-        const dl = doc.length;
-
-        let score = 0;
-
-        for (const term of queryTokens) {
-            const termFreq = tf.get(term) || 0;
-            if (termFreq === 0) continue;
-
-            const df = this.documentFrequencies.get(term) || 0;
-            const idf = calculateIDF(N, df);
-
-            const numerator = termFreq * (BM25_K1 + 1);
-            const denominator = termFreq + BM25_K1 * (1 - BM25_B + BM25_B * (dl / avgdl));
-
-            score += idf * (numerator / denominator);
-        }
-
-        return score;
-    }
-
-    search(query, limit = 10) {
-        if (!query || !query.trim()) return [];
-
-        const queryTokens = tokenize(query);
-        if (queryTokens.length === 0) return [];
-
-        const results = [];
-
-        for (const [nodeId, doc] of this.documents) {
-            const score = this._scoreBM25(nodeId, queryTokens);
-
-            if (score > 0) {
-                results.push({
-                    nodeId,
-                    score,
-                    content: doc.content,
-                    snippet: this._generateSnippet(doc.content, queryTokens),
-                    type: doc.type,
-                    metadata: doc
-                });
-            }
-        }
-
-        results.sort((a, b) => b.score - a.score);
-
-        return results.slice(0, limit);
-    }
-
-    _generateSnippet(content, queryTokens) {
-        const SNIPPET_LENGTH = 100;
-        const CONTEXT_BEFORE = 30;
-
-        const lowerContent = content.toLowerCase();
-
-        let firstMatchIndex = content.length;
-        for (const token of queryTokens) {
-            const idx = lowerContent.indexOf(token);
-            if (idx !== -1 && idx < firstMatchIndex) {
-                firstMatchIndex = idx;
-            }
-        }
-
-        if (firstMatchIndex === content.length) {
-            return content.slice(0, SNIPPET_LENGTH) + (content.length > SNIPPET_LENGTH ? '...' : '');
-        }
-
-        let start = Math.max(0, firstMatchIndex - CONTEXT_BEFORE);
-        let end = Math.min(content.length, start + SNIPPET_LENGTH);
-
-        if (start > 0) {
-            const spaceIdx = content.indexOf(' ', start);
-            if (spaceIdx !== -1 && spaceIdx < firstMatchIndex) {
-                start = spaceIdx + 1;
-            }
-        }
-
-        let snippet = content.slice(start, end);
-
-        if (start > 0) snippet = '...' + snippet;
-        if (end < content.length) snippet = snippet + '...';
-
-        return snippet;
-    }
-}
 
 test('SearchIndex: finds matching documents', () => {
     const index = new SearchIndex();
