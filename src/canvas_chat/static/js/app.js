@@ -5623,11 +5623,13 @@ ${gradingRules}
         const parentNode = parents[0];
 
         // Extract the excerpted text from the highlight node content
-        // The content is stored as "> {selectedText}"
+        // The content is stored as blockquoted text with "> " prefix on each line
         let excerptText = highlightNode.content || '';
-        if (excerptText.startsWith('> ')) {
-            excerptText = excerptText.slice(2);
-        }
+        // Strip "> " prefix from each line (blockquote format)
+        excerptText = excerptText
+            .split('\n')
+            .map(line => line.startsWith('> ') ? line.slice(2) : line)
+            .join('\n');
 
         if (!excerptText.trim()) return;
 

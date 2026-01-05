@@ -2333,6 +2333,8 @@ class Canvas {
     /**
      * Helper to highlight text within HTML without breaking tags.
      * Handles text that spans across multiple HTML elements (e.g., across <strong> boundaries).
+     * Uses whitespace normalization to match text selected across block elements where
+     * selection.toString() produces newlines but joined text nodes do not.
      * @param {string} html - Original HTML content
      * @param {string} text - Text to highlight
      * @returns {string} HTML with highlighted text
@@ -2354,29 +2356,89 @@ class Canvas {
 
         if (textNodes.length === 0) return html;
 
-        // Combine all text and find the match position
-        const fullText = textNodes.map(n => n.textContent).join('');
-        const lowerFull = fullText.toLowerCase();
-        const lowerSearch = text.toLowerCase();
-        const matchStart = lowerFull.indexOf(lowerSearch);
+        // Build the full text WITH position mapping
+        // Add a space between text nodes to simulate block element boundaries
+        // charMap[i] = { nodeIndex, charIndex } maps each char in fullText to its source
+        // charIndex of -1 means it's a synthetic space between nodes
+        let fullText = '';
+        const charMap = [];
 
-        if (matchStart === -1) return html;
+        for (let nodeIndex = 0; nodeIndex < textNodes.length; nodeIndex++) {
+            // Add a space between text nodes (simulates block boundaries)
+            if (nodeIndex > 0) {
+                charMap.push({ nodeIndex: -1, charIndex: -1 }); // synthetic space
+                fullText += ' ';
+            }
 
-        const matchEnd = matchStart + text.length;
+            const content = textNodes[nodeIndex].textContent;
+            for (let charIndex = 0; charIndex < content.length; charIndex++) {
+                charMap.push({ nodeIndex, charIndex });
+                fullText += content[charIndex];
+            }
+        }
 
-        // Walk through text nodes and wrap the matching portions
-        let currentPos = 0;
+        // Normalize whitespace: collapse all whitespace sequences to single space, trim
+        const normalizeWs = (str) => str.replace(/\s+/g, ' ').trim();
+
+        const normalizedFull = normalizeWs(fullText);
+        const normalizedSearch = normalizeWs(text);
+
+        // Find match in normalized strings (case-insensitive)
+        const matchStartNorm = normalizedFull.toLowerCase().indexOf(normalizedSearch.toLowerCase());
+        if (matchStartNorm === -1) return html;
+        const matchEndNorm = matchStartNorm + normalizedSearch.length;
+
+        // Build mapping from normalized positions to original positions
+        // normalizedToOriginal[i] = original index in fullText for normalized char i
+        const normalizedToOriginal = [];
+        let inWhitespace = false;
+        let leadingTrimmed = true;
+
+        for (let i = 0; i < fullText.length; i++) {
+            const ch = fullText[i];
+            if (/\s/.test(ch)) {
+                if (!inWhitespace && !leadingTrimmed) {
+                    // First whitespace char after non-whitespace maps to the normalized space
+                    normalizedToOriginal.push(i);
+                }
+                inWhitespace = true;
+            } else {
+                leadingTrimmed = false;
+                inWhitespace = false;
+                normalizedToOriginal.push(i);
+            }
+        }
+
+        // Get original positions for match boundaries
+        if (matchStartNorm >= normalizedToOriginal.length) return html;
+        const origStart = normalizedToOriginal[matchStartNorm];
+        const origEnd = matchEndNorm <= normalizedToOriginal.length
+            ? normalizedToOriginal[matchEndNorm - 1] + 1
+            : fullText.length;
+
+        // Find which text nodes overlap with [origStart, origEnd)
         const nodesToProcess = [];
 
-        for (const textNode of textNodes) {
-            const nodeStart = currentPos;
-            const nodeEnd = currentPos + textNode.textContent.length;
+        for (let nodeIndex = 0; nodeIndex < textNodes.length; nodeIndex++) {
+            const textNode = textNodes[nodeIndex];
+            const nodeLen = textNode.textContent.length;
 
-            // Check if this node overlaps with the match
-            if (nodeEnd > matchStart && nodeStart < matchEnd) {
-                // Calculate overlap within this node
-                const overlapStart = Math.max(0, matchStart - nodeStart);
-                const overlapEnd = Math.min(textNode.textContent.length, matchEnd - nodeStart);
+            // Find the range of this node in fullText
+            let nodeStartInFull = -1;
+            let nodeEndInFull = -1;
+            for (let i = 0; i < charMap.length; i++) {
+                if (charMap[i].nodeIndex === nodeIndex) {
+                    if (nodeStartInFull === -1) nodeStartInFull = i;
+                    nodeEndInFull = i + 1;
+                }
+            }
+
+            if (nodeStartInFull === -1) continue;
+
+            // Check overlap with [origStart, origEnd)
+            if (nodeEndInFull > origStart && nodeStartInFull < origEnd) {
+                const overlapStart = Math.max(0, origStart - nodeStartInFull);
+                const overlapEnd = Math.min(nodeLen, origEnd - nodeStartInFull);
 
                 nodesToProcess.push({
                     node: textNode,
@@ -2384,8 +2446,6 @@ class Canvas {
                     overlapEnd
                 });
             }
-
-            currentPos = nodeEnd;
         }
 
         // Process nodes in reverse order to avoid invalidating positions
@@ -2396,6 +2456,9 @@ class Canvas {
             const before = content.slice(0, overlapStart);
             const match = content.slice(overlapStart, overlapEnd);
             const after = content.slice(overlapEnd);
+
+            // Skip if match portion is only whitespace (avoid extraneous highlights)
+            if (!match.trim()) continue;
 
             const fragment = document.createDocumentFragment();
 
