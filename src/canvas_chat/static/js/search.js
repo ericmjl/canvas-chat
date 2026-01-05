@@ -319,8 +319,21 @@ function getNodeTypeIcon(type) {
     return NODE_TYPE_ICONS[type] || '📄';
 }
 
-// Export for use in other modules
+// Export for use in other modules (browser)
 window.SearchIndex = SearchIndex;
 window.getNodeTypeIcon = getNodeTypeIcon;
 window.tokenize = tokenize;
 window.calculateIDF = calculateIDF;
+
+// Export for Node.js/tests (CommonJS)
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        SearchIndex,
+        tokenize,
+        calculateIDF,
+        getNodeTypeIcon,
+        NODE_TYPE_ICONS,
+        BM25_K1,
+        BM25_B
+    };
+}
