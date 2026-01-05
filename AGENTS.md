@@ -351,7 +351,7 @@ When you copy an implementation:
 
 **The correct approach:**
 
-1. Extract testable logic into pure functions in separate modules (e.g., `layout.js`, `utils.js`)
+1. Extract testable logic into pure functions in separate modules (e.g., `layout.js`, `highlight-utils.js`)
 2. Import those functions in both the source files that need them AND the test files
 3. Tests validate the actual implementation that runs in production
 
@@ -371,6 +371,39 @@ test('resolveOverlaps works', () => {
 
 If a function is tightly coupled to a class and hard to test, that's a design smell.
 Refactor to extract pure functions that can be imported and tested directly.
+
+### Testing DOM-dependent functions
+
+For functions that require DOM APIs (document, TreeWalker, etc.), follow this pattern:
+
+1. **Extract to a utility module** (e.g., `highlight-utils.js`) that takes `document` as a parameter
+2. **Add CommonJS export** at the end for Node.js/test compatibility:
+
+   ```javascript
+   // At end of file - export for tests (no-op in browser)
+   if (typeof module !== 'undefined' && module.exports) {
+       module.exports = { myFunction };
+   }
+   ```
+
+3. **Add script tag** in `index.html` before the files that use it
+4. **In tests**, import with require and use jsdom's document:
+
+   ```javascript
+   const { myFunction } = require('../src/canvas_chat/static/js/my-utils.js');
+   const { JSDOM } = require('jsdom');
+
+   test('myFunction works', () => {
+       const dom = new JSDOM('<!DOCTYPE html><div></div>');
+       const result = myFunction(dom.window.document, '<p>test</p>', 'test');
+       // assertions...
+   });
+   ```
+
+**Existing utility modules:**
+
+- `layout.js` - Pure layout/positioning functions (no DOM needed)
+- `highlight-utils.js` - Text highlighting functions (DOM needed, takes document param)
 
 Run tests with:
 
