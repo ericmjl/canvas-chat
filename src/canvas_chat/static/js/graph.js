@@ -23,7 +23,8 @@ const NodeType = {
     OPINION: 'opinion',    // Committee member's opinion
     SYNTHESIS: 'synthesis', // Chairman's synthesized answer
     REVIEW: 'review',      // Committee member's review of other opinions
-    IMAGE: 'image'         // Uploaded image for analysis
+    IMAGE: 'image',        // Uploaded image for analysis
+    FLASHCARD: 'flashcard' // Spaced repetition flashcard
 };
 
 /**
@@ -55,7 +56,10 @@ const DEFAULT_NODE_SIZES = {
     [NodeType.COLUMN]: { width: 500, height: 300 },
 
     // Matrix nodes - wider for table layout
-    [NodeType.MATRIX]: { width: 600, height: 400 }
+    [NodeType.MATRIX]: { width: 600, height: 400 },
+
+    // Flashcard nodes - compact for Q/A display
+    [NodeType.FLASHCARD]: { width: 400, height: 280 }
 };
 
 /**
@@ -80,7 +84,8 @@ const EdgeType = {
     MATRIX_CELL: 'matrix_cell', // Link from pinned cell to matrix
     OPINION: 'opinion',       // Human → OPINION nodes (committee)
     SYNTHESIS: 'synthesis',   // OPINION/REVIEW → SYNTHESIS node (committee)
-    REVIEW: 'review'          // OPINION → REVIEW nodes (committee)
+    REVIEW: 'review',         // OPINION → REVIEW nodes (committee)
+    GENERATES: 'generates'    // Source node → generated flashcards
 };
 
 /**

@@ -43,6 +43,8 @@
     --node-pdf-border: #4db6ac;
     --node-image: #fce4ec;
     --node-image-border: #f48fb1;
+    --node-flashcard: #e8f5e9;
+    --node-flashcard-border: #66bb6a;
 
     /* UI colors */
     --edge-color: #495057;
@@ -111,6 +113,8 @@
         --node-pdf-border: #26a69a;
         --node-image: #3d2d35;
         --node-image-border: #f06292;
+        --node-flashcard: #1a3d27;
+        --node-flashcard-border: #43a047;
 
         --edge-color: #9ca3af;
         --edge-color-light: #4b5563;
@@ -722,6 +726,11 @@ html, body {
 .node.image {
     background: var(--node-image);
     border-color: var(--node-image-border);
+}
+
+.node.flashcard {
+    background: var(--node-flashcard);
+    border-color: var(--node-flashcard-border);
 }
 
 /* Source text highlight - shown in parent node when a highlight excerpt is selected */
@@ -3487,4 +3496,66 @@ kbd {
 
 .search-result-nav-hint kbd {
     margin: 0 4px;
+}
+
+/* Flashcard Node Styles */
+.flashcard-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px;
+}
+
+.flashcard-status {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    width: fit-content;
+}
+
+.flashcard-status.new {
+    background: var(--accent);
+    color: white;
+}
+
+.flashcard-status.due {
+    background: var(--warning);
+    color: var(--text-primary);
+}
+
+.flashcard-status.learning {
+    background: var(--success);
+    color: white;
+}
+
+.flashcard-front,
+.flashcard-back {
+    padding: 12px;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+    .flashcard-front,
+    .flashcard-back {
+        background: rgba(0, 0, 0, 0.2);
+    }
+}
+
+.flashcard-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.flashcard-text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-primary);
 }
