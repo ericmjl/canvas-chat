@@ -93,7 +93,9 @@ const {
     NodeType,
     DEFAULT_NODE_SIZES,
     getDefaultNodeSize,
-    wrapNode
+    wrapNode,
+    applySM2,
+    isFlashcardDue
 } = global.window;
 
 // Simple test runner
@@ -2570,6 +2572,164 @@ test('HumanNode: getActions does NOT include CREATE_FLASHCARDS', () => {
     const wrapped = wrapNode(node);
     const actions = wrapped.getActions();
     assertFalse(actions.some(a => a.id === 'create-flashcards'), 'HumanNode should NOT include create-flashcards action');
+});
+
+// ============================================================
+// SM-2 Spaced Repetition Algorithm tests
+// ============================================================
+
+test('applySM2: first correct answer (quality 4) sets interval to 1', () => {
+    const srs = { interval: 0, easeFactor: 2.5, repetitions: 0, nextReviewDate: null, lastReviewDate: null };
+    const result = applySM2(srs, 4);
+    assertEqual(result.interval, 1);
+    assertEqual(result.repetitions, 1);
+});
+
+test('applySM2: second correct answer (quality 4) sets interval to 6', () => {
+    const srs = { interval: 1, easeFactor: 2.5, repetitions: 1, nextReviewDate: null, lastReviewDate: null };
+    const result = applySM2(srs, 4);
+    assertEqual(result.interval, 6);
+    assertEqual(result.repetitions, 2);
+});
+
+test('applySM2: third correct answer multiplies interval by easeFactor', () => {
+    const srs = { interval: 6, easeFactor: 2.5, repetitions: 2, nextReviewDate: null, lastReviewDate: null };
+    const result = applySM2(srs, 4);
+    assertEqual(result.interval, 15); // 6 * 2.5 = 15
+    assertEqual(result.repetitions, 3);
+});
+
+test('applySM2: failed answer (quality 1) resets repetitions and interval', () => {
+    const srs = { interval: 15, easeFactor: 2.5, repetitions: 5, nextReviewDate: null, lastReviewDate: null };
+    const result = applySM2(srs, 1);
+    assertEqual(result.interval, 1);
+    assertEqual(result.repetitions, 0);
+});
+
+test('applySM2: easy answer (quality 5) increases easeFactor', () => {
+    const srs = { interval: 6, easeFactor: 2.5, repetitions: 2, nextReviewDate: null, lastReviewDate: null };
+    const result = applySM2(srs, 5);
+    assertTrue(result.easeFactor > 2.5, 'Ease factor should increase for easy answers');
+});
+
+test('applySM2: hard answer (quality 3) decreases easeFactor', () => {
+    const srs = { interval: 6, easeFactor: 2.5, repetitions: 2, nextReviewDate: null, lastReviewDate: null };
+    const result = applySM2(srs, 3);
+    assertTrue(result.easeFactor < 2.5, 'Ease factor should decrease for hard answers');
+});
+
+test('applySM2: easeFactor minimum is 1.3', () => {
+    const srs = { interval: 6, easeFactor: 1.35, repetitions: 2, nextReviewDate: null, lastReviewDate: null };
+    // Multiple hard answers to try to push below 1.3
+    let result = applySM2(srs, 3);
+    result = applySM2(result, 3);
+    result = applySM2(result, 3);
+    assertTrue(result.easeFactor >= 1.3, 'Ease factor should not go below 1.3');
+});
+
+test('applySM2: sets nextReviewDate based on interval', () => {
+    const srs = { interval: 1, easeFactor: 2.5, repetitions: 1, nextReviewDate: null, lastReviewDate: null };
+    const before = Date.now();
+    const result = applySM2(srs, 4);
+    const after = Date.now();
+
+    const nextReview = new Date(result.nextReviewDate).getTime();
+    // interval is 6 days = 6 * 86400000 ms
+    const expectedMin = before + (6 * 86400000);
+    const expectedMax = after + (6 * 86400000);
+
+    assertTrue(nextReview >= expectedMin - 1000, 'nextReviewDate should be at least 6 days in future');
+    assertTrue(nextReview <= expectedMax + 1000, 'nextReviewDate should be about 6 days in future');
+});
+
+test('applySM2: sets lastReviewDate to current time', () => {
+    const srs = { interval: 1, easeFactor: 2.5, repetitions: 0, nextReviewDate: null, lastReviewDate: null };
+    const before = Date.now();
+    const result = applySM2(srs, 4);
+    const after = Date.now();
+
+    const lastReview = new Date(result.lastReviewDate).getTime();
+    assertTrue(lastReview >= before - 1000, 'lastReviewDate should be around now');
+    assertTrue(lastReview <= after + 1000, 'lastReviewDate should be around now');
+});
+
+test('applySM2: quality 0 resets like any fail', () => {
+    const srs = { interval: 15, easeFactor: 2.5, repetitions: 5, nextReviewDate: null, lastReviewDate: null };
+    const result = applySM2(srs, 0);
+    assertEqual(result.interval, 1);
+    assertEqual(result.repetitions, 0);
+});
+
+test('applySM2: quality 2 resets (fail threshold is < 3)', () => {
+    const srs = { interval: 15, easeFactor: 2.5, repetitions: 5, nextReviewDate: null, lastReviewDate: null };
+    const result = applySM2(srs, 2);
+    assertEqual(result.interval, 1);
+    assertEqual(result.repetitions, 0);
+});
+
+test('applySM2: does not mutate original srs object', () => {
+    const srs = { interval: 6, easeFactor: 2.5, repetitions: 2, nextReviewDate: null, lastReviewDate: null };
+    const result = applySM2(srs, 4);
+    assertEqual(srs.interval, 6, 'Original interval should not change');
+    assertEqual(srs.repetitions, 2, 'Original repetitions should not change');
+    assertNull(srs.lastReviewDate, 'Original lastReviewDate should not change');
+});
+
+// ============================================================
+// Due flashcard detection tests
+// ============================================================
+
+test('isFlashcardDue: new card without SRS data is due', () => {
+    const card = { type: NodeType.FLASHCARD, content: 'Q', back: 'A' };
+    assertTrue(isFlashcardDue(card), 'New card should be due');
+});
+
+test('isFlashcardDue: card with null nextReviewDate is due', () => {
+    const card = {
+        type: NodeType.FLASHCARD,
+        content: 'Q',
+        back: 'A',
+        srs: { nextReviewDate: null }
+    };
+    assertTrue(isFlashcardDue(card), 'Card with null nextReviewDate should be due');
+});
+
+test('isFlashcardDue: card with past nextReviewDate is due', () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString();
+    const card = {
+        type: NodeType.FLASHCARD,
+        content: 'Q',
+        back: 'A',
+        srs: { nextReviewDate: yesterday }
+    };
+    assertTrue(isFlashcardDue(card), 'Card with past nextReviewDate should be due');
+});
+
+test('isFlashcardDue: card with future nextReviewDate is not due', () => {
+    const tomorrow = new Date(Date.now() + 86400000).toISOString();
+    const card = {
+        type: NodeType.FLASHCARD,
+        content: 'Q',
+        back: 'A',
+        srs: { nextReviewDate: tomorrow }
+    };
+    assertFalse(isFlashcardDue(card), 'Card with future nextReviewDate should not be due');
+});
+
+test('isFlashcardDue: non-flashcard node returns false', () => {
+    const node = { type: NodeType.AI, content: 'response' };
+    assertFalse(isFlashcardDue(node), 'Non-flashcard node should not be due');
+});
+
+// ============================================================
+// REVIEW_CARD action tests
+// ============================================================
+
+test('FlashcardNode: getActions includes REVIEW_CARD', () => {
+    const node = { type: NodeType.FLASHCARD, content: 'Q', back: 'A', srs: null };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some(a => a.id === 'review-card'), 'FlashcardNode should include review-card action');
 });
 
 // ============================================================

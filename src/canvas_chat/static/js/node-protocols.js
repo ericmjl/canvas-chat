@@ -18,7 +18,8 @@ const Actions = {
     RESUMMARIZE: { id: 'resummarize', label: '📝 Re-summarize', title: 'Create new summary from edited content' },
     COPY: { id: 'copy', label: '📋 Copy (c)', title: 'Copy (c)' },
     FLIP_CARD: { id: 'flip-card', label: '🔄 Flip', title: 'Flip card to see answer' },
-    CREATE_FLASHCARDS: { id: 'create-flashcards', label: '🎴 Flashcards', title: 'Generate flashcards from content' }
+    CREATE_FLASHCARDS: { id: 'create-flashcards', label: '🎴 Flashcards', title: 'Generate flashcards from content' },
+    REVIEW_CARD: { id: 'review-card', label: '📖 Review', title: 'Start review session for this card' }
 };
 
 /**
@@ -576,7 +577,7 @@ class FlashcardNode extends BaseNode {
     }
 
     getActions() {
-        return [Actions.FLIP_CARD, Actions.EDIT_CONTENT, Actions.COPY];
+        return [Actions.FLIP_CARD, Actions.REVIEW_CARD, Actions.EDIT_CONTENT, Actions.COPY];
     }
 }
 

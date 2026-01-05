@@ -235,6 +235,59 @@ function buildMessagesForApi(contextMessages) {
 }
 
 /**
+ * SM-2 Spaced Repetition Algorithm implementation.
+ * quality: 0-2 = fail, 3 = hard, 4 = good, 5 = easy
+ *
+ * @param {Object} srs - Current SRS state {interval, easeFactor, repetitions, nextReviewDate, lastReviewDate}
+ * @param {number} quality - Response quality (0-5)
+ * @returns {Object} - New SRS state
+ */
+function applySM2(srs, quality) {
+    const result = { ...srs };
+
+    if (quality < 3) {
+        // Failed: reset to beginning
+        result.repetitions = 0;
+        result.interval = 1;
+    } else {
+        // Passed: calculate new interval
+        if (result.repetitions === 0) {
+            result.interval = 1;
+        } else if (result.repetitions === 1) {
+            result.interval = 6;
+        } else {
+            result.interval = Math.round(result.interval * result.easeFactor);
+        }
+
+        // Update ease factor based on quality
+        result.easeFactor += (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+        result.easeFactor = Math.max(1.3, result.easeFactor);
+        result.repetitions++;
+    }
+
+    result.lastReviewDate = new Date().toISOString();
+    result.nextReviewDate = new Date(Date.now() + result.interval * 86400000).toISOString();
+
+    return result;
+}
+
+/**
+ * Check if a flashcard is due for review.
+ * A card is due if:
+ * - It's a FLASHCARD node AND
+ * - nextReviewDate is null (new card) OR
+ * - nextReviewDate is in the past or now
+ *
+ * @param {Object} card - Node object
+ * @returns {boolean} - Whether the card is due
+ */
+function isFlashcardDue(card) {
+    if (card.type !== NodeType.FLASHCARD) return false;
+    if (!card.srs || !card.srs.nextReviewDate) return true; // New card
+    return new Date(card.srs.nextReviewDate) <= new Date();
+}
+
+/**
  * Resize an image file to max dimensions, returns base64 data URL.
  *
  * @param {File} file - The image file to resize
@@ -643,6 +696,9 @@ class App {
 
         // Flashcard generation callback
         this.canvas.onCreateFlashcards = this.handleCreateFlashcards.bind(this);
+
+        // Flashcard review callback
+        this.canvas.onReviewCard = this.reviewSingleCard.bind(this);
 
         // PDF drag & drop callback
         this.canvas.onPdfDrop = this.handlePdfDrop.bind(this);
@@ -5028,6 +5084,384 @@ ${nodeContent}`;
     }
 
     /**
+     * Show the flashcard review modal with due cards
+     * @param {string[]} dueCardIds - Array of flashcard node IDs to review
+     */
+    showReviewModal(dueCardIds) {
+        if (!dueCardIds || dueCardIds.length === 0) {
+            this.showToast('No cards due for review', 'info');
+            return;
+        }
+
+        // Store review state
+        this.reviewState = {
+            cardIds: dueCardIds,
+            currentIndex: 0,
+            currentQuality: null,   // Will be set by grading
+            hasSubmitted: false
+        };
+
+        // Get modal elements
+        const modal = document.getElementById('flashcard-review-modal');
+        const progressEl = document.getElementById('review-progress');
+        const questionEl = document.getElementById('review-question');
+        const answerInput = document.getElementById('review-answer-input');
+        const submitBtn = document.getElementById('review-submit');
+        const resultEl = document.getElementById('review-result');
+        const nextBtn = document.getElementById('review-next');
+
+        // Set up event listeners (clone to remove previous)
+        this.setupReviewModalListeners();
+
+        // Show first card
+        this.displayReviewCard(0);
+
+        // Reset state
+        answerInput.value = '';
+        answerInput.style.display = 'block';
+        submitBtn.style.display = 'block';
+        resultEl.style.display = 'none';
+        nextBtn.style.display = 'none';
+
+        // Update progress
+        progressEl.textContent = `1/${dueCardIds.length}`;
+
+        // Show modal
+        modal.style.display = 'flex';
+        answerInput.focus();
+    }
+
+    /**
+     * Set up event listeners for review modal
+     */
+    setupReviewModalListeners() {
+        const modal = document.getElementById('flashcard-review-modal');
+        const closeBtn = document.getElementById('flashcard-review-close');
+        const submitBtn = document.getElementById('review-submit');
+        const nextBtn = document.getElementById('review-next');
+        const endBtn = document.getElementById('review-end');
+        const overrideCorrectBtn = document.getElementById('review-override-correct');
+        const overrideIncorrectBtn = document.getElementById('review-override-incorrect');
+
+        // Clone buttons to remove previous listeners
+        const newCloseBtn = closeBtn.cloneNode(true);
+        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+        const newSubmitBtn = submitBtn.cloneNode(true);
+        submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
+        const newNextBtn = nextBtn.cloneNode(true);
+        nextBtn.parentNode.replaceChild(newNextBtn, nextBtn);
+        const newEndBtn = endBtn.cloneNode(true);
+        endBtn.parentNode.replaceChild(newEndBtn, endBtn);
+        const newOverrideCorrect = overrideCorrectBtn.cloneNode(true);
+        overrideCorrectBtn.parentNode.replaceChild(newOverrideCorrect, overrideCorrectBtn);
+        const newOverrideIncorrect = overrideIncorrectBtn.cloneNode(true);
+        overrideIncorrectBtn.parentNode.replaceChild(newOverrideIncorrect, overrideIncorrectBtn);
+
+        // Add listeners
+        newCloseBtn.addEventListener('click', () => this.closeReviewModal());
+        newEndBtn.addEventListener('click', () => this.closeReviewModal());
+        newSubmitBtn.addEventListener('click', () => this.handleReviewSubmit());
+        newNextBtn.addEventListener('click', () => this.handleReviewNext());
+        newOverrideCorrect.addEventListener('click', () => this.handleReviewOverride(true));
+        newOverrideIncorrect.addEventListener('click', () => this.handleReviewOverride(false));
+
+        // Enter key submits
+        const answerInput = document.getElementById('review-answer-input');
+        const newAnswerInput = answerInput.cloneNode(true);
+        answerInput.parentNode.replaceChild(newAnswerInput, answerInput);
+        newAnswerInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!this.reviewState.hasSubmitted) {
+                    this.handleReviewSubmit();
+                }
+            }
+        });
+    }
+
+    /**
+     * Display a specific card in the review modal
+     * @param {number} index - Index of card in reviewState.cardIds
+     */
+    displayReviewCard(index) {
+        const cardId = this.reviewState.cardIds[index];
+        const card = this.graph.getNode(cardId);
+
+        if (!card) return;
+
+        const questionEl = document.getElementById('review-question');
+        const progressEl = document.getElementById('review-progress');
+
+        questionEl.textContent = card.content || 'No question';
+        progressEl.textContent = `${index + 1}/${this.reviewState.cardIds.length}`;
+    }
+
+    /**
+     * Close the review modal
+     */
+    closeReviewModal() {
+        const modal = document.getElementById('flashcard-review-modal');
+        modal.style.display = 'none';
+        this.reviewState = null;
+    }
+
+    /**
+     * Handle submit button in review modal - grade the answer
+     */
+    async handleReviewSubmit() {
+        if (!this.reviewState || this.reviewState.hasSubmitted) return;
+
+        const answerInput = document.getElementById('review-answer-input');
+        const submitBtn = document.getElementById('review-submit');
+        const resultEl = document.getElementById('review-result');
+        const correctAnswerText = document.getElementById('review-correct-answer-text');
+        const verdictEl = document.getElementById('review-verdict');
+        const explanationEl = document.getElementById('review-explanation');
+        const nextBtn = document.getElementById('review-next');
+
+        const userAnswer = answerInput.value.trim();
+        if (!userAnswer) {
+            this.showToast('Please enter an answer', 'warning');
+            return;
+        }
+
+        const cardId = this.reviewState.cardIds[this.reviewState.currentIndex];
+        const card = this.graph.getNode(cardId);
+        if (!card) return;
+
+        // Show loading state
+        submitBtn.textContent = 'Grading...';
+        submitBtn.disabled = true;
+
+        try {
+            // Grade the answer using LLM
+            const grading = await this.gradeAnswer(card, userAnswer);
+
+            // Update display
+            correctAnswerText.textContent = card.back || 'No answer provided';
+
+            // Set verdict based on grading
+            verdictEl.className = 'review-verdict';
+            if (grading.correct) {
+                verdictEl.classList.add('correct');
+                verdictEl.textContent = '✓ Correct';
+                this.reviewState.currentQuality = 4; // Good
+            } else if (grading.partial) {
+                verdictEl.classList.add('partial');
+                verdictEl.textContent = '⚠ Partially Correct';
+                this.reviewState.currentQuality = 3; // Hard
+            } else {
+                verdictEl.classList.add('incorrect');
+                verdictEl.textContent = '✗ Incorrect';
+                this.reviewState.currentQuality = 1; // Fail
+            }
+
+            explanationEl.textContent = grading.explanation || '';
+
+            // Show result and hide input
+            this.reviewState.hasSubmitted = true;
+            answerInput.style.display = 'none';
+            submitBtn.style.display = 'none';
+            resultEl.style.display = 'block';
+            nextBtn.style.display = 'inline-block';
+
+            // Check if this is the last card
+            if (this.reviewState.currentIndex >= this.reviewState.cardIds.length - 1) {
+                nextBtn.textContent = 'Finish Review';
+            } else {
+                nextBtn.textContent = 'Next Card';
+            }
+
+        } catch (err) {
+            console.error('Grading error:', err);
+            // Fallback: show result without grading
+            correctAnswerText.textContent = card.back || 'No answer provided';
+            verdictEl.className = 'review-verdict';
+            verdictEl.textContent = 'Could not auto-grade - please self-assess';
+            explanationEl.textContent = '';
+            this.reviewState.currentQuality = 4; // Default to good
+
+            this.reviewState.hasSubmitted = true;
+            answerInput.style.display = 'none';
+            submitBtn.style.display = 'none';
+            resultEl.style.display = 'block';
+            nextBtn.style.display = 'inline-block';
+        }
+    }
+
+    /**
+     * Grade a user's answer using LLM
+     * @param {Object} card - Flashcard node
+     * @param {string} userAnswer - User's typed answer
+     * @returns {Promise<{correct: boolean, partial: boolean, explanation: string}>}
+     */
+    async gradeAnswer(card, userAnswer) {
+        const model = this.modelPicker.value;
+        const apiKey = chat.getApiKeyForModel(model);
+
+        if (!apiKey) {
+            throw new Error('No API key configured');
+        }
+
+        const prompt = `You are grading a flashcard answer. Compare the user's answer to the correct answer and determine if it's correct, partially correct, or incorrect.
+
+Question: ${card.content}
+Correct Answer: ${card.back}
+User's Answer: ${userAnswer}
+
+Respond with ONLY a JSON object (no markdown code blocks):
+{"correct": true/false, "partial": true/false, "explanation": "brief explanation"}
+
+Rules:
+- "correct": true if the answer captures the key concept, even if wording differs
+- "partial": true if some key elements are correct but others are missing/wrong
+- Both cannot be true at the same time
+- Keep explanation under 50 words`;
+
+        const messages = [{ role: 'user', content: prompt }];
+
+        return new Promise((resolve, reject) => {
+            let fullResponse = '';
+
+            chat.sendMessage(
+                messages,
+                model,
+                (chunk) => { fullResponse += chunk; },
+                () => {
+                    try {
+                        // Extract JSON from response
+                        const jsonMatch = fullResponse.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) {
+                            const result = JSON.parse(jsonMatch[0]);
+                            resolve({
+                                correct: result.correct === true,
+                                partial: result.partial === true && result.correct !== true,
+                                explanation: result.explanation || ''
+                            });
+                        } else {
+                            reject(new Error('No JSON in response'));
+                        }
+                    } catch (e) {
+                        reject(e);
+                    }
+                },
+                (err) => { reject(err); }
+            );
+        });
+    }
+
+    /**
+     * Handle override button - user manually marks as correct/incorrect
+     * @param {boolean} wasCorrect - True if user says they knew it
+     */
+    handleReviewOverride(wasCorrect) {
+        if (!this.reviewState) return;
+
+        const verdictEl = document.getElementById('review-verdict');
+
+        // Update quality based on override
+        if (wasCorrect) {
+            this.reviewState.currentQuality = 4; // Good
+            verdictEl.className = 'review-verdict correct';
+            verdictEl.textContent = '✓ Marked as known';
+        } else {
+            this.reviewState.currentQuality = 1; // Fail
+            verdictEl.className = 'review-verdict incorrect';
+            verdictEl.textContent = '✗ Marked as unknown';
+        }
+    }
+
+    /**
+     * Handle Next button - apply SM-2 and show next card or finish
+     */
+    handleReviewNext() {
+        if (!this.reviewState) return;
+
+        // Apply SM-2 to current card
+        const cardId = this.reviewState.cardIds[this.reviewState.currentIndex];
+        const card = this.graph.getNode(cardId);
+
+        if (card) {
+            const quality = this.reviewState.currentQuality || 4;
+            const currentSrs = card.srs || {
+                interval: 0,
+                easeFactor: 2.5,
+                repetitions: 0,
+                nextReviewDate: null,
+                lastReviewDate: null
+            };
+
+            const newSrs = applySM2(currentSrs, quality);
+
+            // Update node
+            this.graph.updateNode(cardId, { srs: newSrs });
+
+            // Re-render the card to update status display
+            this.canvas.renderNode(card);
+        }
+
+        // Move to next card or finish
+        this.reviewState.currentIndex++;
+
+        if (this.reviewState.currentIndex >= this.reviewState.cardIds.length) {
+            // Finished review
+            this.closeReviewModal();
+            this.saveSession();
+            this.showToast(`Reviewed ${this.reviewState.cardIds.length} cards`, 'success');
+        } else {
+            // Show next card
+            this.reviewState.hasSubmitted = false;
+            this.reviewState.currentQuality = null;
+
+            const answerInput = document.getElementById('review-answer-input');
+            const submitBtn = document.getElementById('review-submit');
+            const resultEl = document.getElementById('review-result');
+            const nextBtn = document.getElementById('review-next');
+
+            // Reset input
+            answerInput.value = '';
+            answerInput.style.display = 'block';
+            submitBtn.style.display = 'block';
+            submitBtn.textContent = 'Submit Answer';
+            submitBtn.disabled = false;
+            resultEl.style.display = 'none';
+            nextBtn.style.display = 'none';
+
+            // Display next card
+            this.displayReviewCard(this.reviewState.currentIndex);
+            answerInput.focus();
+        }
+    }
+
+    /**
+     * Start a review session with all due flashcards
+     */
+    startFlashcardReview() {
+        // Find all due flashcards
+        const dueCardIds = this.graph.nodes
+            .filter(node => isFlashcardDue(node))
+            .map(node => node.id);
+
+        if (dueCardIds.length === 0) {
+            this.showToast('No flashcards due for review', 'info');
+            return;
+        }
+
+        this.showReviewModal(dueCardIds);
+    }
+
+    /**
+     * Review a single flashcard
+     * @param {string} cardId - Flashcard node ID
+     */
+    reviewSingleCard(cardId) {
+        const card = this.graph.getNode(cardId);
+        if (!card || card.type !== NodeType.FLASHCARD) return;
+
+        this.showReviewModal([cardId]);
+    }
+
+    /**
      * Highlight the source text in the parent node when a highlight excerpt is selected
      * @param {Object} highlightNode - The highlight node that was selected
      */
@@ -6712,6 +7146,8 @@ window.extractUrlFromReferenceNode = extractUrlFromReferenceNode;
 window.truncateText = truncateText;
 window.escapeHtmlText = escapeHtmlText;
 window.formatMatrixAsText = formatMatrixAsText;
+window.applySM2 = applySM2;
+window.isFlashcardDue = isFlashcardDue;
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {

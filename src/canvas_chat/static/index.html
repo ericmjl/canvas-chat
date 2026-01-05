@@ -592,6 +592,39 @@
         </div>
     </div>
 
+    <!-- Flashcard Review Modal -->
+    <div id="flashcard-review-modal" class="modal" style="display: none;">
+        <div class="modal-content review-modal-content">
+            <div class="modal-header">
+                <h2>Review Flashcards <span id="review-progress" class="review-progress">1/5</span></h2>
+                <button class="modal-close" id="flashcard-review-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="review-question" class="review-question"></div>
+                <textarea id="review-answer-input" class="review-answer-input" placeholder="Type your answer..."></textarea>
+                <button id="review-submit" class="primary-btn review-submit-btn">Submit Answer</button>
+
+                <!-- Shown after submit -->
+                <div id="review-result" class="review-result" style="display: none;">
+                    <div class="review-correct-answer">
+                        <div class="review-label">Correct Answer:</div>
+                        <div id="review-correct-answer-text"></div>
+                    </div>
+                    <div id="review-verdict" class="review-verdict"></div>
+                    <div id="review-explanation" class="review-explanation"></div>
+                    <div class="review-override-buttons">
+                        <button id="review-override-correct" class="override-btn correct">I knew this</button>
+                        <button id="review-override-incorrect" class="override-btn incorrect">I didn't know this</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions review-actions">
+                <button class="secondary-btn" id="review-end">End Review</button>
+                <button class="primary-btn" id="review-next" style="display: none;">Next Card</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Yjs CRDT library for collaborative editing -->
     <!-- Use import map to ensure single Yjs instance (y-indexeddb must use same Yjs) -->
     <script type="importmap">
