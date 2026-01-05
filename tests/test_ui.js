@@ -566,6 +566,333 @@ test('Tag chip click: does not select node when clicking resize handle', () => {
 });
 
 // ============================================================
+// Source text highlighting tests (highlightTextInHtml)
+// ============================================================
+
+/**
+ * Simulate the highlightTextInHtml logic from canvas.js
+ * This handles text selections that span multiple block elements where
+ * selection.toString() produces newlines but joined text nodes do not.
+ */
+function highlightTextInHtml(document, html, text) {
+    if (!text || !html) return html;
+
+    // Create a temporary element to parse the HTML
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+
+    // Use TreeWalker to collect all text nodes
+    const walker = document.createTreeWalker(temp, 4 /* NodeFilter.SHOW_TEXT */);
+    const textNodes = [];
+    let node;
+    while (node = walker.nextNode()) {
+        textNodes.push(node);
+    }
+
+    if (textNodes.length === 0) return html;
+
+    // Build the full text WITH position mapping
+    // Add a space between text nodes to simulate block element boundaries
+    // charMap[i] = { nodeIndex, charIndex } maps each char in fullText to its source
+    // charIndex of -1 means it's a synthetic space between nodes
+    let fullText = '';
+    const charMap = [];
+
+    for (let nodeIndex = 0; nodeIndex < textNodes.length; nodeIndex++) {
+        // Add a space between text nodes (simulates block boundaries)
+        if (nodeIndex > 0) {
+            charMap.push({ nodeIndex: -1, charIndex: -1 }); // synthetic space
+            fullText += ' ';
+        }
+
+        const content = textNodes[nodeIndex].textContent;
+        for (let charIndex = 0; charIndex < content.length; charIndex++) {
+            charMap.push({ nodeIndex, charIndex });
+            fullText += content[charIndex];
+        }
+    }
+
+    // Normalize whitespace: collapse all whitespace sequences to single space, trim
+    const normalizeWs = (str) => str.replace(/\s+/g, ' ').trim();
+
+    const normalizedFull = normalizeWs(fullText);
+    const normalizedSearch = normalizeWs(text);
+
+    // Find match in normalized strings (case-insensitive)
+    const matchStartNorm = normalizedFull.toLowerCase().indexOf(normalizedSearch.toLowerCase());
+    if (matchStartNorm === -1) return html;
+    const matchEndNorm = matchStartNorm + normalizedSearch.length;
+
+    // Build mapping from normalized positions to original positions
+    // normalizedToOriginal[i] = original index in fullText for normalized char i
+    const normalizedToOriginal = [];
+    let inWhitespace = false;
+    let leadingTrimmed = true;
+
+    for (let i = 0; i < fullText.length; i++) {
+        const ch = fullText[i];
+        if (/\s/.test(ch)) {
+            if (!inWhitespace && !leadingTrimmed) {
+                // First whitespace char after non-whitespace maps to the normalized space
+                normalizedToOriginal.push(i);
+            }
+            inWhitespace = true;
+        } else {
+            leadingTrimmed = false;
+            inWhitespace = false;
+            normalizedToOriginal.push(i);
+        }
+    }
+
+    // Get original positions for match boundaries
+    if (matchStartNorm >= normalizedToOriginal.length) return html;
+    const origStart = normalizedToOriginal[matchStartNorm];
+    const origEnd = matchEndNorm <= normalizedToOriginal.length
+        ? normalizedToOriginal[matchEndNorm - 1] + 1
+        : fullText.length;
+
+    // Find which text nodes overlap with [origStart, origEnd)
+    const nodesToProcess = [];
+
+    for (let nodeIndex = 0; nodeIndex < textNodes.length; nodeIndex++) {
+        const textNode = textNodes[nodeIndex];
+        const nodeLen = textNode.textContent.length;
+
+        // Find the range of this node in fullText
+        let nodeStartInFull = -1;
+        let nodeEndInFull = -1;
+        for (let i = 0; i < charMap.length; i++) {
+            if (charMap[i].nodeIndex === nodeIndex) {
+                if (nodeStartInFull === -1) nodeStartInFull = i;
+                nodeEndInFull = i + 1;
+            }
+        }
+
+        if (nodeStartInFull === -1) continue;
+
+        // Check overlap with [origStart, origEnd)
+        if (nodeEndInFull > origStart && nodeStartInFull < origEnd) {
+            const overlapStart = Math.max(0, origStart - nodeStartInFull);
+            const overlapEnd = Math.min(nodeLen, origEnd - nodeStartInFull);
+
+            nodesToProcess.push({
+                node: textNode,
+                overlapStart,
+                overlapEnd
+            });
+        }
+    }
+
+    // Process nodes in reverse order to avoid invalidating positions
+    for (let i = nodesToProcess.length - 1; i >= 0; i--) {
+        const { node: textNode, overlapStart, overlapEnd } = nodesToProcess[i];
+        const content = textNode.textContent;
+
+        const before = content.slice(0, overlapStart);
+        const match = content.slice(overlapStart, overlapEnd);
+        const after = content.slice(overlapEnd);
+
+        // Skip if match portion is only whitespace (avoid extraneous highlights)
+        if (!match.trim()) continue;
+
+        const fragment = document.createDocumentFragment();
+
+        if (before) {
+            fragment.appendChild(document.createTextNode(before));
+        }
+
+        const mark = document.createElement('mark');
+        mark.className = 'source-highlight';
+        mark.textContent = match;
+        fragment.appendChild(mark);
+
+        if (after) {
+            fragment.appendChild(document.createTextNode(after));
+        }
+
+        textNode.parentNode.replaceChild(fragment, textNode);
+    }
+
+    return temp.innerHTML;
+}
+
+test('highlightTextInHtml: simple single paragraph match', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div></div>');
+    const { document } = dom.window;
+
+    const html = '<p>Hello world, this is a test.</p>';
+    const text = 'world';
+
+    const result = highlightTextInHtml(document, html, text);
+    assertIncludes(result, '<mark class="source-highlight">world</mark>');
+    assertIncludes(result, 'Hello ');
+    assertIncludes(result, ', this is a test.');
+});
+
+test('highlightTextInHtml: match spanning multiple elements (inline)', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div></div>');
+    const { document } = dom.window;
+
+    const html = '<p>Hello <strong>beautiful</strong> world</p>';
+    const text = 'beautiful world';
+
+    const result = highlightTextInHtml(document, html, text);
+    // Should highlight text in both the strong and the following text node
+    assertIncludes(result, '<mark class="source-highlight">beautiful</mark>');
+    assertIncludes(result, '<mark class="source-highlight"> world</mark>');
+});
+
+test('highlightTextInHtml: match with newlines in search text (cross-block selection)', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div></div>');
+    const { document } = dom.window;
+
+    // Simulates rendered markdown with heading and paragraph
+    const html = '<h2>The Heading</h2><p>Some paragraph text here.</p>';
+    // When user selects across blocks, selection.toString() produces newlines
+    const text = 'The Heading\n\nSome paragraph';
+
+    const result = highlightTextInHtml(document, html, text);
+    // Should highlight both the heading and part of the paragraph
+    assertIncludes(result, '<mark class="source-highlight">The Heading</mark>');
+    assertIncludes(result, '<mark class="source-highlight">Some paragraph</mark>');
+});
+
+test('highlightTextInHtml: handles bullet list selection', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div></div>');
+    const { document } = dom.window;
+
+    const html = '<p>Where:</p><ul><li>First item</li><li>Second item</li></ul>';
+    // Selection across paragraph and list items with newlines
+    const text = 'Where:\n\nFirst item\nSecond';
+
+    const result = highlightTextInHtml(document, html, text);
+    assertIncludes(result, '<mark class="source-highlight">Where:</mark>');
+    assertIncludes(result, '<mark class="source-highlight">First item</mark>');
+    assertIncludes(result, '<mark class="source-highlight">Second</mark>');
+});
+
+test('highlightTextInHtml: case insensitive matching', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div></div>');
+    const { document } = dom.window;
+
+    const html = '<p>Hello World</p>';
+    const text = 'hello world';
+
+    const result = highlightTextInHtml(document, html, text);
+    assertIncludes(result, '<mark class="source-highlight">Hello World</mark>');
+});
+
+test('highlightTextInHtml: no match returns original html', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div></div>');
+    const { document } = dom.window;
+
+    const html = '<p>Hello world</p>';
+    const text = 'goodbye';
+
+    const result = highlightTextInHtml(document, html, text);
+    assertEqual(result, html);
+});
+
+test('highlightTextInHtml: empty text returns original html', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div></div>');
+    const { document } = dom.window;
+
+    const html = '<p>Hello world</p>';
+    const text = '';
+
+    const result = highlightTextInHtml(document, html, text);
+    assertEqual(result, html);
+});
+
+test('highlightTextInHtml: handles extra whitespace in search text', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div></div>');
+    const { document } = dom.window;
+
+    const html = '<p>Hello world</p>';
+    // Search text with extra spaces (e.g., from copy-paste)
+    const text = 'Hello    world';
+
+    const result = highlightTextInHtml(document, html, text);
+    assertIncludes(result, '<mark class="source-highlight">Hello world</mark>');
+});
+
+test('highlightTextInHtml: complex markdown structure with heading, paragraph, and list', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div></div>');
+    const { document } = dom.window;
+
+    // Simulates rendered markdown like the user's screenshot
+    const html = `
+        <h2>The Machinery of Change</h2>
+        <p>In a dynamic path system, we decompose the total risk into a series of additive "layers."</p>
+        <p>Where:</p>
+        <ul>
+            <li>is the <strong>Baseline Hazard</strong>, representing the background</li>
+        </ul>
+    `;
+    // Selection across heading, paragraph, and into the list
+    const text = 'The Machinery of Change\n\nIn a dynamic path system, we decompose the total risk into a series of additive "layers."\n\nWhere:\n\nis the Baseline Hazard';
+
+    const result = highlightTextInHtml(document, html, text);
+    assertIncludes(result, '<mark class="source-highlight">The Machinery of Change</mark>');
+    assertIncludes(result, '<mark class="source-highlight">In a dynamic path system');
+    assertIncludes(result, '<mark class="source-highlight">Where:</mark>');
+    assertIncludes(result, '<mark class="source-highlight">Baseline Hazard</mark>');
+});
+
+// ============================================================
+// Blockquote stripping tests (for highlight node excerpt extraction)
+// ============================================================
+
+/**
+ * Simulate the excerpt text extraction from highlight node content
+ * Strips "> " prefix from each line (blockquote format)
+ */
+function extractExcerptText(content) {
+    let excerptText = content || '';
+    excerptText = excerptText
+        .split('\n')
+        .map(line => line.startsWith('> ') ? line.slice(2) : line)
+        .join('\n');
+    return excerptText;
+}
+
+test('extractExcerptText: single line blockquote', () => {
+    const content = '> Hello world';
+    const result = extractExcerptText(content);
+    assertEqual(result, 'Hello world');
+});
+
+test('extractExcerptText: multiline blockquote', () => {
+    const content = '> Line one\n> Line two\n> Line three';
+    const result = extractExcerptText(content);
+    assertEqual(result, 'Line one\nLine two\nLine three');
+});
+
+test('extractExcerptText: blockquote with empty lines', () => {
+    const content = '> Heading\n> \n> Paragraph';
+    const result = extractExcerptText(content);
+    assertEqual(result, 'Heading\n\nParagraph');
+});
+
+test('extractExcerptText: mixed blockquote and non-blockquote lines', () => {
+    const content = '> Quoted line\nNon-quoted line\n> Another quoted';
+    const result = extractExcerptText(content);
+    assertEqual(result, 'Quoted line\nNon-quoted line\nAnother quoted');
+});
+
+test('extractExcerptText: no blockquote prefix', () => {
+    const content = 'Plain text without blockquote';
+    const result = extractExcerptText(content);
+    assertEqual(result, 'Plain text without blockquote');
+});
+
+test('extractExcerptText: empty content', () => {
+    const content = '';
+    const result = extractExcerptText(content);
+    assertEqual(result, '');
+});
+
+// ============================================================
 // Summary
 // ============================================================
 
