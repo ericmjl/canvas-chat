@@ -641,6 +641,9 @@ class App {
         this.canvas.onNodeEditContent = this.handleNodeEditContent.bind(this);
         this.canvas.onNodeResummarize = this.handleNodeResummarize.bind(this);
 
+        // Flashcard generation callback
+        this.canvas.onCreateFlashcards = this.handleCreateFlashcards.bind(this);
+
         // PDF drag & drop callback
         this.canvas.onPdfDrop = this.handlePdfDrop.bind(this);
 
@@ -4803,6 +4806,222 @@ class App {
                 this.saveSession();
             }
         );
+
+        this.saveSession();
+        this.updateEmptyState();
+    }
+
+    /**
+     * Handle creating flashcards from a content node
+     * Shows modal with generated flashcard candidates for user selection
+     * @param {string} nodeId - ID of the source node
+     */
+    async handleCreateFlashcards(nodeId) {
+        const sourceNode = this.graph.getNode(nodeId);
+        if (!sourceNode) return;
+
+        const model = this.modelPicker.value;
+        const apiKey = chat.getApiKeyForModel(model);
+
+        if (!apiKey) {
+            alert('Please set an API key for the selected model in Settings.');
+            return;
+        }
+
+        // Get modal elements
+        const modal = document.getElementById('flashcard-generation-modal');
+        const statusEl = document.getElementById('flashcard-generation-status');
+        const candidatesEl = document.getElementById('flashcard-candidates');
+        const acceptBtn = document.getElementById('flashcard-accept-selected');
+        const cancelBtn = document.getElementById('flashcard-cancel');
+        const closeBtn = document.getElementById('flashcard-generation-close');
+
+        // Reset modal state
+        statusEl.textContent = 'Generating flashcards...';
+        statusEl.style.display = 'block';
+        candidatesEl.innerHTML = '';
+        acceptBtn.disabled = true;
+
+        // Show modal
+        modal.style.display = 'flex';
+
+        // Close handlers
+        const closeModal = () => {
+            modal.style.display = 'none';
+        };
+
+        // Remove previous handlers to avoid duplicates
+        const newCloseBtn = closeBtn.cloneNode(true);
+        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+        const newAcceptBtn = acceptBtn.cloneNode(true);
+        acceptBtn.parentNode.replaceChild(newAcceptBtn, acceptBtn);
+
+        newCloseBtn.addEventListener('click', closeModal);
+        newCancelBtn.addEventListener('click', closeModal);
+
+        // Generate flashcards via LLM
+        const nodeContent = sourceNode.content || '';
+        const prompt = `Based on the following content, generate 3-5 flashcards for spaced repetition learning.
+Each flashcard should test a key concept, fact, or relationship.
+
+Return ONLY a JSON array with no additional text: [{"front": "question", "back": "concise answer"}, ...]
+
+Content:
+${nodeContent}`;
+
+        const messages = [{ role: 'user', content: prompt }];
+
+        try {
+            let fullResponse = '';
+
+            await new Promise((resolve, reject) => {
+                chat.sendMessage(
+                    messages,
+                    model,
+                    // onChunk
+                    (chunk) => {
+                        fullResponse += chunk;
+                    },
+                    // onDone
+                    () => {
+                        resolve();
+                    },
+                    // onError
+                    (err) => {
+                        reject(err);
+                    }
+                );
+            });
+
+            // Parse JSON response - extract JSON array from response
+            let flashcards;
+            try {
+                // Try to find JSON array in the response (handle markdown code blocks)
+                const jsonMatch = fullResponse.match(/\[[\s\S]*\]/);
+                if (jsonMatch) {
+                    flashcards = JSON.parse(jsonMatch[0]);
+                } else {
+                    throw new Error('No JSON array found in response');
+                }
+            } catch (parseError) {
+                statusEl.textContent = 'Error parsing flashcards. Please try again.';
+                console.error('Failed to parse flashcard JSON:', parseError, fullResponse);
+                return;
+            }
+
+            if (!Array.isArray(flashcards) || flashcards.length === 0) {
+                statusEl.textContent = 'No flashcards generated. Try with different content.';
+                return;
+            }
+
+            // Hide status and show candidates
+            statusEl.style.display = 'none';
+
+            // Render candidate cards with checkboxes
+            flashcards.forEach((card, idx) => {
+                const candidateEl = document.createElement('div');
+                candidateEl.className = 'flashcard-candidate';
+                candidateEl.innerHTML = `
+                    <input type="checkbox" id="flashcard-check-${idx}" checked data-index="${idx}">
+                    <div class="flashcard-candidate-content">
+                        <div class="flashcard-candidate-question">${this.canvas.escapeHtml(card.front || '')}</div>
+                        <div class="flashcard-candidate-answer">${this.canvas.escapeHtml(card.back || '')}</div>
+                    </div>
+                `;
+                candidatesEl.appendChild(candidateEl);
+            });
+
+            // Enable accept button and update based on checkbox state
+            newAcceptBtn.disabled = false;
+
+            const updateAcceptButton = () => {
+                const checkedCount = candidatesEl.querySelectorAll('input[type="checkbox"]:checked').length;
+                newAcceptBtn.disabled = checkedCount === 0;
+                newAcceptBtn.textContent = checkedCount > 0 ? `Accept Selected (${checkedCount})` : 'Accept Selected';
+            };
+
+            candidatesEl.addEventListener('change', updateAcceptButton);
+            updateAcceptButton();
+
+            // Accept handler
+            newAcceptBtn.addEventListener('click', () => {
+                const selectedCards = [];
+                candidatesEl.querySelectorAll('input[type="checkbox"]:checked').forEach((checkbox) => {
+                    const idx = parseInt(checkbox.dataset.index, 10);
+                    if (flashcards[idx]) {
+                        selectedCards.push(flashcards[idx]);
+                    }
+                });
+
+                if (selectedCards.length > 0) {
+                    this.acceptFlashcards(selectedCards, nodeId);
+                }
+
+                closeModal();
+            });
+
+        } catch (err) {
+            statusEl.textContent = `Error: ${err.message}`;
+            console.error('Flashcard generation error:', err);
+        }
+    }
+
+    /**
+     * Create flashcard nodes from selected candidates
+     * @param {Array} cards - Array of {front, back} objects
+     * @param {string} sourceNodeId - ID of the source node
+     */
+    acceptFlashcards(cards, sourceNodeId) {
+        const sourceNode = this.graph.getNode(sourceNodeId);
+        if (!sourceNode || cards.length === 0) return;
+
+        // Position flashcards below source node in a row
+        const startX = sourceNode.position.x;
+        const startY = sourceNode.position.y + (sourceNode.height || 200) + 60;
+        const cardWidth = 400;
+        const cardGap = 30;
+
+        const createdNodes = [];
+
+        cards.forEach((card, idx) => {
+            // Create flashcard node with SRS metadata
+            const flashcardNode = createNode(NodeType.FLASHCARD, card.front, {
+                position: {
+                    x: startX + idx * (cardWidth + cardGap),
+                    y: startY
+                },
+                back: card.back,
+                srs: {
+                    easeFactor: 2.5,      // SM-2 default
+                    interval: 0,           // Days until next review
+                    repetitions: 0,        // Number of successful reviews
+                    nextReviewDate: null   // Will be set on first review
+                }
+            });
+
+            this.graph.addNode(flashcardNode);
+
+            // Create edge from source to flashcard
+            const edge = createEdge(sourceNodeId, flashcardNode.id, EdgeType.GENERATES);
+            this.graph.addEdge(edge);
+
+            // Render
+            this.canvas.renderNode(flashcardNode);
+            this.canvas.renderEdge(edge, sourceNode.position, flashcardNode.position);
+
+            createdNodes.push(flashcardNode);
+        });
+
+        // Pan to first created flashcard
+        if (createdNodes.length > 0) {
+            this.canvas.centerOnAnimated(
+                createdNodes[0].position.x + 200,
+                createdNodes[0].position.y + 100,
+                300
+            );
+        }
 
         this.saveSession();
         this.updateEmptyState();

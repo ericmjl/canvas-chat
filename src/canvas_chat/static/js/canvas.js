@@ -62,6 +62,7 @@ class Canvas {
         this.onNodeNavigate = null;  // For navigating to parent/child nodes
         this.onNavParentClick = null;  // For handling parent navigation button click
         this.onNavChildClick = null;  // For handling child navigation button click
+        this.onCreateFlashcards = null;  // For generating flashcards from content
 
         // PDF drag & drop callback
         this.onPdfDrop = null;  // For handling PDF file drops
@@ -1929,6 +1930,15 @@ class Canvas {
             resummarizeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onNodeResummarize) this.onNodeResummarize(node.id);
+            });
+        }
+
+        // Create flashcards button
+        const createFlashcardsBtn = div.querySelector('.create-flashcards-btn');
+        if (createFlashcardsBtn) {
+            createFlashcardsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.onCreateFlashcards) this.onCreateFlashcards(node.id);
             });
         }
 

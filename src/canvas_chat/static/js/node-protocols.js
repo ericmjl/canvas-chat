@@ -17,7 +17,8 @@ const Actions = {
     EDIT_CONTENT: { id: 'edit-content', label: '✏️ Edit', title: 'Edit content' },
     RESUMMARIZE: { id: 'resummarize', label: '📝 Re-summarize', title: 'Create new summary from edited content' },
     COPY: { id: 'copy', label: '📋 Copy (c)', title: 'Copy (c)' },
-    FLIP_CARD: { id: 'flip-card', label: '🔄 Flip', title: 'Flip card to see answer' }
+    FLIP_CARD: { id: 'flip-card', label: '🔄 Flip', title: 'Flip card to see answer' },
+    CREATE_FLASHCARDS: { id: 'create-flashcards', label: '🎴 Flashcards', title: 'Generate flashcards from content' }
 };
 
 /**
@@ -153,7 +154,7 @@ class AINode extends BaseNode {
     getTypeIcon() { return '🤖'; }
 
     getActions() {
-        return [Actions.REPLY, Actions.SUMMARIZE, Actions.COPY];
+        return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
 
     getHeaderButtons() {
@@ -177,7 +178,7 @@ class NoteNode extends BaseNode {
     getTypeIcon() { return '📝'; }
 
     getActions() {
-        return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.COPY];
+        return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
 }
 
@@ -187,6 +188,10 @@ class NoteNode extends BaseNode {
 class SummaryNode extends BaseNode {
     getTypeLabel() { return 'Summary'; }
     getTypeIcon() { return '📋'; }
+
+    getActions() {
+        return [Actions.REPLY, Actions.CREATE_FLASHCARDS, Actions.COPY];
+    }
 }
 
 /**
@@ -215,6 +220,10 @@ class SearchNode extends BaseNode {
 class ResearchNode extends BaseNode {
     getTypeLabel() { return 'Research'; }
     getTypeIcon() { return '📚'; }
+
+    getActions() {
+        return [Actions.REPLY, Actions.CREATE_FLASHCARDS, Actions.COPY];
+    }
 }
 
 /**
@@ -399,7 +408,7 @@ class FetchResultNode extends BaseNode {
     getTypeIcon() { return '📄'; }
 
     getActions() {
-        return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.RESUMMARIZE, Actions.COPY];
+        return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.RESUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
 }
 
@@ -411,7 +420,7 @@ class PdfNode extends BaseNode {
     getTypeIcon() { return '📑'; }
 
     getActions() {
-        return [Actions.REPLY, Actions.SUMMARIZE, Actions.COPY];
+        return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
 }
 
@@ -423,7 +432,7 @@ class OpinionNode extends BaseNode {
     getTypeIcon() { return '🗣️'; }
 
     getActions() {
-        return [Actions.REPLY, Actions.SUMMARIZE, Actions.COPY];
+        return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
 
     getHeaderButtons() {
@@ -447,7 +456,7 @@ class SynthesisNode extends BaseNode {
     getTypeIcon() { return '⚖️'; }
 
     getActions() {
-        return [Actions.REPLY, Actions.SUMMARIZE, Actions.COPY];
+        return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
 
     getHeaderButtons() {
@@ -471,7 +480,7 @@ class ReviewNode extends BaseNode {
     getTypeIcon() { return '🔍'; }
 
     getActions() {
-        return [Actions.REPLY, Actions.SUMMARIZE, Actions.COPY];
+        return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
 
     getHeaderButtons() {

@@ -2492,6 +2492,87 @@ test('FlashcardNode: getActions includes FLIP_CARD', () => {
 });
 
 // ============================================================
+// CREATE_FLASHCARDS action tests
+// ============================================================
+
+test('AINode: getActions includes CREATE_FLASHCARDS', () => {
+    const node = { type: NodeType.AI, content: 'Some AI response content' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some(a => a.id === 'create-flashcards'), 'AINode should include create-flashcards action');
+});
+
+test('SummaryNode: getActions includes CREATE_FLASHCARDS', () => {
+    const node = { type: NodeType.SUMMARY, content: 'Summary content' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some(a => a.id === 'create-flashcards'), 'SummaryNode should include create-flashcards action');
+});
+
+test('NoteNode: getActions includes CREATE_FLASHCARDS', () => {
+    const node = { type: NodeType.NOTE, content: 'Note content' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some(a => a.id === 'create-flashcards'), 'NoteNode should include create-flashcards action');
+});
+
+test('ResearchNode: getActions includes CREATE_FLASHCARDS', () => {
+    const node = { type: NodeType.RESEARCH, content: 'Research content' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some(a => a.id === 'create-flashcards'), 'ResearchNode should include create-flashcards action');
+});
+
+test('FetchResultNode: getActions includes CREATE_FLASHCARDS', () => {
+    const node = { type: NodeType.FETCH_RESULT, content: 'Fetched content' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some(a => a.id === 'create-flashcards'), 'FetchResultNode should include create-flashcards action');
+});
+
+test('PdfNode: getActions includes CREATE_FLASHCARDS', () => {
+    const node = { type: NodeType.PDF, content: 'PDF content' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some(a => a.id === 'create-flashcards'), 'PdfNode should include create-flashcards action');
+});
+
+test('OpinionNode: getActions includes CREATE_FLASHCARDS', () => {
+    const node = { type: NodeType.OPINION, content: 'Opinion content' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some(a => a.id === 'create-flashcards'), 'OpinionNode should include create-flashcards action');
+});
+
+test('SynthesisNode: getActions includes CREATE_FLASHCARDS', () => {
+    const node = { type: NodeType.SYNTHESIS, content: 'Synthesis content' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some(a => a.id === 'create-flashcards'), 'SynthesisNode should include create-flashcards action');
+});
+
+test('ReviewNode: getActions includes CREATE_FLASHCARDS', () => {
+    const node = { type: NodeType.REVIEW, content: 'Review content' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some(a => a.id === 'create-flashcards'), 'ReviewNode should include create-flashcards action');
+});
+
+test('FlashcardNode: getActions does NOT include CREATE_FLASHCARDS', () => {
+    const node = { type: NodeType.FLASHCARD, content: 'Q', back: 'A', srs: null };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertFalse(actions.some(a => a.id === 'create-flashcards'), 'FlashcardNode should NOT include create-flashcards action');
+});
+
+test('HumanNode: getActions does NOT include CREATE_FLASHCARDS', () => {
+    const node = { type: NodeType.HUMAN, content: 'User message' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertFalse(actions.some(a => a.id === 'create-flashcards'), 'HumanNode should NOT include create-flashcards action');
+});
+
+// ============================================================
 // Summary
 // ============================================================
 

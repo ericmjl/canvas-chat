@@ -570,6 +570,28 @@
         </div>
     </div>
 
+    <!-- Flashcard Generation Modal -->
+    <div id="flashcard-generation-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Generate Flashcards</h2>
+                <button class="modal-close" id="flashcard-generation-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="flashcard-generation-status" class="flashcard-status-message">
+                    Generating flashcards...
+                </div>
+                <div id="flashcard-candidates" class="flashcard-candidates-list">
+                    <!-- Candidate cards listed here -->
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary-btn" id="flashcard-cancel">Cancel</button>
+                <button class="primary-btn" id="flashcard-accept-selected" disabled>Accept Selected</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Yjs CRDT library for collaborative editing -->
     <!-- Use import map to ensure single Yjs instance (y-indexeddb must use same Yjs) -->
     <script type="importmap">
