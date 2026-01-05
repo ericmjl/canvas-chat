@@ -102,36 +102,8 @@ const TAG_COLORS = [
     '#e9ecef',  // light gray
 ];
 
-/**
- * Check if a position would overlap with existing nodes
- * Utility function for overlap detection (used by Graph class and tests)
- * @param {Object} pos - Position {x, y}
- * @param {number} width - Width of the candidate node
- * @param {number} height - Height of the candidate node
- * @param {Array} nodes - Array of existing nodes
- * @returns {boolean} True if there would be overlap
- */
-function wouldOverlapNodes(pos, width, height, nodes) {
-    const PADDING = 20;  // Minimum gap between nodes
-
-    for (const node of nodes) {
-        const nodeWidth = node.width || 420;
-        const nodeHeight = node.height || 200;
-
-        // Check bounding box overlap
-        const noOverlap =
-            pos.x + width + PADDING < node.position.x ||  // new is left of existing
-            pos.x > node.position.x + nodeWidth + PADDING ||  // new is right of existing
-            pos.y + height + PADDING < node.position.y ||  // new is above existing
-            pos.y > node.position.y + nodeHeight + PADDING;   // new is below existing
-
-        if (!noOverlap) {
-            return true;  // There is overlap
-        }
-    }
-
-    return false;  // No overlap with any node
-}
+// Layout utilities are imported from layout.js (loaded before this file)
+// Access them via window.layoutUtils to avoid variable conflicts in test environments
 
 /**
  * Create a new node
@@ -701,19 +673,19 @@ class Graph {
         let attempts = 0;
         const maxAttempts = 20;
 
-        while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+        while (attempts < maxAttempts && window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
             // Move down to find free space
             candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
             attempts++;
         }
 
         // If still overlapping after max attempts, try moving right
-        if (wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+        if (window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
             candidatePos.x += NODE_WIDTH + HORIZONTAL_GAP;
             candidatePos.y = initialY;
 
             attempts = 0;
-            while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+            while (attempts < maxAttempts && window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
                 candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
                 attempts++;
             }
@@ -726,7 +698,7 @@ class Graph {
      * Check if a position would overlap with existing nodes
      */
     wouldOverlap(pos, width, height, nodes) {
-        return wouldOverlapNodes(pos, width, height, nodes);
+        return window.layoutUtils.wouldOverlapNodes(pos, width, height, nodes);
     }
 
     /**
@@ -1095,122 +1067,12 @@ class Graph {
 
     /**
      * Resolve any overlapping nodes by nudging them apart.
+     * Delegates to the pure function from layout.js.
      * @param {Array} nodes - Array of nodes to check
      * @param {Map} dimensions - Map of nodeId -> { width, height }
      */
     resolveOverlaps(nodes, dimensions = new Map()) {
-        const DEFAULT_WIDTH = 420;
-        const DEFAULT_HEIGHT = 220;
-        const PADDING = 40;
-        const MAX_ITERATIONS = 50;
-
-        const getNodeSize = (node) => {
-            const dim = dimensions.get(node.id);
-            if (dim) {
-                return { width: dim.width, height: dim.height };
-            }
-            return {
-                width: node.width || DEFAULT_WIDTH,
-                height: node.height || DEFAULT_HEIGHT
-            };
-        };
-
-        /**
-         * Calculate overlap between two nodes.
-         * Returns { overlapX, overlapY } - the amount of overlap in each dimension.
-         * If no overlap, returns { overlapX: 0, overlapY: 0 }.
-         */
-        const getOverlap = (nodeA, nodeB) => {
-            const sizeA = getNodeSize(nodeA);
-            const sizeB = getNodeSize(nodeB);
-
-            const aLeft = nodeA.position.x;
-            const aRight = nodeA.position.x + sizeA.width + PADDING;
-            const aTop = nodeA.position.y;
-            const aBottom = nodeA.position.y + sizeA.height + PADDING;
-
-            const bLeft = nodeB.position.x;
-            const bRight = nodeB.position.x + sizeB.width + PADDING;
-            const bTop = nodeB.position.y;
-            const bBottom = nodeB.position.y + sizeB.height + PADDING;
-
-            // Calculate overlap in each dimension
-            const overlapX = Math.min(aRight, bRight) - Math.max(aLeft, bLeft);
-            const overlapY = Math.min(aBottom, bBottom) - Math.max(aTop, bTop);
-
-            // Only overlapping if both dimensions overlap
-            if (overlapX > 0 && overlapY > 0) {
-                return { overlapX, overlapY };
-            }
-            return { overlapX: 0, overlapY: 0 };
-        };
-
-        for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-            let hasOverlap = false;
-
-            for (let i = 0; i < nodes.length; i++) {
-                for (let j = i + 1; j < nodes.length; j++) {
-                    const nodeA = nodes[i];
-                    const nodeB = nodes[j];
-
-                    const { overlapX, overlapY } = getOverlap(nodeA, nodeB);
-
-                    if (overlapX > 0 && overlapY > 0) {
-                        hasOverlap = true;
-
-                        const sizeA = getNodeSize(nodeA);
-                        const sizeB = getNodeSize(nodeB);
-
-                        // Calculate centers
-                        const centerAx = nodeA.position.x + sizeA.width / 2;
-                        const centerAy = nodeA.position.y + sizeA.height / 2;
-                        const centerBx = nodeB.position.x + sizeB.width / 2;
-                        const centerBy = nodeB.position.y + sizeB.height / 2;
-
-                        // Push apart along the axis of minimum overlap (more efficient)
-                        // This avoids diagonal pushes that may not resolve the overlap
-                        if (overlapX < overlapY) {
-                            // Push horizontally
-                            const pushAmount = (overlapX / 2) + 1; // +1 to ensure separation
-                            if (centerBx >= centerAx) {
-                                nodeA.position.x -= pushAmount;
-                                nodeB.position.x += pushAmount;
-                            } else {
-                                nodeA.position.x += pushAmount;
-                                nodeB.position.x -= pushAmount;
-                            }
-                        } else {
-                            // Push vertically
-                            const pushAmount = (overlapY / 2) + 1;
-                            if (centerBy >= centerAy) {
-                                nodeA.position.y -= pushAmount;
-                                nodeB.position.y += pushAmount;
-                            } else {
-                                nodeA.position.y += pushAmount;
-                                nodeB.position.y -= pushAmount;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (!hasOverlap) break;
-        }
-
-        // Ensure all nodes stay in positive coordinates
-        let minX = Infinity, minY = Infinity;
-        for (const node of nodes) {
-            minX = Math.min(minX, node.position.x);
-            minY = Math.min(minY, node.position.y);
-        }
-        if (minX < 100 || minY < 100) {
-            const offsetX = minX < 100 ? 100 - minX : 0;
-            const offsetY = minY < 100 ? 100 - minY : 0;
-            for (const node of nodes) {
-                node.position.x += offsetX;
-                node.position.y += offsetY;
-            }
-        }
+        window.layoutUtils.resolveOverlaps(nodes, 40, 50, dimensions);
     }
 
     /**
@@ -1259,4 +1121,4 @@ window.createMatrixNode = createMatrixNode;
 window.createCellNode = createCellNode;
 window.createRowNode = createRowNode;
 window.createColumnNode = createColumnNode;
-window.wouldOverlapNodes = wouldOverlapNodes;
+window.wouldOverlapNodes = window.layoutUtils.wouldOverlapNodes;

@@ -12,7 +12,8 @@ Quick reference for which files to edit for common tasks:
 | ---- | ------- | ----------- |
 | `src/canvas_chat/static/js/app.js` | Main application, orchestrates everything | Slash commands, keyboard shortcuts, feature handlers, App class methods |
 | `src/canvas_chat/static/js/canvas.js` | SVG canvas, pan/zoom, node rendering | Node appearance, drag behavior, viewport logic, node event handlers |
-| `src/canvas_chat/static/js/graph.js` | Data model, node/edge types, layout algorithms | Node types, edge types, graph traversal, auto-positioning |
+| `src/canvas_chat/static/js/graph.js` | Data model, node/edge types, graph traversal | Node types, edge types, graph traversal, node positioning |
+| `src/canvas_chat/static/js/layout.js` | Pure layout functions for overlap detection | Overlap detection, overlap resolution, node positioning algorithms |
 | `src/canvas_chat/static/js/chat.js` | LLM API calls, streaming | API integration, message formatting, token estimation |
 | `src/canvas_chat/static/js/storage.js` | localStorage persistence | Session storage, API key storage, settings |
 | `src/canvas_chat/static/js/search.js` | Node search functionality | Search UI, filtering logic |
@@ -336,6 +337,40 @@ Write unit tests for logic that does not require API calls:
 - `tests/test_ui.js` - DOM manipulation tests using jsdom simulation
 
 Do not write tests that require external API calls (LLM, Exa, etc.) - these are tested manually.
+
+### Never copy implementations into tests
+
+**NEVER copy function implementations from source files into test files.**
+
+This is a critical anti-pattern that causes tests to pass while production code is broken.
+When you copy an implementation:
+
+1. The test validates the copied code, not the actual source
+2. Changes to the source file don't affect tests (false confidence)
+3. Bugs in production go undetected
+
+**The correct approach:**
+
+1. Extract testable logic into pure functions in separate modules (e.g., `layout.js`, `utils.js`)
+2. Import those functions in both the source files that need them AND the test files
+3. Tests validate the actual implementation that runs in production
+
+```javascript
+// WRONG: Copying implementation into test file
+function resolveOverlaps(nodes) { /* copied from graph.js */ }
+test('resolveOverlaps works', () => {
+    resolveOverlaps(testNodes);  // Tests the COPY, not the real code!
+});
+
+// CORRECT: Import the actual implementation
+const { resolveOverlaps } = require('../src/canvas_chat/static/js/layout.js');
+test('resolveOverlaps works', () => {
+    resolveOverlaps(testNodes);  // Tests the REAL code
+});
+```
+
+If a function is tightly coupled to a class and hard to test, that's a design smell.
+Refactor to extract pure functions that can be imported and tested directly.
 
 Run tests with:
 

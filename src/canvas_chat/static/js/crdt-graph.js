@@ -1196,17 +1196,17 @@ class CRDTGraph {
         let attempts = 0;
         const maxAttempts = 20;
 
-        while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+        while (attempts < maxAttempts && window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
             candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
             attempts++;
         }
 
-        if (wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+        if (window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
             candidatePos.x += NODE_WIDTH + HORIZONTAL_GAP;
             candidatePos.y = initialY;
 
             attempts = 0;
-            while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+            while (attempts < maxAttempts && window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
                 candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
                 attempts++;
             }
@@ -1219,7 +1219,7 @@ class CRDTGraph {
      * Check if a position would overlap with existing nodes
      */
     wouldOverlap(pos, width, height, nodes) {
-        return wouldOverlapNodes(pos, width, height, nodes);
+        return window.layoutUtils.wouldOverlapNodes(pos, width, height, nodes);
     }
 
     /**
@@ -1578,103 +1578,11 @@ class CRDTGraph {
     }
 
     /**
-     * Resolve overlapping nodes
+     * Resolve overlapping nodes.
+     * Delegates to the pure function from layout.js.
      */
     resolveOverlaps(nodes, dimensions = new Map()) {
-        const DEFAULT_WIDTH = 420;
-        const DEFAULT_HEIGHT = 220;
-        const PADDING = 40;
-        const MAX_ITERATIONS = 50;
-
-        const getNodeSize = (node) => {
-            const dim = dimensions.get(node.id);
-            if (dim) return { width: dim.width, height: dim.height };
-            return { width: node.width || DEFAULT_WIDTH, height: node.height || DEFAULT_HEIGHT };
-        };
-
-        const getOverlap = (nodeA, nodeB) => {
-            const sizeA = getNodeSize(nodeA);
-            const sizeB = getNodeSize(nodeB);
-
-            const aLeft = nodeA.position.x;
-            const aRight = nodeA.position.x + sizeA.width + PADDING;
-            const aTop = nodeA.position.y;
-            const aBottom = nodeA.position.y + sizeA.height + PADDING;
-
-            const bLeft = nodeB.position.x;
-            const bRight = nodeB.position.x + sizeB.width + PADDING;
-            const bTop = nodeB.position.y;
-            const bBottom = nodeB.position.y + sizeB.height + PADDING;
-
-            const overlapX = Math.min(aRight, bRight) - Math.max(aLeft, bLeft);
-            const overlapY = Math.min(aBottom, bBottom) - Math.max(aTop, bTop);
-
-            if (overlapX > 0 && overlapY > 0) {
-                return { overlapX, overlapY };
-            }
-            return { overlapX: 0, overlapY: 0 };
-        };
-
-        for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-            let hasOverlap = false;
-
-            for (let i = 0; i < nodes.length; i++) {
-                for (let j = i + 1; j < nodes.length; j++) {
-                    const nodeA = nodes[i];
-                    const nodeB = nodes[j];
-
-                    const { overlapX, overlapY } = getOverlap(nodeA, nodeB);
-
-                    if (overlapX > 0 && overlapY > 0) {
-                        hasOverlap = true;
-
-                        const sizeA = getNodeSize(nodeA);
-                        const sizeB = getNodeSize(nodeB);
-
-                        const centerAx = nodeA.position.x + sizeA.width / 2;
-                        const centerAy = nodeA.position.y + sizeA.height / 2;
-                        const centerBx = nodeB.position.x + sizeB.width / 2;
-                        const centerBy = nodeB.position.y + sizeB.height / 2;
-
-                        if (overlapX < overlapY) {
-                            const pushAmount = (overlapX / 2) + 1;
-                            if (centerBx >= centerAx) {
-                                nodeA.position.x -= pushAmount;
-                                nodeB.position.x += pushAmount;
-                            } else {
-                                nodeA.position.x += pushAmount;
-                                nodeB.position.x -= pushAmount;
-                            }
-                        } else {
-                            const pushAmount = (overlapY / 2) + 1;
-                            if (centerBy >= centerAy) {
-                                nodeA.position.y -= pushAmount;
-                                nodeB.position.y += pushAmount;
-                            } else {
-                                nodeA.position.y += pushAmount;
-                                nodeB.position.y -= pushAmount;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (!hasOverlap) break;
-        }
-
-        let minX = Infinity, minY = Infinity;
-        for (const node of nodes) {
-            minX = Math.min(minX, node.position.x);
-            minY = Math.min(minY, node.position.y);
-        }
-        if (minX < 100 || minY < 100) {
-            const offsetX = minX < 100 ? 100 - minX : 0;
-            const offsetY = minY < 100 ? 100 - minY : 0;
-            for (const node of nodes) {
-                node.position.x += offsetX;
-                node.position.y += offsetY;
-            }
-        }
+        window.layoutUtils.resolveOverlaps(nodes, 40, 50, dimensions);
     }
 
     // =========================================================================

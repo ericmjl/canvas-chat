@@ -53,6 +53,11 @@ global.NodeType = {
 };
 
 // Load graph.js first (defines NodeType, etc. and exports wouldOverlapNodes)
+// First load layout.js which graph.js depends on
+const layoutPath = path.join(__dirname, '../src/canvas_chat/static/js/layout.js');
+const layoutCode = fs.readFileSync(layoutPath, 'utf8');
+vm.runInThisContext(layoutCode, { filename: layoutPath });
+
 const graphPath = path.join(__dirname, '../src/canvas_chat/static/js/graph.js');
 const graphCode = fs.readFileSync(graphPath, 'utf8');
 vm.runInThisContext(graphCode, { filename: graphPath });
@@ -96,8 +101,12 @@ const {
     wrapNode,
     applySM2,
     isFlashcardDue,
-    getDueFlashcards
+    getDueFlashcards,
+    layoutUtils
 } = global.window;
+
+// Extract layout functions from layoutUtils (actual implementations from layout.js)
+const { getOverlap, hasAnyOverlap, resolveOverlaps } = layoutUtils;
 
 // Simple test runner
 let passed = 0;
@@ -613,117 +622,8 @@ test('truncate: handles null/undefined', () => {
 });
 
 // ============================================================
-// resolveOverlaps tests
+// resolveOverlaps tests (using actual implementations from layout.js)
 // ============================================================
-
-/**
- * Calculate overlap between two nodes.
- * NOTE: This is a Graph class method (used internally by resolveOverlaps).
- * Keeping a copy here for testing the overlap calculation logic.
- * In the future, consider extracting this as a utility function.
- */
-function getOverlap(nodeA, nodeB, padding = 40) {
-    const getNodeSize = (node) => ({
-        width: node.width || 420,
-        height: node.height || 220
-    });
-
-    const sizeA = getNodeSize(nodeA);
-    const sizeB = getNodeSize(nodeB);
-
-    const aLeft = nodeA.position.x;
-    const aRight = nodeA.position.x + sizeA.width + padding;
-    const aTop = nodeA.position.y;
-    const aBottom = nodeA.position.y + sizeA.height + padding;
-
-    const bLeft = nodeB.position.x;
-    const bRight = nodeB.position.x + sizeB.width + padding;
-    const bTop = nodeB.position.y;
-    const bBottom = nodeB.position.y + sizeB.height + padding;
-
-    const overlapX = Math.min(aRight, bRight) - Math.max(aLeft, bLeft);
-    const overlapY = Math.min(aBottom, bBottom) - Math.max(aTop, bTop);
-
-    if (overlapX > 0 && overlapY > 0) {
-        return { overlapX, overlapY };
-    }
-    return { overlapX: 0, overlapY: 0 };
-}
-
-/**
- * Resolve overlapping nodes.
- * NOTE: This is a Graph class method. Keeping a copy here for testing
- * the overlap resolution algorithm. In the future, consider extracting
- * this as a utility function or testing via Graph instances.
- */
-function resolveOverlaps(nodes, padding = 40, maxIterations = 50) {
-    const getNodeSize = (node) => ({
-        width: node.width || 420,
-        height: node.height || 220
-    });
-
-    for (let iter = 0; iter < maxIterations; iter++) {
-        let hasOverlap = false;
-
-        for (let i = 0; i < nodes.length; i++) {
-            for (let j = i + 1; j < nodes.length; j++) {
-                const nodeA = nodes[i];
-                const nodeB = nodes[j];
-
-                const { overlapX, overlapY } = getOverlap(nodeA, nodeB, padding);
-
-                if (overlapX > 0 && overlapY > 0) {
-                    hasOverlap = true;
-
-                    const sizeA = getNodeSize(nodeA);
-                    const sizeB = getNodeSize(nodeB);
-
-                    const centerAx = nodeA.position.x + sizeA.width / 2;
-                    const centerAy = nodeA.position.y + sizeA.height / 2;
-                    const centerBx = nodeB.position.x + sizeB.width / 2;
-                    const centerBy = nodeB.position.y + sizeB.height / 2;
-
-                    if (overlapX < overlapY) {
-                        const pushAmount = (overlapX / 2) + 1;
-                        if (centerBx >= centerAx) {
-                            nodeA.position.x -= pushAmount;
-                            nodeB.position.x += pushAmount;
-                        } else {
-                            nodeA.position.x += pushAmount;
-                            nodeB.position.x -= pushAmount;
-                        }
-                    } else {
-                        const pushAmount = (overlapY / 2) + 1;
-                        if (centerBy >= centerAy) {
-                            nodeA.position.y -= pushAmount;
-                            nodeB.position.y += pushAmount;
-                        } else {
-                            nodeA.position.y += pushAmount;
-                            nodeB.position.y -= pushAmount;
-                        }
-                    }
-                }
-            }
-        }
-
-        if (!hasOverlap) break;
-    }
-}
-
-/**
- * Check if any nodes in the array overlap
- */
-function hasAnyOverlap(nodes, padding = 40) {
-    for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-            const { overlapX, overlapY } = getOverlap(nodes[i], nodes[j], padding);
-            if (overlapX > 0 && overlapY > 0) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
 
 test('getOverlap: no overlap when far apart', () => {
     const nodeA = { position: { x: 0, y: 0 }, width: 100, height: 100 };
@@ -824,10 +724,11 @@ test('resolveOverlaps: separates multiple overlapping nodes', () => {
 });
 
 test('resolveOverlaps: preserves non-overlapping nodes', () => {
+    // Use positions that are already >= 100 to avoid normalization offset
     const nodes = [
-        { position: { x: 0, y: 0 }, width: 100, height: 100 },
-        { position: { x: 500, y: 0 }, width: 100, height: 100 },
-        { position: { x: 0, y: 500 }, width: 100, height: 100 }
+        { position: { x: 100, y: 100 }, width: 100, height: 100 },
+        { position: { x: 600, y: 100 }, width: 100, height: 100 },
+        { position: { x: 100, y: 600 }, width: 100, height: 100 }
     ];
 
     const originalPositions = nodes.map(n => ({ x: n.position.x, y: n.position.y }));
@@ -836,7 +737,7 @@ test('resolveOverlaps: preserves non-overlapping nodes', () => {
 
     resolveOverlaps(nodes);
 
-    // Positions should remain unchanged
+    // Positions should remain unchanged (no overlaps to resolve, already in positive coords)
     for (let i = 0; i < nodes.length; i++) {
         assertEqual(nodes[i].position.x, originalPositions[i].x);
         assertEqual(nodes[i].position.y, originalPositions[i].y);
