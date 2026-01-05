@@ -5320,6 +5320,31 @@ ${nodeContent}`;
             throw new Error('No API key configured');
         }
 
+        // Get strictness setting and build appropriate grading rules
+        const strictness = storage.getFlashcardStrictness();
+        let gradingRules;
+
+        if (strictness === 'lenient') {
+            gradingRules = `Rules (LENIENT grading - be generous):
+- "correct": true if the answer captures the general gist or idea, even with different wording, synonyms, or minor inaccuracies
+- "partial": true only if the answer is mostly off-topic but shows some related understanding
+- Accept paraphrasing, informal language, and answers that demonstrate understanding without exact terminology
+- When in doubt, mark as correct`;
+        } else if (strictness === 'strict') {
+            gradingRules = `Rules (STRICT grading - be demanding):
+- "correct": true only if the answer closely matches the expected answer with accurate terminology and complete coverage of key points
+- "partial": true if the answer shows understanding but is missing important details, uses imprecise language, or has minor errors
+- Require precise terminology and complete explanations
+- Penalize vague or incomplete answers`;
+        } else {
+            // Default: medium
+            gradingRules = `Rules (MEDIUM grading - balanced):
+- "correct": true if the answer captures the key concepts, even if wording differs
+- "partial": true if some key elements are correct but others are missing or wrong
+- Accept reasonable paraphrasing but require core concepts to be present
+- Minor terminology differences are OK, but major conceptual gaps are not`;
+        }
+
         const prompt = `You are grading a flashcard answer. Compare the user's answer to the correct answer and determine if it's correct, partially correct, or incorrect.
 
 Question: ${card.content}
@@ -5329,10 +5354,8 @@ User's Answer: ${userAnswer}
 Respond with ONLY a JSON object (no markdown code blocks):
 {"correct": true/false, "partial": true/false, "explanation": "brief explanation"}
 
-Rules:
-- "correct": true if the answer captures the key concept, even if wording differs
-- "partial": true if some key elements are correct but others are missing/wrong
-- Both cannot be true at the same time
+${gradingRules}
+- Both "correct" and "partial" cannot be true at the same time
 - Keep explanation under 50 words`;
 
         const messages = [{ role: 'user', content: prompt }];
@@ -6029,6 +6052,9 @@ Rules:
 
         // Load base URL
         document.getElementById('base-url').value = storage.getBaseUrl() || '';
+
+        // Load flashcard strictness
+        document.getElementById('flashcard-strictness').value = storage.getFlashcardStrictness();
     }
 
     hideSettingsModal() {
@@ -6712,6 +6738,10 @@ Rules:
         // Save base URL
         const baseUrl = document.getElementById('base-url').value.trim();
         storage.setBaseUrl(baseUrl);
+
+        // Save flashcard strictness
+        const strictness = document.getElementById('flashcard-strictness').value;
+        storage.setFlashcardStrictness(strictness);
 
         // Reload models to reflect newly configured API keys
         this.loadModels();

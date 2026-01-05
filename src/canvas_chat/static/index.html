@@ -218,6 +218,19 @@
                     <small class="key-hint">Leave empty to use default provider endpoints. Supports OpenAI-compatible APIs.</small>
                 </div>
 
+                <h3>Flashcard Settings</h3>
+                <p class="settings-note">Configure how flashcard answers are graded during review.</p>
+
+                <div class="api-key-group">
+                    <label for="flashcard-strictness">Grading Strictness</label>
+                    <select id="flashcard-strictness" class="settings-select">
+                        <option value="lenient">Lenient (gist is enough)</option>
+                        <option value="medium" selected>Medium (key concepts required)</option>
+                        <option value="strict">Strict (precise answer required)</option>
+                    </select>
+                    <small class="key-hint">Controls how strictly the AI grades your flashcard answers</small>
+                </div>
+
                 <button id="save-settings-btn" class="primary-btn">Save Settings</button>
             </div>
         </div>
