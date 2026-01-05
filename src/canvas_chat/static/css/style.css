@@ -3584,6 +3584,17 @@ kbd {
     color: var(--text-primary);
 }
 
+/* Flashcard flip state - show answer when flipped */
+.node.flashcard-flipped .flashcard-back {
+    display: block !important;
+}
+
+.node.flashcard-flipped .flashcard-front {
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 12px;
+    margin-bottom: 8px;
+}
+
 /* Flashcard Generation Modal Styles */
 .flashcard-status-message {
     text-align: center;

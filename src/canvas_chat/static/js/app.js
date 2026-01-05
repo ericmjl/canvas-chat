@@ -714,6 +714,9 @@ class App {
         // Flashcard review callback
         this.canvas.onReviewCard = this.reviewSingleCard.bind(this);
 
+        // Flashcard flip callback
+        this.canvas.onFlipCard = this.handleFlipCard.bind(this);
+
         // PDF drag & drop callback
         this.canvas.onPdfDrop = this.handlePdfDrop.bind(this);
 
@@ -5499,6 +5502,25 @@ ${gradingRules}
         if (!card || card.type !== NodeType.FLASHCARD) return;
 
         this.showReviewModal([cardId]);
+    }
+
+    /**
+     * Handle flipping a flashcard to show/hide the answer
+     * Toggles a CSS class on the node to reveal the back of the card
+     * @param {string} cardId - Flashcard node ID
+     */
+    handleFlipCard(cardId) {
+        const card = this.graph.getNode(cardId);
+        if (!card || card.type !== NodeType.FLASHCARD) return;
+
+        // Toggle the flipped state on the node element
+        const nodeWrapper = this.canvas.nodeElements.get(cardId);
+        if (nodeWrapper) {
+            const nodeDiv = nodeWrapper.querySelector('.node');
+            if (nodeDiv) {
+                nodeDiv.classList.toggle('flashcard-flipped');
+            }
+        }
     }
 
     /**

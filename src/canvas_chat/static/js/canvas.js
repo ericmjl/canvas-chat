@@ -1611,7 +1611,10 @@ class Canvas {
                               action.id === 'fetch-summarize' ? 'fetch-summarize-btn' :
                               action.id === 'edit-content' ? 'edit-content-btn' :
                               action.id === 'resummarize' ? 'resummarize-btn' :
-                              action.id === 'copy' ? 'copy-btn' : '';
+                              action.id === 'copy' ? 'copy-btn' :
+                              action.id === 'create-flashcards' ? 'create-flashcards-btn' :
+                              action.id === 'flip-card' ? 'flip-card-btn' :
+                              action.id === 'review-card' ? 'review-card-btn' : '';
             return `<button class="node-action ${actionClass}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
         }).join('');
 
@@ -1949,6 +1952,15 @@ class Canvas {
             reviewCardBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.onReviewCard) this.onReviewCard(node.id);
+            });
+        }
+
+        // Flip card button (flashcard nodes)
+        const flipCardBtn = div.querySelector('.flip-card-btn');
+        if (flipCardBtn) {
+            flipCardBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.onFlipCard) this.onFlipCard(node.id);
             });
         }
 
