@@ -51,7 +51,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e6/ad/3cc14f097111b4de0040c83a525973216457bbeeb63739ef1ed275c1c021/certifi-2026.1.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/47/d9/d83e293854571c877a92da46fdec39158f8d7e68da75bf73581225d28e90/cffi-2.0.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/67/ff/f6b948ca32e4f2a4576aa129d8bed61f2e0543bf9f5f2b7fc3758ed005c9/charset_normalizer-3.4.4-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/d5/48/a4460ef2c007a40a78f9684c2d067c7f55f18248c730f75eea63a610bfda/chonkie-1.5.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/2f/0b/3c7f87b2ed277897d401ef090f7b98ca50febbc02b4336dc57fe9f67fb41/chonkie-1.5.2-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c9/56/e7e69b427c3878352c2fb9b450bd0e19ed552753491d39d7d0a2f5226d41/cryptography-46.0.3-cp311-abi3-manylinux_2_28_x86_64.whl
@@ -233,7 +233,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e6/ad/3cc14f097111b4de0040c83a525973216457bbeeb63739ef1ed275c1c021/certifi-2026.1.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/92/c4/3ce07396253a83250ee98564f8d7e9789fab8e58858f35d07a9a2c78de9f/cffi-2.0.0-cp314-cp314-macosx_10_13_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/2a/35/7051599bd493e62411d6ede36fd5af83a38f37c4767b92884df7301db25d/charset_normalizer-3.4.4-cp314-cp314-macosx_10_13_universal2.whl
-      - pypi: https://files.pythonhosted.org/packages/dd/a3/9d556afe07584c303852f0c718e8eefaa2bd02e0f0d5aea83d916b522a09/chonkie-1.5.1-cp314-cp314-macosx_10_15_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/d4/a5/700be717efe0e8bc434f39c2c5a49bb3f607954c73fc98395539f255007b/chonkie-1.5.2-cp314-cp314-macosx_10_15_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1d/42/9c391dd801d6cf0d561b5890549d4b27bafcc53b39c31a817e69d87c625b/cryptography-46.0.3-cp311-abi3-macosx_10_9_universal2.whl
@@ -412,7 +412,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e6/ad/3cc14f097111b4de0040c83a525973216457bbeeb63739ef1ed275c1c021/certifi-2026.1.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/59/dd/27e9fa567a23931c838c6b02d0764611c62290062a6d4e8ff7863daf9730/cffi-2.0.0-cp314-cp314-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/2a/35/7051599bd493e62411d6ede36fd5af83a38f37c4767b92884df7301db25d/charset_normalizer-3.4.4-cp314-cp314-macosx_10_13_universal2.whl
-      - pypi: https://files.pythonhosted.org/packages/02/00/dfbf2003348ee9d44575b38f885e9c8ca6d12dac93a1c356a0452912dbd4/chonkie-1.5.1-cp314-cp314-macosx_11_0_arm64.whl
+      - pypi: https://files.pythonhosted.org/packages/48/8e/5b9376f9f61725b5e390110a4831965f44f57aa63092a68adcff6cec5d8b/chonkie-1.5.2-cp314-cp314-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1d/42/9c391dd801d6cf0d561b5890549d4b27bafcc53b39c31a817e69d87c625b/cryptography-46.0.3-cp311-abi3-macosx_10_9_universal2.whl
@@ -879,8 +879,8 @@ packages:
   requires_python: '>=3.9'
 - pypi: ./
   name: canvas-chat
-  version: 0.1.26
-  sha256: 70cf932ae3876ce59fdd91f8c294a58e996b7ab4acfbaa4e88759d8677c4caaa
+  version: 0.1.27
+  sha256: e4133f2758ce97838a0c407d148ac90e8611177fede583b2e095fb8623406c4a
   requires_dist:
   - fastapi>=0.115.0
   - uvicorn>=0.32.0
@@ -900,7 +900,6 @@ packages:
   - pytest>=8.0.0 ; extra == 'dev'
   - httpx>=0.27.0 ; extra == 'dev'
   requires_python: '>=3.11'
-  editable: true
 - pypi: https://files.pythonhosted.org/packages/4b/0c/0654233d7543ac8a50f4785f172430ddc97538ba418eb305d6e529d1a120/cbor2-5.8.0-cp314-cp314-macosx_11_0_arm64.whl
   name: cbor2
   version: 5.8.0
@@ -952,10 +951,10 @@ packages:
   version: 3.4.4
   sha256: ecaae4149d99b1c9e7b88bb03e3221956f68fd6d50be2ef061b2381b61d20838
   requires_python: '>=3.7'
-- pypi: https://files.pythonhosted.org/packages/02/00/dfbf2003348ee9d44575b38f885e9c8ca6d12dac93a1c356a0452912dbd4/chonkie-1.5.1-cp314-cp314-macosx_11_0_arm64.whl
+- pypi: https://files.pythonhosted.org/packages/2f/0b/3c7f87b2ed277897d401ef090f7b98ca50febbc02b4336dc57fe9f67fb41/chonkie-1.5.2-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
   name: chonkie
-  version: 1.5.1
-  sha256: f415db1f0005fa7222a081a3c016b86edbff929f1bd951bfd90a8f551482fd7a
+  version: 1.5.2
+  sha256: 55fcb8eeb720db6ad7d4fb98868dbe354ee6e9eddc66859a85f3259928caab50
   requires_dist:
   - tqdm>=4.64.0
   - numpy>=2.0.0
@@ -972,6 +971,7 @@ packages:
   - magika>=0.6.0,<1.1.0 ; extra == 'code'
   - transformers>=4.0.0 ; extra == 'neural'
   - torch>=2.0.0,<3.0 ; extra == 'neural'
+  - memchunk>=0.3.0 ; extra == 'fast'
   - tokenizers>=0.16.0 ; extra == 'model2vec'
   - model2vec>=0.7.0 ; extra == 'model2vec'
   - numpy>=2.0.0,<3.0 ; extra == 'model2vec'
@@ -1046,6 +1046,7 @@ packages:
   - catsu>=0.0.1 ; extra == 'all'
   - litellm>=1.0.0 ; extra == 'all'
   - datasets>=1.14.0 ; extra == 'all'
+  - memchunk>=0.3.0 ; extra == 'all'
   - datasets>=1.14.0 ; extra == 'dev'
   - transformers>=4.0.0 ; extra == 'dev'
   - pytest>=6.2.0 ; extra == 'dev'
@@ -1061,10 +1062,10 @@ packages:
   - openpyxl ; extra == 'dev'
   - uv>=0.9.18 ; extra == 'dev'
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/d5/48/a4460ef2c007a40a78f9684c2d067c7f55f18248c730f75eea63a610bfda/chonkie-1.5.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/48/8e/5b9376f9f61725b5e390110a4831965f44f57aa63092a68adcff6cec5d8b/chonkie-1.5.2-cp314-cp314-macosx_11_0_arm64.whl
   name: chonkie
-  version: 1.5.1
-  sha256: 8d0c75717b0e96a01005ab22cac0a13262707352b7a5a0c1edc7fceb26bdad62
+  version: 1.5.2
+  sha256: 7c0df296fedd82bc57665e3541a08a2e9a43c6a81d19f30cf2bdc8b151179b54
   requires_dist:
   - tqdm>=4.64.0
   - numpy>=2.0.0
@@ -1081,6 +1082,7 @@ packages:
   - magika>=0.6.0,<1.1.0 ; extra == 'code'
   - transformers>=4.0.0 ; extra == 'neural'
   - torch>=2.0.0,<3.0 ; extra == 'neural'
+  - memchunk>=0.3.0 ; extra == 'fast'
   - tokenizers>=0.16.0 ; extra == 'model2vec'
   - model2vec>=0.7.0 ; extra == 'model2vec'
   - numpy>=2.0.0,<3.0 ; extra == 'model2vec'
@@ -1155,6 +1157,7 @@ packages:
   - catsu>=0.0.1 ; extra == 'all'
   - litellm>=1.0.0 ; extra == 'all'
   - datasets>=1.14.0 ; extra == 'all'
+  - memchunk>=0.3.0 ; extra == 'all'
   - datasets>=1.14.0 ; extra == 'dev'
   - transformers>=4.0.0 ; extra == 'dev'
   - pytest>=6.2.0 ; extra == 'dev'
@@ -1170,10 +1173,10 @@ packages:
   - openpyxl ; extra == 'dev'
   - uv>=0.9.18 ; extra == 'dev'
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/dd/a3/9d556afe07584c303852f0c718e8eefaa2bd02e0f0d5aea83d916b522a09/chonkie-1.5.1-cp314-cp314-macosx_10_15_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/d4/a5/700be717efe0e8bc434f39c2c5a49bb3f607954c73fc98395539f255007b/chonkie-1.5.2-cp314-cp314-macosx_10_15_x86_64.whl
   name: chonkie
-  version: 1.5.1
-  sha256: cee27ffe612f12fddf0dfd06e3c36afc049378c8236183eab53dba9a614a0c36
+  version: 1.5.2
+  sha256: 86e0d5e4e9e203a1d01435a32c1568bf5816898fd55ef3f3590ce6ef3c8eab56
   requires_dist:
   - tqdm>=4.64.0
   - numpy>=2.0.0
@@ -1190,6 +1193,7 @@ packages:
   - magika>=0.6.0,<1.1.0 ; extra == 'code'
   - transformers>=4.0.0 ; extra == 'neural'
   - torch>=2.0.0,<3.0 ; extra == 'neural'
+  - memchunk>=0.3.0 ; extra == 'fast'
   - tokenizers>=0.16.0 ; extra == 'model2vec'
   - model2vec>=0.7.0 ; extra == 'model2vec'
   - numpy>=2.0.0,<3.0 ; extra == 'model2vec'
@@ -1264,6 +1268,7 @@ packages:
   - catsu>=0.0.1 ; extra == 'all'
   - litellm>=1.0.0 ; extra == 'all'
   - datasets>=1.14.0 ; extra == 'all'
+  - memchunk>=0.3.0 ; extra == 'all'
   - datasets>=1.14.0 ; extra == 'dev'
   - transformers>=4.0.0 ; extra == 'dev'
   - pytest>=6.2.0 ; extra == 'dev'
