@@ -5121,17 +5121,18 @@ ${nodeContent}`;
             hasSubmitted: false
         };
 
-        // Get modal elements
+        // Set up event listeners (clone to remove previous)
+        // IMPORTANT: This must be called BEFORE getting element references
+        // because it replaces elements with clones
+        this.setupReviewModalListeners();
+
+        // Get modal elements AFTER setupReviewModalListeners has cloned them
         const modal = document.getElementById('flashcard-review-modal');
         const progressEl = document.getElementById('review-progress');
-        const questionEl = document.getElementById('review-question');
         const answerInput = document.getElementById('review-answer-input');
         const submitBtn = document.getElementById('review-submit');
         const resultEl = document.getElementById('review-result');
         const nextBtn = document.getElementById('review-next');
-
-        // Set up event listeners (clone to remove previous)
-        this.setupReviewModalListeners();
 
         // Show first card
         this.displayReviewCard(0);
@@ -5140,6 +5141,8 @@ ${nodeContent}`;
         answerInput.value = '';
         answerInput.style.display = 'block';
         submitBtn.style.display = 'block';
+        submitBtn.textContent = 'Submit Answer';
+        submitBtn.disabled = false;
         resultEl.style.display = 'none';
         nextBtn.style.display = 'none';
 
