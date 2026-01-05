@@ -9,8 +9,20 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'src/**'
+      - 'modal_app.py'
+      - 'pyproject.toml'
+      - 'pixi.lock'
+      - '.github/workflows/modal-deploy.yaml'
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+      - 'src/**'
+      - 'modal_app.py'
+      - 'pyproject.toml'
+      - 'pixi.lock'
+      - '.github/workflows/modal-deploy.yaml'
 
 jobs:
   deploy:
