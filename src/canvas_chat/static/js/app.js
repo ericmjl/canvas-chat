@@ -5443,17 +5443,20 @@ ${gradingRules}
             this.graph.updateNode(cardId, { srs: newSrs });
 
             // Re-render the card to update status display
-            this.canvas.renderNode(card);
+            // Must re-fetch the node to get the updated reference
+            const updatedCard = this.graph.getNode(cardId);
+            this.canvas.renderNode(updatedCard);
         }
 
         // Move to next card or finish
         this.reviewState.currentIndex++;
 
         if (this.reviewState.currentIndex >= this.reviewState.cardIds.length) {
-            // Finished review
+            // Finished review - save count before closing modal (which sets reviewState to null)
+            const reviewedCount = this.reviewState.cardIds.length;
             this.closeReviewModal();
             this.saveSession();
-            this.showToast(`Reviewed ${this.reviewState.cardIds.length} cards`, 'success');
+            this.showToast(`Reviewed ${reviewedCount} cards`, 'success');
         } else {
             // Show next card
             this.reviewState.hasSubmitted = false;
