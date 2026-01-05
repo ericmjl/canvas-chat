@@ -5530,7 +5530,7 @@ ${gradingRules}
      * Check for due flashcards and show toast notification if any
      */
     checkDueFlashcardsOnLoad() {
-        const dueCards = getDueFlashcards(this.graph.nodes);
+        const dueCards = getDueFlashcards(this.graph.getAllNodes());
 
         if (dueCards.length > 0) {
             const cardIds = dueCards.map(c => c.id);
