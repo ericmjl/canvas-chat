@@ -2837,6 +2837,84 @@ test('getDueFlashcards: handles boundary case - review date is now', () => {
 });
 
 // ============================================================
+// Flashcard strictness storage tests
+// ============================================================
+
+/**
+ * Simulate the flashcard strictness storage functions from storage.js.
+ * These control how strictly the LLM grades flashcard answers.
+ */
+function createStrictnessStorage(localStorage) {
+    return {
+        getFlashcardStrictness() {
+            return localStorage.getItem('canvas-chat-flashcard-strictness') || 'medium';
+        },
+
+        setFlashcardStrictness(value) {
+            localStorage.setItem('canvas-chat-flashcard-strictness', value);
+        }
+    };
+}
+
+test('getFlashcardStrictness: returns medium by default', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createStrictnessStorage(mockStorage);
+
+    assertEqual(storage.getFlashcardStrictness(), 'medium');
+});
+
+test('getFlashcardStrictness: returns stored value', () => {
+    const mockStorage = new MockLocalStorage();
+    mockStorage.setItem('canvas-chat-flashcard-strictness', 'strict');
+    const storage = createStrictnessStorage(mockStorage);
+
+    assertEqual(storage.getFlashcardStrictness(), 'strict');
+});
+
+test('setFlashcardStrictness: stores lenient value', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createStrictnessStorage(mockStorage);
+
+    storage.setFlashcardStrictness('lenient');
+
+    assertEqual(storage.getFlashcardStrictness(), 'lenient');
+});
+
+test('setFlashcardStrictness: stores strict value', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createStrictnessStorage(mockStorage);
+
+    storage.setFlashcardStrictness('strict');
+
+    assertEqual(storage.getFlashcardStrictness(), 'strict');
+});
+
+test('setFlashcardStrictness: can update value', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createStrictnessStorage(mockStorage);
+
+    storage.setFlashcardStrictness('lenient');
+    assertEqual(storage.getFlashcardStrictness(), 'lenient');
+
+    storage.setFlashcardStrictness('strict');
+    assertEqual(storage.getFlashcardStrictness(), 'strict');
+
+    storage.setFlashcardStrictness('medium');
+    assertEqual(storage.getFlashcardStrictness(), 'medium');
+});
+
+test('setFlashcardStrictness: persists across function calls', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage1 = createStrictnessStorage(mockStorage);
+
+    storage1.setFlashcardStrictness('strict');
+
+    // Create a new storage instance with the same localStorage
+    const storage2 = createStrictnessStorage(mockStorage);
+    assertEqual(storage2.getFlashcardStrictness(), 'strict');
+});
+
+// ============================================================
 // Summary
 // ============================================================
 

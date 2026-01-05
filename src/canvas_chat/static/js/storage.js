@@ -398,6 +398,22 @@ class Storage {
 
         localStorage.setItem('canvas-chat-recent-models', JSON.stringify(trimmed));
     }
+
+    /**
+     * Get flashcard grading strictness level
+     * @returns {string} - 'lenient', 'medium', or 'strict' (default: 'medium')
+     */
+    getFlashcardStrictness() {
+        return localStorage.getItem('canvas-chat-flashcard-strictness') || 'medium';
+    }
+
+    /**
+     * Set flashcard grading strictness level
+     * @param {string} value - 'lenient', 'medium', or 'strict'
+     */
+    setFlashcardStrictness(value) {
+        localStorage.setItem('canvas-chat-flashcard-strictness', value);
+    }
 }
 
 // Export singleton instance
