@@ -141,15 +141,12 @@ jobs:
           llamabot configure default-model --model-name="gpt-4.1-mini"
           llamabot git write-release-notes
 
-      - name: Fix formatting issues in generated release notes
+      - name: Run pre-commit to fix any formatting issues
         if: steps.check_release.outputs.already_released == 'false'
         run: |
-          # Strip trailing whitespace from release notes (LLM often adds trailing spaces)
-          sed -i 's/[[:space:]]*$//' docs/releases/v${{ env.version_number }}.md
-
-      - name: Update pixi.lock after all changes
-        if: steps.check_release.outputs.already_released == 'false'
-        run: pixi lock
+          # First run applies auto-fixes, second run verifies all checks pass
+          uvx pre-commit run --all-files || true
+          uvx pre-commit run --all-files
 
       - name: Commit release notes and lock file
         if: steps.check_release.outputs.already_released == 'false'
