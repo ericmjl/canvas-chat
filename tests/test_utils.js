@@ -95,7 +95,8 @@ const {
     getDefaultNodeSize,
     wrapNode,
     applySM2,
-    isFlashcardDue
+    isFlashcardDue,
+    getDueFlashcards
 } = global.window;
 
 // Simple test runner
@@ -2730,6 +2731,109 @@ test('FlashcardNode: getActions includes REVIEW_CARD', () => {
     const wrapped = wrapNode(node);
     const actions = wrapped.getActions();
     assertTrue(actions.some(a => a.id === 'review-card'), 'FlashcardNode should include review-card action');
+});
+
+// ============================================================
+// getDueFlashcards filter tests
+// ============================================================
+
+test('getDueFlashcards: returns empty array when no nodes', () => {
+    const result = getDueFlashcards([]);
+    assertEqual(result.length, 0);
+});
+
+test('getDueFlashcards: returns empty array when no flashcards', () => {
+    const nodes = [
+        { type: NodeType.AI, content: 'response' },
+        { type: NodeType.HUMAN, content: 'question' }
+    ];
+    const result = getDueFlashcards(nodes);
+    assertEqual(result.length, 0);
+});
+
+test('getDueFlashcards: returns new flashcard (no SRS data)', () => {
+    const nodes = [
+        { id: 'fc-1', type: NodeType.FLASHCARD, content: 'Q1', back: 'A1' }
+    ];
+    const result = getDueFlashcards(nodes);
+    assertEqual(result.length, 1);
+    assertEqual(result[0].id, 'fc-1');
+});
+
+test('getDueFlashcards: returns flashcard with null nextReviewDate', () => {
+    const nodes = [
+        {
+            id: 'fc-1',
+            type: NodeType.FLASHCARD,
+            content: 'Q1',
+            back: 'A1',
+            srs: { nextReviewDate: null }
+        }
+    ];
+    const result = getDueFlashcards(nodes);
+    assertEqual(result.length, 1);
+});
+
+test('getDueFlashcards: returns flashcard with past nextReviewDate', () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString();
+    const nodes = [
+        {
+            id: 'fc-1',
+            type: NodeType.FLASHCARD,
+            content: 'Q1',
+            back: 'A1',
+            srs: { nextReviewDate: yesterday }
+        }
+    ];
+    const result = getDueFlashcards(nodes);
+    assertEqual(result.length, 1);
+});
+
+test('getDueFlashcards: excludes flashcard with future nextReviewDate', () => {
+    const tomorrow = new Date(Date.now() + 86400000).toISOString();
+    const nodes = [
+        {
+            id: 'fc-1',
+            type: NodeType.FLASHCARD,
+            content: 'Q1',
+            back: 'A1',
+            srs: { nextReviewDate: tomorrow }
+        }
+    ];
+    const result = getDueFlashcards(nodes);
+    assertEqual(result.length, 0);
+});
+
+test('getDueFlashcards: mixed nodes returns only due flashcards', () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString();
+    const tomorrow = new Date(Date.now() + 86400000).toISOString();
+    const nodes = [
+        { type: NodeType.AI, content: 'response' },
+        { id: 'fc-due', type: NodeType.FLASHCARD, content: 'Q1', back: 'A1', srs: { nextReviewDate: yesterday } },
+        { id: 'fc-not-due', type: NodeType.FLASHCARD, content: 'Q2', back: 'A2', srs: { nextReviewDate: tomorrow } },
+        { id: 'fc-new', type: NodeType.FLASHCARD, content: 'Q3', back: 'A3' },
+        { type: NodeType.HUMAN, content: 'question' }
+    ];
+    const result = getDueFlashcards(nodes);
+    assertEqual(result.length, 2);
+    assertTrue(result.some(c => c.id === 'fc-due'), 'Should include due card');
+    assertTrue(result.some(c => c.id === 'fc-new'), 'Should include new card');
+    assertFalse(result.some(c => c.id === 'fc-not-due'), 'Should not include future card');
+});
+
+test('getDueFlashcards: handles boundary case - review date is now', () => {
+    const now = new Date().toISOString();
+    const nodes = [
+        {
+            id: 'fc-1',
+            type: NodeType.FLASHCARD,
+            content: 'Q1',
+            back: 'A1',
+            srs: { nextReviewDate: now }
+        }
+    ];
+    const result = getDueFlashcards(nodes);
+    assertEqual(result.length, 1, 'Card with nextReviewDate = now should be due');
 });
 
 // ============================================================
