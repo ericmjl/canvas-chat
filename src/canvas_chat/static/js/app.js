@@ -5622,14 +5622,8 @@ ${gradingRules}
 
         const parentNode = parents[0];
 
-        // Extract the excerpted text from the highlight node content
-        // The content is stored as blockquoted text with "> " prefix on each line
-        let excerptText = highlightNode.content || '';
-        // Strip "> " prefix from each line (blockquote format)
-        excerptText = excerptText
-            .split('\n')
-            .map(line => line.startsWith('> ') ? line.slice(2) : line)
-            .join('\n');
+        // Extract the excerpted text using the utility function
+        const excerptText = extractExcerptText(highlightNode.content);
 
         if (!excerptText.trim()) return;
 
