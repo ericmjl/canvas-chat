@@ -2831,6 +2831,373 @@ test('setFlashcardStrictness: persists across function calls', () => {
 });
 
 // ============================================================
+// Custom Models storage tests
+// ============================================================
+
+/**
+ * Tests for user-defined custom models storage.
+ * Custom models allow users to add LiteLLM-compatible model IDs
+ * that persist in localStorage and appear in the model picker.
+ */
+function createCustomModelsStorage(localStorage) {
+    const STORAGE_KEY = 'canvas-chat-custom-models';
+    const MODEL_ID_PATTERN = /^[a-z0-9_-]+\/[a-z0-9._-]+$/i;
+
+    return {
+        getCustomModels() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            return data ? JSON.parse(data) : [];
+        },
+
+        saveCustomModel(model) {
+            // Validate model ID format (provider/model-name)
+            if (!model.id || !MODEL_ID_PATTERN.test(model.id)) {
+                throw new Error('Model ID must be in format: provider/model-name');
+            }
+
+            const models = this.getCustomModels();
+
+            // Check if model already exists (update) or is new (add)
+            const existingIndex = models.findIndex(m => m.id === model.id);
+
+            const customModel = {
+                id: model.id,
+                name: model.name || model.id,  // Default to ID if no name
+                provider: 'Custom',
+                context_window: model.context_window || 128000,
+                base_url: model.base_url || null
+            };
+
+            if (existingIndex >= 0) {
+                models[existingIndex] = customModel;
+            } else {
+                models.push(customModel);
+            }
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(models));
+            return customModel;
+        },
+
+        deleteCustomModel(modelId) {
+            const models = this.getCustomModels();
+            const filtered = models.filter(m => m.id !== modelId);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+            return filtered.length < models.length;  // Return true if deleted
+        }
+    };
+}
+
+test('getCustomModels: returns empty array when no data', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    assertEqual(storage.getCustomModels(), []);
+});
+
+test('saveCustomModel: adds model with all fields', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    const model = storage.saveCustomModel({
+        id: 'openai/gpt-4.1-mini',
+        name: 'GPT-4.1 Mini',
+        context_window: 200000,
+        base_url: 'https://my-proxy.com/v1'
+    });
+
+    assertEqual(model.id, 'openai/gpt-4.1-mini');
+    assertEqual(model.name, 'GPT-4.1 Mini');
+    assertEqual(model.provider, 'Custom');
+    assertEqual(model.context_window, 200000);
+    assertEqual(model.base_url, 'https://my-proxy.com/v1');
+
+    const saved = storage.getCustomModels();
+    assertEqual(saved.length, 1);
+    assertEqual(saved[0].id, 'openai/gpt-4.1-mini');
+});
+
+test('saveCustomModel: defaults name to id when not provided', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    const model = storage.saveCustomModel({ id: 'openai/my-model' });
+
+    assertEqual(model.name, 'openai/my-model');
+});
+
+test('saveCustomModel: defaults context_window to 128000', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    const model = storage.saveCustomModel({ id: 'openai/my-model' });
+
+    assertEqual(model.context_window, 128000);
+});
+
+test('saveCustomModel: defaults base_url to null', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    const model = storage.saveCustomModel({ id: 'openai/my-model' });
+
+    assertEqual(model.base_url, null);
+});
+
+test('saveCustomModel: always sets provider to Custom', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    const model = storage.saveCustomModel({
+        id: 'anthropic/claude-custom',
+        provider: 'ShouldBeIgnored'
+    });
+
+    assertEqual(model.provider, 'Custom');
+});
+
+test('saveCustomModel: updates existing model with same id', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    storage.saveCustomModel({
+        id: 'openai/my-model',
+        name: 'Original Name',
+        context_window: 100000
+    });
+
+    storage.saveCustomModel({
+        id: 'openai/my-model',
+        name: 'Updated Name',
+        context_window: 200000
+    });
+
+    const models = storage.getCustomModels();
+    assertEqual(models.length, 1);
+    assertEqual(models[0].name, 'Updated Name');
+    assertEqual(models[0].context_window, 200000);
+});
+
+test('saveCustomModel: rejects invalid model ID - missing slash', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    let threw = false;
+    try {
+        storage.saveCustomModel({ id: 'invalid-model-no-slash' });
+    } catch (e) {
+        threw = true;
+        assertTrue(e.message.includes('provider/model-name'), 'Error should mention format');
+    }
+    assertTrue(threw, 'Should throw for invalid model ID');
+});
+
+test('saveCustomModel: rejects empty model ID', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    let threw = false;
+    try {
+        storage.saveCustomModel({ id: '' });
+    } catch (e) {
+        threw = true;
+    }
+    assertTrue(threw, 'Should throw for empty model ID');
+});
+
+test('saveCustomModel: rejects model ID without provider', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    let threw = false;
+    try {
+        storage.saveCustomModel({ id: '/model-only' });
+    } catch (e) {
+        threw = true;
+    }
+    assertTrue(threw, 'Should throw for model ID without provider');
+});
+
+test('saveCustomModel: accepts valid model ID formats', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    // Various valid formats
+    storage.saveCustomModel({ id: 'openai/gpt-4o' });
+    storage.saveCustomModel({ id: 'ollama_chat/llama3.1' });
+    storage.saveCustomModel({ id: 'my-proxy/qwen2.5-72b' });
+    storage.saveCustomModel({ id: 'anthropic/claude-3.5-sonnet' });
+
+    assertEqual(storage.getCustomModels().length, 4);
+});
+
+test('deleteCustomModel: removes model by id', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    storage.saveCustomModel({ id: 'openai/model-1' });
+    storage.saveCustomModel({ id: 'openai/model-2' });
+    storage.saveCustomModel({ id: 'openai/model-3' });
+
+    assertEqual(storage.getCustomModels().length, 3);
+
+    const deleted = storage.deleteCustomModel('openai/model-2');
+
+    assertTrue(deleted, 'Should return true when model deleted');
+    assertEqual(storage.getCustomModels().length, 2);
+    assertFalse(storage.getCustomModels().some(m => m.id === 'openai/model-2'));
+});
+
+test('deleteCustomModel: returns false for non-existent model', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    storage.saveCustomModel({ id: 'openai/model-1' });
+
+    const deleted = storage.deleteCustomModel('openai/non-existent');
+
+    assertFalse(deleted, 'Should return false when model not found');
+    assertEqual(storage.getCustomModels().length, 1);
+});
+
+test('deleteCustomModel: handles empty list gracefully', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    const deleted = storage.deleteCustomModel('openai/any-model');
+
+    assertFalse(deleted);
+    assertEqual(storage.getCustomModels().length, 0);
+});
+
+test('getCustomModels: persists across storage instances', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage1 = createCustomModelsStorage(mockStorage);
+
+    storage1.saveCustomModel({ id: 'openai/my-model', name: 'My Model' });
+
+    // Simulate page reload - new storage instance, same localStorage
+    const storage2 = createCustomModelsStorage(mockStorage);
+    const models = storage2.getCustomModels();
+
+    assertEqual(models.length, 1);
+    assertEqual(models[0].id, 'openai/my-model');
+    assertEqual(models[0].name, 'My Model');
+});
+
+// ============================================================
+// getBaseUrlForModel helper tests
+// ============================================================
+
+/**
+ * Tests for the getBaseUrlForModel helper.
+ * This helper checks if a model is custom and has a per-model base_url,
+ * otherwise falls back to the global base URL.
+ */
+function createBaseUrlHelper(localStorage) {
+    const customModelsStorage = createCustomModelsStorage(localStorage);
+
+    return {
+        getBaseUrl() {
+            return localStorage.getItem('canvas-chat-base-url') || null;
+        },
+
+        setBaseUrl(url) {
+            if (url) {
+                localStorage.setItem('canvas-chat-base-url', url);
+            } else {
+                localStorage.removeItem('canvas-chat-base-url');
+            }
+        },
+
+        getBaseUrlForModel(modelId) {
+            // Check if model is a custom model with per-model base_url
+            const customModels = customModelsStorage.getCustomModels();
+            const customModel = customModels.find(m => m.id === modelId);
+
+            if (customModel && customModel.base_url) {
+                return customModel.base_url;
+            }
+
+            // Fall back to global base URL
+            return this.getBaseUrl();
+        },
+
+        // Expose for test setup
+        saveCustomModel: customModelsStorage.saveCustomModel.bind(customModelsStorage)
+    };
+}
+
+test('getBaseUrlForModel: returns null when no base URL configured', () => {
+    const mockStorage = new MockLocalStorage();
+    const helper = createBaseUrlHelper(mockStorage);
+
+    assertNull(helper.getBaseUrlForModel('openai/gpt-4o'));
+});
+
+test('getBaseUrlForModel: returns global base URL for regular models', () => {
+    const mockStorage = new MockLocalStorage();
+    const helper = createBaseUrlHelper(mockStorage);
+
+    helper.setBaseUrl('https://global-proxy.com/v1');
+
+    assertEqual(helper.getBaseUrlForModel('openai/gpt-4o'), 'https://global-proxy.com/v1');
+});
+
+test('getBaseUrlForModel: returns per-model base URL for custom models', () => {
+    const mockStorage = new MockLocalStorage();
+    const helper = createBaseUrlHelper(mockStorage);
+
+    helper.setBaseUrl('https://global-proxy.com/v1');
+    helper.saveCustomModel({
+        id: 'openai/my-custom',
+        base_url: 'https://my-custom-proxy.com/v1'
+    });
+
+    assertEqual(helper.getBaseUrlForModel('openai/my-custom'), 'https://my-custom-proxy.com/v1');
+});
+
+test('getBaseUrlForModel: per-model base URL overrides global', () => {
+    const mockStorage = new MockLocalStorage();
+    const helper = createBaseUrlHelper(mockStorage);
+
+    helper.setBaseUrl('https://global.com/v1');
+    helper.saveCustomModel({
+        id: 'openai/custom',
+        base_url: 'https://custom.com/v1'
+    });
+
+    // Custom model uses its own URL
+    assertEqual(helper.getBaseUrlForModel('openai/custom'), 'https://custom.com/v1');
+    // Regular model uses global URL
+    assertEqual(helper.getBaseUrlForModel('openai/gpt-4o'), 'https://global.com/v1');
+});
+
+test('getBaseUrlForModel: custom model without base_url uses global', () => {
+    const mockStorage = new MockLocalStorage();
+    const helper = createBaseUrlHelper(mockStorage);
+
+    helper.setBaseUrl('https://global.com/v1');
+    helper.saveCustomModel({
+        id: 'openai/custom',
+        // No base_url specified
+    });
+
+    assertEqual(helper.getBaseUrlForModel('openai/custom'), 'https://global.com/v1');
+});
+
+test('getBaseUrlForModel: custom model without base_url and no global returns null', () => {
+    const mockStorage = new MockLocalStorage();
+    const helper = createBaseUrlHelper(mockStorage);
+
+    helper.saveCustomModel({
+        id: 'openai/custom',
+        // No base_url specified
+    });
+
+    assertNull(helper.getBaseUrlForModel('openai/custom'));
+});
+
+// ============================================================
 // Summary
 // ============================================================
 

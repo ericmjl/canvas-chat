@@ -797,6 +797,10 @@ class App {
             allModels.push(...models);
         }
 
+        // Add user-defined custom models
+        const customModels = storage.getCustomModels();
+        allModels.push(...customModels);
+
         // Update chat.models for context window lookups
         chat.models = allModels;
 
@@ -1048,6 +1052,11 @@ class App {
         });
         document.getElementById('save-settings-btn').addEventListener('click', () => {
             this.saveSettings();
+        });
+
+        // Custom models in settings
+        document.getElementById('add-custom-model-btn').addEventListener('click', () => {
+            this.handleAddCustomModel();
         });
 
         // Help modal
@@ -3089,7 +3098,7 @@ class App {
     }
 
     async parseTwoLists(contents, context, model, apiKey) {
-        const baseUrl = chat.getBaseUrl();
+        const baseUrl = chat.getBaseUrlForModel(model);
         const requestBody = {
             contents,
             context,
@@ -3292,7 +3301,7 @@ class App {
 
         const model = this.modelPicker.value;
         const apiKey = chat.getApiKeyForModel(model);
-        const baseUrl = chat.getBaseUrl();
+        const baseUrl = chat.getBaseUrlForModel(model);
 
         const rowItem = matrixNode.rowItems[row];
         const colItem = matrixNode.colItems[col];
@@ -4474,7 +4483,7 @@ class App {
      */
     async streamWithAbort(nodeId, abortController, messages, model, onChunk, onDone, onError) {
         const apiKey = chat.getApiKeyForModel(model);
-        const baseUrl = chat.getBaseUrl();
+        const baseUrl = chat.getBaseUrlForModel(model);
 
         try {
             const requestBody = {
@@ -5840,7 +5849,7 @@ ${gradingRules}
 
             const model = this.modelPicker.value;
             const apiKey = chat.getApiKeyForModel(model);
-            const baseUrl = chat.getBaseUrl();
+            const baseUrl = chat.getBaseUrlForModel(model);
 
             const requestBody = {
                 content,
@@ -5897,7 +5906,7 @@ ${gradingRules}
         try {
             const model = this.modelPicker.value;
             const apiKey = chat.getApiKeyForModel(model);
-            const baseUrl = chat.getBaseUrl();
+            const baseUrl = chat.getBaseUrlForModel(model);
 
             // Build content string based on node type
             let contentForSummary;
@@ -6083,10 +6092,113 @@ ${gradingRules}
 
         // Load flashcard strictness
         document.getElementById('flashcard-strictness').value = storage.getFlashcardStrictness();
+
+        // Render custom models list
+        this.renderCustomModelsList();
     }
 
     hideSettingsModal() {
         document.getElementById('settings-modal').style.display = 'none';
+    }
+
+    /**
+     * Render the custom models list in the settings modal
+     */
+    renderCustomModelsList() {
+        const container = document.getElementById('custom-models-list');
+        const models = storage.getCustomModels();
+
+        if (models.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        container.innerHTML = models.map(model => {
+            const meta = [];
+            if (model.context_window) {
+                meta.push(`${(model.context_window / 1000).toFixed(0)}k context`);
+            }
+            if (model.base_url) {
+                meta.push('custom endpoint');
+            }
+
+            return `
+                <div class="custom-model-item" data-model-id="${escapeHtmlText(model.id)}">
+                    <div class="custom-model-info">
+                        <div class="custom-model-name">${escapeHtmlText(model.name)}</div>
+                        <div class="custom-model-id">${escapeHtmlText(model.id)}</div>
+                        ${meta.length > 0 ? `<div class="custom-model-meta">${meta.join(' · ')}</div>` : ''}
+                    </div>
+                    <button class="custom-model-delete" title="Delete model">&times;</button>
+                </div>
+            `;
+        }).join('');
+
+        // Add delete handlers
+        container.querySelectorAll('.custom-model-delete').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const item = e.target.closest('.custom-model-item');
+                const modelId = item.dataset.modelId;
+                this.handleDeleteCustomModel(modelId);
+            });
+        });
+    }
+
+    /**
+     * Handle adding a custom model from the settings form
+     */
+    handleAddCustomModel() {
+        const idInput = document.getElementById('custom-model-id');
+        const nameInput = document.getElementById('custom-model-name');
+        const contextInput = document.getElementById('custom-model-context');
+        const baseUrlInput = document.getElementById('custom-model-baseurl');
+
+        const modelId = idInput.value.trim();
+        const name = nameInput.value.trim();
+        const contextWindow = parseInt(contextInput.value, 10) || 128000;
+        const baseUrl = baseUrlInput.value.trim();
+
+        if (!modelId) {
+            idInput.focus();
+            return;
+        }
+
+        try {
+            storage.saveCustomModel({
+                id: modelId,
+                name: name || undefined,
+                context_window: contextWindow,
+                base_url: baseUrl || undefined
+            });
+
+            // Clear form
+            idInput.value = '';
+            nameInput.value = '';
+            contextInput.value = '';
+            baseUrlInput.value = '';
+
+            // Re-render list
+            this.renderCustomModelsList();
+
+            // Also reload models so the new model appears in the picker
+            this.loadModels();
+        } catch (err) {
+            // Show validation error
+            alert(err.message);
+            idInput.focus();
+        }
+    }
+
+    /**
+     * Handle deleting a custom model
+     * @param {string} modelId - The model ID to delete
+     */
+    handleDeleteCustomModel(modelId) {
+        storage.deleteCustomModel(modelId);
+        this.renderCustomModelsList();
+
+        // Also reload models to remove from picker
+        this.loadModels();
     }
 
     // --- Help Modal ---

@@ -414,6 +414,94 @@ class Storage {
     setFlashcardStrictness(value) {
         localStorage.setItem('canvas-chat-flashcard-strictness', value);
     }
+
+    // --- Custom Models (localStorage) ---
+
+    /**
+     * Model ID validation pattern: provider/model-name
+     * Examples: openai/gpt-4.1-mini, ollama_chat/llama3.1, my-proxy/qwen2.5-72b
+     */
+    static MODEL_ID_PATTERN = /^[a-z0-9_-]+\/[a-z0-9._-]+$/i;
+
+    /**
+     * Get user-defined custom models from localStorage
+     * @returns {Array<{id: string, name: string, provider: string, context_window: number, base_url: string|null}>}
+     */
+    getCustomModels() {
+        const data = localStorage.getItem('canvas-chat-custom-models');
+        return data ? JSON.parse(data) : [];
+    }
+
+    /**
+     * Save a custom model to localStorage.
+     * If a model with the same ID exists, it will be updated.
+     * @param {Object} model - Model configuration
+     * @param {string} model.id - LiteLLM-compatible model ID (e.g., "openai/gpt-4.1-mini")
+     * @param {string} [model.name] - Display name (defaults to model.id)
+     * @param {number} [model.context_window] - Context window size (defaults to 128000)
+     * @param {string} [model.base_url] - Per-model base URL (defaults to null, uses global)
+     * @returns {Object} - The saved model object
+     * @throws {Error} - If model ID is invalid
+     */
+    saveCustomModel(model) {
+        // Validate model ID format (provider/model-name)
+        if (!model.id || !Storage.MODEL_ID_PATTERN.test(model.id)) {
+            throw new Error('Model ID must be in format: provider/model-name');
+        }
+
+        const models = this.getCustomModels();
+
+        // Check if model already exists (update) or is new (add)
+        const existingIndex = models.findIndex(m => m.id === model.id);
+
+        const customModel = {
+            id: model.id,
+            name: model.name || model.id,  // Default to ID if no name
+            provider: 'Custom',
+            context_window: model.context_window || 128000,
+            base_url: model.base_url || null
+        };
+
+        if (existingIndex >= 0) {
+            models[existingIndex] = customModel;
+        } else {
+            models.push(customModel);
+        }
+
+        localStorage.setItem('canvas-chat-custom-models', JSON.stringify(models));
+        return customModel;
+    }
+
+    /**
+     * Delete a custom model by ID
+     * @param {string} modelId - The model ID to delete
+     * @returns {boolean} - True if a model was deleted, false if not found
+     */
+    deleteCustomModel(modelId) {
+        const models = this.getCustomModels();
+        const filtered = models.filter(m => m.id !== modelId);
+        localStorage.setItem('canvas-chat-custom-models', JSON.stringify(filtered));
+        return filtered.length < models.length;
+    }
+
+    /**
+     * Get base URL for a specific model.
+     * Custom models may have per-model base URLs that override the global setting.
+     * @param {string} modelId - The model ID
+     * @returns {string|null} - Base URL to use, or null if none configured
+     */
+    getBaseUrlForModel(modelId) {
+        // Check if this is a custom model with per-model base_url
+        const customModels = this.getCustomModels();
+        const customModel = customModels.find(m => m.id === modelId);
+
+        if (customModel && customModel.base_url) {
+            return customModel.base_url;
+        }
+
+        // Fall back to global base URL
+        return this.getBaseUrl();
+    }
 }
 
 // Export singleton instance

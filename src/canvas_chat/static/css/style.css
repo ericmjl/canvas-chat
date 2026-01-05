@@ -2033,6 +2033,132 @@ html, body {
     background: var(--accent-hover);
 }
 
+.secondary-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.secondary-btn:hover {
+    background: var(--accent);
+    color: white;
+}
+
+/* Custom Models in Settings */
+.custom-models-list {
+    margin-bottom: 16px;
+}
+
+.custom-models-list:empty::before {
+    content: "No custom models configured";
+    display: block;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+.custom-model-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-md);
+    margin-bottom: 8px;
+    background: var(--bg-primary);
+}
+
+.custom-model-item:hover {
+    border-color: var(--accent);
+}
+
+.custom-model-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.custom-model-name {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.custom-model-id {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.custom-model-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.custom-model-delete {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--danger);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.custom-model-item:hover .custom-model-delete {
+    opacity: 1;
+}
+
+.custom-model-delete:hover {
+    background: rgba(250, 82, 82, 0.1);
+}
+
+.custom-model-form {
+    background: var(--bg-secondary);
+    padding: 16px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+}
+
+.custom-model-form .api-key-group {
+    margin-bottom: 12px;
+}
+
+.custom-model-form-row {
+    display: flex;
+    gap: 12px;
+}
+
+.custom-model-form-row .api-key-group {
+    flex: 1;
+}
+
+.custom-model-form .secondary-btn {
+    margin-top: 4px;
+}
+
 /* Session List */
 .session-list {
     margin-top: 16px;

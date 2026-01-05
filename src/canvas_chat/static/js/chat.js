@@ -62,6 +62,16 @@ class Chat {
     }
 
     /**
+     * Get base URL for a specific model.
+     * Custom models may have per-model base URLs that override the global setting.
+     * @param {string} modelId - The model ID
+     * @returns {string|null} - Base URL to use, or null if none configured
+     */
+    getBaseUrlForModel(modelId) {
+        return storage.getBaseUrlForModel(modelId);
+    }
+
+    /**
      * Get context window size for a model
      */
     getContextWindow(modelId) {
