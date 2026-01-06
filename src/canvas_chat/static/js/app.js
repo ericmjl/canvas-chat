@@ -439,6 +439,7 @@ class SlashCommandMenu {
         this.filteredCommands = [];
         this.onSelect = null; // Callback when command is selected
         this.justSelected = false; // Flag to prevent immediate send after selection
+        this.getHasContext = null; // Callback to check if context is available (selected nodes)
 
         this.createMenu();
     }
@@ -532,10 +533,13 @@ class SlashCommandMenu {
             case 'Tab':
             case 'Enter':
                 if (this.filteredCommands.length > 0) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.selectCommand(input, this.filteredCommands[this.selectedIndex]);
-                    return true;
+                    const cmd = this.filteredCommands[this.selectedIndex];
+                    if (!this.isCommandDisabled(cmd)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.selectCommand(input, cmd);
+                        return true;
+                    }
                 }
                 break;
             case 'Escape':
@@ -594,12 +598,40 @@ class SlashCommandMenu {
         this.activeInput = null;
     }
 
+    /**
+     * Check if a command is currently disabled
+     */
+    isCommandDisabled(cmd) {
+        const hasExa = storage.hasExaApiKey();
+        const inputText = this.activeInput ? this.activeInput.value : '';
+        const hasInputText = inputText.includes(' ') && inputText.split(' ').slice(1).join(' ').trim().length > 0;
+        const hasSelectedNodes = this.getHasContext ? this.getHasContext() : false;
+        const hasContext = hasInputText || hasSelectedNodes;
+
+        const isExaDisabled = cmd.requiresExa && !hasExa;
+        const isContextDisabled = cmd.requiresContext && !hasContext;
+        return isExaDisabled || isContextDisabled;
+    }
+
     render() {
         const hasExa = storage.hasExaApiKey();
+        // Check if context is available (selected nodes or text after command)
+        const inputText = this.activeInput ? this.activeInput.value : '';
+        const hasInputText = inputText.includes(' ') && inputText.split(' ').slice(1).join(' ').trim().length > 0;
+        const hasSelectedNodes = this.getHasContext ? this.getHasContext() : false;
+        const hasContext = hasInputText || hasSelectedNodes;
+
         const commandsHtml = this.filteredCommands.map((cmd, index) => {
-            const isDisabled = cmd.requiresExa && !hasExa;
+            const isExaDisabled = cmd.requiresExa && !hasExa;
+            const isContextDisabled = cmd.requiresContext && !hasContext;
+            const isDisabled = isExaDisabled || isContextDisabled;
             const disabledClass = isDisabled ? 'disabled' : '';
-            const disabledSuffix = isDisabled ? ' <span class="requires-exa">(requires Exa)</span>' : '';
+            let disabledSuffix = '';
+            if (isExaDisabled) {
+                disabledSuffix = ' <span class="requires-exa">(requires Exa)</span>';
+            } else if (isContextDisabled) {
+                disabledSuffix = ' <span class="requires-context">(requires text or selected node)</span>';
+            }
             return `
             <div class="slash-command-item ${index === this.selectedIndex ? 'selected' : ''} ${disabledClass}"
                  data-index="${index}">
@@ -619,8 +651,11 @@ class SlashCommandMenu {
         // Add click handlers
         this.menu.querySelectorAll('.slash-command-item').forEach((item, index) => {
             item.addEventListener('click', () => {
-                this.selectedIndex = index;
-                this.selectCommand(this.activeInput, this.filteredCommands[index]);
+                const cmd = this.filteredCommands[index];
+                if (!this.isCommandDisabled(cmd)) {
+                    this.selectedIndex = index;
+                    this.selectCommand(this.activeInput, cmd);
+                }
             });
         });
     }
@@ -1006,6 +1041,8 @@ class App {
     setupEventListeners() {
         // Attach slash command menu to chat input
         this.slashCommandMenu.attach(this.chatInput);
+        // Provide context checker for commands that require selected nodes
+        this.slashCommandMenu.getHasContext = () => this.canvas.getSelectedNodeIds().length > 0;
 
         // Chat input - send on Enter (but not if slash menu is handling it)
         this.chatInput.addEventListener('keydown', (e) => {
