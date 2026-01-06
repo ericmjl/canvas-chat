@@ -4249,7 +4249,8 @@ kbd {
     border-top: 1px solid transparent;
     background: var(--bg-primary);
     opacity: 0;
-    transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease, border-color 0.15s ease;
+    /* On collapse: fast opacity fade, no border transition (avoids flash) */
+    transition: max-height 0.25s ease, opacity 0.15s ease, padding 0.25s ease;
 }
 
 .factcheck-claim.expanded .factcheck-details {
@@ -4257,6 +4258,8 @@ kbd {
     opacity: 1;
     padding: 0 12px 12px 36px;
     border-top: 1px solid var(--node-border);
+    /* On expand: include border transition for smooth appearance */
+    transition: max-height 0.25s ease, opacity 0.2s ease 0.05s, padding 0.25s ease, border-color 0.15s ease;
 }
 
 .factcheck-details p {
