@@ -4177,14 +4177,14 @@ kbd {
    ====================================== */
 
 .factcheck-content {
-    padding: 0;
+    padding: 12px;
 }
 
 .factcheck-claims {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 8px;
+    /* Parent .factcheck-content provides padding */
 }
 
 .factcheck-claim {
