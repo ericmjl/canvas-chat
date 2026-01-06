@@ -24,7 +24,8 @@ const NodeType = {
     SYNTHESIS: 'synthesis', // Chairman's synthesized answer
     REVIEW: 'review',      // Committee member's review of other opinions
     IMAGE: 'image',        // Uploaded image for analysis
-    FLASHCARD: 'flashcard' // Spaced repetition flashcard
+    FLASHCARD: 'flashcard', // Spaced repetition flashcard
+    FACTCHECK: 'factcheck' // Fact-checking verdict node
 };
 
 /**
@@ -45,6 +46,7 @@ const DEFAULT_NODE_SIZES = {
     [NodeType.REVIEW]: { width: 640, height: 480 },
     [NodeType.NOTE]: { width: 640, height: 480 },
     [NodeType.IMAGE]: { width: 640, height: 480 },
+    [NodeType.FACTCHECK]: { width: 640, height: 480 },
 
     // Small nodes (420x200) - User input, short content
     [NodeType.HUMAN]: { width: 420, height: 200 },
