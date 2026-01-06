@@ -4243,14 +4243,20 @@ kbd {
 }
 
 .factcheck-details {
-    display: none;
-    padding: 0 12px 12px 36px;
-    border-top: 1px solid var(--node-border);
+    max-height: 0;
+    overflow: hidden;
+    padding: 0 12px 0 36px;
+    border-top: 1px solid transparent;
     background: var(--bg-primary);
+    opacity: 0;
+    transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease, border-color 0.15s ease;
 }
 
 .factcheck-claim.expanded .factcheck-details {
-    display: block;
+    max-height: 300px;
+    opacity: 1;
+    padding: 0 12px 12px 36px;
+    border-top: 1px solid var(--node-border);
 }
 
 .factcheck-details p {
