@@ -2696,11 +2696,31 @@ class App {
             }
         }
 
+        // Create a loading node immediately for feedback
+        const loadingNode = createNode(NodeType.FACTCHECK, '🔄 **Analyzing text for claims...**', {
+            position: this.graph.autoPosition(parentIds)
+        });
+        this.graph.addNode(loadingNode);
+        this.canvas.renderNode(loadingNode);
+
+        // Connect to parent nodes
+        for (const parentId of parentIds) {
+            const edge = createEdge(parentId, loadingNode.id, EdgeType.REFERENCE);
+            this.graph.addEdge(edge);
+            const parentNode = this.graph.getNode(parentId);
+            this.canvas.renderEdge(edge, parentNode.position, loadingNode.position);
+        }
+
+        this.canvas.clearSelection();
+        this.canvas.panToNodeAnimated(loadingNode.id);
+
         try {
             // If context provided but input is vague, refine it
             let effectiveInput = input;
             if (context && context.trim() && (!input || input.length < 20)) {
                 console.log('[Factcheck] Refining vague input with context');
+                this.canvas.updateNodeContent(loadingNode.id, '🔄 **Refining query...**', true);
+
                 const refineResponse = await fetch('/api/refine-query', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2728,58 +2748,44 @@ class App {
             }
 
             console.log('[Factcheck] Final effectiveInput:', effectiveInput);
+            this.canvas.updateNodeContent(loadingNode.id, '🔄 **Extracting claims...**', true);
 
             // Extract individual claims from input
             const claims = await this.extractFactcheckClaims(effectiveInput, model, apiKey);
 
             if (claims.length === 0) {
-                // No claims found - show inline message
-                const errorNode = createNode(NodeType.FACTCHECK, '**No verifiable claims found.**\n\nPlease provide specific factual statements to verify.', {
-                    position: this.graph.autoPosition(parentIds)
-                });
-                this.graph.addNode(errorNode);
-                this.canvas.renderNode(errorNode);
-                for (const parentId of parentIds) {
-                    const edge = createEdge(parentId, errorNode.id, EdgeType.REFERENCE);
-                    this.graph.addEdge(edge);
-                    const parentNode = this.graph.getNode(parentId);
-                    this.canvas.renderEdge(edge, parentNode.position, errorNode.position);
-                }
-                this.canvas.clearSelection();
+                // No claims found - update loading node with error message
+                const errorContent = '**No verifiable claims found.**\n\nPlease provide specific factual statements to verify.';
+                this.canvas.updateNodeContent(loadingNode.id, errorContent, false);
+                this.graph.updateNode(loadingNode.id, { content: errorContent });
                 this.saveSession();
                 return;
             }
 
             if (claims.length > 5) {
                 // Too many claims - show modal for selection
+                // Store the loading node ID so we can reuse it after modal
                 this._factcheckData = {
                     claims: claims,
                     parentIds: parentIds,
                     model: model,
-                    apiKey: apiKey
+                    apiKey: apiKey,
+                    loadingNodeId: loadingNode.id
                 };
+                this.canvas.updateNodeContent(loadingNode.id, `🔄 **Found ${claims.length} claims.** Select which to verify...`, false);
                 this.showFactcheckModal(claims);
                 return;
             }
 
-            // Proceed directly with all claims (≤5)
-            await this.executeFactcheck(claims, parentIds, model, apiKey);
+            // Proceed directly with all claims (≤5) - reuse the loading node
+            await this.executeFactcheck(claims, parentIds, model, apiKey, loadingNode.id);
 
         } catch (err) {
             console.error('Factcheck error:', err);
-            // Create error node
-            const errorNode = createNode(NodeType.FACTCHECK, `**Fact-check failed**\n\n*Error: ${err.message}*`, {
-                position: this.graph.autoPosition(parentIds)
-            });
-            this.graph.addNode(errorNode);
-            this.canvas.renderNode(errorNode);
-            for (const parentId of parentIds) {
-                const edge = createEdge(parentId, errorNode.id, EdgeType.REFERENCE);
-                this.graph.addEdge(edge);
-                const parentNode = this.graph.getNode(parentId);
-                this.canvas.renderEdge(edge, parentNode.position, errorNode.position);
-            }
-            this.canvas.clearSelection();
+            // Update loading node with error
+            const errorContent = `**Fact-check failed**\n\n*Error: ${err.message}*`;
+            this.canvas.updateNodeContent(loadingNode.id, errorContent, false);
+            this.graph.updateNode(loadingNode.id, { content: errorContent });
             this.saveSession();
         }
     }
@@ -2840,10 +2846,20 @@ class App {
 
     /**
      * Close the factcheck modal
+     * @param {boolean} [cancelled=true] - Whether the modal was cancelled (vs executed)
      */
-    closeFactcheckModal() {
+    closeFactcheckModal(cancelled = true) {
         const modal = document.getElementById('factcheck-modal');
         modal.style.display = 'none';
+
+        // If cancelled and there's a loading node, remove it
+        if (cancelled && this._factcheckData?.loadingNodeId) {
+            const loadingNodeId = this._factcheckData.loadingNodeId;
+            this.canvas.removeNode(loadingNodeId);
+            this.graph.removeNode(loadingNodeId);
+            this.saveSession();
+        }
+
         this._factcheckData = null;
     }
 
@@ -2911,24 +2927,27 @@ class App {
         const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.value));
         const selectedClaims = selectedIndices.map(i => this._factcheckData.claims[i]);
 
-        // Close modal first
-        this.closeFactcheckModal();
+        // Store data before closing modal (close nullifies _factcheckData)
+        const { parentIds, model, apiKey, loadingNodeId } = this._factcheckData;
 
-        // Execute with selected claims
-        const { parentIds, model, apiKey } = this._factcheckData;
-        await this.executeFactcheck(selectedClaims, parentIds, model, apiKey);
+        // Close modal (not cancelled - we're executing)
+        this.closeFactcheckModal(false);
+
+        // Execute with selected claims, reusing the loading node
+        await this.executeFactcheck(selectedClaims, parentIds, model, apiKey, loadingNodeId);
     }
 
     /**
      * Execute factcheck for the given claims
-     * Creates a FACTCHECK node and verifies each claim in parallel
+     * Creates a FACTCHECK node (or reuses existing) and verifies each claim in parallel
      * @param {string[]} claims - Array of claims to verify
      * @param {string[]} parentIds - Parent node IDs
      * @param {string} model - LLM model to use
      * @param {string} apiKey - API key for the model
+     * @param {string} [existingNodeId] - Optional existing node ID to reuse
      */
-    async executeFactcheck(claims, parentIds, model, apiKey) {
-        // Create the FACTCHECK node with initial state
+    async executeFactcheck(claims, parentIds, model, apiKey, existingNodeId = null) {
+        // Create the claims data with initial state
         const claimsData = claims.map((claim, index) => ({
             text: claim,
             status: 'checking', // checking | verified | partially_true | misleading | false | unverifiable | error
@@ -2938,24 +2957,37 @@ class App {
         }));
 
         const nodeContent = this.buildFactcheckContent(claimsData);
-        const factcheckNode = createNode(NodeType.FACTCHECK, nodeContent, {
-            position: this.graph.autoPosition(parentIds),
-            claims: claimsData
-        });
 
-        this.graph.addNode(factcheckNode);
-        this.canvas.renderNode(factcheckNode);
+        let factcheckNode;
+        if (existingNodeId) {
+            // Reuse existing node
+            factcheckNode = this.graph.getNode(existingNodeId);
+            factcheckNode.claims = claimsData;
+            factcheckNode.content = nodeContent;
+            this.graph.updateNode(existingNodeId, { content: nodeContent, claims: claimsData });
+            this.canvas.renderNode(factcheckNode);
+        } else {
+            // Create new node
+            factcheckNode = createNode(NodeType.FACTCHECK, nodeContent, {
+                position: this.graph.autoPosition(parentIds),
+                claims: claimsData
+            });
 
-        // Connect to parent nodes
-        for (const parentId of parentIds) {
-            const edge = createEdge(parentId, factcheckNode.id, EdgeType.REFERENCE);
-            this.graph.addEdge(edge);
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, factcheckNode.position);
+            this.graph.addNode(factcheckNode);
+            this.canvas.renderNode(factcheckNode);
+
+            // Connect to parent nodes
+            for (const parentId of parentIds) {
+                const edge = createEdge(parentId, factcheckNode.id, EdgeType.REFERENCE);
+                this.graph.addEdge(edge);
+                const parentNode = this.graph.getNode(parentId);
+                this.canvas.renderEdge(edge, parentNode.position, factcheckNode.position);
+            }
+
+            this.canvas.panToNodeAnimated(factcheckNode.id);
         }
 
         this.canvas.clearSelection();
-        this.canvas.panToNodeAnimated(factcheckNode.id);
         this.saveSession();
 
         // Verify each claim in parallel
