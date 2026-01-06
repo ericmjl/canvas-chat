@@ -350,6 +350,7 @@ const SLASH_COMMANDS = [
     { command: '/research', description: 'Deep research (requires Exa)', placeholder: 'topic', requiresExa: true },
     { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
     { command: '/committee', description: 'Consult multiple LLMs and synthesize', placeholder: 'question' },
+    { command: '/factcheck', description: 'Verify claims with web search', placeholder: 'claim(s) to verify', requiresContext: true },
 ];
 
 /**
