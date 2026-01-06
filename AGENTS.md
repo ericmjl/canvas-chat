@@ -381,6 +381,38 @@ test('resolveOverlaps works', () => {
 If a function is tightly coupled to a class and hard to test, that's a design smell.
 Refactor to extract pure functions that can be imported and tested directly.
 
+### When NOT to write unit tests
+
+**Not all code needs unit tests.** Some code is better tested through integration tests, E2E tests, or manual QA.
+
+**Don't write unit tests for:**
+
+1. **Complex instance methods** that require full class instantiation with many dependencies
+   - Example: `App.buildLLMRequest()` requires App constructor, modelPicker, storage, chat instances
+   - Why: Would require either duplicating logic (violates "never copy" rule) or brittle mocking
+   - Instead: Test through integration tests or manual QA with real configurations
+
+2. **Methods with runtime state dependencies**
+   - Methods that depend on DOM state, user interactions, or async operations in progress
+   - Why: Mocking the entire runtime environment is fragile and doesn't test real behavior
+   - Instead: Test the pure functions they call, verify behavior manually in the UI
+
+3. **Code already covered by structural guarantees**
+   - Example: Helper function that's the ONLY way to build requests (prevents bugs structurally)
+   - Why: The refactoring itself ensures correct usage
+   - Instead: Code review + manual testing of the happy path
+
+**When in doubt, ask:**
+- Would I need to duplicate code to test this? → Don't test it
+- Would I need complex mocking of multiple systems? → Don't test it
+- Is this already guaranteed by the structure of the code? → Don't test it
+- Is this a pure function with no dependencies? → Test it!
+
+**Example from PR #98:**
+- ❌ `App.buildLLMRequest()` - Complex instance method, requires mocking
+- ✅ `extract_provider()` - Pure function, easily testable
+- ✅ Refactoring that makes `base_url` impossible to forget - Structural guarantee
+
 ### Testing DOM-dependent functions
 
 For functions that require DOM APIs (document, TreeWalker, etc.), follow this pattern:
