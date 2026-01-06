@@ -403,12 +403,14 @@ Refactor to extract pure functions that can be imported and tested directly.
    - Instead: Code review + manual testing of the happy path
 
 **When in doubt, ask:**
+
 - Would I need to duplicate code to test this? → Don't test it
 - Would I need complex mocking of multiple systems? → Don't test it
 - Is this already guaranteed by the structure of the code? → Don't test it
 - Is this a pure function with no dependencies? → Test it!
 
 **Example from PR #98:**
+
 - ❌ `App.buildLLMRequest()` - Complex instance method, requires mocking
 - ✅ `extract_provider()` - Pure function, easily testable
 - ✅ Refactoring that makes `base_url` impossible to forget - Structural guarantee

@@ -1,9 +1,6 @@
 """Unit tests for utility functions in app.py - no API calls required."""
 
-import pytest
-
 from canvas_chat.app import extract_provider
-
 
 # --- extract_provider() tests ---
 
