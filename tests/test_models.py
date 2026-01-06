@@ -5,6 +5,8 @@ from pydantic import ValidationError
 
 from canvas_chat.app import (
     CommitteeRequest,
+    DDGSearchRequest,
+    DDGSearchResult,
     ExaContentsResult,
     ExaGetContentsRequest,
     FetchPdfRequest,
@@ -337,3 +339,56 @@ def test_pdf_result_missing_page_count():
     """Test that PdfResult requires page_count."""
     with pytest.raises(ValidationError):
         PdfResult(filename="doc.pdf", content="Content")
+
+
+# --- DDGSearchRequest and DDGSearchResult tests ---
+
+
+def test_ddg_search_request_valid():
+    """Test that DDGSearchRequest validates correct input."""
+    request = DDGSearchRequest(query="python async programming", max_results=5)
+    assert request.query == "python async programming"
+    assert request.max_results == 5
+
+
+def test_ddg_search_request_defaults():
+    """Test DDGSearchRequest default values."""
+    request = DDGSearchRequest(query="test query")
+    assert request.query == "test query"
+    assert request.max_results == 10  # default
+
+
+def test_ddg_search_request_missing_query():
+    """Test that DDGSearchRequest requires query."""
+    with pytest.raises(ValidationError):
+        DDGSearchRequest(max_results=5)
+
+
+def test_ddg_search_result_valid():
+    """Test that DDGSearchResult validates correct input."""
+    result = DDGSearchResult(
+        title="Python Async Guide",
+        url="https://example.com/python-async",
+        snippet="Learn about async programming in Python...",
+    )
+    assert result.title == "Python Async Guide"
+    assert result.url == "https://example.com/python-async"
+    assert result.snippet == "Learn about async programming in Python..."
+
+
+def test_ddg_search_result_empty_snippet():
+    """Test DDGSearchResult with empty snippet."""
+    result = DDGSearchResult(title="Test Result", url="https://example.com", snippet="")
+    assert result.snippet == ""
+
+
+def test_ddg_search_result_missing_required():
+    """Test that DDGSearchResult requires title, url, and snippet."""
+    with pytest.raises(ValidationError):
+        DDGSearchResult(title="Test", url="https://example.com")
+
+    with pytest.raises(ValidationError):
+        DDGSearchResult(title="Test", snippet="snippet")
+
+    with pytest.raises(ValidationError):
+        DDGSearchResult(url="https://example.com", snippet="snippet")

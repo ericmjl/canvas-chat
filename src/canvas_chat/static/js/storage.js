@@ -326,6 +326,15 @@ class Storage {
     }
 
     /**
+     * Check if Exa API key is configured
+     * @returns {boolean} - True if Exa API key is set and non-empty
+     */
+    hasExaApiKey() {
+        const key = this.getExaApiKey();
+        return key && key.trim().length > 0;
+    }
+
+    /**
      * Get the currently selected model
      */
     getCurrentModel() {

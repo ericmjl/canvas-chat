@@ -163,6 +163,21 @@ class ExaContentsResult(BaseModel):
     author: str | None = None
 
 
+class DDGSearchRequest(BaseModel):
+    """Request body for DuckDuckGo search endpoint."""
+
+    query: str
+    max_results: int = 10
+
+
+class DDGSearchResult(BaseModel):
+    """A single DuckDuckGo search result."""
+
+    title: str
+    url: str
+    snippet: str
+
+
 class ProviderModelsRequest(BaseModel):
     """Request body for fetching models from a provider."""
 
@@ -986,6 +1001,49 @@ async def exa_search(request: ExaSearchRequest):
 
     except Exception as e:
         logger.error(f"Exa search failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/ddg/search")
+async def ddg_search(request: DDGSearchRequest):
+    """
+    Search the web using DuckDuckGo.
+
+    This is a free fallback for users who don't have an Exa API key.
+    Returns search results in the same format as Exa search.
+    """
+    logger.info(
+        f"DDG search request: query='{request.query}', "
+        f"max_results={request.max_results}"
+    )
+
+    try:
+        from duckduckgo_search import DDGS
+
+        with DDGS() as ddgs:
+            results = list(ddgs.text(request.query, max_results=request.max_results))
+
+        formatted_results = []
+        for result in results:
+            formatted_results.append(
+                DDGSearchResult(
+                    title=result.get("title", "Untitled"),
+                    url=result.get("href", ""),
+                    snippet=result.get("body", ""),
+                )
+            )
+
+        logger.info(f"DDG returned {len(formatted_results)} results")
+        return {
+            "query": request.query,
+            "results": formatted_results,
+            "num_results": len(formatted_results),
+            "provider": "duckduckgo",
+        }
+
+    except Exception as e:
+        logger.error(f"DDG search failed: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e)) from e
 
