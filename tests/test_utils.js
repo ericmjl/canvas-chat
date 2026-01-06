@@ -3201,6 +3201,137 @@ test('getBaseUrlForModel: custom model without base_url and no global returns nu
 });
 
 // ============================================================
+// Matrix cell concurrent update tests
+// ============================================================
+// These tests verify the fix for the matrix cell persistence bug where
+// concurrent cell fills would overwrite each other due to stale snapshots.
+
+const Graph = global.window.Graph;
+
+test('Matrix cells: sequential updates preserve all cells', () => {
+    // Setup: Create a graph with a matrix node
+    const graph = new Graph();
+    const matrix = createMatrixNodeReal(
+        { x: 0, y: 0 },
+        'Test matrix',
+        ['Row A', 'Row B'],
+        ['Col 1', 'Col 2']
+    );
+    graph.addNode(matrix);
+
+    // Simulate sequential cell fills (no race condition)
+    // Fill cell 0-0
+    let currentNode = graph.getNode(matrix.id);
+    let updatedCells = { ...currentNode.cells, '0-0': { content: 'A1', filled: true } };
+    graph.updateNode(matrix.id, { cells: updatedCells });
+
+    // Fill cell 0-1
+    currentNode = graph.getNode(matrix.id);
+    updatedCells = { ...currentNode.cells, '0-1': { content: 'A2', filled: true } };
+    graph.updateNode(matrix.id, { cells: updatedCells });
+
+    // Fill cell 1-0
+    currentNode = graph.getNode(matrix.id);
+    updatedCells = { ...currentNode.cells, '1-0': { content: 'B1', filled: true } };
+    graph.updateNode(matrix.id, { cells: updatedCells });
+
+    // Verify all cells are preserved
+    const finalNode = graph.getNode(matrix.id);
+    assertEqual(finalNode.cells['0-0'].content, 'A1');
+    assertEqual(finalNode.cells['0-1'].content, 'A2');
+    assertEqual(finalNode.cells['1-0'].content, 'B1');
+});
+
+test('Matrix cells: stale cells snapshot causes data loss (demonstrates the bug)', () => {
+    // This test demonstrates the BUG that was fixed.
+    // The issue: spreading cells from a stale snapshot (before other cells were filled)
+    // causes filled cells to be overwritten with empty/stale versions.
+
+    const graph = new Graph();
+    const matrix = createMatrixNodeReal(
+        { x: 0, y: 0 },
+        'Test matrix',
+        ['Row A', 'Row B'],
+        ['Col 1', 'Col 2']
+    );
+    graph.addNode(matrix);
+
+    // Simulate the BUG: two concurrent fills both capture cells snapshot at start
+    // This mimics what happened in the old code where matrixNode was captured once
+    // and matrixNode.cells was spread later
+    const staleCellsA = { ...graph.getNode(matrix.id).cells };  // All cells empty/unfilled
+    const staleCellsB = { ...graph.getNode(matrix.id).cells };  // All cells empty/unfilled
+
+    // Cell A completes and writes its filled content
+    const updatedCellsA = { ...staleCellsA, '0-0': { content: 'A1', filled: true } };
+    graph.updateNode(matrix.id, { cells: updatedCellsA });
+
+    // Verify cell A was written and is filled
+    assertEqual(graph.getNode(matrix.id).cells['0-0'].content, 'A1');
+    assertTrue(graph.getNode(matrix.id).cells['0-0'].filled, 'Cell 0-0 should be filled');
+
+    // Cell B completes and writes using ITS stale snapshot (the bug!)
+    // staleCellsB was captured BEFORE cell A was filled, so it has the old empty version
+    const updatedCellsB = { ...staleCellsB, '0-1': { content: 'A2', filled: true } };
+    graph.updateNode(matrix.id, { cells: updatedCellsB });
+
+    // Verify the bug: cell 0-0's filled content was lost!
+    const finalNode = graph.getNode(matrix.id);
+    // Cell 0-0 was reverted to empty because staleCellsB had the old unfilled version
+    assertFalse(finalNode.cells['0-0'].filled, 'BUG: Cell 0-0 should have been overwritten to unfilled');
+    assertEqual(finalNode.cells['0-0'].content, null); // Lost the 'A1' content
+    assertEqual(finalNode.cells['0-1'].content, 'A2'); // Cell B exists
+    assertTrue(finalNode.cells['0-1'].filled, 'Cell 0-1 should be filled');
+});
+
+test('Matrix cells: re-read pattern preserves concurrent updates (the fix)', () => {
+    // This test verifies the FIX: always re-read node state before writing.
+
+    const graph = new Graph();
+    const matrix = createMatrixNodeReal(
+        { x: 0, y: 0 },
+        'Test matrix',
+        ['Row A', 'Row B'],
+        ['Col 1', 'Col 2']
+    );
+    graph.addNode(matrix);
+
+    // Simulate parallel fills - each re-reads current state before writing (the fix)
+
+    // Cell A completes
+    let currentNode = graph.getNode(matrix.id);
+    let currentCells = currentNode?.cells || {};
+    let updatedCells = { ...currentCells, '0-0': { content: 'A1', filled: true } };
+    graph.updateNode(matrix.id, { cells: updatedCells });
+
+    // Cell B completes - re-reads current state (includes cell A now)
+    currentNode = graph.getNode(matrix.id);
+    currentCells = currentNode?.cells || {};
+    updatedCells = { ...currentCells, '0-1': { content: 'A2', filled: true } };
+    graph.updateNode(matrix.id, { cells: updatedCells });
+
+    // Cell C completes - re-reads current state (includes cells A and B)
+    currentNode = graph.getNode(matrix.id);
+    currentCells = currentNode?.cells || {};
+    updatedCells = { ...currentCells, '1-0': { content: 'B1', filled: true } };
+    graph.updateNode(matrix.id, { cells: updatedCells });
+
+    // Cell D completes - re-reads current state (includes all previous)
+    currentNode = graph.getNode(matrix.id);
+    currentCells = currentNode?.cells || {};
+    updatedCells = { ...currentCells, '1-1': { content: 'B2', filled: true } };
+    graph.updateNode(matrix.id, { cells: updatedCells });
+
+    // Verify ALL cells are preserved
+    const finalNode = graph.getNode(matrix.id);
+    assertEqual(finalNode.cells['0-0'].content, 'A1');
+    assertEqual(finalNode.cells['0-1'].content, 'A2');
+    assertEqual(finalNode.cells['1-0'].content, 'B1');
+    assertEqual(finalNode.cells['1-1'].content, 'B2');
+    assertTrue(Object.keys(finalNode.cells).length === 4, 'All 4 cells should exist');
+});
+
+// ============================================================
 // Note: buildLLMRequest() tests removed
 // ============================================================
 // Per AGENTS.md principle: "Tests pure functions that don't require DOM or API calls"

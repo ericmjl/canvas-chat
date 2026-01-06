@@ -4134,7 +4134,10 @@ ${resultsText}`;
                     const now = Date.now();
                     if (now - lastStreamSync >= streamSyncInterval) {
                         lastStreamSync = now;
-                        const streamingCells = { ...matrixNode.cells, [cellKey]: { content: cellContent, filled: false } };
+                        // Re-read node to get current state (avoid race condition with parallel fills)
+                        const currentNode = this.graph.getNode(nodeId);
+                        const currentCells = currentNode?.cells || {};
+                        const streamingCells = { ...currentCells, [cellKey]: { content: cellContent, filled: false } };
                         this.graph.updateNode(nodeId, { cells: streamingCells });
                     }
                 },
@@ -4147,10 +4150,14 @@ ${resultsText}`;
                 }
             });
 
-            // Update the graph data (immutable pattern)
-            const oldCell = matrixNode.cells[cellKey] ? { ...matrixNode.cells[cellKey] } : { content: null, filled: false };
+            // Update the graph data - re-read node to get current state
+            // (avoid race condition with parallel fills where stale matrixNode.cells
+            // would overwrite cells filled by concurrent operations)
+            const currentNode = this.graph.getNode(nodeId);
+            const currentCells = currentNode?.cells || {};
+            const oldCell = currentCells[cellKey] ? { ...currentCells[cellKey] } : { content: null, filled: false };
             const newCell = { content: cellContent, filled: true };
-            const updatedCells = { ...matrixNode.cells, [cellKey]: newCell };
+            const updatedCells = { ...currentCells, [cellKey]: newCell };
             this.graph.updateNode(nodeId, { cells: updatedCells });
 
             // Push undo action for cell fill
