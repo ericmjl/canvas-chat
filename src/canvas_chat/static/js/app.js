@@ -2893,27 +2893,33 @@ class App {
             }
         });
 
-        // Update select all state
+        // Update select all state and label
         const totalCount = checkboxes.length;
         const selectedCount = selectedClaims.length;
         selectAll.checked = selectedCount === totalCount;
         selectAll.indeterminate = selectedCount > 0 && selectedCount < totalCount;
 
+        // Update the label text based on state
+        const labelText = selectAll.parentElement.querySelector('.checkbox-text');
+        if (labelText) {
+            labelText.textContent = selectedCount === totalCount ? 'Deselect All' : 'Select All';
+        }
+
         // Update count display
         const countEl = document.getElementById('factcheck-selection-count');
-        const isValid = selectedCount >= 1 && selectedCount <= 5;
+        const isValid = selectedCount >= 1;
 
         countEl.textContent = `${selectedCount} of ${totalCount} selected`;
         countEl.classList.toggle('valid', isValid);
         countEl.classList.toggle('invalid', !isValid);
 
-        // Show/hide limit warning
+        // Show/hide limit warning (informational, not blocking)
         const warningEl = document.getElementById('factcheck-limit-warning');
         if (warningEl) {
             warningEl.style.display = selectedCount > 5 ? 'inline' : 'none';
         }
 
-        // Enable/disable execute button
+        // Enable/disable execute button (only require at least 1 selected)
         document.getElementById('factcheck-execute-btn').disabled = !isValid;
     }
 
