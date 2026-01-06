@@ -715,6 +715,61 @@ test('highlightTextInHtml: complex markdown structure with heading, paragraph, a
 });
 
 // ============================================================
+// KaTeX math rendering tests (tables with rendered math)
+// ============================================================
+
+test('highlightTextInHtml: KaTeX table with duplication artifacts', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div></div>');
+    const { document } = dom.window;
+
+    // Actual KaTeX-rendered table cell with MathML + katex-html
+    const html = `<tr>
+<td>Base Model</td>
+<td>20.00* (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.13</mn><mo>±</mo></mrow><annotation encoding="application/x-tex">0.13 ±</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord">0.13</span><span class="mord">±</span></span></span></span>0.08)</td>
+<td>0.00* (N/A)</td>
+</tr>`;
+
+    // User's selection includes KaTeX duplication (number appears twice due to MathML + katex-html)
+    const text = 'Base Model\t20.00* (\n0.13\n±\n0.13±0.08)\t0.00* (N/A)';
+
+    const result = highlightTextInHtml(document, html, text);
+    assertIncludes(result, '<mark class="source-highlight">');
+    assertIncludes(result, 'Base Model');
+});
+
+test('highlightTextInHtml: skips MathML text nodes', () => {
+    const dom = new JSDOM('<!DOCTYPE html><div></div>');
+    const { document } = dom.window;
+
+    // KaTeX renders both MathML (for accessibility) and visual HTML
+    const html = `<span class="katex">
+        <span class="katex-mathml"><math><mn>0.13</mn><mo>±</mo></math></span>
+        <span class="katex-html" aria-hidden="true"><span class="mord">0.13</span><span class="mord">±</span></span>
+    </span>`;
+
+    // Selection of just the visible content
+    const text = '0.13±';
+
+    const result = highlightTextInHtml(document, html, text);
+    assertIncludes(result, '<mark class="source-highlight">');
+});
+
+test('normalizeKatexDuplication: removes number±number± pattern', () => {
+    // This tests the helper function that normalizes KaTeX selection artifacts
+    const input = '0.13 ± 0.13±0.08';
+    const expected = '0.13±0.08';
+    const result = normalizeKatexDuplication(input);
+    assertEqual(result.replace(/\s+/g, ' ').trim(), expected);
+});
+
+test('normalizeKatexDuplication: handles newlines in selection', () => {
+    const input = '0.13\n±\n0.13±0.08';
+    const result = normalizeKatexDuplication(input);
+    assertIncludes(result, '0.13±');
+    assertIncludes(result, '0.08');
+});
+
+// ============================================================
 // Blockquote stripping tests (for highlight node excerpt extraction)
 // ============================================================
 
@@ -754,6 +809,74 @@ test('extractExcerptText: empty content', () => {
     const content = '';
     const result = extractExcerptText(content);
     assertEqual(result, '');
+});
+
+// ============================================================
+// Alignment algorithm tests (for robust text matching)
+// ============================================================
+
+// Note: alignStart, alignEnd, findMatchRegion are imported from highlight-utils.js
+
+test('alignStart: finds exact match position', () => {
+    const result = alignStart('world', 'Hello world, this is a test.');
+    assertEqual(result, 6);
+});
+
+test('alignStart: handles case insensitive matching', () => {
+    const result = alignStart('WORLD', 'Hello world');
+    assertEqual(result, 6);
+});
+
+test('alignStart: handles whitespace differences', () => {
+    const result = alignStart('Hello   world', 'Hello world');
+    assertEqual(result, 0);
+});
+
+test('alignStart: returns -1 for no match', () => {
+    const result = alignStart('xyz', 'Hello world');
+    assertEqual(result, -1);
+});
+
+test('alignEnd: finds end position correctly', () => {
+    const result = alignEnd('world', 'Hello world');
+    assertEqual(result, 11);
+});
+
+test('alignEnd: handles trailing punctuation', () => {
+    const result = alignEnd('test.', 'This is a test.');
+    assertEqual(result, 15);
+});
+
+test('findMatchRegion: simple word match', () => {
+    const result = findMatchRegion('world', 'Hello world, this is a test.');
+    assertEqual(result.start, 6);
+    assertEqual(result.end, 11);
+});
+
+test('findMatchRegion: cross-block with newlines', () => {
+    const target = 'The Heading Some paragraph text here.';
+    const query = 'The Heading\n\nSome paragraph';
+    const result = findMatchRegion(query, target);
+    assertEqual(target.substring(result.start, result.end), 'The Heading Some paragraph');
+});
+
+test('findMatchRegion: KaTeX duplication handling', () => {
+    const target = '66.00 (0.18±0.58)';
+    const query = '66.00 (\n0.18\n±\n0.18±0.58)';
+    const result = findMatchRegion(query, target);
+    assertEqual(target.substring(result.start, result.end), '66.00 (0.18±0.58)');
+});
+
+test('findMatchRegion: long KaTeX table row', () => {
+    const target = 'RLM (no sub-calls) 66.00 (0.18±0.58) 17.34 (1.77±1.23)';
+    const query = 'RLM (no sub-calls)\t66.00 (\n0.18\n±\n0.18±0.58)\t17.34 (\n1.77\n±\n1.77±1.23)';
+    const result = findMatchRegion(query, target);
+    assertEqual(target.substring(result.start, result.end), target);
+});
+
+test('findMatchRegion: returns null for no match', () => {
+    const result = findMatchRegion('xyz', 'Hello world');
+    assertEqual(result, null);
 });
 
 // ============================================================
