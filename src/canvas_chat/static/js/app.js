@@ -2649,6 +2649,106 @@ class App {
     }
 
     /**
+     * Handle /factcheck slash command - verify claims with web search
+     * @param {string} input - The user's input (claim or vague reference)
+     * @param {string} context - Optional context from selected nodes
+     */
+    async handleFactcheck(input, context = null) {
+        const model = this.modelPicker.value;
+        const apiKey = chat.getApiKeyForModel(model);
+
+        // Get parent node IDs for positioning
+        let parentIds = this.canvas.getSelectedNodeIds();
+        if (parentIds.length === 0) {
+            const leaves = this.graph.getLeafNodes();
+            if (leaves.length > 0) {
+                leaves.sort((a, b) => b.created_at - a.created_at);
+                parentIds = [leaves[0].id];
+            }
+        }
+
+        try {
+            // If context provided but input is vague, refine it
+            let effectiveInput = input;
+            if (context && context.trim() && (!input || input.length < 20)) {
+                const refineResponse = await fetch('/api/refine-query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_query: input || 'verify this',
+                        context: context,
+                        command_type: 'factcheck',
+                        model: model,
+                        api_key: apiKey
+                    })
+                });
+                if (refineResponse.ok) {
+                    const refineData = await refineResponse.json();
+                    effectiveInput = refineData.refined_query;
+                }
+            }
+
+            // Use context as input if no direct input provided
+            if (!effectiveInput && context) {
+                effectiveInput = context;
+            }
+
+            // Extract individual claims from input
+            const claims = await this.extractFactcheckClaims(effectiveInput, model, apiKey);
+
+            if (claims.length === 0) {
+                // No claims found - show inline message
+                const errorNode = createNode(NodeType.FACTCHECK, '**No verifiable claims found.**\n\nPlease provide specific factual statements to verify.', {
+                    position: this.graph.autoPosition(parentIds)
+                });
+                this.graph.addNode(errorNode);
+                this.canvas.renderNode(errorNode);
+                for (const parentId of parentIds) {
+                    const edge = createEdge(parentId, errorNode.id, EdgeType.REFERENCE);
+                    this.graph.addEdge(edge);
+                    const parentNode = this.graph.getNode(parentId);
+                    this.canvas.renderEdge(edge, parentNode.position, errorNode.position);
+                }
+                this.canvas.clearSelection();
+                this.saveSession();
+                return;
+            }
+
+            if (claims.length > 5) {
+                // Too many claims - show modal for selection
+                this._factcheckData = {
+                    claims: claims,
+                    parentIds: parentIds,
+                    model: model,
+                    apiKey: apiKey
+                };
+                this.showFactcheckModal(claims);
+                return;
+            }
+
+            // Proceed directly with all claims (≤5)
+            await this.executeFactcheck(claims, parentIds, model, apiKey);
+
+        } catch (err) {
+            console.error('Factcheck error:', err);
+            // Create error node
+            const errorNode = createNode(NodeType.FACTCHECK, `**Fact-check failed**\n\n*Error: ${err.message}*`, {
+                position: this.graph.autoPosition(parentIds)
+            });
+            this.graph.addNode(errorNode);
+            this.canvas.renderNode(errorNode);
+            for (const parentId of parentIds) {
+                const edge = createEdge(parentId, errorNode.id, EdgeType.REFERENCE);
+                this.graph.addEdge(edge);
+                const parentNode = this.graph.getNode(parentId);
+                this.canvas.renderEdge(edge, parentNode.position, errorNode.position);
+            }
+            this.canvas.clearSelection();
+            this.saveSession();
+        }
+    }
+
+    /**
      * Handle /committee slash command - show modal to configure LLM committee
      */
     async handleCommittee(question, context = null) {
