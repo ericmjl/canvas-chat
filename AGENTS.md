@@ -316,6 +316,15 @@ Focusing an input clears the browser's text selection. Instead:
 - Let the user click into input fields manually
 - Use the stored text when processing the action
 
+### User dialogs and confirmations
+
+**NEVER use browser `alert()`, `confirm()`, or `prompt()`.** These block the UI and feel jarring.
+Always use in-app modals for user interactions that require confirmation or input.
+
+- For simple notifications, use toast messages or inline feedback
+- For confirmations, create a modal with Cancel/Confirm buttons
+- For complex input, create a modal with form fields (see committee modal as example)
+
 ## Testing
 
 Run the dev server with `pixi run dev` before testing UI changes.
