@@ -1540,6 +1540,15 @@ class App {
             }
         }
 
+        // Check for /factcheck command
+        if (content.startsWith('/factcheck ')) {
+            const claim = content.slice(11).trim();
+            if (claim || context) {
+                await this.handleFactcheck(claim, context);
+                return true;
+            }
+        }
+
         return false;
     }
 
