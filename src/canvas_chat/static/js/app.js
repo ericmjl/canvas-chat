@@ -2884,12 +2884,18 @@ class App {
         selectAll.indeterminate = selectedCount > 0 && selectedCount < totalCount;
 
         // Update count display
-        const countEl = document.getElementById('factcheck-claims-count');
+        const countEl = document.getElementById('factcheck-selection-count');
         const isValid = selectedCount >= 1 && selectedCount <= 5;
 
-        countEl.textContent = `${selectedCount} selected (max 5)`;
+        countEl.textContent = `${selectedCount} of ${totalCount} selected`;
         countEl.classList.toggle('valid', isValid);
         countEl.classList.toggle('invalid', !isValid);
+
+        // Show/hide limit warning
+        const warningEl = document.getElementById('factcheck-limit-warning');
+        if (warningEl) {
+            warningEl.style.display = selectedCount > 5 ? 'inline' : 'none';
+        }
 
         // Enable/disable execute button
         document.getElementById('factcheck-execute-btn').disabled = !isValid;
