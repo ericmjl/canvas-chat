@@ -498,6 +498,83 @@ class ReviewNode extends BaseNode {
 }
 
 /**
+ * Factcheck node (claim verification with verdicts)
+ */
+class FactcheckNode extends BaseNode {
+    getTypeLabel() { return 'Factcheck'; }
+    getTypeIcon() { return '🔍'; }
+
+    getSummaryText(canvas) {
+        const claims = this.node.claims || [];
+        const count = claims.length;
+        if (count === 0) return 'Fact Check';
+        return `Fact Check · ${count} claim${count !== 1 ? 's' : ''}`;
+    }
+
+    renderContent(canvas) {
+        const claims = this.node.claims || [];
+        if (claims.length === 0) {
+            return canvas.renderMarkdown(this.node.content || 'No claims to verify.');
+        }
+
+        // Render accordion-style claims
+        const claimsHtml = claims.map((claim, index) => {
+            const badge = this.getVerdictBadge(claim.status);
+            const statusClass = claim.status || 'checking';
+            const isChecking = claim.status === 'checking';
+
+            let detailsHtml = '';
+            if (!isChecking && claim.explanation) {
+                const sourcesHtml = (claim.sources || []).map(s =>
+                    `<a href="${canvas.escapeHtml(s.url)}" target="_blank" rel="noopener">${canvas.escapeHtml(s.title || s.url)}</a>`
+                ).join(', ');
+
+                detailsHtml = `
+                    <div class="factcheck-details">
+                        <p>${canvas.escapeHtml(claim.explanation)}</p>
+                        ${sourcesHtml ? `<div class="factcheck-sources"><strong>Sources:</strong> ${sourcesHtml}</div>` : ''}
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="factcheck-claim ${statusClass}" data-claim-index="${index}">
+                    <div class="factcheck-claim-header">
+                        <span class="factcheck-badge">${badge}</span>
+                        <span class="factcheck-claim-text">${canvas.escapeHtml(claim.text)}</span>
+                        ${isChecking ? '<span class="factcheck-spinner">⟳</span>' : '<span class="factcheck-toggle">▼</span>'}
+                    </div>
+                    ${detailsHtml}
+                </div>
+            `;
+        }).join('');
+
+        return `<div class="factcheck-claims">${claimsHtml}</div>`;
+    }
+
+    getVerdictBadge(status) {
+        const badges = {
+            'checking': '🔄',
+            'verified': '✅',
+            'partially_true': '⚠️',
+            'misleading': '🔶',
+            'false': '❌',
+            'unverifiable': '❓',
+            'error': '⚠️'
+        };
+        return badges[status] || '❓';
+    }
+
+    getActions() {
+        return [Actions.COPY];
+    }
+
+    getContentClasses() {
+        return 'factcheck-content';
+    }
+}
+
+/**
  * Image node (uploaded image for analysis)
  */
 class ImageNode extends BaseNode {
@@ -615,6 +692,7 @@ function wrapNode(node) {
         [NodeType.OPINION]: OpinionNode,
         [NodeType.SYNTHESIS]: SynthesisNode,
         [NodeType.REVIEW]: ReviewNode,
+        [NodeType.FACTCHECK]: FactcheckNode,
         [NodeType.IMAGE]: ImageNode,
         [NodeType.FLASHCARD]: FlashcardNode
     };
@@ -699,6 +777,7 @@ function validateNodeProtocol(NodeClass) {
     else if (className.includes('Opinion')) nodeType = NodeType.OPINION;
     else if (className.includes('Synthesis')) nodeType = NodeType.SYNTHESIS;
     else if (className.includes('Review')) nodeType = NodeType.REVIEW;
+    else if (className.includes('Factcheck')) nodeType = NodeType.FACTCHECK;
     else if (className.includes('Flashcard')) nodeType = NodeType.FLASHCARD;
 
     // Create a type-appropriate mock node
@@ -739,5 +818,6 @@ window.PdfNode = PdfNode;
 window.OpinionNode = OpinionNode;
 window.SynthesisNode = SynthesisNode;
 window.ReviewNode = ReviewNode;
+window.FactcheckNode = FactcheckNode;
 window.ImageNode = ImageNode;
 window.FlashcardNode = FlashcardNode;

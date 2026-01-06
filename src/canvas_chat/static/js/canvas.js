@@ -2121,6 +2121,21 @@ class Canvas {
             }
         }
 
+        // Factcheck-specific event handlers (drawer toggle)
+        if (node.type === NodeType.FACTCHECK) {
+            const claimHeaders = div.querySelectorAll('.factcheck-claim-header');
+            claimHeaders.forEach(header => {
+                header.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const claimEl = header.closest('.factcheck-claim');
+                    if (claimEl && !claimEl.classList.contains('checking')) {
+                        // Toggle expanded state (multiple can be open)
+                        claimEl.classList.toggle('expanded');
+                    }
+                });
+            });
+        }
+
         // Track user scroll to pause auto-scroll during streaming
         // If user scrolls up (not at bottom), we stop auto-scrolling
         const contentEl = div.querySelector('.node-content');

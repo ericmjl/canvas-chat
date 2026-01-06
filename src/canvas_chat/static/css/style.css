@@ -4171,3 +4171,134 @@ kbd {
     color: var(--text-muted);
     font-style: italic;
 }
+
+/* ======================================
+   FACTCHECK Node Styles (Accordion)
+   ====================================== */
+
+.factcheck-content {
+    padding: 0;
+}
+
+.factcheck-claims {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+}
+
+.factcheck-claim {
+    border: 1px solid var(--node-border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+    transition: border-color 0.15s ease;
+}
+
+.factcheck-claim:hover {
+    border-color: var(--text-muted);
+}
+
+.factcheck-claim-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.factcheck-badge {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.factcheck-claim-text {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text-primary);
+}
+
+.factcheck-toggle {
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.factcheck-claim.expanded .factcheck-toggle {
+    transform: rotate(180deg);
+}
+
+.factcheck-spinner {
+    font-size: 14px;
+    animation: spin 1s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.factcheck-details {
+    display: none;
+    padding: 0 12px 12px 36px;
+    border-top: 1px solid var(--node-border);
+    background: var(--bg-primary);
+}
+
+.factcheck-claim.expanded .factcheck-details {
+    display: block;
+}
+
+.factcheck-details p {
+    margin: 10px 0 8px 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.factcheck-sources {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.factcheck-sources a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.factcheck-sources a:hover {
+    text-decoration: underline;
+}
+
+/* Verdict status colors */
+.factcheck-claim.verified {
+    border-left: 3px solid #22c55e;
+}
+
+.factcheck-claim.partially_true {
+    border-left: 3px solid #f59e0b;
+}
+
+.factcheck-claim.misleading {
+    border-left: 3px solid #f97316;
+}
+
+.factcheck-claim.false {
+    border-left: 3px solid #ef4444;
+}
+
+.factcheck-claim.unverifiable {
+    border-left: 3px solid #6b7280;
+}
+
+.factcheck-claim.error {
+    border-left: 3px solid #f59e0b;
+}
+
+.factcheck-claim.checking {
+    border-left: 3px solid var(--accent);
+}

@@ -150,6 +150,60 @@ class Chat {
     }
 
     /**
+     * Send a chat message and get a non-streaming response
+     * Useful for structured outputs like JSON parsing
+     * @param {Array} messages - Array of {role, content} messages
+     * @param {string} model - Model ID
+     * @param {string} [apiKeyOverride] - Optional API key override (otherwise uses stored key)
+     * @returns {Promise<string>} - The full response content
+     */
+    async sendMessageNonStreaming(messages, model, apiKeyOverride = null) {
+        const apiKey = apiKeyOverride || this.getApiKeyForModel(model);
+        const baseUrl = this.getBaseUrl();
+
+        const requestBody = {
+            messages,
+            model,
+            api_key: apiKey,
+            temperature: 0.3, // Lower temperature for structured outputs
+        };
+
+        if (baseUrl) {
+            requestBody.base_url = baseUrl;
+        }
+
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `HTTP error: ${response.status}`);
+        }
+
+        // Collect full response from SSE stream
+        let fullContent = '';
+
+        await SSE.readSSEStream(response, {
+            onEvent: (eventType, data) => {
+                if (eventType === 'message' && data) {
+                    fullContent += data;
+                }
+            },
+            onDone: () => {},
+            onError: (err) => {
+                throw err;
+            }
+        });
+
+        return SSE.normalizeText(fullContent);
+    }
+
+    /**
      * Summarize a branch of conversation
      */
     async summarize(messages, model) {

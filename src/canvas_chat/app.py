@@ -855,7 +855,7 @@ class RefineQueryRequest(BaseModel):
 
     user_query: str  # What the user typed (e.g., "how does this work?")
     context: str  # The context from selected text or parent nodes
-    command_type: str = "search"  # "search" or "research"
+    command_type: str = "search"  # "search", "research", or "factcheck"
     model: str = "openai/gpt-4o-mini"
     api_key: str | None = None
     base_url: str | None = None
@@ -868,7 +868,7 @@ async def refine_query(request: RefineQueryRequest):
 
     This resolves pronouns and vague references like "how does this work?"
     into specific queries based on the surrounding context.
-    Works for both search queries and research instructions.
+    Works for search queries, research instructions, and factcheck claims.
     """
     logger.info(
         f"Refine query: user_query='{request.user_query}', "
@@ -876,8 +876,23 @@ async def refine_query(request: RefineQueryRequest):
         f"context_length={len(request.context)}"
     )
 
-    # Different prompts for search vs research
-    if request.command_type == "research":
+    # Different prompts for search vs research vs factcheck
+    if request.command_type == "factcheck":
+        system_prompt = """You are a fact-checking assistant. Given a user's query and context, extract or clarify the factual claim(s) to be verified.
+
+Rules:
+- Return ONLY the refined claim or statement to fact-check, nothing else
+- Resolve any pronouns or vague references (like "this", "it", "that") using the context
+- Make the claim specific and verifiable
+- Include key facts, names, numbers, or dates from the context
+- Keep it as a clear declarative statement
+- Do not include quotes around the claim
+
+Examples:
+- User: "is this true?" Context: "The Eiffel Tower was built in 1889..." → "The Eiffel Tower was built in 1889"
+- User: "verify this claim" Context: "Python is the most popular programming language..." → "Python is the most popular programming language"
+- User: "fact check" Context: "Einstein failed math as a student..." → "Albert Einstein failed math as a student" """  # noqa: E501
+    elif request.command_type == "research":
         system_prompt = """You are a research instructions optimizer. Given a user's research request and the context it refers to, generate clear, specific research instructions.
 
 Rules:
