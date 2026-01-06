@@ -1773,6 +1773,7 @@ class App {
 
                 const model = this.modelPicker.value;
                 const apiKey = chat.getApiKeyForModel(model);
+                const baseUrl = chat.getBaseUrlForModel(model);
 
                 const refineResponse = await fetch('/api/refine-query', {
                     method: 'POST',
@@ -1782,7 +1783,8 @@ class App {
                         context: context,
                         command_type: 'search',
                         model: model,
-                        api_key: apiKey
+                        api_key: apiKey,
+                        base_url: baseUrl
                     })
                 });
 
@@ -2575,6 +2577,7 @@ class App {
 
                 const model = this.modelPicker.value;
                 const apiKey = chat.getApiKeyForModel(model);
+                const baseUrl = chat.getBaseUrlForModel(model);
 
                 const refineResponse = await fetch('/api/refine-query', {
                     method: 'POST',
@@ -2584,7 +2587,8 @@ class App {
                         context: context,
                         command_type: 'research',
                         model: model,
-                        api_key: apiKey
+                        api_key: apiKey,
+                        base_url: baseUrl
                     })
                 });
 
@@ -2721,6 +2725,8 @@ class App {
                 console.log('[Factcheck] Refining vague input with context');
                 this.canvas.updateNodeContent(loadingNode.id, '🔄 **Refining query...**', true);
 
+                const baseUrl = chat.getBaseUrlForModel(model);
+
                 const refineResponse = await fetch('/api/refine-query', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2729,7 +2735,8 @@ class App {
                         context: context,
                         command_type: 'factcheck',
                         model: model,
-                        api_key: apiKey
+                        api_key: apiKey,
+                        base_url: baseUrl
                     })
                 });
                 if (refineResponse.ok) {
