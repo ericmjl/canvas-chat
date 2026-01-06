@@ -346,8 +346,8 @@ async function resizeImage(file, maxDimension = 2048) {
 // Slash command definitions
 const SLASH_COMMANDS = [
     { command: '/note', description: 'Add a note or fetch URL content', placeholder: 'markdown or https://...' },
-    { command: '/search', description: 'Search the web with Exa AI', placeholder: 'query' },
-    { command: '/research', description: 'Deep research with multiple sources', placeholder: 'topic' },
+    { command: '/search', description: 'Search the web', placeholder: 'query' },
+    { command: '/research', description: 'Deep research (requires Exa)', placeholder: 'topic', requiresExa: true },
     { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
     { command: '/committee', description: 'Consult multiple LLMs and synthesize', placeholder: 'question' },
 ];
@@ -594,13 +594,19 @@ class SlashCommandMenu {
     }
 
     render() {
-        const commandsHtml = this.filteredCommands.map((cmd, index) => `
-            <div class="slash-command-item ${index === this.selectedIndex ? 'selected' : ''}"
+        const hasExa = storage.hasExaApiKey();
+        const commandsHtml = this.filteredCommands.map((cmd, index) => {
+            const isDisabled = cmd.requiresExa && !hasExa;
+            const disabledClass = isDisabled ? 'disabled' : '';
+            const disabledSuffix = isDisabled ? ' <span class="requires-exa">(requires Exa)</span>' : '';
+            return `
+            <div class="slash-command-item ${index === this.selectedIndex ? 'selected' : ''} ${disabledClass}"
                  data-index="${index}">
                 <span class="slash-command-name">${cmd.command}</span>
-                <span class="slash-command-desc">${cmd.description}</span>
+                <span class="slash-command-desc">${cmd.description}${disabledSuffix}</span>
             </div>
-        `).join('');
+        `;
+        }).join('');
 
         this.menu.innerHTML = `
             ${commandsHtml}
@@ -1642,13 +1648,10 @@ class App {
      * @param {string} context - Optional context to help refine the query (e.g., selected text)
      */
     async handleSearch(query, context = null) {
-        // Get Exa API key
-        const exaKey = storage.getExaApiKey();
-        if (!exaKey) {
-            alert('Please set your Exa API key in Settings to use search.');
-            this.showSettingsModal();
-            return;
-        }
+        // Check which search provider to use
+        const hasExa = storage.hasExaApiKey();
+        const exaKey = hasExa ? storage.getExaApiKey() : null;
+        const provider = hasExa ? 'Exa' : 'DuckDuckGo';
 
         // Get selected nodes for positioning
         let parentIds = this.canvas.getSelectedNodeIds();
@@ -1661,7 +1664,7 @@ class App {
         }
 
         // Create search node with original query initially
-        const searchNode = createNode(NodeType.SEARCH, `Searching: "${query}"`, {
+        const searchNode = createNode(NodeType.SEARCH, `Searching (${provider}): "${query}"`, {
             position: this.graph.autoPosition(parentIds)
         });
 
@@ -1713,20 +1716,32 @@ class App {
                     const refineData = await refineResponse.json();
                     effectiveQuery = refineData.refined_query;
                     // Update node to show what we're actually searching for
-                    this.canvas.updateNodeContent(searchNode.id, `Searching: "${effectiveQuery}"`, true);
+                    this.canvas.updateNodeContent(searchNode.id, `Searching (${provider}): "${effectiveQuery}"`, true);
                 }
             }
 
-            // Call Exa API with the (potentially refined) query
-            const response = await fetch('/api/exa/search', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query: effectiveQuery,
-                    api_key: exaKey,
-                    num_results: 5
-                })
-            });
+            // Call appropriate search API based on provider
+            let response;
+            if (hasExa) {
+                response = await fetch('/api/exa/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: effectiveQuery,
+                        api_key: exaKey,
+                        num_results: 5
+                    })
+                });
+            } else {
+                response = await fetch('/api/ddg/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: effectiveQuery,
+                        max_results: 10
+                    })
+                });
+            }
 
             if (!response.ok) {
                 throw new Error(`Search failed: ${response.statusText}`);
@@ -1737,10 +1752,17 @@ class App {
             // Update search node with result count (show both original and effective query if different)
             let searchContent;
             if (effectiveQuery !== query) {
-                searchContent = `**Search:** "${query}"\n*Searched for: "${effectiveQuery}"*\n\n*Found ${data.num_results} results*`;
+                searchContent = `**Search (${provider}):** "${query}"\n*Searched for: "${effectiveQuery}"*\n\n*Found ${data.num_results} results*`;
             } else {
-                searchContent = `**Search:** "${query}"\n\n*Found ${data.num_results} results*`;
+                searchContent = `**Search (${provider}):** "${query}"\n\n*Found ${data.num_results} results*`;
             }
+
+            // Add one-time DDG tip for first-time users
+            if (!hasExa && !sessionStorage.getItem('ddg-tip-shown')) {
+                searchContent += '\n\n---\n*Tip: For richer search with content extraction, add an Exa API key in Settings.*';
+                sessionStorage.setItem('ddg-tip-shown', 'true');
+            }
+
             this.canvas.updateNodeContent(searchNode.id, searchContent, false);
             this.graph.updateNode(searchNode.id, { content: searchContent });
 
@@ -1770,7 +1792,7 @@ class App {
             this.saveSession();
 
         } catch (err) {
-            const errorContent = `**Search:** "${query}"\n\n*Error: ${err.message}*`;
+            const errorContent = `**Search (${provider}):** "${query}"\n\n*Error: ${err.message}*`;
             this.canvas.updateNodeContent(searchNode.id, errorContent, false);
             this.graph.updateNode(searchNode.id, { content: errorContent });
             this.saveSession();
@@ -2424,10 +2446,10 @@ class App {
      * @param {string} context - Optional context to help refine the instructions (e.g., selected text)
      */
     async handleResearch(instructions, context = null) {
-        // Get Exa API key
+        // Get Exa API key - research requires Exa (no fallback available)
         const exaKey = storage.getExaApiKey();
         if (!exaKey) {
-            alert('Please set your Exa API key in Settings to use research.');
+            alert('The /research command requires an Exa API key.\n\nPlease add your Exa key in Settings, or use /search for basic web search (works without Exa).');
             this.showSettingsModal();
             return;
         }
@@ -4013,13 +4035,9 @@ class App {
             return;
         }
 
-        // Check for Exa API key
-        const exaKey = storage.getExaApiKey();
-        if (!exaKey) {
-            alert('Please set your Exa API key in Settings to fetch content.');
-            this.showSettingsModal();
-            return;
-        }
+        // Check which content fetching method to use
+        const hasExa = storage.hasExaApiKey();
+        const exaKey = hasExa ? storage.getExaApiKey() : null;
 
         const model = this.modelPicker.value;
 
@@ -4046,31 +4064,55 @@ class App {
         );
 
         try {
-            // Fetch content from URL via Exa
+            // Fetch content from URL via Exa or fallback to direct fetch
             this.canvas.updateNodeContent(fetchResultNode.id, 'Fetching content from URL...', true);
 
-            const response = await fetch('/api/exa/get-contents', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    url: url,
-                    api_key: exaKey
-                })
-            });
+            let contentData;
+            if (hasExa) {
+                // Use Exa's content extraction API
+                const response = await fetch('/api/exa/get-contents', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: url,
+                        api_key: exaKey
+                    })
+                });
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to fetch content');
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to fetch content');
+                }
+
+                contentData = await response.json();
+                // Normalize response format
+                contentData = {
+                    title: contentData.title,
+                    content: contentData.text
+                };
+            } else {
+                // Use free Jina/direct fetch fallback
+                const response = await fetch('/api/fetch-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to fetch content');
+                }
+
+                contentData = await response.json();
+                // Response already has title and content fields
             }
 
-            const contentData = await response.json();
-
-            if (!contentData.text || contentData.text.trim().length === 0) {
+            if (!contentData.content || contentData.content.trim().length === 0) {
                 throw new Error('No text content found at this URL');
             }
 
             // Update the FETCH_RESULT node with the raw content
-            const fetchedContent = `**[${contentData.title}](${url})**\n\n${contentData.text}`;
+            const fetchedContent = `**[${contentData.title}](${url})**\n\n${contentData.content}`;
             this.canvas.updateNodeContent(fetchResultNode.id, fetchedContent, false);
             this.graph.updateNode(fetchResultNode.id, {
                 content: fetchedContent,
@@ -4105,7 +4147,7 @@ class App {
 
             // Now summarize the content with LLM
             const messages = [
-                { role: 'user', content: `Please provide a comprehensive summary of the following article:\n\n**${contentData.title}**\n\n${contentData.text}` }
+                { role: 'user', content: `Please provide a comprehensive summary of the following article:\n\n**${contentData.title}**\n\n${contentData.content}` }
             ];
 
             const summary = await chat.summarize(messages, model);

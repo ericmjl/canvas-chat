@@ -1129,6 +1129,21 @@ html, body {
     margin: 0 1px;
 }
 
+.slash-command-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.slash-command-item.disabled:hover {
+    background: transparent;
+}
+
+.slash-command-item .requires-exa {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 /* Node Header */
 .node-header {
     display: flex;

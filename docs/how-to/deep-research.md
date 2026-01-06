@@ -162,12 +162,15 @@ Use `/search` when you want to:
 - Browse multiple sources yourself
 - Quickly find a specific page or fact
 - See what information is available
+- Search without an Exa API key (uses DuckDuckGo as fallback)
 
 Use `/research` when you want:
 
 - A synthesized report combining multiple sources
 - Comprehensive coverage of a topic
 - Citation-backed analysis
+
+**Note:** `/research` requires an Exa API key and has no fallback. If you don't have an Exa key, use `/search` which works with DuckDuckGo.
 
 ## Limits
 

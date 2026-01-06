@@ -1,12 +1,23 @@
-# How to search the web with Exa
+# How to search the web
 
 The `/search` command lets you search the web and bring results directly into your canvas as nodes you can explore and discuss.
 
-## Prerequisites
+## Search providers
 
-You need an Exa API key configured in Settings. If you haven't set one up:
+Canvas Chat supports two search providers:
 
-1. Click the ⚙️ Settings button
+| Provider | API Key Required | Features |
+|----------|------------------|----------|
+| **Exa** | Yes | Neural search, content extraction, richer snippets |
+| **DuckDuckGo** | No | Basic web search, free fallback |
+
+If you have an Exa API key configured, searches use Exa. Otherwise, searches automatically fall back to DuckDuckGo.
+
+## Setting up Exa (optional)
+
+For richer search results with content extraction:
+
+1. Click the Settings button
 2. Get an API key from [Exa](https://exa.ai/)
 3. Paste it into the "Exa API Key" field
 4. Click Save
@@ -105,6 +116,8 @@ Search nodes are positioned automatically:
 
 ## Limits
 
-- Maximum 5 search results per query
-- Requires Exa API key (free tier available)
-- Fetch & Summarize requires both Exa API key and an LLM provider API key
+- Maximum 5-10 search results per query
+- DuckDuckGo provides basic search (no API key needed)
+- Exa provides neural search with richer content (API key required)
+- Fetch & Summarize requires an LLM provider API key
+- The `/research` command requires an Exa API key (no fallback)
