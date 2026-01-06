@@ -1566,6 +1566,26 @@ class App {
         return false;
     }
 
+    /**
+     * Build an LLM request payload with model, API key, and base URL.
+     * This ensures all LLM requests include proxy configuration if set.
+     *
+     * @param {Object} additionalParams - Additional parameters to include in the request
+     * @returns {Object} Request payload with model, api_key, base_url, and any additional params
+     */
+    buildLLMRequest(additionalParams = {}) {
+        const model = this.modelPicker.value;
+        const apiKey = chat.getApiKeyForModel(model);
+        const baseUrl = chat.getBaseUrlForModel(model);
+
+        return {
+            model: model,
+            api_key: apiKey,
+            base_url: baseUrl,
+            ...additionalParams
+        };
+    }
+
     async handleSend() {
         const content = this.chatInput.value.trim();
         if (!content) return;
@@ -1771,21 +1791,14 @@ class App {
             if (context && context.trim()) {
                 this.canvas.updateNodeContent(searchNode.id, `Refining search query...`, true);
 
-                const model = this.modelPicker.value;
-                const apiKey = chat.getApiKeyForModel(model);
-                const baseUrl = chat.getBaseUrlForModel(model);
-
                 const refineResponse = await fetch('/api/refine-query', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                    body: JSON.stringify(this.buildLLMRequest({
                         user_query: query,
                         context: context,
-                        command_type: 'search',
-                        model: model,
-                        api_key: apiKey,
-                        base_url: baseUrl
-                    })
+                        command_type: 'search'
+                    }))
                 });
 
                 if (refineResponse.ok) {
@@ -2575,21 +2588,14 @@ class App {
             if (context && context.trim()) {
                 this.canvas.updateNodeContent(researchNode.id, `**Research:** ${instructions}\n\n*Refining research instructions...*`, true);
 
-                const model = this.modelPicker.value;
-                const apiKey = chat.getApiKeyForModel(model);
-                const baseUrl = chat.getBaseUrlForModel(model);
-
                 const refineResponse = await fetch('/api/refine-query', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                    body: JSON.stringify(this.buildLLMRequest({
                         user_query: instructions,
                         context: context,
-                        command_type: 'research',
-                        model: model,
-                        api_key: apiKey,
-                        base_url: baseUrl
-                    })
+                        command_type: 'research'
+                    }))
                 });
 
                 if (refineResponse.ok) {
@@ -2725,19 +2731,14 @@ class App {
                 console.log('[Factcheck] Refining vague input with context');
                 this.canvas.updateNodeContent(loadingNode.id, '🔄 **Refining query...**', true);
 
-                const baseUrl = chat.getBaseUrlForModel(model);
-
                 const refineResponse = await fetch('/api/refine-query', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                    body: JSON.stringify(this.buildLLMRequest({
                         user_query: input || 'verify this',
                         context: context,
-                        command_type: 'factcheck',
-                        model: model,
-                        api_key: apiKey,
-                        base_url: baseUrl
-                    })
+                        command_type: 'factcheck'
+                    }))
                 });
                 if (refineResponse.ok) {
                     const refineData = await refineResponse.json();
