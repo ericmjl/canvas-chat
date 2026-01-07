@@ -926,10 +926,15 @@ class App {
         this.canvas.renderGraph(this.graph);
 
         // Update navigation button states and collapse visibility after rendering
-        // Delay slightly to ensure nodes are rendered
+        // Use triple requestAnimationFrame to ensure edges are rendered first
+        // (renderGraph uses double rAF for edges due to height settling)
         requestAnimationFrame(() => {
-            this.canvas.updateAllNavButtonStates(this.graph);
-            this.updateAllNodeVisibility();
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    this.canvas.updateAllNavButtonStates(this.graph);
+                    this.updateAllNodeVisibility();
+                });
+            });
         });
 
         // Rebuild search index
@@ -1450,6 +1455,33 @@ class App {
                 if (selectedNodeIds.length === 1) {
                     e.preventDefault();
                     this.handleNodeFitToViewport(selectedNodeIds[0]);
+                }
+            }
+
+            // '-' to collapse selected node (hide children)
+            if (e.key === '-' && !e.target.matches('input, textarea')) {
+                const selectedNodeIds = this.canvas.getSelectedNodeIds();
+                if (selectedNodeIds.length === 1) {
+                    const node = this.graph.getNode(selectedNodeIds[0]);
+                    const children = this.graph.getChildren(selectedNodeIds[0]);
+                    // Only collapse if node has children and is not already collapsed
+                    if (node && children.length > 0 && !node.collapsed) {
+                        e.preventDefault();
+                        this.handleNodeCollapse(selectedNodeIds[0]);
+                    }
+                }
+            }
+
+            // '=' to expand selected node (show children)
+            if (e.key === '=' && !e.target.matches('input, textarea')) {
+                const selectedNodeIds = this.canvas.getSelectedNodeIds();
+                if (selectedNodeIds.length === 1) {
+                    const node = this.graph.getNode(selectedNodeIds[0]);
+                    // Only expand if node is collapsed
+                    if (node && node.collapsed) {
+                        e.preventDefault();
+                        this.handleNodeCollapse(selectedNodeIds[0]);
+                    }
                 }
             }
         });
@@ -2334,36 +2366,77 @@ class App {
      */
     handleNavParentClick(nodeId, button) {
         const parents = this.graph.getParents(nodeId);
-        this.canvas.handleNavButtonClick(nodeId, 'parent', parents, button);
+        // Get direct visible parents
+        const directVisibleParents = parents.filter(parent => this.graph.isNodeVisible(parent.id));
+        // Also get visible ancestors through hidden paths (e.g., collapsed nodes that connect through hidden children)
+        const ancestorsThroughHidden = this.graph.getVisibleAncestorsThroughHidden(nodeId);
+
+        // Combine and deduplicate
+        const allNavigableParents = [...directVisibleParents];
+        for (const ancestor of ancestorsThroughHidden) {
+            if (!allNavigableParents.some(p => p.id === ancestor.id)) {
+                allNavigableParents.push(ancestor);
+            }
+        }
+
+        this.canvas.handleNavButtonClick(nodeId, 'parent', allNavigableParents, button);
     }
 
     /**
      * Handle click on the child navigation button.
      * Gets the child nodes and either navigates directly or shows a popover.
+     * If the node is collapsed, shows visible descendants through hidden paths.
      *
      * @param {string} nodeId - The current node ID
      * @param {HTMLElement} button - The button element that was clicked
      */
     handleNavChildClick(nodeId, button) {
-        const children = this.graph.getChildren(nodeId);
-        this.canvas.handleNavButtonClick(nodeId, 'child', children, button);
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        let navigableChildren;
+
+        if (node.collapsed) {
+            // Node is collapsed - get visible descendants through hidden paths
+            navigableChildren = this.graph.getVisibleDescendantsThroughHidden(nodeId);
+        } else {
+            // Node is not collapsed - get direct visible children
+            const children = this.graph.getChildren(nodeId);
+            navigableChildren = children.filter(child => this.graph.isNodeVisible(child.id));
+        }
+
+        this.canvas.handleNavButtonClick(nodeId, 'child', navigableChildren, button);
     }
 
     /**
      * Handle keyboard navigation to parent node(s).
      * Shows toast if no parents, navigates directly if one, shows popover if multiple.
+     * Considers both direct visible parents and visible ancestors through hidden paths.
      * @param {string} nodeId - The selected node ID
      */
     navigateToParentKeyboard(nodeId) {
         const parents = this.graph.getParents(nodeId);
-        if (parents.length === 0) {
+        // Get direct visible parents
+        const directVisibleParents = parents.filter(parent => this.graph.isNodeVisible(parent.id));
+        // Also get visible ancestors through hidden paths (e.g., collapsed nodes that connect through hidden children)
+        const ancestorsThroughHidden = this.graph.getVisibleAncestorsThroughHidden(nodeId);
+
+        // Combine and deduplicate
+        const allNavigableParents = [...directVisibleParents];
+        for (const ancestor of ancestorsThroughHidden) {
+            if (!allNavigableParents.some(p => p.id === ancestor.id)) {
+                allNavigableParents.push(ancestor);
+            }
+        }
+
+        if (allNavigableParents.length === 0) {
             this.canvas.showNavToast('No parent nodes', nodeId);
-        } else if (parents.length === 1) {
-            this.handleNodeNavigate(parents[0].id);
+        } else if (allNavigableParents.length === 1) {
+            this.handleNodeNavigate(allNavigableParents[0].id);
         } else {
             const button = this.canvas.getNavButton(nodeId, 'parent');
             if (button) {
-                this.canvas.handleNavButtonClick(nodeId, 'parent', parents, button);
+                this.canvas.handleNavButtonClick(nodeId, 'parent', allNavigableParents, button);
             }
         }
     }
@@ -2371,18 +2444,32 @@ class App {
     /**
      * Handle keyboard navigation to child node(s).
      * Shows toast if no children, navigates directly if one, shows popover if multiple.
+     * If the node is collapsed, navigates to visible descendants through hidden paths.
      * @param {string} nodeId - The selected node ID
      */
     navigateToChildKeyboard(nodeId) {
-        const children = this.graph.getChildren(nodeId);
-        if (children.length === 0) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        let navigableChildren;
+
+        if (node.collapsed) {
+            // Node is collapsed - get visible descendants through hidden paths
+            navigableChildren = this.graph.getVisibleDescendantsThroughHidden(nodeId);
+        } else {
+            // Node is not collapsed - get direct visible children
+            const children = this.graph.getChildren(nodeId);
+            navigableChildren = children.filter(child => this.graph.isNodeVisible(child.id));
+        }
+
+        if (navigableChildren.length === 0) {
             this.canvas.showNavToast('No child nodes', nodeId);
-        } else if (children.length === 1) {
-            this.handleNodeNavigate(children[0].id);
+        } else if (navigableChildren.length === 1) {
+            this.handleNodeNavigate(navigableChildren[0].id);
         } else {
             const button = this.canvas.getNavButton(nodeId, 'child');
             if (button) {
-                this.canvas.handleNavButtonClick(nodeId, 'child', children, button);
+                this.canvas.handleNavButtonClick(nodeId, 'child', navigableChildren, button);
             }
         }
     }
@@ -2424,6 +2511,9 @@ class App {
         // Toggle collapsed state
         node.collapsed = !node.collapsed;
 
+        // Persist the collapsed state to the graph
+        this.graph.updateNode(nodeId, { collapsed: node.collapsed });
+
         // Update visibility of all nodes
         this.updateAllNodeVisibility();
 
@@ -2450,6 +2540,57 @@ class App {
                 const children = this.graph.getChildren(node.id);
                 const hiddenCount = node.collapsed ? this.graph.countHiddenDescendants(node.id) : 0;
                 this.canvas.updateCollapseButton(node.id, children.length > 0, node.collapsed, hiddenCount);
+            }
+        }
+
+        // Update edge visibility/styling based on collapse state
+        this.updateAllEdgeVisibility();
+    }
+
+    /**
+     * Update visibility and styling of all edges based on collapse state.
+     * Also creates virtual collapsed-path edges from collapsed nodes to visible descendants.
+     * - Hidden: either endpoint is hidden
+     * - Visible: both endpoints visible
+     * - Virtual collapsed-path: from collapsed node to visible descendant through hidden nodes
+     */
+    updateAllEdgeVisibility() {
+        // First, remove all existing virtual collapsed-path edges
+        this.canvas.removeAllCollapsedPathEdges();
+
+        // Update real edge visibility
+        for (const edge of this.graph.getAllEdges()) {
+            const sourceNode = this.graph.getNode(edge.source);
+            const targetNode = this.graph.getNode(edge.target);
+
+            if (!sourceNode || !targetNode) continue;
+
+            const sourceVisible = this.graph.isNodeVisible(edge.source);
+            const targetVisible = this.graph.isNodeVisible(edge.target);
+
+            // Determine edge state - for real edges, just show or hide
+            if (!sourceVisible || !targetVisible) {
+                this.canvas.updateEdgeState(edge.id, 'hidden');
+            } else {
+                this.canvas.updateEdgeState(edge.id, 'visible');
+            }
+        }
+
+        // Create virtual collapsed-path edges for collapsed nodes
+        for (const node of this.graph.getAllNodes()) {
+            if (node.collapsed && this.graph.isNodeVisible(node.id)) {
+                // This node is collapsed and visible - find visible descendants through hidden paths
+                const visibleDescendants = this.graph.getVisibleDescendantsThroughHidden(node.id);
+
+                for (const descendant of visibleDescendants) {
+                    // Render a virtual edge from this collapsed node to the visible descendant
+                    this.canvas.renderCollapsedPathEdge(
+                        node.id,
+                        descendant.id,
+                        node.position,
+                        descendant.position
+                    );
+                }
             }
         }
     }
@@ -4624,13 +4765,81 @@ ${resultsText}`;
         }
 
         // Animate nodes to their new positions (keep current viewport)
+        // Use custom edge update callback to respect collapse state
         this.canvas.animateToLayout(this.graph, {
             duration: 500,
-            keepViewport: true
+            keepViewport: true,
+            onEdgeUpdate: () => this.updateEdgesWithCollapseState()
         });
 
         // Save the new positions
         this.saveSession();
+    }
+
+    /**
+     * Update all edges respecting collapse state.
+     * This is used during animations to keep edges properly hidden/visible.
+     * Always updates edge positions (even hidden ones) so they're correct when revealed.
+     */
+    updateEdgesWithCollapseState() {
+        // Update ALL real edges - always update positions, but toggle visibility
+        for (const edge of this.graph.getAllEdges()) {
+            const sourceNode = this.graph.getNode(edge.source);
+            const targetNode = this.graph.getNode(edge.target);
+
+            if (!sourceNode || !targetNode) continue;
+
+            // Always update edge position
+            const sourceWrapper = this.canvas.nodeElements.get(edge.source);
+            const targetWrapper = this.canvas.nodeElements.get(edge.target);
+
+            if (sourceWrapper && targetWrapper) {
+                const sourcePos = {
+                    x: parseFloat(sourceWrapper.getAttribute('x')),
+                    y: parseFloat(sourceWrapper.getAttribute('y'))
+                };
+                const targetPos = {
+                    x: parseFloat(targetWrapper.getAttribute('x')),
+                    y: parseFloat(targetWrapper.getAttribute('y'))
+                };
+                this.canvas.renderEdge(edge, sourcePos, targetPos);
+            }
+
+            // Then set visibility based on collapse state
+            const sourceVisible = this.graph.isNodeVisible(edge.source);
+            const targetVisible = this.graph.isNodeVisible(edge.target);
+
+            if (sourceVisible && targetVisible) {
+                this.canvas.updateEdgeState(edge.id, 'visible');
+            } else {
+                this.canvas.updateEdgeState(edge.id, 'hidden');
+            }
+        }
+
+        // Update virtual collapsed-path edges (renderCollapsedPathEdge updates in place if exists)
+        for (const node of this.graph.getAllNodes()) {
+            if (node.collapsed && this.graph.isNodeVisible(node.id)) {
+                const visibleDescendants = this.graph.getVisibleDescendantsThroughHidden(node.id);
+
+                for (const descendant of visibleDescendants) {
+                    // Get current animated positions from DOM
+                    const sourceWrapper = this.canvas.nodeElements.get(node.id);
+                    const targetWrapper = this.canvas.nodeElements.get(descendant.id);
+
+                    if (sourceWrapper && targetWrapper) {
+                        const sourcePos = {
+                            x: parseFloat(sourceWrapper.getAttribute('x')),
+                            y: parseFloat(sourceWrapper.getAttribute('y'))
+                        };
+                        const targetPos = {
+                            x: parseFloat(targetWrapper.getAttribute('x')),
+                            y: parseFloat(targetWrapper.getAttribute('y'))
+                        };
+                        this.canvas.renderCollapsedPathEdge(node.id, descendant.id, sourcePos, targetPos);
+                    }
+                }
+            }
+        }
     }
 
     handleNodeReply(nodeId) {

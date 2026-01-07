@@ -3587,6 +3587,212 @@ test('Graph.countHiddenDescendants counts only hidden nodes in merge', () => {
 });
 
 // ============================================================
+// Graph.getVisibleDescendantsThroughHidden() tests
+// ============================================================
+
+test('Graph.getVisibleDescendantsThroughHidden returns visible children directly', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+
+    // Not collapsed - B is visible, so it's returned as the first visible descendant
+    const result = graph.getVisibleDescendantsThroughHidden(nodeA.id);
+    assertEqual(result.length, 1);
+    assertEqual(result[0].id, nodeB.id);
+});
+
+test('Graph.getVisibleDescendantsThroughHidden finds merge node through hidden path', () => {
+    // A -> B, A -> C, B -> D, C -> D (diamond with D as merge node)
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    const nodeD = createNodeReal(NodeType.AI, 'D');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addNode(nodeD);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeA.id, nodeC.id));
+    graph.addEdge(createEdge(nodeB.id, nodeD.id));
+    graph.addEdge(createEdge(nodeC.id, nodeD.id));
+
+    // Collapse B - D is still visible via C
+    nodeB.collapsed = true;
+    const result = graph.getVisibleDescendantsThroughHidden(nodeB.id);
+    assertEqual(result.length, 1);
+    assertEqual(result[0].id, nodeD.id);
+});
+
+test('Graph.getVisibleDescendantsThroughHidden returns empty when all descendants hidden', () => {
+    // A -> B -> C (simple chain, all hidden when A collapsed)
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeB.id, nodeC.id));
+
+    // Collapse A - B and C are all hidden, no visible descendants through hidden
+    nodeA.collapsed = true;
+    const result = graph.getVisibleDescendantsThroughHidden(nodeA.id);
+    assertEqual(result.length, 0);
+});
+
+test('Graph.getVisibleDescendantsThroughHidden stops at first visible node', () => {
+    // A -> B -> C, A -> D -> C, C -> E
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    const nodeD = createNodeReal(NodeType.AI, 'D');
+    const nodeE = createNodeReal(NodeType.AI, 'E');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addNode(nodeD);
+    graph.addNode(nodeE);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeA.id, nodeD.id));
+    graph.addEdge(createEdge(nodeB.id, nodeC.id));
+    graph.addEdge(createEdge(nodeD.id, nodeC.id));
+    graph.addEdge(createEdge(nodeC.id, nodeE.id));
+
+    // Collapse B - C is visible via D, E is also visible
+    // But we should only return C (first visible), not continue to E
+    nodeB.collapsed = true;
+    const result = graph.getVisibleDescendantsThroughHidden(nodeB.id);
+    assertEqual(result.length, 1);
+    assertEqual(result[0].id, nodeC.id);
+});
+
+test('Graph.getVisibleDescendantsThroughHidden returns empty for leaf node', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    graph.addNode(nodeA);
+
+    const result = graph.getVisibleDescendantsThroughHidden(nodeA.id);
+    assertEqual(result.length, 0);
+});
+
+// ============================================================
+// Graph.getVisibleAncestorsThroughHidden() tests
+// ============================================================
+
+test('Graph.getVisibleAncestorsThroughHidden returns visible parents directly', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+
+    // A is visible (root) - function returns all visible parents
+    const result = graph.getVisibleAncestorsThroughHidden(nodeB.id);
+    assertEqual(result.length, 1);
+    assertEqual(result[0].id, nodeA.id);
+});
+
+test('Graph.getVisibleAncestorsThroughHidden finds collapsed parent', () => {
+    // A -> B -> C (simple chain)
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeB.id, nodeC.id));
+
+    // Collapse A - C's visible ancestor through hidden path is A
+    // (B is hidden, A is visible and collapsed)
+    nodeA.collapsed = true;
+
+    // For C, its parent B is hidden, so we traverse upward
+    // B's parent A is visible (root)
+    const result = graph.getVisibleAncestorsThroughHidden(nodeC.id);
+    assertEqual(result.length, 1);
+    assertEqual(result[0].id, nodeA.id);
+});
+
+test('Graph.getVisibleAncestorsThroughHidden returns both visible parents for merge node', () => {
+    // A -> B -> D, A -> C -> D (D is visible merge node)
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    const nodeD = createNodeReal(NodeType.AI, 'D');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addNode(nodeD);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeA.id, nodeC.id));
+    graph.addEdge(createEdge(nodeB.id, nodeD.id));
+    graph.addEdge(createEdge(nodeC.id, nodeD.id));
+
+    // Collapse B - D is visible via C
+    // D's parents B and C are both visible (B is collapsed but still visible)
+    nodeB.collapsed = true;
+
+    const result = graph.getVisibleAncestorsThroughHidden(nodeD.id);
+    // Both parents B and C are visible
+    assertEqual(result.length, 2);
+    const ids = result.map(n => n.id);
+    assertTrue(ids.includes(nodeB.id), 'Should include B');
+    assertTrue(ids.includes(nodeC.id), 'Should include C');
+});
+
+test('Graph.getVisibleAncestorsThroughHidden traverses through hidden nodes', () => {
+    // A -> B -> C -> D, A -> E -> D (D is merge node)
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    const nodeD = createNodeReal(NodeType.AI, 'D');
+    const nodeE = createNodeReal(NodeType.AI, 'E');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addNode(nodeD);
+    graph.addNode(nodeE);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeB.id, nodeC.id));
+    graph.addEdge(createEdge(nodeC.id, nodeD.id));
+    graph.addEdge(createEdge(nodeA.id, nodeE.id));
+    graph.addEdge(createEdge(nodeE.id, nodeD.id));
+
+    // Collapse B - C is hidden, D is visible via E
+    // D's parent C is hidden, should traverse upward to find B (collapsed, visible)
+    // D's parent E is visible
+    nodeB.collapsed = true;
+
+    const result = graph.getVisibleAncestorsThroughHidden(nodeD.id);
+    // C is hidden, its parent B is visible (collapsed)
+    // E is visible
+    assertEqual(result.length, 2);
+    const ids = result.map(n => n.id);
+    assertTrue(ids.includes(nodeB.id), 'Should include B (through hidden C)');
+    assertTrue(ids.includes(nodeE.id), 'Should include E (direct visible parent)');
+});
+
+test('Graph.getVisibleAncestorsThroughHidden returns empty for root node', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    graph.addNode(nodeA);
+
+    const result = graph.getVisibleAncestorsThroughHidden(nodeA.id);
+    assertEqual(result.length, 0);
+});
+
+// ============================================================
 // Note: buildLLMRequest() tests removed
 // ============================================================
 // Per AGENTS.md principle: "Tests pure functions that don't require DOM or API calls"

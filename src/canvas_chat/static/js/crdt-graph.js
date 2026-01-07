@@ -882,6 +882,129 @@ class CRDTGraph {
     }
 
     /**
+     * Get all descendants of a node (children, grandchildren, etc.)
+     * Handles merge nodes (multiple parents) by deduplicating.
+     * @param {string} nodeId - The node ID
+     * @param {Set} visited - Set of already visited node IDs (for deduplication)
+     * @returns {Array} Array of descendant node objects
+     */
+    getDescendants(nodeId, visited = new Set()) {
+        if (visited.has(nodeId)) return [];
+        visited.add(nodeId);
+
+        const descendants = [];
+        const children = this.getChildren(nodeId);
+
+        for (const child of children) {
+            descendants.push(child);
+            descendants.push(...this.getDescendants(child.id, visited));
+        }
+
+        return descendants;
+    }
+
+    /**
+     * Check if a node is visible (not hidden by a collapsed ancestor).
+     * A node is visible if ANY path from root to it contains no collapsed ancestors.
+     * This handles merge nodes correctly: they stay visible if any parent path is open.
+     * @param {string} nodeId - The node ID to check
+     * @returns {boolean} True if the node is visible
+     */
+    isNodeVisible(nodeId) {
+        const node = this.getNode(nodeId);
+        if (!node) return false;
+
+        const parents = this.getParents(nodeId);
+
+        // Root nodes (no parents) are always visible
+        if (parents.length === 0) return true;
+
+        // Check if ANY parent path leads to visibility
+        // A path is open if the parent is not collapsed AND the parent is visible
+        for (const parent of parents) {
+            if (!parent.collapsed && this.isNodeVisible(parent.id)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Count hidden descendants (for collapse button badge).
+     * Only counts nodes that are actually hidden (not visible via another path).
+     * @param {string} nodeId - The collapsed node ID
+     * @returns {number} Number of hidden descendants
+     */
+    countHiddenDescendants(nodeId) {
+        const descendants = this.getDescendants(nodeId, new Set([nodeId]));
+        // Count only those that are not visible via another path
+        return descendants.filter(d => !this.isNodeVisible(d.id)).length;
+    }
+
+    /**
+     * Find visible descendants reachable through hidden nodes.
+     * Used for drawing collapsed-path virtual edges from collapsed node to merge nodes.
+     * @param {string} nodeId - The collapsed node ID
+     * @returns {Array} Array of visible descendant node objects reachable through hidden paths
+     */
+    getVisibleDescendantsThroughHidden(nodeId) {
+        const result = [];
+        const visited = new Set([nodeId]);
+
+        const traverse = (currentId) => {
+            const children = this.getChildren(currentId);
+            for (const child of children) {
+                if (visited.has(child.id)) continue;
+                visited.add(child.id);
+
+                if (this.isNodeVisible(child.id)) {
+                    // Found a visible descendant - add it to results
+                    result.push(child);
+                    // Don't traverse further - we only want the first visible node in each path
+                } else {
+                    // Child is hidden, continue traversing
+                    traverse(child.id);
+                }
+            }
+        };
+
+        traverse(nodeId);
+        return result;
+    }
+
+    /**
+     * Find visible ancestors reachable through hidden nodes.
+     * Used for navigation: when at a merge node, find collapsed ancestors that connect through hidden paths.
+     * @param {string} nodeId - The node ID to find ancestors for
+     * @returns {Array} Array of visible ancestor node objects reachable through hidden paths
+     */
+    getVisibleAncestorsThroughHidden(nodeId) {
+        const result = [];
+        const visited = new Set([nodeId]);
+
+        const traverse = (currentId) => {
+            const parents = this.getParents(currentId);
+            for (const parent of parents) {
+                if (visited.has(parent.id)) continue;
+                visited.add(parent.id);
+
+                if (this.isNodeVisible(parent.id)) {
+                    // Found a visible ancestor - add it to results
+                    result.push(parent);
+                    // Don't traverse further - we only want the first visible node in each path
+                } else {
+                    // Parent is hidden, continue traversing upward
+                    traverse(parent.id);
+                }
+            }
+        };
+
+        traverse(nodeId);
+        return result;
+    }
+
+    /**
      * Get all ancestors of a node (for context resolution)
      * Returns nodes in topological order (oldest first)
      */

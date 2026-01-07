@@ -1294,11 +1294,13 @@ class Canvas {
      * @param {number} options.duration - Animation duration in ms (default 500)
      * @param {string|null} options.focusNodeId - Node to keep centered (null for fit-to-content)
      * @param {boolean} options.keepViewport - If true, don't change viewport at all (default false)
+     * @param {Function} options.onEdgeUpdate - Optional callback for custom edge updating (called each frame)
      */
     animateToLayout(graph, options = {}) {
         const duration = options.duration || 500;
         const focusNodeId = options.focusNodeId || null;
         const keepViewport = options.keepViewport || false;
+        const onEdgeUpdate = options.onEdgeUpdate || null;
 
         // Collect start and end positions for each node
         const animations = [];
@@ -1326,7 +1328,11 @@ class Canvas {
 
         if (animations.length === 0) {
             // No position changes, just update edges
-            this.updateAllEdges(graph);
+            if (onEdgeUpdate) {
+                onEdgeUpdate();
+            } else {
+                this.updateAllEdges(graph);
+            }
             if (!focusNodeId && !keepViewport) {
                 this.fitToContentAnimated(duration);
             }
@@ -1357,8 +1363,12 @@ class Canvas {
                 anim.wrapper.setAttribute('y', y);
             }
 
-            // Update all edges
-            this.updateAllEdges(graph);
+            // Update edges - use custom callback if provided
+            if (onEdgeUpdate) {
+                onEdgeUpdate();
+            } else {
+                this.updateAllEdges(graph);
+            }
 
             // Animate viewport if fitting to content
             if (viewportAnim) {
@@ -2460,7 +2470,7 @@ class Canvas {
             return;
         }
 
-        btn.style.display = '';
+        btn.style.display = 'inline-flex';
 
         if (isCollapsed) {
             btn.textContent = hiddenCount > 0 ? `▶ +${hiddenCount}` : '▶';
@@ -2517,6 +2527,32 @@ class Canvas {
                     edgeEl.classList.add('collapsed-hidden');
                 }
             }
+        }
+    }
+
+    /**
+     * Update the visual state of an edge based on collapse state.
+     * @param {string} edgeId - The edge ID
+     * @param {string} state - 'visible', 'hidden', or 'collapsed-path'
+     */
+    updateEdgeState(edgeId, state) {
+        const edgeEl = this.edgeElements.get(edgeId);
+        if (!edgeEl) return;
+
+        // Remove all state classes first
+        edgeEl.classList.remove('collapsed-hidden', 'collapsed-path');
+
+        switch (state) {
+            case 'hidden':
+                edgeEl.classList.add('collapsed-hidden');
+                break;
+            case 'collapsed-path':
+                edgeEl.classList.add('collapsed-path');
+                break;
+            case 'visible':
+            default:
+                // No additional classes needed
+                break;
         }
     }
 
@@ -2823,6 +2859,90 @@ class Canvas {
         this.edgeElements.set(edge.id, path);
 
         return path;
+    }
+
+    /**
+     * Render or update a virtual collapsed-path edge from a collapsed node to a visible descendant.
+     * These edges are dashed and show the connection through hidden nodes.
+     * If the edge already exists, updates its path in place (no re-creation).
+     * @param {string} sourceId - The collapsed node ID
+     * @param {string} targetId - The visible descendant node ID
+     * @param {Object} sourcePos - Source node position {x, y}
+     * @param {Object} targetPos - Target node position {x, y}
+     */
+    renderCollapsedPathEdge(sourceId, targetId, sourcePos, targetPos) {
+        const virtualEdgeId = `collapsed-path-${sourceId}-${targetId}`;
+
+        // Get node dimensions from DOM
+        const sourceWrapper = this.nodeElements.get(sourceId);
+        const targetWrapper = this.nodeElements.get(targetId);
+
+        const sourceWidth = sourceWrapper ? parseFloat(sourceWrapper.getAttribute('width')) || 420 : 420;
+        const sourceHeight = sourceWrapper ? parseFloat(sourceWrapper.getAttribute('height')) || 100 : 100;
+        const targetWidth = targetWrapper ? parseFloat(targetWrapper.getAttribute('width')) || 420 : 420;
+        const targetHeight = targetWrapper ? parseFloat(targetWrapper.getAttribute('height')) || 100 : 100;
+
+        // Calculate bezier curve
+        const d = this.calculateBezierPath(
+            sourcePos, { width: sourceWidth, height: sourceHeight },
+            targetPos, { width: targetWidth, height: targetHeight }
+        );
+
+        // Check if edge already exists
+        const existingPath = this.edgeElements.get(virtualEdgeId);
+        if (existingPath) {
+            // Update path in place - no recreation, no animation restart
+            existingPath.setAttribute('d', d);
+            return existingPath;
+        }
+
+        // Create new edge
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('class', 'edge collapsed-path');
+        path.setAttribute('data-edge-id', virtualEdgeId);
+        path.setAttribute('data-source', sourceId);
+        path.setAttribute('data-target', targetId);
+        path.setAttribute('data-virtual', 'true');
+        path.setAttribute('d', d);
+
+        // Add arrowhead
+        path.setAttribute('marker-end', 'url(#arrowhead)');
+
+        this.edgesLayer.appendChild(path);
+        this.edgeElements.set(virtualEdgeId, path);
+
+        return path;
+    }
+
+    /**
+     * Remove a virtual collapsed-path edge.
+     * @param {string} sourceId - The collapsed node ID
+     * @param {string} targetId - The visible descendant node ID
+     */
+    removeCollapsedPathEdge(sourceId, targetId) {
+        const virtualEdgeId = `collapsed-path-${sourceId}-${targetId}`;
+        const existing = this.edgeElements.get(virtualEdgeId);
+        if (existing) {
+            existing.remove();
+            this.edgeElements.delete(virtualEdgeId);
+        }
+    }
+
+    /**
+     * Remove all virtual collapsed-path edges.
+     */
+    removeAllCollapsedPathEdges() {
+        const toRemove = [];
+        for (const [edgeId, edgeEl] of this.edgeElements) {
+            if (edgeEl.getAttribute('data-virtual') === 'true') {
+                toRemove.push(edgeId);
+            }
+        }
+        for (const edgeId of toRemove) {
+            const el = this.edgeElements.get(edgeId);
+            if (el) el.remove();
+            this.edgeElements.delete(edgeId);
+        }
     }
 
     /**

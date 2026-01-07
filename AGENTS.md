@@ -13,6 +13,7 @@ Quick reference for which files to edit for common tasks:
 | `src/canvas_chat/static/js/app.js` | Main application, orchestrates everything | Slash commands, keyboard shortcuts, feature handlers, App class methods |
 | `src/canvas_chat/static/js/canvas.js` | SVG canvas, pan/zoom, node rendering | Node appearance, drag behavior, viewport logic, node event handlers |
 | `src/canvas_chat/static/js/graph.js` | Data model, node/edge types, graph traversal | Node types, edge types, graph traversal, node positioning |
+| `src/canvas_chat/static/js/crdt-graph.js` | CRDT-backed graph (Yjs), API-compatible with graph.js | Same as graph.js - **must keep in sync until graph.js is deprecated** |
 | `src/canvas_chat/static/js/layout.js` | Pure layout functions for overlap detection | Overlap detection, overlap resolution, node positioning algorithms |
 | `src/canvas_chat/static/js/chat.js` | LLM API calls, streaming | API integration, message formatting, token estimation |
 | `src/canvas_chat/static/js/storage.js` | localStorage persistence | Session storage, API key storage, settings |

@@ -1338,24 +1338,85 @@ html, body {
 }
 
 /* Collapse button styling */
+/* Collapse button - visible when node has children */
 .header-btn.collapse-btn {
+    display: none;  /* Hidden by default, shown via inline style when node has children */
     min-width: 24px;
     padding: 2px 6px;
     font-size: 12px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+/* When collapse button has content (shown via JS), make it visible on hover */
+.node:hover .header-btn.collapse-btn {
+    opacity: 0.6;
+}
+
+.header-btn.collapse-btn:hover {
+    opacity: 1;
+    background: var(--accent);
+    color: white;
 }
 
 .header-btn.collapse-btn.collapsed {
     background-color: var(--accent-light);
     font-weight: 500;
+    opacity: 0.8;
 }
 
-/* Collapsed node/edge hidden state */
+.node:hover .header-btn.collapse-btn.collapsed {
+    opacity: 1;
+}
+
+/* Collapsed node/edge hidden state - smooth transition */
+.node-wrapper {
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+
 .node-wrapper.collapsed-hidden {
-    display: none;
+    opacity: 0;
+    transform: scale(0.95);
+    pointer-events: none;
+    /* Use visibility with delay to fully hide after animation */
+    visibility: hidden;
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out, visibility 0s 0.25s;
+}
+
+/* When becoming visible again, no delay on visibility */
+.node-wrapper:not(.collapsed-hidden) {
+    visibility: visible;
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out, visibility 0s 0s;
+}
+
+.edge {
+    transition: opacity 0.25s ease-out;
 }
 
 .edge.collapsed-hidden {
-    display: none;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Collapsed-path edge: source is collapsed but target is visible (merge node)
+   Shows a dotted, grayed line to indicate a hidden path connection */
+.edge.collapsed-path {
+    stroke: var(--text-muted) !important;
+    stroke-dasharray: 4, 4 !important;
+    stroke-width: 2 !important;
+    opacity: 0.7;
+    animation: fadeInEdge 0.25s ease-out;
+}
+
+@keyframes fadeInEdge {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 0.7;
+    }
 }
 
 /* Navigation Popover */

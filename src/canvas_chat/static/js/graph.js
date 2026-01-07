@@ -596,6 +596,68 @@ class Graph {
     }
 
     /**
+     * Find visible descendants reachable through hidden nodes.
+     * Used for drawing collapsed-path virtual edges from collapsed node to merge nodes.
+     * @param {string} nodeId - The collapsed node ID
+     * @returns {Array} Array of visible descendant node objects reachable through hidden paths
+     */
+    getVisibleDescendantsThroughHidden(nodeId) {
+        const result = [];
+        const visited = new Set([nodeId]);
+
+        const traverse = (currentId) => {
+            const children = this.getChildren(currentId);
+            for (const child of children) {
+                if (visited.has(child.id)) continue;
+                visited.add(child.id);
+
+                if (this.isNodeVisible(child.id)) {
+                    // Found a visible descendant - add it to results
+                    result.push(child);
+                    // Don't traverse further - we only want the first visible node in each path
+                } else {
+                    // Child is hidden, continue traversing
+                    traverse(child.id);
+                }
+            }
+        };
+
+        traverse(nodeId);
+        return result;
+    }
+
+    /**
+     * Find visible ancestors reachable through hidden nodes.
+     * Used for navigation: when at a merge node, find collapsed ancestors that connect through hidden paths.
+     * @param {string} nodeId - The node ID to find ancestors for
+     * @returns {Array} Array of visible ancestor node objects reachable through hidden paths
+     */
+    getVisibleAncestorsThroughHidden(nodeId) {
+        const result = [];
+        const visited = new Set([nodeId]);
+
+        const traverse = (currentId) => {
+            const parents = this.getParents(currentId);
+            for (const parent of parents) {
+                if (visited.has(parent.id)) continue;
+                visited.add(parent.id);
+
+                if (this.isNodeVisible(parent.id)) {
+                    // Found a visible ancestor - add it to results
+                    result.push(parent);
+                    // Don't traverse further - we only want the first visible node in each path
+                } else {
+                    // Parent is hidden, continue traversing upward
+                    traverse(parent.id);
+                }
+            }
+        };
+
+        traverse(nodeId);
+        return result;
+    }
+
+    /**
      * Resolve context for one or more nodes
      * Returns messages in chronological order, deduplicated
      */
