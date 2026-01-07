@@ -1386,11 +1386,11 @@ class App {
             }
 
             // Arrow Up/Down for parent/child navigation
-            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'j' || e.key === 'k') {
                 // If popover is open, navigate within it
                 if (this.canvas.isNavPopoverOpen()) {
                     e.preventDefault();
-                    this.canvas.navigatePopoverSelection(e.key === 'ArrowUp' ? -1 : 1);
+                    this.canvas.navigatePopoverSelection((e.key === 'ArrowUp' || e.key === 'j') ? -1 : 1);
                     return;
                 }
 
@@ -1399,7 +1399,7 @@ class App {
                     const selectedNodeIds = this.canvas.getSelectedNodeIds();
                     if (selectedNodeIds.length === 1) {
                         e.preventDefault();
-                        if (e.key === 'ArrowUp') {
+                        if (e.key === 'ArrowUp' || e.key === 'j') {
                             this.navigateToParentKeyboard(selectedNodeIds[0]);
                         } else {
                             this.navigateToChildKeyboard(selectedNodeIds[0]);
