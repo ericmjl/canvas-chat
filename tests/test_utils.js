@@ -49,7 +49,7 @@ global.NodeType = {
     SEARCH: 'search', RESEARCH: 'research', HIGHLIGHT: 'highlight', MATRIX: 'matrix',
     CELL: 'cell', ROW: 'row', COLUMN: 'column', FETCH_RESULT: 'fetch_result',
     PDF: 'pdf', OPINION: 'opinion', SYNTHESIS: 'synthesis', REVIEW: 'review', IMAGE: 'image',
-    FLASHCARD: 'flashcard'
+    FLASHCARD: 'flashcard', FACTCHECK: 'factcheck'
 };
 
 // Load graph.js first (defines NodeType, etc. and exports wouldOverlapNodes)
@@ -99,6 +99,8 @@ const {
     DEFAULT_NODE_SIZES,
     getDefaultNodeSize,
     wrapNode,
+    createMockNodeForType,
+    HeaderButtons,
     applySM2,
     isFlashcardDue,
     getDueFlashcards,
@@ -2495,6 +2497,36 @@ test('HumanNode: getActions does NOT include CREATE_FLASHCARDS', () => {
 });
 
 // ============================================================
+// HeaderButtons collapse button tests
+// ============================================================
+
+test('All node types include collapse button in header', () => {
+    const nodeTypes = [
+        NodeType.HUMAN, NodeType.AI, NodeType.NOTE, NodeType.SUMMARY,
+        NodeType.REFERENCE, NodeType.SEARCH, NodeType.RESEARCH,
+        NodeType.HIGHLIGHT, NodeType.MATRIX, NodeType.CELL,
+        NodeType.ROW, NodeType.COLUMN, NodeType.FETCH_RESULT,
+        NodeType.PDF, NodeType.OPINION, NodeType.SYNTHESIS,
+        NodeType.REVIEW, NodeType.FACTCHECK, NodeType.IMAGE,
+        NodeType.FLASHCARD
+    ];
+
+    for (const type of nodeTypes) {
+        const mockNode = createMockNodeForType(type);
+        const wrapped = wrapNode(mockNode);
+        const buttons = wrapped.getHeaderButtons();
+        const hasCollapse = buttons.some(btn => btn.id === 'collapse');
+        assertTrue(hasCollapse, `${type} should include collapse button in header`);
+    }
+});
+
+test('HeaderButtons.COLLAPSE has correct properties', () => {
+    assertEqual(HeaderButtons.COLLAPSE.id, 'collapse');
+    assertEqual(HeaderButtons.COLLAPSE.label, '−');
+    assertEqual(HeaderButtons.COLLAPSE.title, 'Collapse children');
+});
+
+// ============================================================
 // SM-2 Spaced Repetition Algorithm tests
 // ============================================================
 
@@ -3329,6 +3361,229 @@ test('Matrix cells: re-read pattern preserves concurrent updates (the fix)', () 
     assertEqual(finalNode.cells['1-0'].content, 'B1');
     assertEqual(finalNode.cells['1-1'].content, 'B2');
     assertTrue(Object.keys(finalNode.cells).length === 4, 'All 4 cells should exist');
+});
+
+// ============================================================
+// Graph.getDescendants() tests
+// ============================================================
+
+test('Graph.getDescendants returns all descendants in chain', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeB.id, nodeC.id));
+
+    const descendants = graph.getDescendants(nodeA.id);
+    assertEqual(descendants.length, 2);
+    assertTrue(descendants.some(n => n.id === nodeB.id), 'Should include B');
+    assertTrue(descendants.some(n => n.id === nodeC.id), 'Should include C');
+});
+
+test('Graph.getDescendants returns multiple children', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    const nodeD = createNodeReal(NodeType.AI, 'D');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addNode(nodeD);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeA.id, nodeC.id));
+    graph.addEdge(createEdge(nodeA.id, nodeD.id));
+
+    const descendants = graph.getDescendants(nodeA.id);
+    assertEqual(descendants.length, 3);
+});
+
+test('Graph.getDescendants returns empty for leaf node', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    graph.addNode(nodeA);
+
+    const descendants = graph.getDescendants(nodeA.id);
+    assertEqual(descendants.length, 0);
+});
+
+test('Graph.getDescendants handles diamond/merge structure', () => {
+    // A -> B, A -> C, B -> D, C -> D (diamond)
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    const nodeD = createNodeReal(NodeType.AI, 'D');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addNode(nodeD);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeA.id, nodeC.id));
+    graph.addEdge(createEdge(nodeB.id, nodeD.id));
+    graph.addEdge(createEdge(nodeC.id, nodeD.id));
+
+    const descendants = graph.getDescendants(nodeA.id);
+    // Should include B, C, D (D only once despite two paths)
+    assertEqual(descendants.length, 3);
+    assertTrue(descendants.some(n => n.id === nodeD.id), 'Should include D');
+});
+
+// ============================================================
+// Graph.isNodeVisible() tests
+// ============================================================
+
+test('Graph.isNodeVisible returns true for root nodes', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    graph.addNode(nodeA);
+
+    assertTrue(graph.isNodeVisible(nodeA.id), 'Root node should be visible');
+});
+
+test('Graph.isNodeVisible returns true when no ancestors collapsed', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+
+    assertTrue(graph.isNodeVisible(nodeB.id), 'Child should be visible when parent not collapsed');
+});
+
+test('Graph.isNodeVisible returns false when ancestor is collapsed', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+
+    nodeA.collapsed = true;
+    assertFalse(graph.isNodeVisible(nodeB.id), 'Child should be hidden when parent collapsed');
+});
+
+test('Graph.isNodeVisible returns false for deep descendant when ancestor collapsed', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeB.id, nodeC.id));
+
+    nodeA.collapsed = true;
+    assertFalse(graph.isNodeVisible(nodeC.id), 'Grandchild should be hidden when grandparent collapsed');
+});
+
+test('Graph.isNodeVisible returns true for merge node if any parent path visible', () => {
+    // A -> B, A -> C, B -> D, C -> D (diamond with D as merge node)
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    const nodeD = createNodeReal(NodeType.AI, 'D');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addNode(nodeD);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeA.id, nodeC.id));
+    graph.addEdge(createEdge(nodeB.id, nodeD.id));
+    graph.addEdge(createEdge(nodeC.id, nodeD.id));
+
+    // Collapse B only - D should still be visible via C
+    nodeB.collapsed = true;
+    assertTrue(graph.isNodeVisible(nodeD.id), 'Merge node should be visible if any parent path is open');
+});
+
+test('Graph.isNodeVisible returns false for merge node if all parent paths collapsed', () => {
+    // A -> B, A -> C, B -> D, C -> D (diamond with D as merge node)
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    const nodeD = createNodeReal(NodeType.AI, 'D');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addNode(nodeD);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeA.id, nodeC.id));
+    graph.addEdge(createEdge(nodeB.id, nodeD.id));
+    graph.addEdge(createEdge(nodeC.id, nodeD.id));
+
+    // Collapse both B and C - D should be hidden
+    nodeB.collapsed = true;
+    nodeC.collapsed = true;
+    assertFalse(graph.isNodeVisible(nodeD.id), 'Merge node should be hidden if all parent paths collapsed');
+});
+
+// ============================================================
+// Graph.countHiddenDescendants() tests
+// ============================================================
+
+test('Graph.countHiddenDescendants returns correct count for simple chain', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeB.id, nodeC.id));
+
+    nodeA.collapsed = true;
+    assertEqual(graph.countHiddenDescendants(nodeA.id), 2);
+});
+
+test('Graph.countHiddenDescendants returns 0 when not collapsed', () => {
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+
+    // Not collapsed - all descendants are visible
+    assertEqual(graph.countHiddenDescendants(nodeA.id), 0);
+});
+
+test('Graph.countHiddenDescendants counts only hidden nodes in merge', () => {
+    // A -> B, A -> C, B -> D, C -> D, D -> E
+    const graph = new Graph();
+    const nodeA = createNodeReal(NodeType.HUMAN, 'A');
+    const nodeB = createNodeReal(NodeType.AI, 'B');
+    const nodeC = createNodeReal(NodeType.AI, 'C');
+    const nodeD = createNodeReal(NodeType.AI, 'D');
+    const nodeE = createNodeReal(NodeType.AI, 'E');
+    graph.addNode(nodeA);
+    graph.addNode(nodeB);
+    graph.addNode(nodeC);
+    graph.addNode(nodeD);
+    graph.addNode(nodeE);
+    graph.addEdge(createEdge(nodeA.id, nodeB.id));
+    graph.addEdge(createEdge(nodeA.id, nodeC.id));
+    graph.addEdge(createEdge(nodeB.id, nodeD.id));
+    graph.addEdge(createEdge(nodeC.id, nodeD.id));
+    graph.addEdge(createEdge(nodeD.id, nodeE.id));
+
+    // Collapse B only - D and E still visible via C, so B's hidden count is 0
+    nodeB.collapsed = true;
+    assertEqual(graph.countHiddenDescendants(nodeB.id), 0);
+
+    // Collapse both B and C - now D and E are hidden
+    nodeC.collapsed = true;
+    // B's descendants are D and E, both hidden
+    assertEqual(graph.countHiddenDescendants(nodeB.id), 2);
 });
 
 // ============================================================

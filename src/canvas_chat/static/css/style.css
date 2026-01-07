@@ -1337,6 +1337,27 @@ html, body {
     opacity: 0.2 !important;
 }
 
+/* Collapse button styling */
+.header-btn.collapse-btn {
+    min-width: 24px;
+    padding: 2px 6px;
+    font-size: 12px;
+}
+
+.header-btn.collapse-btn.collapsed {
+    background-color: var(--accent-light);
+    font-weight: 500;
+}
+
+/* Collapsed node/edge hidden state */
+.node-wrapper.collapsed-hidden {
+    display: none;
+}
+
+.edge.collapsed-hidden {
+    display: none;
+}
+
 /* Navigation Popover */
 .nav-popover {
     position: fixed;

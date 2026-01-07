@@ -103,6 +103,14 @@ git push -u origin fix/descriptive-name
 gh pr create --title "Fix: Description" --body "Summary of changes"
 ```
 
+### Closing issues
+
+**NEVER close issues directly with `gh issue close`.** Issues should only be closed via pull requests using GitHub's "Closes #N" or "Fixes #N" syntax in the PR description or commit messages.
+
+- Use `Closes #100` in PR description to auto-close when merged
+- Sub-issues for implementation tracking can be closed directly, but the main feature issue must be closed via PR
+- This ensures proper traceability between code changes and issue resolution
+
 ### Pre-commit hooks
 
 **NEVER use `--no-verify` or `-n` when committing.** Pre-commit hooks ensure code quality and must always run.

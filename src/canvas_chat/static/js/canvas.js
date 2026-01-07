@@ -64,6 +64,7 @@ class Canvas {
         this.onNavChildClick = null;  // For handling child navigation button click
         this.onCreateFlashcards = null;  // For generating flashcards from content
         this.onReviewCard = null;  // For reviewing a flashcard
+        this.onNodeCollapse = null;  // For collapsing/expanding node children
 
         // PDF drag & drop callback
         this.onPdfDrop = null;  // For handling PDF file drops
@@ -1620,6 +1621,10 @@ class Canvas {
 
         // Build header buttons HTML
         const headerButtonsHtml = headerButtons.map(btn => {
+            // Collapse button is hidden by default, shown dynamically when node has children
+            if (btn.id === 'collapse') {
+                return `<button class="header-btn collapse-btn" title="${this.escapeHtml(btn.title)}" style="display:none;">${this.escapeHtml(btn.label)}</button>`;
+            }
             const displayStyle = btn.hidden ? 'style="display:none;"' : '';
             return `<button class="header-btn ${btn.id}-btn" title="${this.escapeHtml(btn.title)}" ${displayStyle}>${this.escapeHtml(btn.label)}</button>`;
         }).join('');
@@ -2019,6 +2024,15 @@ class Canvas {
                 if (this.onNavChildClick) {
                     this.onNavChildClick(node.id, navChildBtn);
                 }
+            });
+        }
+
+        // Collapse/expand button
+        const collapseBtn = div.querySelector('.collapse-btn');
+        if (collapseBtn) {
+            collapseBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.onNodeCollapse) this.onNodeCollapse(node.id);
             });
         }
 
@@ -2423,6 +2437,87 @@ class Canvas {
 
         const continueBtn = wrapper.querySelector('.continue-btn');
         if (continueBtn) continueBtn.style.display = 'none';
+    }
+
+    /**
+     * Update the collapse button state for a node.
+     * Shows/hides the button based on whether node has children.
+     * Updates icon and badge based on collapsed state.
+     * @param {string} nodeId - The node ID
+     * @param {boolean} hasChildren - Whether the node has children
+     * @param {boolean} isCollapsed - Whether the node is currently collapsed
+     * @param {number} hiddenCount - Number of hidden descendants (for badge)
+     */
+    updateCollapseButton(nodeId, hasChildren, isCollapsed, hiddenCount = 0) {
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) return;
+
+        const btn = wrapper.querySelector('.collapse-btn');
+        if (!btn) return;
+
+        if (!hasChildren) {
+            btn.style.display = 'none';
+            return;
+        }
+
+        btn.style.display = '';
+
+        if (isCollapsed) {
+            btn.textContent = hiddenCount > 0 ? `▶ +${hiddenCount}` : '▶';
+            btn.title = 'Expand children';
+            btn.classList.add('collapsed');
+        } else {
+            btn.textContent = '−';
+            btn.title = 'Collapse children';
+            btn.classList.remove('collapsed');
+        }
+    }
+
+    /**
+     * Update visibility of a node (show/hide based on graph state).
+     * Uses CSS class for hiding rather than removing from DOM.
+     * @param {string} nodeId - The node ID
+     * @param {boolean} visible - Whether the node should be visible
+     */
+    updateNodeVisibility(nodeId, visible) {
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) return;
+
+        if (visible) {
+            wrapper.classList.remove('collapsed-hidden');
+        } else {
+            wrapper.classList.add('collapsed-hidden');
+        }
+
+        // Also update edges connected to this node
+        this.updateEdgeVisibility(nodeId, visible);
+    }
+
+    /**
+     * Update visibility of edges connected to a node.
+     * An edge is hidden if either its source or target node is hidden.
+     * @param {string} nodeId - The node ID whose edges should be checked
+     * @param {boolean} nodeVisible - Whether the node is visible
+     */
+    updateEdgeVisibility(nodeId, nodeVisible) {
+        for (const [edgeId, edgeEl] of this.edgeElements) {
+            const source = edgeEl.getAttribute('data-source');
+            const target = edgeEl.getAttribute('data-target');
+
+            if (source === nodeId || target === nodeId) {
+                const sourceWrapper = this.nodeElements.get(source);
+                const targetWrapper = this.nodeElements.get(target);
+
+                const sourceVisible = sourceWrapper && !sourceWrapper.classList.contains('collapsed-hidden');
+                const targetVisible = targetWrapper && !targetWrapper.classList.contains('collapsed-hidden');
+
+                if (sourceVisible && targetVisible) {
+                    edgeEl.classList.remove('collapsed-hidden');
+                } else {
+                    edgeEl.classList.add('collapsed-hidden');
+                }
+            }
+        }
     }
 
     /**
