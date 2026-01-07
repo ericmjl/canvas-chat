@@ -28,6 +28,7 @@ const Actions = {
 const HeaderButtons = {
     NAV_PARENT: { id: 'nav-parent', label: '↑', title: 'Go to parent node' },
     NAV_CHILD: { id: 'nav-child', label: '↓', title: 'Go to child node' },
+    COLLAPSE: { id: 'collapse', label: '−', title: 'Collapse children' },
     STOP: { id: 'stop', label: '⏹', title: 'Stop generating', hidden: true },
     CONTINUE: { id: 'continue', label: '▶', title: 'Continue generating', hidden: true },
     RESET_SIZE: { id: 'reset-size', label: '↺', title: 'Reset to default size' },
@@ -101,6 +102,7 @@ class BaseNode {
         return [
             HeaderButtons.NAV_PARENT,
             HeaderButtons.NAV_CHILD,
+            HeaderButtons.COLLAPSE,
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,
             HeaderButtons.DELETE
@@ -162,6 +164,7 @@ class AINode extends BaseNode {
         return [
             HeaderButtons.NAV_PARENT,
             HeaderButtons.NAV_CHILD,
+            HeaderButtons.COLLAPSE,
             HeaderButtons.STOP,
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,
@@ -255,6 +258,7 @@ class MatrixNode extends BaseNode {
         return [
             HeaderButtons.NAV_PARENT,
             HeaderButtons.NAV_CHILD,
+            HeaderButtons.COLLAPSE,
             HeaderButtons.STOP,  // For stopping cell fills
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,
@@ -440,6 +444,7 @@ class OpinionNode extends BaseNode {
         return [
             HeaderButtons.NAV_PARENT,
             HeaderButtons.NAV_CHILD,
+            HeaderButtons.COLLAPSE,
             HeaderButtons.STOP,
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,
@@ -464,6 +469,7 @@ class SynthesisNode extends BaseNode {
         return [
             HeaderButtons.NAV_PARENT,
             HeaderButtons.NAV_CHILD,
+            HeaderButtons.COLLAPSE,
             HeaderButtons.STOP,
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,
@@ -488,6 +494,7 @@ class ReviewNode extends BaseNode {
         return [
             HeaderButtons.NAV_PARENT,
             HeaderButtons.NAV_CHILD,
+            HeaderButtons.COLLAPSE,
             HeaderButtons.STOP,
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,

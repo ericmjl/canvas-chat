@@ -532,6 +532,70 @@ class Graph {
     }
 
     /**
+     * Get all descendants of a node (children, grandchildren, etc.)
+     * Returns nodes in breadth-first order, deduplicated for merge nodes.
+     */
+    getDescendants(nodeId, visited = new Set()) {
+        if (visited.has(nodeId)) return [];
+        visited.add(nodeId);
+
+        const descendants = [];
+        const children = this.getChildren(nodeId);
+
+        for (const child of children) {
+            // Only add child if not already visited (handles merge nodes)
+            if (!visited.has(child.id)) {
+                descendants.push(child);
+                descendants.push(...this.getDescendants(child.id, visited));
+            }
+        }
+        return descendants;
+    }
+
+    /**
+     * Check if a node is visible (not hidden by a collapsed ancestor).
+     * A node is visible if ANY path from a root to it contains no collapsed nodes.
+     *
+     * @param {string} nodeId - The node ID to check
+     * @returns {boolean} True if the node should be visible
+     */
+    isNodeVisible(nodeId) {
+        const node = this.getNode(nodeId);
+        if (!node) return false;
+
+        // Root nodes are always visible
+        const parents = this.getParents(nodeId);
+        if (parents.length === 0) return true;
+
+        // Node is visible if ANY parent provides a visible, non-collapsed path
+        for (const parent of parents) {
+            // If parent is collapsed, this path is blocked
+            if (parent.collapsed) continue;
+
+            // If parent is visible via some path, this node is visible
+            if (this.isNodeVisible(parent.id)) {
+                return true;
+            }
+        }
+
+        // All paths blocked
+        return false;
+    }
+
+    /**
+     * Count descendants that would be hidden if this node is collapsed.
+     * Only counts nodes that are currently not visible (hidden by this collapse).
+     *
+     * @param {string} nodeId - The collapsed node ID
+     * @returns {number} Count of hidden descendants
+     */
+    countHiddenDescendants(nodeId) {
+        const descendants = this.getDescendants(nodeId);
+        // Count descendants that are not visible
+        return descendants.filter(d => !this.isNodeVisible(d.id)).length;
+    }
+
+    /**
      * Resolve context for one or more nodes
      * Returns messages in chronological order, deduplicated
      */

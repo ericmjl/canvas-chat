@@ -776,6 +776,9 @@ class App {
         this.canvas.onNavChildClick = this.handleNavChildClick.bind(this);
         this.canvas.onNodeNavigate = this.handleNodeNavigate.bind(this);
 
+        // Collapse/expand callback for hiding/showing descendants
+        this.canvas.onNodeCollapse = this.handleNodeCollapse.bind(this);
+
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
         if (replyInput) {
@@ -922,10 +925,11 @@ class App {
         // Render graph
         this.canvas.renderGraph(this.graph);
 
-        // Update navigation button states after rendering
+        // Update navigation button states and collapse visibility after rendering
         // Delay slightly to ensure nodes are rendered
         requestAnimationFrame(() => {
             this.canvas.updateAllNavButtonStates(this.graph);
+            this.updateAllNodeVisibility();
         });
 
         // Rebuild search index
@@ -1650,6 +1654,9 @@ class App {
 
             const parentNode = this.graph.getNode(parentId);
             this.canvas.renderEdge(edge, parentNode.position, humanNode.position);
+
+            // Update collapse button for parent (now has children)
+            this.updateCollapseButtonForNode(parentId);
         }
 
         // Clear input and selection
@@ -1675,6 +1682,9 @@ class App {
         const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
         this.graph.addEdge(aiEdge);
         this.canvas.renderEdge(aiEdge, humanNode.position, aiNode.position);
+
+        // Update collapse button for human node (now has AI child)
+        this.updateCollapseButtonForNode(humanNode.id);
 
         // Smoothly pan to the new AI node
         this.canvas.centerOnAnimated(
@@ -2399,6 +2409,64 @@ class App {
             node.position.y + height / 2,
             300
         );
+    }
+
+    /**
+     * Handle collapse/expand toggle for a node.
+     * Toggles the collapsed state and updates visibility of all descendants.
+     *
+     * @param {string} nodeId - The ID of the node to collapse/expand
+     */
+    handleNodeCollapse(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        // Toggle collapsed state
+        node.collapsed = !node.collapsed;
+
+        // Update visibility of all nodes
+        this.updateAllNodeVisibility();
+
+        // Update the collapse button for this node
+        const children = this.graph.getChildren(nodeId);
+        const hiddenCount = node.collapsed ? this.graph.countHiddenDescendants(nodeId) : 0;
+        this.canvas.updateCollapseButton(nodeId, children.length > 0, node.collapsed, hiddenCount);
+
+        // Save session
+        this.saveSession();
+    }
+
+    /**
+     * Update visibility of all nodes based on collapse state.
+     * Called after any collapse/expand action or session restore.
+     */
+    updateAllNodeVisibility() {
+        for (const node of this.graph.getAllNodes()) {
+            const visible = this.graph.isNodeVisible(node.id);
+            this.canvas.updateNodeVisibility(node.id, visible);
+
+            // Update collapse buttons for all visible nodes
+            if (visible) {
+                const children = this.graph.getChildren(node.id);
+                const hiddenCount = node.collapsed ? this.graph.countHiddenDescendants(node.id) : 0;
+                this.canvas.updateCollapseButton(node.id, children.length > 0, node.collapsed, hiddenCount);
+            }
+        }
+    }
+
+    /**
+     * Update collapse button for a node after its children change.
+     * Call this after adding an edge where the node is the parent (source).
+     *
+     * @param {string} nodeId - The node ID to update
+     */
+    updateCollapseButtonForNode(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        const children = this.graph.getChildren(nodeId);
+        const hiddenCount = node.collapsed ? this.graph.countHiddenDescendants(nodeId) : 0;
+        this.canvas.updateCollapseButton(nodeId, children.length > 0, node.collapsed || false, hiddenCount);
     }
 
     /**
@@ -4598,6 +4666,9 @@ ${resultsText}`;
             this.graph.addEdge(edge);
             this.canvas.renderEdge(edge, sourceNode.position, highlightNode.position);
 
+            // Update collapse button for source node (now has children)
+            this.updateCollapseButtonForNode(nodeId);
+
             this.saveSession();
             this.updateEmptyState();
 
@@ -4627,6 +4698,9 @@ ${resultsText}`;
                 this.graph.addEdge(humanEdge);
                 this.canvas.renderEdge(humanEdge, highlightNode.position, humanNode.position);
 
+                // Update collapse button for highlight node (now has children)
+                this.updateCollapseButtonForNode(highlightNode.id);
+
                 this.saveSession();
 
                 // Create AI response node
@@ -4642,6 +4716,9 @@ ${resultsText}`;
                 const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
                 this.graph.addEdge(aiEdge);
                 this.canvas.renderEdge(aiEdge, humanNode.position, aiNode.position);
+
+                // Update collapse button for human node (now has AI child)
+                this.updateCollapseButtonForNode(humanNode.id);
 
                 // Smoothly pan to the AI node
                 this.canvas.centerOnAnimated(
@@ -4742,6 +4819,9 @@ ${resultsText}`;
         this.graph.addEdge(edge);
         this.canvas.renderEdge(edge, parentNode.position, summaryNode.position);
 
+        // Update collapse button for parent node (now has children)
+        this.updateCollapseButtonForNode(nodeId);
+
         try {
             const summary = await chat.summarize(messages, model);
 
@@ -4798,6 +4878,9 @@ ${resultsText}`;
         const fetchEdge = createEdge(nodeId, fetchResultNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(fetchEdge);
         this.canvas.renderEdge(fetchEdge, node.position, fetchResultNode.position);
+
+        // Update collapse button for source node (now has children)
+        this.updateCollapseButtonForNode(nodeId);
 
         // Smoothly pan to the fetch result node
         this.canvas.centerOnAnimated(
@@ -4880,6 +4963,9 @@ ${resultsText}`;
             const summaryEdge = createEdge(fetchResultNode.id, summaryNode.id, EdgeType.REFERENCE);
             this.graph.addEdge(summaryEdge);
             this.canvas.renderEdge(summaryEdge, fetchResultNode.position, summaryNode.position);
+
+            // Update collapse button for fetch result node (now has children)
+            this.updateCollapseButtonForNode(fetchResultNode.id);
 
             // Smoothly pan to the summary node
             this.canvas.centerOnAnimated(
@@ -5883,6 +5969,9 @@ ${nodeContent}`;
 
             createdNodes.push(flashcardNode);
         });
+
+        // Update collapse button for source node (now has flashcard children)
+        this.updateCollapseButtonForNode(sourceNodeId);
 
         // Pan to first created flashcard
         if (createdNodes.length > 0) {
