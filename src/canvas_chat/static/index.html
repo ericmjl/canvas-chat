@@ -12,6 +12,13 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
     <!-- marked-katex-extension -->
     <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension@5.1.5/lib/index.umd.js"></script>
+    <!-- Papa Parse for CSV parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
+    <!-- Pyodide for Python execution in browser -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+    <!-- CodeMirror 6 for code editing -->
+    <script src="https://cdn.jsdelivr.net/npm/@codemirror/state@6/dist/index.cjs" type="module"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@codemirror/view@6/style/editor.css">
 </head>
 <body>
     <!-- Top Toolbar -->
@@ -286,8 +293,8 @@
     <!-- Hidden file input for import -->
     <input type="file" id="import-file-input" accept=".canvaschat" style="display: none;">
 
-    <!-- Hidden file input for PDF and image upload -->
-    <input type="file" id="pdf-file-input" accept=".pdf,application/pdf,image/*" style="display: none;">
+    <!-- Hidden file input for PDF, image, and CSV upload -->
+    <input type="file" id="pdf-file-input" accept=".pdf,application/pdf,image/*,.csv,text/csv" style="display: none;">
 
     <!-- Matrix Axis Confirmation Modal -->
     <div id="matrix-modal" class="modal" style="display: none;">
@@ -513,6 +520,8 @@
                             <tr><td><code>/research</code> <em>topic</em></td><td>Deep research with multiple sources</td></tr>
                             <tr><td><code>/matrix</code> <em>context</em></td><td>Create a comparison matrix</td></tr>
                             <tr><td><code>/committee</code> <em>question</em></td><td>Consult multiple LLMs and synthesize</td></tr>
+                            <tr><td><code>/factcheck</code> <em>claims</em></td><td>Verify claims with web search</td></tr>
+                            <tr><td><code>/code</code></td><td>Create Python code node (select CSV first)</td></tr>
                         </tbody>
                     </table>
                 </section>
@@ -763,6 +772,7 @@
     <script src="/static/js/matrix.js"></script>
     <script src="/static/js/factcheck.js"></script>
     <script src="/static/js/research.js"></script>
+    <script src="/static/js/pyodide-runner.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

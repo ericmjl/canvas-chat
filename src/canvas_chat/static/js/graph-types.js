@@ -11,7 +11,7 @@
 
 /**
  * Valid node type values
- * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'} NodeTypeValue
+ * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'code'} NodeTypeValue
  */
 
 /**
@@ -181,7 +181,9 @@ const NodeType = {
     REVIEW: 'review',      // Committee member's review of other opinions
     IMAGE: 'image',        // Uploaded image for analysis
     FLASHCARD: 'flashcard', // Spaced repetition flashcard
-    FACTCHECK: 'factcheck' // Fact-checking verdict node
+    FACTCHECK: 'factcheck', // Fact-checking verdict node
+    CSV: 'csv',            // Uploaded CSV data for analysis
+    CODE: 'code'           // Python code for execution
 };
 
 /**
@@ -204,6 +206,8 @@ const DEFAULT_NODE_SIZES = {
     [NodeType.NOTE]: { width: 640, height: 480 },
     [NodeType.IMAGE]: { width: 640, height: 480 },
     [NodeType.FACTCHECK]: { width: 640, height: 480 },
+    [NodeType.CSV]: { width: 640, height: 480 },
+    [NodeType.CODE]: { width: 640, height: 400 },
 
     // Small nodes (420x200) - User input, short content
     [NodeType.HUMAN]: { width: 420, height: 200 },

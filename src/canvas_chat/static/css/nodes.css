@@ -1241,3 +1241,122 @@
 .node-content .katex {
     font-size: 1em;
 }
+
+/* =============================================================================
+   CSV Node Styles
+   ============================================================================= */
+
+.csv-metadata {
+    background: var(--color-bg-secondary, #f5f5f5);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm, 4px);
+    margin-bottom: 12px;
+    font-size: 0.85em;
+    border-left: 3px solid var(--color-accent, #4a9eff);
+}
+
+.csv-columns {
+    color: var(--color-text-secondary, #666);
+    font-size: 0.9em;
+}
+
+.csv-preview {
+    overflow-x: auto;
+}
+
+.csv-preview table {
+    font-size: 0.85em;
+}
+
+.csv-preview th,
+.csv-preview td {
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* =============================================================================
+   Code Node Styles
+   ============================================================================= */
+
+.code-node-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.code-data-hint {
+    background: var(--color-bg-secondary, #f0f4f8);
+    color: var(--color-text-secondary, #666);
+    padding: 6px 12px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.8em;
+    border-bottom: 1px solid var(--color-border, #e0e0e0);
+}
+
+.code-editor-container {
+    flex: 1;
+    min-height: 150px;
+    overflow: hidden;
+}
+
+.code-editor-textarea {
+    width: 100%;
+    height: 100%;
+    min-height: 150px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.9em;
+    line-height: 1.5;
+    padding: 12px;
+    border: none;
+    background: var(--color-bg-code, #1e1e1e);
+    color: var(--color-text-code, #d4d4d4);
+    resize: none;
+    outline: none;
+    border-radius: 0 0 var(--radius-sm, 4px) var(--radius-sm, 4px);
+}
+
+.code-editor-textarea:focus {
+    background: var(--color-bg-code-focus, #252526);
+}
+
+.code-state-indicator {
+    padding: 6px 12px;
+    background: var(--color-accent, #4a9eff);
+    color: white;
+    font-size: 0.8em;
+    text-align: center;
+}
+
+.code-node-content.code-running .code-editor-textarea {
+    opacity: 0.7;
+}
+
+.code-node-content.code-error .code-editor-textarea {
+    border: 2px solid var(--color-error, #e74c3c);
+}
+
+.code-error-output {
+    background: var(--color-error-bg, #fdf2f2);
+    color: var(--color-error, #e74c3c);
+    padding: 8px 12px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.8em;
+    border-top: 1px solid var(--color-error, #e74c3c);
+    white-space: pre-wrap;
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+/* Light mode adjustments for code */
+@media (prefers-color-scheme: light) {
+    .code-editor-textarea {
+        background: #f5f5f5;
+        color: #333;
+    }
+
+    .code-editor-textarea:focus {
+        background: #fff;
+    }
+}
