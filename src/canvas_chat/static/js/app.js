@@ -2545,12 +2545,7 @@ import pandas as pd
 ${csvNames[0]}.head()
 `;
             // Position near the first CSV node
-            const firstCsvNode = this.graph.getNode(csvNodeIds[0]);
-            position = this.graph.findNonOverlappingPosition(
-                firstCsvNode.position.x + firstCsvNode.width + 50,
-                firstCsvNode.position.y,
-                400, 300
-            );
+            position = this.graph.autoPosition(csvNodeIds);
         } else {
             // No CSV selected - create standalone code node
             starterCode = `# ${description || 'Python code'}
@@ -2602,11 +2597,7 @@ import pandas as pd
 df.head()
 `;
 
-        const position = this.graph.findNonOverlappingPosition(
-            csvNode.position.x + csvNode.width + 50,
-            csvNode.position.y,
-            400, 300
-        );
+        const position = this.graph.autoPosition([nodeId]);
 
         const codeNode = createNode(NodeType.CODE, starterCode, {
             position,
@@ -2685,13 +2676,8 @@ df.head()
             }
 
             // Create output nodes positioned below the code node
-            let yOffset = codeNode.height + 30;
             for (const output of outputs) {
-                const position = this.graph.findNonOverlappingPosition(
-                    codeNode.position.x,
-                    codeNode.position.y + yOffset,
-                    350, 250
-                );
+                const position = this.graph.autoPosition([nodeId]);
 
                 const outputNode = createNode(output.type, output.content, {
                     position,
@@ -2705,7 +2691,6 @@ df.head()
                 this.graph.addEdge(edge);
 
                 this.canvas.renderNode(outputNode);
-                yOffset += 280;
             }
 
             // Restore code node content (remove "Running...")
@@ -2715,11 +2700,7 @@ df.head()
 
         } catch (error) {
             // Show error in output
-            const position = this.graph.findNonOverlappingPosition(
-                codeNode.position.x,
-                codeNode.position.y + codeNode.height + 30,
-                350, 200
-            );
+            const position = this.graph.autoPosition([nodeId]);
 
             const errorNode = createNode(NodeType.NOTE, '```\nError: ' + error.message + '\n```', {
                 position,
