@@ -186,3 +186,13 @@ window.SSE = {
     parseSSEEvent,
     streamSSEContent
 };
+
+// CommonJS export for Node.js/testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        normalizeText,
+        readSSEStream,
+        parseSSEEvent,
+        streamSSEContent
+    };
+}

@@ -12,8 +12,8 @@ Quick reference for which files to edit for common tasks:
 | ---- | ------- | ----------- |
 | `src/canvas_chat/static/js/app.js` | Main application, orchestrates everything | Slash commands, keyboard shortcuts, feature handlers, App class methods |
 | `src/canvas_chat/static/js/canvas.js` | SVG canvas, pan/zoom, node rendering | Node appearance, drag behavior, viewport logic, node event handlers |
-| `src/canvas_chat/static/js/graph.js` | Data model, node/edge types, graph traversal | Node types, edge types, graph traversal, node positioning |
-| `src/canvas_chat/static/js/crdt-graph.js` | CRDT-backed graph (Yjs), API-compatible with graph.js | Same as graph.js - **must keep in sync until graph.js is deprecated** |
+| `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions | Node types, edge types, createNode/createEdge utilities |
+| `src/canvas_chat/static/js/crdt-graph.js` | CRDT-backed graph (Yjs), graph traversal | Graph data model, node positioning, graph traversal |
 | `src/canvas_chat/static/js/layout.js` | Pure layout functions for overlap detection | Overlap detection, overlap resolution, node positioning algorithms |
 | `src/canvas_chat/static/js/chat.js` | LLM API calls, streaming | API integration, message formatting, token estimation |
 | `src/canvas_chat/static/js/storage.js` | localStorage persistence | Session storage, API key storage, settings |
@@ -38,9 +38,9 @@ Quick reference for which files to edit for common tasks:
 
 | Constant | Location | Purpose |
 | -------- | -------- | ------- |
-| `NodeType` | `graph.js:8-27` | All node type definitions |
-| `EdgeType` | `graph.js:58-69` | All edge type definitions |
-| `SCROLLABLE_NODE_TYPES` | `graph.js:33-44` | Node types with 4:3 fixed size |
+| `NodeType` | `graph-types.js:11-32` | All node type definitions |
+| `EdgeType` | `graph-types.js:82-94` | All edge type definitions |
+| `DEFAULT_NODE_SIZES` | `graph-types.js:40-68` | Default dimensions by node type |
 | `SLASH_COMMANDS` | `app.js:186-192` | Slash command definitions |
 | CSS variables | `style.css:10-75` | Colors, sizing, theming |
 

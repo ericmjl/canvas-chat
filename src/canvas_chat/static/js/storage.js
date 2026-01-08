@@ -515,3 +515,8 @@ class Storage {
 
 // Export singleton instance
 const storage = new Storage();
+
+// CommonJS export for Node.js/testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Storage, storage };
+}

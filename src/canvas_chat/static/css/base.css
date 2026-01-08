@@ -1,0 +1,151 @@
+/**
+ * Base styles - CSS reset, variables, dark mode
+ * Canvas Chat - Excalidraw-inspired aesthetic
+ */
+
+/* CSS Reset and Base */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    /* Colors - Light mode */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-canvas: #f5f5f5;
+    --text-primary: #1e1e1e;
+    --text-secondary: #6b7280;
+    --text-muted: #9ca3af;
+
+    /* Node colors */
+    --node-human: #e3f2fd;
+    --node-human-border: #90caf9;
+    --node-ai: #f3e5f5;
+    --node-ai-border: #ce93d8;
+    --node-note: #fff9c4;
+    --node-note-border: #fff176;
+    --node-summary: #e8f5e9;
+    --node-summary-border: #a5d6a7;
+    --node-reference: #fff3e0;
+    --node-reference-border: #ffcc80;
+    --node-search: #e0f7fa;
+    --node-search-border: #4dd0e1;
+    --node-research: #ede7f6;
+    --node-research-border: #b39ddb;
+    --node-highlight: #fffde7;
+    --node-highlight-border: #ffd54f;
+    --node-opinion: #e8eaf6;
+    --node-opinion-border: #7986cb;
+    --node-synthesis: #fce4ec;
+    --node-synthesis-border: #f06292;
+    --node-review: #fff8e1;
+    --node-review-border: #ffb74d;
+    --node-pdf: #e8f4f8;
+    --node-pdf-border: #4db6ac;
+    --node-image: #fce4ec;
+    --node-image-border: #f48fb1;
+    --node-flashcard: #e8f5e9;
+    --node-flashcard-border: #66bb6a;
+
+    /* UI colors */
+    --edge-color: #495057;
+    --edge-color-light: #adb5bd;
+    --selection-color: #228be6;
+    --selection-bg: rgba(34, 139, 230, 0.1);
+    --context-highlight: rgba(34, 139, 230, 0.2);
+    --accent: #228be6;
+    --accent-hover: #1c7ed6;
+    --danger: #fa5252;
+    --success: #40c057;
+    --warning: #fab005;
+
+    /* Additional UI colors */
+    --border: #e5e7eb;
+    --text-tertiary: #d1d5db;
+    --bg-tertiary: #f3f4f6;
+    --accent-light: rgba(34, 139, 230, 0.1);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+
+    /* Spacing */
+    --toolbar-height: 48px;
+    --input-height: 60px;
+
+    /* Typography */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+
+    /* Border radius - slightly rounded for hand-drawn feel */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #2d2d2d;
+        --bg-canvas: #121212;
+        --text-primary: #e4e4e7;
+        --text-secondary: #a1a1aa;
+        --text-muted: #71717a;
+
+        --node-human: #1e3a5f;
+        --node-human-border: #2563eb;
+        --node-ai: #3b2d4a;
+        --node-ai-border: #9333ea;
+        --node-note: #3d3520;
+        --node-note-border: #ca8a04;
+        --node-summary: #1a3d27;
+        --node-summary-border: #16a34a;
+        --node-reference: #3d2e1f;
+        --node-reference-border: #ea580c;
+        --node-search: #1a3d3d;
+        --node-search-border: #0891b2;
+        --node-research: #2d2445;
+        --node-research-border: #7c3aed;
+        --node-highlight: #3d3a20;
+        --node-highlight-border: #fbc02d;
+        --node-opinion: #2d2d45;
+        --node-opinion-border: #5c6bc0;
+        --node-synthesis: #3d2d35;
+        --node-synthesis-border: #ec407a;
+        --node-review: #3d3520;
+        --node-review-border: #ffa726;
+        --node-pdf: #1a3d3d;
+        --node-pdf-border: #26a69a;
+        --node-image: #3d2d35;
+        --node-image-border: #f06292;
+        --node-flashcard: #1a3d27;
+        --node-flashcard-border: #43a047;
+
+        --edge-color: #9ca3af;
+        --edge-color-light: #4b5563;
+
+        /* Additional UI colors - dark mode */
+        --border: #3f3f46;
+        --text-tertiary: #52525b;
+        --bg-tertiary: #27272a;
+        --accent-light: rgba(34, 139, 230, 0.2);
+
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+    }
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    background: var(--bg-canvas);
+}

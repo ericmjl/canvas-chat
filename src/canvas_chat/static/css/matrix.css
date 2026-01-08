@@ -1,0 +1,312 @@
+/**
+ * Matrix styles - matrix node, cells, matrix modal
+ */
+
+/* Matrix Node */
+.node.matrix {
+    background: var(--bg-primary);
+    border-color: var(--accent);
+}
+
+.node.matrix .node-content {
+    padding: 0;
+    overflow: hidden;
+    height: calc(100% - 125px); /* Fill available space minus header/summary/context/footer */
+    display: flex;
+    flex-direction: column;
+}
+
+.matrix-context {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-style: italic;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--edge-color-light);
+}
+
+.matrix-context-text {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.matrix-context-copy {
+    flex-shrink: 0;
+    padding: 2px 6px;
+    font-size: 12px;
+    font-style: normal;
+    background: var(--bg-primary);
+    border: 1px solid var(--edge-color-light);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.matrix-context:hover .matrix-context-copy {
+    opacity: 1;
+}
+
+.matrix-context-copy:hover {
+    background: var(--bg-canvas);
+}
+
+.matrix-table-container {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    table-layout: fixed;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.matrix-table thead {
+    flex-shrink: 0;
+    display: block;
+}
+
+.matrix-table thead tr {
+    display: flex;
+    width: 100%;
+}
+
+.matrix-table tbody {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.matrix-table tbody tr {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.matrix-table th,
+.matrix-table td {
+    border: 1px solid var(--bg-secondary);
+    padding: 4px 6px;
+    text-align: left;
+    vertical-align: top;
+    overflow: hidden;
+    flex: 1;
+    min-height: 0;
+}
+
+.matrix-table th:first-child,
+.matrix-table td:first-child {
+    flex: 0 0 var(--index-col-width, 25%);
+}
+
+.matrix-table th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+    height: auto; /* Headers keep natural height */
+}
+
+.matrix-table th:first-child,
+.matrix-table td:first-child {
+    background: var(--bg-secondary);
+    font-weight: 500;
+}
+
+.matrix-table td.row-header {
+    background: var(--bg-secondary);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.matrix-table td.row-header:hover {
+    background: var(--selection-bg);
+}
+
+.matrix-table th.col-header {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.matrix-table th.col-header:hover {
+    background: var(--selection-bg);
+}
+
+.matrix-table .corner-cell {
+    background: var(--accent);
+    color: white;
+    position: relative;
+}
+
+/* Index column resize handle */
+.index-col-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    background: transparent;
+    z-index: 10;
+}
+
+.index-col-resize-handle:hover,
+.index-col-resize-handle.dragging {
+    background: var(--accent);
+    opacity: 0.6;
+}
+
+.matrix-header-text {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Dynamic width - fills available space */
+}
+
+.matrix-cell {
+    cursor: pointer;
+    transition: background 0.15s;
+    overflow: hidden;
+    position: relative;
+}
+
+.matrix-cell:hover {
+    background: var(--selection-bg);
+}
+
+.matrix-cell-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 16px;
+}
+
+.matrix-cell-fill {
+    width: 24px;
+    height: 24px;
+    border: 1px dashed var(--text-muted);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.matrix-cell-fill:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--selection-bg);
+}
+
+.matrix-cell-content {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-primary);
+    overflow: hidden;
+    word-wrap: break-word;
+    /* Fill cell and truncate overflow */
+    height: 100%;
+    position: relative;
+}
+
+/* Fade out effect at the bottom when content is truncated */
+.matrix-cell-content::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1.4em;
+    background: linear-gradient(transparent, white);
+    pointer-events: none;
+}
+
+.matrix-cell.highlighted {
+    background: var(--selection-bg);
+    box-shadow: inset 0 0 0 2px var(--selection-color);
+    animation: cellPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes cellPulse {
+    0%, 100% { box-shadow: inset 0 0 0 2px var(--selection-color); }
+    50% { box-shadow: inset 0 0 0 3px var(--selection-color), 0 0 8px var(--selection-color); }
+}
+
+.matrix-cell.loading {
+    position: relative;
+}
+
+.matrix-cell.loading::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--text-muted);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.matrix-actions {
+    display: flex;
+    gap: 4px;
+    padding: 8px;
+    border-top: 1px solid var(--bg-secondary);
+    background: var(--bg-secondary);
+}
+
+.matrix-actions button {
+    flex: 1;
+    padding: 6px 8px;
+    border: none;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 11px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.matrix-actions button:hover {
+    background: var(--accent);
+    color: white;
+}
+
+/* Cell Node */
+.node.cell {
+    background: var(--bg-primary);
+    border-color: var(--accent);
+    border-style: dashed;
+}
+
+.node.cell .node-header {
+    background: var(--selection-bg);
+}
+
+/* Matrix Cell Edge */
+.edge.matrix_cell {
+    stroke: var(--accent);
+    stroke-dasharray: 4, 4;
+}

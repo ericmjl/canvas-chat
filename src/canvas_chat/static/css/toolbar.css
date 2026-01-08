@@ -1,0 +1,311 @@
+/**
+ * Toolbar styles - top toolbar, controls, multiplayer, toasts
+ */
+
+/* Toolbar */
+#toolbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--toolbar-height);
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    z-index: 100;
+    box-shadow: var(--shadow-sm);
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+/* Hide scrollbar but keep functionality */
+#toolbar::-webkit-scrollbar {
+    height: 4px;
+}
+
+#toolbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#toolbar::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 2px;
+}
+
+#toolbar::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+.toolbar-left, .toolbar-center, .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.logo {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.session-name {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.session-name:hover {
+    background: var(--bg-secondary);
+}
+
+.auto-title-btn {
+    font-size: 14px;
+    padding: 4px 6px;
+    opacity: 0.6;
+    transition: opacity 0.15s, transform 0.15s;
+}
+
+.auto-title-btn:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.auto-title-btn:disabled {
+    cursor: wait;
+    opacity: 0.4;
+}
+
+/* Context Budget Bar */
+.context-budget {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.budget-bar {
+    width: 120px;
+    height: 6px;
+    background: var(--bg-secondary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.budget-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.budget-fill.warning {
+    background: var(--warning);
+}
+
+.budget-fill.danger {
+    background: var(--danger);
+}
+
+.budget-text {
+    min-width: 80px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+/* Model Picker */
+.model-picker {
+    padding: 6px 10px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+}
+
+.model-picker:hover {
+    border-color: var(--accent);
+}
+
+.model-picker:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--selection-bg);
+}
+
+.model-picker.no-keys {
+    border-color: var(--warning, #f59e0b);
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning, #f59e0b);
+    font-style: italic;
+}
+
+/* Layout Controls */
+.layout-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.layout-picker {
+    padding: 6px 8px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+}
+
+.layout-picker:hover {
+    border-color: var(--accent);
+}
+
+.layout-picker:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--selection-bg);
+}
+
+/* Icon Buttons */
+.icon-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.15s, opacity 0.15s;
+}
+
+.icon-btn:hover:not(:disabled) {
+    background: var(--bg-secondary);
+}
+
+.icon-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Undo/Redo controls */
+.undo-redo-controls {
+    display: flex;
+    gap: 2px;
+    margin-right: 8px;
+    padding-right: 12px;
+    border-right: 1px solid var(--bg-secondary);
+}
+
+/* Multiplayer controls */
+.multiplayer-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 8px;
+    padding-right: 12px;
+    border-right: 1px solid var(--bg-secondary);
+}
+
+.multiplayer-btn.active {
+    background: var(--success);
+    color: white;
+}
+
+.multiplayer-btn.active:hover {
+    background: #2f9e44;
+}
+
+.multiplayer-btn.connecting {
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.peer-count {
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--accent);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+}
+
+.multiplayer-leave-btn {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 12px;
+    background: var(--danger);
+    color: white;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.multiplayer-leave-btn:hover {
+    background: #c92a2a;
+}
+
+/* Toast notifications */
+.toast-notification {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--text-primary);
+    color: var(--bg-primary);
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    z-index: 10000;
+    pointer-events: none;
+}
+
+.toast-notification.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Node locked by another user (multiplayer) */
+.node-wrapper.node-locked-by-other .node {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.node-wrapper.node-locked-by-other::after {
+    content: 'Being edited...';
+    position: absolute;
+    top: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--warning);
+    color: #1e1e1e;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    z-index: 10;
+}

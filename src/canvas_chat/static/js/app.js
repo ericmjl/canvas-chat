@@ -2,12 +2,7 @@
  * Main application - ties together all modules
  */
 
-/**
- * Feature flag for CRDT-backed graph (local-first multiplayer foundation)
- * Set to true to enable Yjs-based graph with automatic persistence
- * Set to false for legacy Map-based graph
- */
-const USE_CRDT_GRAPH = true;
+
 
 /**
  * Detect if content is a URL (used by handleNote to route to handleNoteFromUrl)
@@ -710,80 +705,64 @@ class App {
         // Initialize canvas
         this.canvas = new Canvas('canvas-container', 'canvas');
 
-        // Setup canvas callbacks
-        this.canvas.onNodeSelect = this.handleNodeSelect.bind(this);
-        this.canvas.onNodeDeselect = this.handleNodeDeselect.bind(this);
-        this.canvas.onNodeMove = this.handleNodeMove.bind(this);
-        this.canvas.onNodeDrag = this.handleNodeDrag.bind(this);  // Real-time drag for multiplayer
-        this.canvas.onNodeResize = this.handleNodeResize.bind(this);
-        this.canvas.onNodeResizing = this.handleNodeResizing.bind(this);  // Real-time resize for multiplayer
-        this.canvas.onNodeReply = this.handleNodeReply.bind(this);
-        this.canvas.onNodeBranch = this.handleNodeBranch.bind(this);
-        this.canvas.onNodeSummarize = this.handleNodeSummarize.bind(this);
-        this.canvas.onNodeFetchSummarize = this.handleNodeFetchSummarize.bind(this);
-        this.canvas.onNodeDelete = this.handleNodeDelete.bind(this);
-        this.canvas.onNodeCopy = this.copyNodeContent.bind(this);
-        this.canvas.onNodeTitleEdit = this.handleNodeTitleEdit.bind(this);
-
-        // Matrix-specific callbacks
-        this.canvas.onMatrixCellFill = this.handleMatrixCellFill.bind(this);
-        this.canvas.onMatrixCellView = this.handleMatrixCellView.bind(this);
-        this.canvas.onMatrixFillAll = this.handleMatrixFillAll.bind(this);
-        this.canvas.onMatrixRowExtract = this.handleMatrixRowExtract.bind(this);
-        this.canvas.onMatrixColExtract = this.handleMatrixColExtract.bind(this);
-        this.canvas.onMatrixEdit = this.handleMatrixEdit.bind(this);
-        this.canvas.onMatrixIndexColResize = this.handleMatrixIndexColResize.bind(this);
-
-        // Streaming control callbacks
-        this.canvas.onNodeStopGeneration = this.handleNodeStopGeneration.bind(this);
-        this.canvas.onNodeContinueGeneration = this.handleNodeContinueGeneration.bind(this);
-
-        // Error handling callbacks
-        this.canvas.onNodeRetry = this.handleNodeRetry.bind(this);
-        this.canvas.onNodeDismissError = this.handleNodeDismissError.bind(this);
-
-        // Node resize to viewport callback
-        this.canvas.onNodeFitToViewport = this.handleNodeFitToViewport.bind(this);
-        this.canvas.onNodeResetSize = this.handleNodeResetSize.bind(this);
-
-        // Content editing callbacks (for FETCH_RESULT nodes)
-        this.canvas.onNodeEditContent = this.handleNodeEditContent.bind(this);
-        this.canvas.onNodeResummarize = this.handleNodeResummarize.bind(this);
-
-        // Flashcard generation callback
-        this.canvas.onCreateFlashcards = this.handleCreateFlashcards.bind(this);
-
-        // Flashcard review callback
-        this.canvas.onReviewCard = this.reviewSingleCard.bind(this);
-
-        // Flashcard flip callback
-        this.canvas.onFlipCard = this.handleFlipCard.bind(this);
-
-        // PDF drag & drop callback
-        this.canvas.onPdfDrop = this.handlePdfDrop.bind(this);
-
-        // Image drag & drop callback
-        this.canvas.onImageDrop = this.handleImageDrop.bind(this);
-
-        // Image click callback (for images in node content)
-        this.canvas.onImageClick = this.handleImageClick.bind(this);
-
-        // Tag chip click callback (for highlighting nodes by tag)
-        this.canvas.onTagChipClick = this.handleTagChipClick.bind(this);
-
-        // Navigation callbacks for parent/child traversal
-        this.canvas.onNavParentClick = this.handleNavParentClick.bind(this);
-        this.canvas.onNavChildClick = this.handleNavChildClick.bind(this);
-        this.canvas.onNodeNavigate = this.handleNodeNavigate.bind(this);
-
-        // Collapse/expand callback for hiding/showing descendants
-        this.canvas.onNodeCollapse = this.handleNodeCollapse.bind(this);
+        // Setup canvas event listeners (using EventEmitter pattern)
+        this.canvas
+            .on('nodeSelect', this.handleNodeSelect.bind(this))
+            .on('nodeDeselect', this.handleNodeDeselect.bind(this))
+            .on('nodeMove', this.handleNodeMove.bind(this))
+            .on('nodeDrag', this.handleNodeDrag.bind(this))  // Real-time drag for multiplayer
+            .on('nodeResize', this.handleNodeResize.bind(this))
+            .on('nodeResizing', this.handleNodeResizing.bind(this))  // Real-time resize for multiplayer
+            .on('nodeReply', this.handleNodeReply.bind(this))
+            .on('nodeBranch', this.handleNodeBranch.bind(this))
+            .on('nodeSummarize', this.handleNodeSummarize.bind(this))
+            .on('nodeFetchSummarize', this.handleNodeFetchSummarize.bind(this))
+            .on('nodeDelete', this.handleNodeDelete.bind(this))
+            .on('nodeCopy', this.copyNodeContent.bind(this))
+            .on('nodeTitleEdit', this.handleNodeTitleEdit.bind(this))
+            // Matrix-specific events
+            .on('matrixCellFill', this.handleMatrixCellFill.bind(this))
+            .on('matrixCellView', this.handleMatrixCellView.bind(this))
+            .on('matrixFillAll', this.handleMatrixFillAll.bind(this))
+            .on('matrixRowExtract', this.handleMatrixRowExtract.bind(this))
+            .on('matrixColExtract', this.handleMatrixColExtract.bind(this))
+            .on('matrixEdit', this.handleMatrixEdit.bind(this))
+            .on('matrixIndexColResize', this.handleMatrixIndexColResize.bind(this))
+            // Streaming control events
+            .on('nodeStopGeneration', this.handleNodeStopGeneration.bind(this))
+            .on('nodeContinueGeneration', this.handleNodeContinueGeneration.bind(this))
+            // Error handling events
+            .on('nodeRetry', this.handleNodeRetry.bind(this))
+            .on('nodeDismissError', this.handleNodeDismissError.bind(this))
+            // Node resize to viewport events
+            .on('nodeFitToViewport', this.handleNodeFitToViewport.bind(this))
+            .on('nodeResetSize', this.handleNodeResetSize.bind(this))
+            // Content editing events (for FETCH_RESULT nodes)
+            .on('nodeEditContent', this.handleNodeEditContent.bind(this))
+            .on('nodeResummarize', this.handleNodeResummarize.bind(this))
+            // Flashcard events
+            .on('createFlashcards', this.handleCreateFlashcards.bind(this))
+            .on('reviewCard', this.reviewSingleCard.bind(this))
+            .on('flipCard', this.handleFlipCard.bind(this))
+            // File drop events
+            .on('pdfDrop', this.handlePdfDrop.bind(this))
+            .on('imageDrop', this.handleImageDrop.bind(this))
+            // Image and tag click events
+            .on('imageClick', this.handleImageClick.bind(this))
+            .on('tagChipClick', this.handleTagChipClick.bind(this))
+            // Navigation events for parent/child traversal
+            .on('navParentClick', this.handleNavParentClick.bind(this))
+            .on('navChildClick', this.handleNavChildClick.bind(this))
+            .on('nodeNavigate', this.handleNodeNavigate.bind(this))
+            // Collapse/expand event for hiding/showing descendants
+            .on('nodeCollapse', this.handleNodeCollapse.bind(this));
 
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
         if (replyInput) {
             this.slashCommandMenu.attach(replyInput);
             // Set up callback so canvas can check if menu is handling keys
+            // Note: This callback returns a value, so it must remain as a property
             this.canvas.onReplyInputKeydown = (e) => {
                 if (this.slashCommandMenu.visible) {
                     if (['ArrowUp', 'ArrowDown', 'Tab', 'Escape', 'Enter'].includes(e.key)) {
@@ -911,16 +890,10 @@ class App {
     async loadSessionData(session) {
         this.session = session;
 
-        if (USE_CRDT_GRAPH) {
-            // CRDT mode: create CRDTGraph with automatic persistence
-            console.log('%c[App] Using CRDT Graph mode', 'color: #2196F3; font-weight: bold');
-            this.graph = new CRDTGraph(session.id, session);
-            await this.graph.enablePersistence();
-        } else {
-            // Legacy mode
-            console.log('[App] Using legacy Graph mode');
-            this.graph = new Graph(session);
-        }
+        // Create CRDTGraph with automatic persistence
+        console.log('%c[App] Using CRDT Graph mode', 'color: #2196F3; font-weight: bold');
+        this.graph = new CRDTGraph(session.id, session);
+        await this.graph.enablePersistence();
 
         // Render graph
         this.canvas.renderGraph(this.graph);
@@ -988,14 +961,9 @@ class App {
                 viewport: { x: 0, y: 0, scale: 1 }
             };
 
-            if (USE_CRDT_GRAPH) {
-                console.log('%c[App] Creating empty CRDT Graph for shared session', 'color: #2196F3; font-weight: bold');
-                this.graph = new CRDTGraph(sessionId);
-                await this.graph.enablePersistence();
-            } else {
-                console.log('[App] Using legacy Graph mode');
-                this.graph = new Graph(this.session);
-            }
+            console.log('%c[App] Creating empty CRDT Graph for shared session', 'color: #2196F3; font-weight: bold');
+            this.graph = new CRDTGraph(sessionId);
+            await this.graph.enablePersistence();
 
             // Render empty graph (will populate via sync)
             this.canvas.renderGraph(this.graph);
@@ -1007,7 +975,7 @@ class App {
         }
 
         // Auto-enable multiplayer to sync with host
-        if (autoMultiplayer && USE_CRDT_GRAPH) {
+        if (autoMultiplayer) {
             // Small delay to ensure graph is ready
             setTimeout(() => {
                 this.toggleMultiplayer();
@@ -1028,15 +996,10 @@ class App {
             viewport: { x: 0, y: 0, scale: 1 }
         };
 
-        if (USE_CRDT_GRAPH) {
-            // CRDT mode
-            console.log('%c[App] Creating new session with CRDT Graph', 'color: #2196F3; font-weight: bold');
-            this.graph = new CRDTGraph(sessionId);
-            await this.graph.enablePersistence();
-        } else {
-            // Legacy mode
-            this.graph = new Graph();
-        }
+        // Create new CRDT Graph
+        console.log('%c[App] Creating new session with CRDT Graph', 'color: #2196F3; font-weight: bold');
+        this.graph = new CRDTGraph(sessionId);
+        await this.graph.enablePersistence();
 
         this.canvas.clear();
 
@@ -5199,7 +5162,7 @@ ${resultsText}`;
 
         } catch (err) {
             this.canvas.updateNodeContent(fetchResultNode.id, `Error: ${err.message}`, false);
-            this.graph.updateNode(summaryNode.id, { content: `Error: ${err.message}` });
+            this.graph.updateNode(fetchResultNode.id, { content: `Error: ${err.message}` });
         }
     }
 
@@ -6848,34 +6811,24 @@ ${gradingRules}
         }
 
         this.saveTimeout = setTimeout(async () => {
-            if (USE_CRDT_GRAPH) {
-                // CRDT mode: y-indexeddb handles graph persistence automatically
-                // But we ALSO save the full graph data as a backup for migration safety
-                // This ensures we don't lose data if CRDT persistence fails
-                const graphData = this.graph.toJSON();
-                const sessionData = {
-                    id: this.session.id,
-                    name: this.session.name,
-                    created_at: this.session.created_at,
-                    updated_at: Date.now(),
-                    useCRDT: true,
-                    viewport: this.session.viewport,
-                    // Keep graph data as backup - this ensures migration can be retried
-                    // if CRDT persistence fails or IndexedDB is cleared
-                    nodes: graphData.nodes,
-                    edges: graphData.edges,
-                    tags: graphData.tags
-                };
-                await storage.saveSession(sessionData);
-            } else {
-                // Legacy mode: serialize entire graph
-                this.session = {
-                    ...this.session,
-                    ...this.graph.toJSON(),
-                    updated_at: Date.now()
-                };
-                await storage.saveSession(this.session);
-            }
+            // y-indexeddb handles graph persistence automatically
+            // But we ALSO save the full graph data as a backup for migration safety
+            // This ensures we don't lose data if CRDT persistence fails
+            const graphData = this.graph.toJSON();
+            const sessionData = {
+                id: this.session.id,
+                name: this.session.name,
+                created_at: this.session.created_at,
+                updated_at: Date.now(),
+                useCRDT: true,
+                viewport: this.session.viewport,
+                // Keep graph data as backup - this ensures migration can be retried
+                // if CRDT persistence fails or IndexedDB is cleared
+                nodes: graphData.nodes,
+                edges: graphData.edges,
+                tags: graphData.tags
+            };
+            await storage.saveSession(sessionData);
         }, 500);
     }
 
@@ -8489,26 +8442,38 @@ window.applySM2 = applySM2;
 window.isFlashcardDue = isFlashcardDue;
 window.getDueFlashcards = getDueFlashcards;
 
-// Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    if (USE_CRDT_GRAPH) {
-        // CRDT mode: wait for Yjs to load before initializing
-        // Yjs loads as an ES module which is async, so we need to wait for the yjs-ready event
-        const initWithYjs = () => {
-            console.log('%c[App] Yjs ready, initializing app', 'color: #4CAF50');
-            window.app = new App();
-        };
+// CommonJS export for Node.js/testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        formatUserError,
+        buildMessagesForApi,
+        isUrlContent,
+        extractUrlFromReferenceNode,
+        truncateText,
+        escapeHtmlText,
+        formatMatrixAsText,
+        applySM2,
+        isFlashcardDue,
+        getDueFlashcards,
+        SlashCommandMenu,
+        App
+    };
+}
 
-        if (window.Y) {
-            // Yjs already loaded
-            initWithYjs();
-        } else {
-            // Wait for Yjs to load
-            console.log('[App] Waiting for Yjs to load...');
-            window.addEventListener('yjs-ready', initWithYjs, { once: true });
-        }
-    } else {
-        // Legacy mode: initialize immediately
+// Initialize app when DOM is ready
+// Wait for Yjs to load before initializing (Yjs loads as an ES module which is async)
+document.addEventListener('DOMContentLoaded', () => {
+    const initWithYjs = () => {
+        console.log('%c[App] Yjs ready, initializing app', 'color: #4CAF50');
         window.app = new App();
+    };
+
+    if (window.Y) {
+        // Yjs already loaded
+        initWithYjs();
+    } else {
+        // Wait for Yjs to load
+        console.log('[App] Waiting for Yjs to load...');
+        window.addEventListener('yjs-ready', initWithYjs, { once: true });
     }
 });

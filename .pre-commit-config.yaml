@@ -19,6 +19,15 @@ repos:
     hooks:
       - id: markdownlint-cli2
         args: ["--fix"]
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.56.0
+    hooks:
+      - id: eslint
+        files: ^src/canvas_chat/static/js/.*\.js$
+        types: [file]
+        args: ["--fix"]
+        additional_dependencies:
+          - eslint@8.57.0
   - repo: local
     hooks:
       - id: pixi-lock

@@ -78,6 +78,9 @@ class Canvas {
         // Tag chip click callback (for highlighting nodes by tag)
         this.onTagChipClick = null;  // For handling clicks on tag chips
 
+        // EventEmitter for new event-based API
+        this.events = new EventEmitter();
+
         // Reply tooltip state
         this.branchTooltip = null;
         this.activeSelectionNodeId = null;
@@ -174,9 +177,9 @@ class Canvas {
         const replyText = input.value.trim();
         const selectedText = this.pendingSelectedText;
 
-        if (selectedText && this.activeSelectionNodeId && this.onNodeBranch) {
+        if (selectedText && this.activeSelectionNodeId) {
             // Pass both the selected text and the user's reply
-            this.onNodeBranch(this.activeSelectionNodeId, selectedText, replyText);
+            this.emit('nodeBranch', this.activeSelectionNodeId, selectedText, replyText);
         }
 
         this.hideBranchTooltip();
@@ -298,8 +301,8 @@ class Canvas {
      * Extracts image and focuses chat input
      */
     handleImageAsk() {
-        if (this.pendingImageSrc && this.pendingImageNodeId && this.onImageClick) {
-            this.onImageClick(this.pendingImageNodeId, this.pendingImageSrc, { action: 'ask' });
+        if (this.pendingImageSrc && this.pendingImageNodeId) {
+            this.emit('imageClick', this.pendingImageNodeId, this.pendingImageSrc, { action: 'ask' });
         }
         this.hideImageTooltip();
     }
@@ -309,8 +312,8 @@ class Canvas {
      * Creates a new IMAGE node with this image
      */
     handleImageExtract() {
-        if (this.pendingImageSrc && this.pendingImageNodeId && this.onImageClick) {
-            this.onImageClick(this.pendingImageNodeId, this.pendingImageSrc, { action: 'extract' });
+        if (this.pendingImageSrc && this.pendingImageNodeId) {
+            this.emit('imageClick', this.pendingImageNodeId, this.pendingImageSrc, { action: 'extract' });
         }
         this.hideImageTooltip();
     }
@@ -371,9 +374,7 @@ class Canvas {
             item.addEventListener('click', (e) => {
                 const nodeId = item.getAttribute('data-node-id');
                 this.hideNavPopover();
-                if (this.onNodeNavigate) {
-                    this.onNodeNavigate(nodeId);
-                }
+                this.emit('nodeNavigate', nodeId);
             });
         });
 
@@ -441,9 +442,7 @@ class Canvas {
         if (selected) {
             const nodeId = selected.getAttribute('data-node-id');
             this.hideNavPopover();
-            if (this.onNodeNavigate) {
-                this.onNodeNavigate(nodeId);
-            }
+            this.emit('nodeNavigate', nodeId);
         }
     }
 
@@ -503,9 +502,7 @@ class Canvas {
 
         if (nodes.length === 1) {
             // Single node - navigate directly
-            if (this.onNodeNavigate) {
-                this.onNodeNavigate(nodes[0].id);
-            }
+            this.emit('nodeNavigate', nodes[0].id);
         } else {
             // Multiple nodes - show popover
             const rect = button.getBoundingClientRect();
@@ -728,15 +725,15 @@ class Canvas {
 
         // Check for PDF file first
         const pdfFile = Array.from(files).find(f => f.type === 'application/pdf');
-        if (pdfFile && this.onPdfDrop) {
-            this.onPdfDrop(pdfFile, position);
+        if (pdfFile) {
+            this.emit('pdfDrop', pdfFile, position);
             return;
         }
 
         // Check for image file
         const imageFile = Array.from(files).find(f => f.type.startsWith('image/'));
-        if (imageFile && this.onImageDrop) {
-            this.onImageDrop(imageFile, position);
+        if (imageFile) {
+            this.emit('imageDrop', imageFile, position);
             return;
         }
     }
@@ -894,9 +891,7 @@ class Canvas {
             this.updateEdgesForNode(this.draggedNode.id, { x: newX, y: newY });
 
             // Callback for real-time sync (e.g., multiplayer)
-            if (this.onNodeDrag) {
-                this.onNodeDrag(this.draggedNode.id, { x: newX, y: newY });
-            }
+            this.emit('nodeDrag', this.draggedNode.id, { x: newX, y: newY });
         }
     }
 
@@ -919,9 +914,7 @@ class Canvas {
                 if (nodeEl) nodeEl.classList.remove('dragging');
 
                 // Callback to persist position (pass old position for undo)
-                if (this.onNodeMove) {
-                    this.onNodeMove(this.draggedNode.id, newPos, this.dragStartPos);
-                }
+                this.emit('nodeMove', this.draggedNode.id, newPos, this.dragStartPos);
             }
 
             this.isDraggingNode = false;
@@ -1540,9 +1533,7 @@ class Canvas {
         this.updateEdgesForNode(nodeId, { x, y });
 
         // Notify callback to persist dimensions
-        if (this.onNodeResize) {
-            this.onNodeResize(nodeId, targetWidth, targetHeight);
-        }
+        this.emit('nodeResize', nodeId, targetWidth, targetHeight);
 
         // Center the node in viewport
         this.panToNodeAnimated(nodeId, 300);
@@ -1827,9 +1818,7 @@ class Canvas {
                     this.updateEdgesForNode(node.id, node.position);
 
                     // Notify for real-time multiplayer sync
-                    if (this.onNodeResizing) {
-                        this.onNodeResizing(node.id, newWidth, newHeight);
-                    }
+                    this.emit('nodeResizing', node.id, newWidth, newHeight);
                 };
 
                 const onMouseUp = () => {
@@ -1840,9 +1829,7 @@ class Canvas {
                     const finalWidth = parseFloat(wrapper.getAttribute('width'));
                     const finalHeight = parseFloat(wrapper.getAttribute('height'));
 
-                    if (this.onNodeResize) {
-                        this.onNodeResize(node.id, finalWidth, finalHeight);
-                    }
+                    this.emit('nodeResize', node.id, finalWidth, finalHeight);
                 };
 
                 document.addEventListener('mousemove', onMouseMove);
@@ -1859,39 +1846,40 @@ class Canvas {
         if (replyBtn) {
             replyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNodeReply) this.onNodeReply(node.id);
+                this.emit('nodeReply', node.id);
             });
         }
 
         if (summarizeBtn) {
             summarizeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNodeSummarize) this.onNodeSummarize(node.id);
+                this.emit('nodeSummarize', node.id);
             });
         }
 
         if (fetchSummarizeBtn) {
             fetchSummarizeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNodeFetchSummarize) this.onNodeFetchSummarize(node.id);
+                this.emit('nodeFetchSummarize', node.id);
             });
         }
 
         if (deleteBtn) {
             deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNodeDelete) this.onNodeDelete(node.id);
+                this.emit('nodeDelete', node.id);
             });
         }
 
-        // Copy button - use callback if available, otherwise use protocol directly
+        // Copy button - use event/callback if available, otherwise use protocol directly
         const copyBtn = div.querySelector('.copy-btn');
         if (copyBtn) {
             copyBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (this.onNodeCopy) {
-                    // Use app callback (handles matrix formatting)
-                    await this.onNodeCopy(node.id);
+                // Check if there are listeners (legacy callback or event listeners)
+                if (this.onNodeCopy || this.events.listenerCount('nodeCopy') > 0) {
+                    // Use app callback/event (handles matrix formatting)
+                    this.emit('nodeCopy', node.id);
                 } else {
                     // Fallback: use protocol directly, providing a minimal app for matrix formatting
                     try {
@@ -1939,7 +1927,7 @@ class Canvas {
         if (editContentBtn) {
             editContentBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNodeEditContent) this.onNodeEditContent(node.id);
+                this.emit('nodeEditContent', node.id);
             });
         }
 
@@ -1948,7 +1936,7 @@ class Canvas {
         if (resummarizeBtn) {
             resummarizeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNodeResummarize) this.onNodeResummarize(node.id);
+                this.emit('nodeResummarize', node.id);
             });
         }
 
@@ -1957,7 +1945,7 @@ class Canvas {
         if (createFlashcardsBtn) {
             createFlashcardsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onCreateFlashcards) this.onCreateFlashcards(node.id);
+                this.emit('createFlashcards', node.id);
             });
         }
 
@@ -1966,7 +1954,7 @@ class Canvas {
         if (reviewCardBtn) {
             reviewCardBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onReviewCard) this.onReviewCard(node.id);
+                this.emit('reviewCard', node.id);
             });
         }
 
@@ -1975,7 +1963,7 @@ class Canvas {
         if (flipCardBtn) {
             flipCardBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onFlipCard) this.onFlipCard(node.id);
+                this.emit('flipCard', node.id);
             });
         }
 
@@ -1984,7 +1972,7 @@ class Canvas {
         if (stopBtn) {
             stopBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNodeStopGeneration) this.onNodeStopGeneration(node.id);
+                this.emit('nodeStopGeneration', node.id);
             });
         }
 
@@ -1993,7 +1981,7 @@ class Canvas {
         if (continueBtn) {
             continueBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNodeContinueGeneration) this.onNodeContinueGeneration(node.id);
+                this.emit('nodeContinueGeneration', node.id);
             });
         }
 
@@ -2002,7 +1990,7 @@ class Canvas {
         if (fitViewportBtn) {
             fitViewportBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNodeFitToViewport) this.onNodeFitToViewport(node.id);
+                this.emit('nodeFitToViewport', node.id);
             });
         }
 
@@ -2011,7 +1999,7 @@ class Canvas {
         if (resetSizeBtn) {
             resetSizeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNodeResetSize) this.onNodeResetSize(node.id);
+                this.emit('nodeResetSize', node.id);
             });
         }
 
@@ -2020,9 +2008,7 @@ class Canvas {
         if (navParentBtn) {
             navParentBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNavParentClick) {
-                    this.onNavParentClick(node.id, navParentBtn);
-                }
+                this.emit('navParentClick', node.id, navParentBtn);
             });
         }
 
@@ -2031,9 +2017,7 @@ class Canvas {
         if (navChildBtn) {
             navChildBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNavChildClick) {
-                    this.onNavChildClick(node.id, navChildBtn);
-                }
+                this.emit('navChildClick', node.id, navChildBtn);
             });
         }
 
@@ -2042,7 +2026,7 @@ class Canvas {
         if (collapseBtn) {
             collapseBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.onNodeCollapse) this.onNodeCollapse(node.id);
+                this.emit('nodeCollapse', node.id);
             });
         }
 
@@ -2058,14 +2042,10 @@ class Canvas {
 
                     if (cell.classList.contains('filled')) {
                         // View filled cell
-                        if (this.onMatrixCellView) {
-                            this.onMatrixCellView(node.id, row, col);
-                        }
+                        this.emit('matrixCellView', node.id, row, col);
                     } else {
                         // Fill empty cell
-                        if (this.onMatrixCellFill) {
-                            this.onMatrixCellFill(node.id, row, col);
-                        }
+                        this.emit('matrixCellFill', node.id, row, col);
                     }
                 });
             });
@@ -2075,9 +2055,7 @@ class Canvas {
             if (editBtn) {
                 editBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    if (this.onMatrixEdit) {
-                        this.onMatrixEdit(node.id);
-                    }
+                    this.emit('matrixEdit', node.id);
                 });
             }
 
@@ -2086,9 +2064,7 @@ class Canvas {
             if (fillAllBtn) {
                 fillAllBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    if (this.onMatrixFillAll) {
-                        this.onMatrixFillAll(node.id);
-                    }
+                    this.emit('matrixFillAll', node.id);
                 });
             }
 
@@ -2116,9 +2092,7 @@ class Canvas {
                 header.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const row = parseInt(header.dataset.row);
-                    if (this.onMatrixRowExtract) {
-                        this.onMatrixRowExtract(node.id, row);
-                    }
+                    this.emit('matrixRowExtract', node.id, row);
                 });
             });
 
@@ -2128,9 +2102,7 @@ class Canvas {
                 header.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const col = parseInt(header.dataset.col);
-                    if (this.onMatrixColExtract) {
-                        this.onMatrixColExtract(node.id, col);
-                    }
+                    this.emit('matrixColExtract', node.id, col);
                 });
             });
 
@@ -2181,9 +2153,7 @@ class Canvas {
         if (nodeSummary) {
             nodeSummary.addEventListener('dblclick', (e) => {
                 e.stopPropagation();
-                if (this.onNodeTitleEdit) {
-                    this.onNodeTitleEdit(node.id);
-                }
+                this.emit('nodeTitleEdit', node.id);
             });
         }
 
@@ -2215,9 +2185,7 @@ class Canvas {
             chip.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const color = chip.dataset.color;
-                if (this.onTagChipClick) {
-                    this.onTagChipClick(color);
-                }
+                this.emit('tagChipClick', color);
             });
         });
     }
@@ -2590,14 +2558,14 @@ class Canvas {
             if (retryBtn) {
                 retryBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    if (this.onNodeRetry) this.onNodeRetry(nodeId);
+                    this.emit('nodeRetry', nodeId);
                 });
             }
 
             if (dismissBtn) {
                 dismissBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    if (this.onNodeDismissError) this.onNodeDismissError(nodeId);
+                    this.emit('nodeDismissError', nodeId);
                 });
             }
         }
@@ -2659,9 +2627,7 @@ class Canvas {
 
         this.updateFadedState();
 
-        if (this.onNodeSelect) {
-            this.onNodeSelect(Array.from(this.selectedNodes));
-        }
+        this.emit('nodeSelect', Array.from(this.selectedNodes));
     }
 
     /**
@@ -2676,9 +2642,7 @@ class Canvas {
 
         this.updateFadedState();
 
-        if (this.onNodeDeselect) {
-            this.onNodeDeselect(Array.from(this.selectedNodes));
-        }
+        this.emit('nodeDeselect', Array.from(this.selectedNodes));
     }
 
     /**
@@ -2695,9 +2659,7 @@ class Canvas {
 
         this.updateFadedState();
 
-        if (this.onNodeDeselect) {
-            this.onNodeDeselect([]);
-        }
+        this.emit('nodeDeselect', []);
     }
 
     /**
@@ -3128,9 +3090,7 @@ class Canvas {
             const finalWidth = matrixTable.style.getPropertyValue('--index-col-width') || '25%';
 
             // Notify callback to persist the width in the node data
-            if (this.onMatrixIndexColResize) {
-                this.onMatrixIndexColResize(nodeId, finalWidth);
-            }
+            this.emit('matrixIndexColResize', nodeId, finalWidth);
         };
 
         document.addEventListener('mousemove', onMouseMove);
@@ -3447,7 +3407,54 @@ class Canvas {
             });
         });
     }
+
+    // EventEmitter convenience methods
+    /**
+     * Register an event listener
+     * @param {string} event - Event name (e.g., 'nodeSelect', 'nodeDelete')
+     * @param {Function} listener - Callback function
+     * @returns {Canvas} this for chaining
+     */
+    on(event, listener) {
+        this.events.on(event, listener);
+        return this;
+    }
+
+    /**
+     * Remove an event listener
+     * @param {string} event - Event name
+     * @param {Function} listener - Callback function to remove
+     * @returns {Canvas} this for chaining
+     */
+    off(event, listener) {
+        this.events.off(event, listener);
+        return this;
+    }
+
+    /**
+     * Emit an event with arguments
+     * Also calls legacy callback if defined for backward compatibility
+     * @param {string} event - Event name
+     * @param {...any} args - Arguments to pass to listeners
+     * @returns {boolean} true if event had listeners or legacy callback
+     */
+    emit(event, ...args) {
+        // Call legacy callback if defined (backward compatibility)
+        const callbackName = 'on' + event.charAt(0).toUpperCase() + event.slice(1);
+        const hasLegacyCallback = typeof this[callbackName] === 'function';
+        if (hasLegacyCallback) {
+            this[callbackName](...args);
+        }
+        // Emit to EventEmitter listeners
+        const hadListeners = this.events.emit(event, ...args);
+        return hasLegacyCallback || hadListeners;
+    }
 }
 
 // Export
 window.Canvas = Canvas;
+
+// CommonJS export for Node.js/testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Canvas };
+}
