@@ -2685,13 +2685,19 @@ df.head()
         const onInstallProgress = (msg) => {
             installMessages.push(msg);
 
-            // On first message, expand the drawer
+            // On first message, create drawer and animate it open
             if (!drawerOpenedForInstall) {
                 this.graph.updateNode(nodeId, {
                     installProgress: [...installMessages],
-                    outputExpanded: true
+                    outputExpanded: false  // Start collapsed
                 });
+                // Create the drawer (collapsed)
                 this.canvas.renderNode(this.graph.getNode(nodeId));
+
+                // Then animate it open
+                this.graph.updateNode(nodeId, { outputExpanded: true });
+                this.canvas.animateOutputPanel(nodeId, true);
+
                 drawerOpenedForInstall = true;
             } else {
                 // For subsequent messages, just update the content without re-rendering
@@ -2707,20 +2713,19 @@ df.head()
             // Run code with Pyodide and installation progress callback
             const result = await pyodideRunner.run(code, csvDataMap, onInstallProgress);
 
-            // If drawer was opened for installation, close it briefly before showing output
+            // If drawer was opened for installation, animate it closed before showing results
             if (drawerOpenedForInstall && installMessages.length > 0) {
-                // Add a small delay so users can see installation completed
+                // Small delay to see installation complete
                 await new Promise(resolve => setTimeout(resolve, 500));
 
-                // Close drawer temporarily
-                this.graph.updateNode(nodeId, {
-                    installProgress: null,
-                    outputExpanded: false
+                // Animate drawer closed
+                this.graph.updateNode(nodeId, { outputExpanded: false });
+                await new Promise(resolve => {
+                    this.canvas.animateOutputPanel(nodeId, false, resolve);
                 });
-                this.canvas.renderNode(this.graph.getNode(nodeId));
 
-                // Small delay for collapse animation
-                await new Promise(resolve => setTimeout(resolve, 300));
+                // Small pause after close
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
 
             // Check for Python errors returned from Pyodide
@@ -2754,7 +2759,7 @@ df.head()
                 outputStdout: stdout,
                 outputHtml: resultHtml,
                 outputText: resultText,
-                outputExpanded: hasOutput,  // Auto-expand only if there's output
+                outputExpanded: hasOutput,  // Expand if there's output
                 installProgress: null  // Clear installation progress
             });
 
@@ -2782,7 +2787,7 @@ df.head()
                 }
             }
 
-            // Re-render code node to show output drawer
+            // Re-render code node to clear "Running..." and show output drawer
             this.canvas.renderNode(this.graph.getNode(nodeId));
             this.canvas.updateAllEdges(this.graph);
             this.canvas.updateAllNavButtonStates(this.graph);
