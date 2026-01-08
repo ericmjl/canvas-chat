@@ -508,15 +508,7 @@ class CodeNode extends BaseNode {
         let stateIndicator = '';
         if (executionState === 'running') {
             stateClass = 'code-running';
-            // Show installation progress if available
-            if (this.node.installProgress && this.node.installProgress.length > 0) {
-                const progressHtml = this.node.installProgress
-                    .map(msg => canvas.escapeHtml(msg))
-                    .join('<br>');
-                stateIndicator = `<div class="code-state-indicator">${progressHtml}</div>`;
-            } else {
-                stateIndicator = '<div class="code-state-indicator">Running...</div>';
-            }
+            stateIndicator = '<div class="code-state-indicator">Running...</div>';
         } else if (executionState === 'error') {
             stateClass = 'code-error';
         }
@@ -540,7 +532,12 @@ class CodeNode extends BaseNode {
      * Check if this code node has output to display
      */
     hasOutput() {
-        return !!(this.node.outputHtml || this.node.outputText || this.node.outputStdout);
+        return !!(
+            this.node.outputHtml ||
+            this.node.outputText ||
+            this.node.outputStdout ||
+            (this.node.installProgress && this.node.installProgress.length > 0)
+        );
     }
 
     /**
@@ -550,8 +547,18 @@ class CodeNode extends BaseNode {
         const outputHtml = this.node.outputHtml || null;
         const outputText = this.node.outputText || null;
         const outputStdout = this.node.outputStdout || null;
+        const installProgress = this.node.installProgress || null;
 
         let html = `<div class="code-output-panel-content">`;
+
+        // Show installation progress if present (during running state)
+        if (installProgress && installProgress.length > 0) {
+            html += `<div class="code-install-progress">`;
+            for (const msg of installProgress) {
+                html += `<div class="install-progress-line">${canvas.escapeHtml(msg)}</div>`;
+            }
+            html += `</div>`;
+        }
 
         // Show stdout first if present
         if (outputStdout) {

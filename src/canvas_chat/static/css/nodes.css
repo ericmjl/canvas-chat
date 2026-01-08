@@ -1681,3 +1681,32 @@
         color: #333;
     }
 }
+
+/* Installation progress display */
+.code-install-progress {
+    background: var(--color-bg-code, #1e1e1e);
+    color: var(--color-text-code, #d4d4d4);
+    padding: 12px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.85em;
+    margin: 0 0 8px 0;
+    border-left: 3px solid var(--color-primary, #007aff);
+}
+
+.install-progress-line {
+    padding: 2px 0;
+    line-height: 1.6;
+}
+
+.install-progress-line:not(:last-child) {
+    margin-bottom: 4px;
+}
+
+@media (prefers-color-scheme: light) {
+    .code-install-progress {
+        background: #f0f7ff;
+        color: #1a1a1a;
+        border-left-color: var(--color-primary, #007aff);
+    }
+}

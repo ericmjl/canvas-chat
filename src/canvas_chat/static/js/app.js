@@ -2673,24 +2673,45 @@ df.head()
         this.graph.updateNode(nodeId, {
             executionState: 'running',
             lastError: null,
-            installProgress: []  // Track installation messages
+            installProgress: [],  // Track installation messages
+            outputExpanded: false  // Start collapsed
         });
         this.canvas.renderNode(this.graph.getNode(nodeId));
 
         // Collect installation progress messages
         const installMessages = [];
+        let drawerOpenedForInstall = false;
+
         const onInstallProgress = (msg) => {
             installMessages.push(msg);
-            // Update node with current progress
+            // Update node with current progress and expand drawer on first message
             this.graph.updateNode(nodeId, {
-                installProgress: [...installMessages]
+                installProgress: [...installMessages],
+                outputExpanded: true  // Expand drawer to show installation progress
             });
+            drawerOpenedForInstall = true;
             this.canvas.renderNode(this.graph.getNode(nodeId));
         };
 
         try {
             // Run code with Pyodide and installation progress callback
             const result = await pyodideRunner.run(code, csvDataMap, onInstallProgress);
+
+            // If drawer was opened for installation, close it briefly before showing output
+            if (drawerOpenedForInstall && installMessages.length > 0) {
+                // Add a small delay so users can see installation completed
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Close drawer temporarily
+                this.graph.updateNode(nodeId, {
+                    installProgress: null,
+                    outputExpanded: false
+                });
+                this.canvas.renderNode(this.graph.getNode(nodeId));
+
+                // Small delay for collapse animation
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
 
             // Check for Python errors returned from Pyodide
             if (result.error) {
@@ -2713,6 +2734,9 @@ df.head()
             const resultHtml = result.resultHtml || null;
             const resultText = result.resultText || null;
 
+            // Only auto-expand if there's actual output to show
+            const hasOutput = !!(stdout || resultHtml || resultText);
+
             // Update node with output for inline drawer display
             this.graph.updateNode(nodeId, {
                 executionState: 'idle',
@@ -2720,7 +2744,7 @@ df.head()
                 outputStdout: stdout,
                 outputHtml: resultHtml,
                 outputText: resultText,
-                outputExpanded: true,  // Auto-expand when there's new output
+                outputExpanded: hasOutput,  // Auto-expand only if there's output
                 installProgress: null  // Clear installation progress
             });
 
