@@ -2733,13 +2733,14 @@ df.head()
             const hasOutput = !!(stdout || resultHtml || resultText);
 
             // Update node with output for inline drawer display
+            // Keep drawer open if it was opened for installation, or open it if there's output
             this.graph.updateNode(nodeId, {
                 executionState: 'idle',
                 lastError: null,
                 outputStdout: stdout,
                 outputHtml: resultHtml,
                 outputText: resultText,
-                outputExpanded: hasOutput,  // Expand if there's output
+                outputExpanded: drawerOpenedForInstall || hasOutput,  // Keep open if installation opened it, or if there's output
                 installProgress: null  // Clear installation progress
             });
 

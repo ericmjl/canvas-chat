@@ -147,7 +147,11 @@ const pyodideRunner = (function() {
 
         const msg = `📦 Installing packages: ${toInstall.map(p => p.pipName).join(', ')}`;
         console.log(msg);
-        if (onProgress) onProgress(msg);
+        if (onProgress) {
+            onProgress(msg);
+            // Yield to browser to allow UI updates
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
 
         const micropip = pyodide.pyimport('micropip');
 
@@ -156,31 +160,51 @@ const pyodideRunner = (function() {
                 // Try Pyodide prebuilt packages first (faster)
                 const tryMsg = `📦 Installing ${pipName}...`;
                 console.log(tryMsg);
-                if (onProgress) onProgress(tryMsg);
+                if (onProgress) {
+                    onProgress(tryMsg);
+                    // Yield to browser to allow UI updates
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
 
                 await pyodide.loadPackage(pipName);
                 installedPackages.add(importName);
 
                 const successMsg = `✅ Installed ${pipName} (Pyodide)`;
                 console.log(successMsg);
-                if (onProgress) onProgress(successMsg);
+                if (onProgress) {
+                    onProgress(successMsg);
+                    // Yield to browser to allow UI updates
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
             } catch (pyodideErr) {
                 // Fall back to micropip for pure Python packages
                 try {
                     const fallbackMsg = `📦 Trying micropip for ${pipName}...`;
                     console.log(fallbackMsg);
-                    if (onProgress) onProgress(fallbackMsg);
+                    if (onProgress) {
+                        onProgress(fallbackMsg);
+                        // Yield to browser to allow UI updates
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
 
                     await micropip.install(pipName);
                     installedPackages.add(importName);
 
                     const successMsg = `✅ Installed ${pipName} (micropip)`;
                     console.log(successMsg);
-                    if (onProgress) onProgress(successMsg);
+                    if (onProgress) {
+                        onProgress(successMsg);
+                        // Yield to browser to allow UI updates
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
                 } catch (micropipErr) {
                     const failMsg = `❌ Failed to install ${pipName}`;
                     console.error(failMsg, micropipErr);
-                    if (onProgress) onProgress(failMsg);
+                    if (onProgress) {
+                        onProgress(failMsg);
+                        // Yield to browser to allow UI updates
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
                     failed.push(pipName);
                 }
             }
@@ -276,14 +300,22 @@ const pyodideRunner = (function() {
         if (useMatplotlib && !installedPackages.has('matplotlib')) {
             const msg = '📦 Installing matplotlib...';
             console.log(msg);
-            if (onInstallProgress) onInstallProgress(msg);
+            if (onInstallProgress) {
+                onInstallProgress(msg);
+                // Yield to browser to allow UI updates
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
 
             await pyodide.loadPackage('matplotlib');
             installedPackages.add('matplotlib');
 
             const successMsg = '✅ Installed matplotlib';
             console.log(successMsg);
-            if (onInstallProgress) onInstallProgress(successMsg);
+            if (onInstallProgress) {
+                onInstallProgress(successMsg);
+                // Yield to browser to allow UI updates
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
         }
 
         // Prepare the execution environment
