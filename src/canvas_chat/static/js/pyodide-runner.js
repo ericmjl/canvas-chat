@@ -121,11 +121,13 @@ const pyodideRunner = (function() {
     /**
      * Install packages via micropip if needed
      * @param {string[]} packages - List of package names
+     * @throws {Error} If package installation fails
      */
     async function autoInstallPackages(packages) {
         if (!pyodide) return;
 
         const toInstall = [];
+        const failed = [];
 
         for (const pkg of packages) {
             // Skip builtins
@@ -137,30 +139,43 @@ const pyodideRunner = (function() {
             // Map aliases
             const pipName = PACKAGE_ALIASES[pkg] || pkg;
 
-            toInstall.push(pipName);
+            toInstall.push({ importName: pkg, pipName });
         }
 
         if (toInstall.length === 0) return;
 
-        console.log('Installing packages:', toInstall);
+        console.log('📦 Installing packages:', toInstall.map(p => p.pipName));
 
-        try {
-            await pyodide.loadPackagesFromImports(`import ${toInstall.join(', ')}`);
-            for (const pkg of toInstall) {
-                installedPackages.add(pkg);
-            }
-        } catch (err) {
-            // Try micropip as fallback
-            console.log('Falling back to micropip for:', toInstall);
-            const micropip = pyodide.pyimport('micropip');
-            for (const pkg of toInstall) {
+        const micropip = pyodide.pyimport('micropip');
+
+        for (const { importName, pipName } of toInstall) {
+            try {
+                // Try Pyodide prebuilt packages first (faster)
+                console.log(`📦 Trying Pyodide package: ${pipName}`);
+                await pyodide.loadPackage(pipName);
+                installedPackages.add(importName);
+                console.log(`✅ Installed ${pipName} (Pyodide)`);
+            } catch (pyodideErr) {
+                // Fall back to micropip for pure Python packages
                 try {
-                    await micropip.install(pkg);
-                    installedPackages.add(pkg);
-                } catch (installErr) {
-                    console.warn(`Failed to install ${pkg}:`, installErr);
+                    console.log(`📦 Falling back to micropip: ${pipName}`);
+                    await micropip.install(pipName);
+                    installedPackages.add(importName);
+                    console.log(`✅ Installed ${pipName} (micropip)`);
+                } catch (micropipErr) {
+                    console.error(`❌ Failed to install ${pipName}:`, micropipErr);
+                    failed.push(pipName);
                 }
             }
+        }
+
+        // If any packages failed, throw an error with helpful message
+        if (failed.length > 0) {
+            throw new Error(
+                `Failed to install packages: ${failed.join(', ')}\n\n` +
+                `These packages may not be available in Pyodide or PyPI.\n` +
+                `Try using alternatives or check package names.`
+            );
         }
     }
 
