@@ -2,6 +2,61 @@
  * Storage module - IndexedDB for sessions, localStorage for settings
  */
 
+// =============================================================================
+// Type Definitions (JSDoc)
+// =============================================================================
+
+/**
+ * Session stored in IndexedDB
+ * @typedef {Object} Session
+ * @property {string} id - Session UUID
+ * @property {string} name - Session display name
+ * @property {import('./graph-types.js').Node[]} nodes - Array of nodes
+ * @property {import('./graph-types.js').Edge[]} edges - Array of edges
+ * @property {Object.<string, {name: string, color: string}>} [tags] - Tag definitions
+ * @property {number} created_at - Creation timestamp (Unix ms)
+ * @property {number} updated_at - Last update timestamp (Unix ms)
+ * @property {number} [imported_at] - Import timestamp (if imported)
+ */
+
+/**
+ * Exported session file format (.canvaschat)
+ * @typedef {Session & {
+ *   version: number,
+ *   exported_at: string
+ * }} ExportedSession
+ */
+
+/**
+ * API keys stored in localStorage
+ * @typedef {Object} ApiKeys
+ * @property {string} [openai] - OpenAI API key
+ * @property {string} [anthropic] - Anthropic API key
+ * @property {string} [google] - Google (Gemini) API key
+ * @property {string} [groq] - Groq API key
+ * @property {string} [github] - GitHub (Copilot) API key
+ * @property {string} [exa] - Exa search API key
+ */
+
+/**
+ * Custom model configuration
+ * @typedef {Object} CustomModel
+ * @property {string} id - LiteLLM-compatible model ID (e.g., "openai/gpt-4.1-mini")
+ * @property {string} name - Display name
+ * @property {string} provider - Always "Custom" for custom models
+ * @property {number} context_window - Context window size in tokens
+ * @property {string|null} base_url - Per-model base URL (optional)
+ */
+
+/**
+ * Provider name for API key lookup
+ * @typedef {'openai'|'anthropic'|'gemini'|'google'|'groq'|'github'|'github_copilot'|'exa'|'ollama'} ProviderName
+ */
+
+// =============================================================================
+// Constants
+// =============================================================================
+
 const DB_NAME = 'canvas-chat';
 const DB_VERSION = 1;
 const SESSIONS_STORE = 'sessions';

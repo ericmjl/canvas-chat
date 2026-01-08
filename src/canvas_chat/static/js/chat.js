@@ -2,6 +2,68 @@
  * Chat module - LLM communication with SSE streaming
  */
 
+// =============================================================================
+// Type Definitions (JSDoc)
+// =============================================================================
+
+/**
+ * Chat message role
+ * @typedef {'user'|'assistant'|'system'} MessageRole
+ */
+
+/**
+ * Chat message for LLM API
+ * @typedef {Object} ChatMessage
+ * @property {MessageRole} role - Message role
+ * @property {string|Array} content - Text content or multimodal content array
+ * @property {string} [nodeId] - Source node ID (internal use)
+ * @property {string} [imageData] - Base64 image data (for image messages)
+ * @property {string} [mimeType] - Image MIME type (for image messages)
+ */
+
+/**
+ * LLM request body sent to /api/chat
+ * @typedef {Object} LLMRequest
+ * @property {ChatMessage[]} messages - Conversation messages
+ * @property {string} model - Model ID (e.g., "openai/gpt-4o")
+ * @property {string} api_key - API key for the provider
+ * @property {number} [temperature] - Sampling temperature (0-2)
+ * @property {string} [base_url] - Custom API base URL
+ */
+
+/**
+ * Model info from /api/models
+ * @typedef {Object} ModelInfo
+ * @property {string} id - Model ID (e.g., "openai/gpt-4o")
+ * @property {string} name - Display name
+ * @property {string} provider - Provider name
+ * @property {number} context_window - Context window size in tokens
+ * @property {string} [base_url] - Per-model base URL (for custom models)
+ */
+
+/**
+ * Callback for streaming chunks
+ * @callback OnChunkCallback
+ * @param {string} chunk - New text chunk
+ * @param {string} fullContent - Accumulated content so far
+ */
+
+/**
+ * Callback for stream completion
+ * @callback OnDoneCallback
+ * @param {string} fullContent - Complete response content
+ */
+
+/**
+ * Callback for stream errors
+ * @callback OnErrorCallback
+ * @param {Error} error - Error object
+ */
+
+// =============================================================================
+// Chat Class
+// =============================================================================
+
 class Chat {
     constructor() {
         this.currentModel = null;
