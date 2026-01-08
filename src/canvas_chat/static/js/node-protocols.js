@@ -19,7 +19,9 @@ const Actions = {
     COPY: { id: 'copy', label: '📋 Copy (c)', title: 'Copy (c)' },
     FLIP_CARD: { id: 'flip-card', label: '🔄 Flip', title: 'Flip card to see answer' },
     CREATE_FLASHCARDS: { id: 'create-flashcards', label: '🎴 Flashcards', title: 'Generate flashcards from content' },
-    REVIEW_CARD: { id: 'review-card', label: '📖 Review', title: 'Start review session for this card' }
+    REVIEW_CARD: { id: 'review-card', label: '📖 Review', title: 'Start review session for this card' },
+    ANALYZE: { id: 'analyze', label: '🔬 Analyze', title: 'Generate code to analyze this data' },
+    RUN_CODE: { id: 'run-code', label: '▶️ Run', title: 'Execute code (Cmd+Enter)' }
 };
 
 /**
@@ -430,6 +432,120 @@ class PdfNode extends BaseNode {
 }
 
 /**
+ * CSV node (uploaded CSV data for analysis)
+ */
+class CsvNode extends BaseNode {
+    getTypeLabel() { return 'CSV'; }
+    getTypeIcon() { return '📊'; }
+
+    getSummaryText(canvas) {
+        if (this.node.title) return this.node.title;
+        const filename = this.node.filename || 'CSV Data';
+        const rowCount = this.node.rowCount || '?';
+        return `${filename} (${rowCount} rows)`;
+    }
+
+    renderContent(canvas) {
+        // Show table preview with metadata header
+        const filename = this.node.filename || 'data.csv';
+        const rowCount = this.node.rowCount || '?';
+        const colCount = this.node.columnCount || '?';
+        const columns = this.node.columns || [];
+
+        let html = `<div class="csv-metadata">`;
+        html += `<strong>${canvas.escapeHtml(filename)}</strong> — `;
+        html += `${rowCount} rows × ${colCount} columns`;
+        if (columns.length > 0) {
+            html += `<br><span class="csv-columns">Columns: ${columns.map(c => canvas.escapeHtml(c)).join(', ')}</span>`;
+        }
+        html += `</div>`;
+
+        // Render the markdown table preview
+        if (this.node.content) {
+            html += `<div class="csv-preview">${canvas.renderMarkdown(this.node.content)}</div>`;
+        }
+
+        return html;
+    }
+
+    getActions() {
+        return [Actions.ANALYZE, Actions.REPLY, Actions.SUMMARIZE, Actions.COPY];
+    }
+}
+
+/**
+ * Code node (Python code for execution with Pyodide)
+ */
+class CodeNode extends BaseNode {
+    getTypeLabel() { return 'Code'; }
+    getTypeIcon() { return '🐍'; }
+
+    getSummaryText(canvas) {
+        if (this.node.title) return this.node.title;
+        // Show first meaningful line of code
+        const code = this.node.code || this.node.content || '';
+        const firstLine = code.split('\n').find(line => line.trim() && !line.trim().startsWith('#')) || 'Python code';
+        return canvas.truncate(firstLine.trim(), 50);
+    }
+
+    renderContent(canvas) {
+        const code = this.node.code || this.node.content || '';
+        const executionState = this.node.executionState || 'idle';
+        const parentCsvIds = this.node.parentCsvIds || [];
+
+        // Build header comment showing available data
+        let dataHint = '';
+        if (parentCsvIds.length === 1) {
+            dataHint = `<div class="code-data-hint"># Data available as: df</div>`;
+        } else if (parentCsvIds.length > 1) {
+            const vars = parentCsvIds.map((_, i) => `df${i + 1}`).join(', ');
+            dataHint = `<div class="code-data-hint"># Data available as: ${vars}</div>`;
+        }
+
+        // Execution state indicator
+        let stateClass = '';
+        let stateIndicator = '';
+        if (executionState === 'running') {
+            stateClass = 'code-running';
+            stateIndicator = '<div class="code-state-indicator">Running...</div>';
+        } else if (executionState === 'error') {
+            stateClass = 'code-error';
+        }
+
+        // Code editor container (CodeMirror will be initialized here)
+        let html = `<div class="code-node-content ${stateClass}">`;
+        html += dataHint;
+        html += `<div class="code-editor-container" data-node-id="${this.node.id}">`;
+        html += `<textarea class="code-editor-textarea">${canvas.escapeHtml(code)}</textarea>`;
+        html += `</div>`;
+        html += stateIndicator;
+
+        // Show inline error if present
+        if (this.node.lastError) {
+            html += `<div class="code-error-output">${canvas.escapeHtml(this.node.lastError)}</div>`;
+        }
+
+        html += `</div>`;
+        return html;
+    }
+
+    getActions() {
+        return [Actions.RUN_CODE, Actions.COPY];
+    }
+
+    getHeaderButtons() {
+        return [
+            HeaderButtons.NAV_PARENT,
+            HeaderButtons.NAV_CHILD,
+            HeaderButtons.COLLAPSE,
+            HeaderButtons.RESET_SIZE,
+            HeaderButtons.FIT_VIEWPORT,
+            HeaderButtons.DELETE
+        ];
+    }
+}
+
+/**
  * Opinion node (committee member's opinion)
  */
 class OpinionNode extends BaseNode {
@@ -701,7 +817,9 @@ function wrapNode(node) {
         [NodeType.REVIEW]: ReviewNode,
         [NodeType.FACTCHECK]: FactcheckNode,
         [NodeType.IMAGE]: ImageNode,
-        [NodeType.FLASHCARD]: FlashcardNode
+        [NodeType.FLASHCARD]: FlashcardNode,
+        [NodeType.CSV]: CsvNode,
+        [NodeType.CODE]: CodeNode
     };
 
     const NodeClass = classMap[node.type] || BaseNode;

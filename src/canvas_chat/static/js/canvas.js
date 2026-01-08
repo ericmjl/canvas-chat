@@ -65,6 +65,8 @@ class Canvas {
         this.onCreateFlashcards = null;  // For generating flashcards from content
         this.onReviewCard = null;  // For reviewing a flashcard
         this.onNodeCollapse = null;  // For collapsing/expanding node children
+        this.onNodeAnalyze = null;  // For analyzing CSV data with AI
+        this.onNodeRunCode = null;  // For executing code in Pyodide
 
         // PDF drag & drop callback
         this.onPdfDrop = null;  // For handling PDF file drops
@@ -727,6 +729,13 @@ class Canvas {
         const pdfFile = Array.from(files).find(f => f.type === 'application/pdf');
         if (pdfFile) {
             this.emit('pdfDrop', pdfFile, position);
+            return;
+        }
+
+        // Check for CSV file
+        const csvFile = Array.from(files).find(f => f.name.endsWith('.csv') || f.type === 'text/csv');
+        if (csvFile) {
+            this.emit('csvDrop', csvFile, position);
             return;
         }
 
@@ -1687,7 +1696,9 @@ class Canvas {
                               action.id === 'copy' ? 'copy-btn' :
                               action.id === 'create-flashcards' ? 'create-flashcards-btn' :
                               action.id === 'flip-card' ? 'flip-card-btn' :
-                              action.id === 'review-card' ? 'review-card-btn' : '';
+                              action.id === 'review-card' ? 'review-card-btn' :
+                              action.id === 'analyze' ? 'analyze-btn' :
+                              action.id === 'run-code' ? 'run-code-btn' : '';
             return `<button class="node-action ${actionClass}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
         }).join('');
 
@@ -2098,6 +2109,37 @@ class Canvas {
             collapseBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.emit('nodeCollapse', node.id);
+            });
+        }
+
+        // Analyze button (CSV nodes)
+        const analyzeBtn = div.querySelector('.analyze-btn');
+        if (analyzeBtn) {
+            analyzeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.emit('nodeAnalyze', node.id);
+            });
+        }
+
+        // Run code button (Code nodes)
+        const runCodeBtn = div.querySelector('.run-code-btn');
+        if (runCodeBtn) {
+            runCodeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.emit('nodeRunCode', node.id);
+            });
+        }
+
+        // Code textarea Cmd+Enter to run (Code nodes)
+        const codeTextarea = div.querySelector('.code-editor-textarea');
+        if (codeTextarea) {
+            codeTextarea.addEventListener('keydown', (e) => {
+                // Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) to run code
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.emit('nodeRunCode', node.id);
+                }
             });
         }
 

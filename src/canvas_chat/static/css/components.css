@@ -932,6 +932,13 @@
     font-style: italic;
 }
 
+/* Requires CSV hint in slash menu */
+.requires-csv {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 /* ======================================
    FACTCHECK Node Styles (Accordion)
    ====================================== */

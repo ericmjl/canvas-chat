@@ -9,7 +9,7 @@
  * - resizeImage
  */
 
-/* global FlashcardFeature, CommitteeFeature, MatrixFeature, FactcheckFeature, ResearchFeature, resizeImage */
+/* global FlashcardFeature, CommitteeFeature, MatrixFeature, FactcheckFeature, ResearchFeature, resizeImage, Papa, pyodideRunner */
 
 // Slash command definitions
 const SLASH_COMMANDS = [
@@ -19,6 +19,7 @@ const SLASH_COMMANDS = [
     { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
     { command: '/committee', description: 'Consult multiple LLMs and synthesize', placeholder: 'question' },
     { command: '/factcheck', description: 'Verify claims with web search', placeholder: 'claim(s) to verify', requiresContext: true },
+    { command: '/code', description: 'Create code node linked to selected CSV(s)', placeholder: 'optional description', requiresCsv: true },
 ];
 
 /**
@@ -108,6 +109,7 @@ class SlashCommandMenu {
         this.onSelect = null; // Callback when command is selected
         this.justSelected = false; // Flag to prevent immediate send after selection
         this.getHasContext = null; // Callback to check if context is available (selected nodes)
+        this.getHasSelectedCsv = null; // Callback to check if a CSV node is selected
 
         this.createMenu();
     }
@@ -275,10 +277,12 @@ class SlashCommandMenu {
         const hasInputText = inputText.includes(' ') && inputText.split(' ').slice(1).join(' ').trim().length > 0;
         const hasSelectedNodes = this.getHasContext ? this.getHasContext() : false;
         const hasContext = hasInputText || hasSelectedNodes;
+        const hasSelectedCsv = this.getHasSelectedCsv ? this.getHasSelectedCsv() : false;
 
         const isExaDisabled = cmd.requiresExa && !hasExa;
         const isContextDisabled = cmd.requiresContext && !hasContext;
-        return isExaDisabled || isContextDisabled;
+        const isCsvDisabled = cmd.requiresCsv && !hasSelectedCsv;
+        return isExaDisabled || isContextDisabled || isCsvDisabled;
     }
 
     render() {
@@ -288,17 +292,21 @@ class SlashCommandMenu {
         const hasInputText = inputText.includes(' ') && inputText.split(' ').slice(1).join(' ').trim().length > 0;
         const hasSelectedNodes = this.getHasContext ? this.getHasContext() : false;
         const hasContext = hasInputText || hasSelectedNodes;
+        const hasSelectedCsv = this.getHasSelectedCsv ? this.getHasSelectedCsv() : false;
 
         const commandsHtml = this.filteredCommands.map((cmd, index) => {
             const isExaDisabled = cmd.requiresExa && !hasExa;
             const isContextDisabled = cmd.requiresContext && !hasContext;
-            const isDisabled = isExaDisabled || isContextDisabled;
+            const isCsvDisabled = cmd.requiresCsv && !hasSelectedCsv;
+            const isDisabled = isExaDisabled || isContextDisabled || isCsvDisabled;
             const disabledClass = isDisabled ? 'disabled' : '';
             let disabledSuffix = '';
             if (isExaDisabled) {
                 disabledSuffix = ' <span class="requires-exa">(requires Exa)</span>';
             } else if (isContextDisabled) {
                 disabledSuffix = ' <span class="requires-context">(requires text or selected node)</span>';
+            } else if (isCsvDisabled) {
+                disabledSuffix = ' <span class="requires-csv">(requires selected CSV node)</span>';
             }
             return `
             <div class="slash-command-item ${index === this.selectedIndex ? 'selected' : ''} ${disabledClass}"
@@ -423,6 +431,7 @@ class App {
             // File drop events
             .on('pdfDrop', this.handlePdfDrop.bind(this))
             .on('imageDrop', this.handleImageDrop.bind(this))
+            .on('csvDrop', this.handleCsvDrop.bind(this))
             // Image and tag click events
             .on('imageClick', this.handleImageClick.bind(this))
             .on('tagChipClick', this.handleTagChipClick.bind(this))
@@ -431,7 +440,10 @@ class App {
             .on('navChildClick', this.handleNavChildClick.bind(this))
             .on('nodeNavigate', this.handleNodeNavigate.bind(this))
             // Collapse/expand event for hiding/showing descendants
-            .on('nodeCollapse', this.handleNodeCollapse.bind(this));
+            .on('nodeCollapse', this.handleNodeCollapse.bind(this))
+            // CSV/Code execution events
+            .on('nodeAnalyze', this.handleNodeAnalyze.bind(this))
+            .on('nodeRunCode', this.handleNodeRunCode.bind(this));
 
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
@@ -798,6 +810,14 @@ class App {
         this.slashCommandMenu.attach(this.chatInput);
         // Provide context checker for commands that require selected nodes
         this.slashCommandMenu.getHasContext = () => this.canvas.getSelectedNodeIds().length > 0;
+        // Provide CSV checker for commands that require selected CSV nodes
+        this.slashCommandMenu.getHasSelectedCsv = () => {
+            const selectedIds = this.canvas.getSelectedNodeIds();
+            return selectedIds.some(id => {
+                const node = this.graph.getNode(id);
+                return node && node.type === NodeType.CSV;
+            });
+        };
 
         // Chat input - send on Enter (but not if slash menu is handling it)
         this.chatInput.addEventListener('keydown', (e) => {
@@ -1356,6 +1376,13 @@ class App {
                 await this.handleFactcheck(claim, context);
                 return true;
             }
+        }
+
+        // Check for /code command
+        if (content.startsWith('/code')) {
+            const description = content.slice(5).trim();
+            await this.handleCode(description);
+            return true;
         }
 
         return false;
@@ -1928,6 +1955,100 @@ class App {
     }
 
     /**
+     * Handle CSV file upload (from drag & drop or file picker).
+     *
+     * @param {File} file - The CSV file to upload
+     * @param {Object} position - Optional position for the node (for drag & drop)
+     */
+    async handleCsvUpload(file, position = null) {
+        // Validate CSV type
+        if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
+            alert('Please select a CSV file.');
+            return;
+        }
+
+        // Validate size (10 MB limit for browser-friendly parsing)
+        const MAX_SIZE = 10 * 1024 * 1024;
+        if (file.size > MAX_SIZE) {
+            alert('CSV is too large. Maximum size is 10 MB.');
+            return;
+        }
+
+        try {
+            // Read file contents
+            const text = await file.text();
+
+            // Parse CSV with Papa Parse
+            const parseResult = Papa.parse(text, {
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: true
+            });
+
+            if (parseResult.errors && parseResult.errors.length > 0) {
+                console.warn('CSV parse warnings:', parseResult.errors);
+            }
+
+            const data = parseResult.data;
+            const columns = parseResult.meta.fields || [];
+
+            // Create preview content (first 5 rows as markdown table)
+            const previewRows = data.slice(0, 5);
+            let previewContent = `**${file.name}** (${data.length} rows, ${columns.length} columns)\n\n`;
+            if (columns.length > 0) {
+                previewContent += '| ' + columns.join(' | ') + ' |\n';
+                previewContent += '| ' + columns.map(() => '---').join(' | ') + ' |\n';
+                for (const row of previewRows) {
+                    previewContent += '| ' + columns.map(col => String(row[col] ?? '')).join(' | ') + ' |\n';
+                }
+                if (data.length > 5) {
+                    previewContent += `\n*...and ${data.length - 5} more rows*`;
+                }
+            }
+
+            // Create CSV node
+            const nodePosition = position || this.graph.autoPosition([]);
+            const csvNode = createNode(NodeType.CSV, previewContent, {
+                position: nodePosition,
+                title: file.name,
+                filename: file.name,
+                csvData: data,  // Store parsed data for code execution
+                columns: columns
+            });
+
+            this.graph.addNode(csvNode);
+            this.canvas.renderNode(csvNode);
+
+            this.canvas.clearSelection();
+            this.canvas.selectNode(csvNode.id);
+            this.saveSession();
+            this.updateEmptyState();
+
+            // Pan to the new node
+            this.canvas.centerOnAnimated(
+                csvNode.position.x + 200,
+                csvNode.position.y + 150,
+                300
+            );
+
+            this.showCanvasHint('CSV loaded! Click "Analyze" to write Python code.');
+
+        } catch (err) {
+            alert(`Failed to process CSV: ${err.message}`);
+        }
+    }
+
+    /**
+     * Handle CSV drop on canvas (from drag & drop).
+     *
+     * @param {File} file - The CSV file that was dropped
+     * @param {Object} position - The drop position in canvas coordinates
+     */
+    async handleCsvDrop(file, position) {
+        await this.handleCsvUpload(file, position);
+    }
+
+    /**
      * Handle click on an image in node content.
      * Called when user triggers Ask or Extract action from image tooltip.
      *
@@ -2392,6 +2513,207 @@ class App {
      */
     getModelDisplayName(modelId) {
         return this.committeeFeature.getModelDisplayName(modelId);
+    }
+
+    // --- CSV/Code Execution Methods ---
+
+    /**
+     * Handle /code slash command - creates a Code node linked to selected CSV(s)
+     * @param {string} description - Optional description from user
+     */
+    async handleCode(description) {
+        const selectedIds = this.canvas.getSelectedNodeIds();
+        const csvNodeIds = selectedIds.filter(id => {
+            const node = this.graph.getNode(id);
+            return node && node.type === NodeType.CSV;
+        });
+
+        if (csvNodeIds.length === 0) {
+            alert('Please select at least one CSV node first');
+            return;
+        }
+
+        // Create code node with starter template
+        const csvNodes = csvNodeIds.map(id => this.graph.getNode(id));
+        const csvNames = csvNodes.map((n, i) => csvNodes.length === 1 ? 'df' : `df${i + 1}`);
+        const starterCode = `# Available DataFrames: ${csvNames.join(', ')}
+# ${description || 'Analyze the data'}
+
+import pandas as pd
+
+# Example: Display first few rows
+${csvNames[0]}.head()
+`;
+
+        // Position near the first CSV node
+        const firstCsvNode = this.graph.getNode(csvNodeIds[0]);
+        const position = this.graph.findNonOverlappingPosition(
+            firstCsvNode.position.x + firstCsvNode.width + 50,
+            firstCsvNode.position.y,
+            400, 300
+        );
+
+        const codeNode = createNode(NodeType.CODE, starterCode, {
+            position,
+            csvNodeIds: csvNodeIds,  // Link to source CSV nodes
+        });
+
+        this.graph.addNode(codeNode);
+
+        // Create edges from CSV nodes to code node
+        for (const csvId of csvNodeIds) {
+            const edge = createEdge(csvId, codeNode.id, EdgeType.GENERATES);
+            this.graph.addEdge(edge);
+        }
+
+        this.canvas.renderNode(codeNode);
+        this.canvas.renderEdges();
+        this.canvas.panToNodeAnimated(codeNode.id);
+        this.saveSession();
+    }
+
+    /**
+     * Handle Analyze button click on CSV node - creates a Code node for that CSV
+     * @param {string} nodeId - The CSV node ID
+     */
+    async handleNodeAnalyze(nodeId) {
+        const csvNode = this.graph.getNode(nodeId);
+        if (!csvNode || csvNode.type !== NodeType.CSV) return;
+
+        // Create code node with starter template
+        const starterCode = `# Analyzing: ${csvNode.title || 'CSV data'}
+import pandas as pd
+
+# DataFrame is pre-loaded as 'df'
+df.head()
+`;
+
+        const position = this.graph.findNonOverlappingPosition(
+            csvNode.position.x + csvNode.width + 50,
+            csvNode.position.y,
+            400, 300
+        );
+
+        const codeNode = createNode(NodeType.CODE, starterCode, {
+            position,
+            csvNodeIds: [nodeId],  // Link to source CSV node
+        });
+
+        this.graph.addNode(codeNode);
+
+        // Create edge from CSV to code node
+        const edge = createEdge(nodeId, codeNode.id, EdgeType.GENERATES);
+        this.graph.addEdge(edge);
+
+        this.canvas.renderNode(codeNode);
+        this.canvas.renderEdges();
+        this.canvas.panToNodeAnimated(codeNode.id);
+        this.saveSession();
+    }
+
+    /**
+     * Handle Run button click on Code node - executes Python with Pyodide
+     * @param {string} nodeId - The Code node ID
+     */
+    async handleNodeRunCode(nodeId) {
+        const codeNode = this.graph.getNode(nodeId);
+        if (!codeNode || codeNode.type !== NodeType.CODE) return;
+
+        const code = codeNode.content;
+        const csvNodeIds = codeNode.csvNodeIds || [];
+
+        // Build csvDataMap from linked CSV nodes
+        const csvDataMap = {};
+        csvNodeIds.forEach((csvId, index) => {
+            const csvNode = this.graph.getNode(csvId);
+            if (csvNode && csvNode.csvData) {
+                const varName = csvNodeIds.length === 1 ? 'df' : `df${index + 1}`;
+                csvDataMap[varName] = csvNode.csvData;
+            }
+        });
+
+        // Show loading state
+        this.canvas.updateNodeContent(nodeId, code + '\n\n# Running...', true);
+
+        try {
+            // Run code with Pyodide
+            const result = await pyodideRunner.run(code, csvDataMap);
+
+            // Create output nodes for results
+            const outputs = [];
+
+            // Text output (stdout)
+            if (result.stdout && result.stdout.trim()) {
+                outputs.push({
+                    type: NodeType.NOTE,
+                    content: '```\n' + result.stdout.trim() + '\n```',
+                    title: 'Output'
+                });
+            }
+
+            // Figure outputs (base64 images)
+            if (result.figures && result.figures.length > 0) {
+                result.figures.forEach((base64, i) => {
+                    outputs.push({
+                        type: NodeType.IMAGE,
+                        content: `data:image/png;base64,${base64}`,
+                        title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`
+                    });
+                });
+            }
+
+            // Create output nodes positioned below the code node
+            let yOffset = codeNode.height + 30;
+            for (const output of outputs) {
+                const position = this.graph.findNonOverlappingPosition(
+                    codeNode.position.x,
+                    codeNode.position.y + yOffset,
+                    350, 250
+                );
+
+                const outputNode = createNode(output.type, output.content, {
+                    position,
+                    title: output.title
+                });
+
+                this.graph.addNode(outputNode);
+
+                // Create edge from code node to output
+                const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
+                this.graph.addEdge(edge);
+
+                this.canvas.renderNode(outputNode);
+                yOffset += 280;
+            }
+
+            // Restore code node content (remove "Running...")
+            this.canvas.updateNodeContent(nodeId, code, false);
+            this.canvas.renderEdges();
+            this.saveSession();
+
+        } catch (error) {
+            // Show error in output
+            const position = this.graph.findNonOverlappingPosition(
+                codeNode.position.x,
+                codeNode.position.y + codeNode.height + 30,
+                350, 200
+            );
+
+            const errorNode = createNode(NodeType.NOTE, '```\nError: ' + error.message + '\n```', {
+                position,
+                title: 'Error'
+            });
+
+            this.graph.addNode(errorNode);
+
+            const edge = createEdge(nodeId, errorNode.id, EdgeType.GENERATES);
+            this.graph.addEdge(edge);
+
+            this.canvas.renderNode(errorNode);
+            this.canvas.updateNodeContent(nodeId, code, false);
+            this.canvas.renderEdges();
+            this.saveSession();
+        }
     }
 
     // --- Matrix Feature Wrappers ---
