@@ -8,9 +8,11 @@ Quick reference for which files to edit for common tasks:
 
 ### Frontend (Vanilla JS)
 
+#### Core modules
+
 | File | Purpose | Edit for... |
 | ---- | ------- | ----------- |
-| `src/canvas_chat/static/js/app.js` | Main application, orchestrates everything | Slash commands, keyboard shortcuts, feature handlers, App class methods |
+| `src/canvas_chat/static/js/app.js` | Main application, orchestrates everything | Slash commands, keyboard shortcuts, App class methods |
 | `src/canvas_chat/static/js/canvas.js` | SVG canvas, pan/zoom, node rendering | Node appearance, drag behavior, viewport logic, node event handlers |
 | `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions | Node types, edge types, createNode/createEdge utilities |
 | `src/canvas_chat/static/js/crdt-graph.js` | CRDT-backed graph (Yjs), graph traversal | Graph data model, node positioning, graph traversal |
@@ -19,6 +21,17 @@ Quick reference for which files to edit for common tasks:
 | `src/canvas_chat/static/js/storage.js` | localStorage persistence | Session storage, API key storage, settings |
 | `src/canvas_chat/static/js/search.js` | Node search functionality | Search UI, filtering logic |
 | `src/canvas_chat/static/js/sse.js` | Server-sent events utilities | Streaming connection handling |
+| `src/canvas_chat/static/js/utils.js` | Pure utility functions | Image resizing, error formatting, text processing |
+
+#### Feature modules
+
+| File | Purpose | Edit for... |
+| ---- | ------- | ----------- |
+| `src/canvas_chat/static/js/flashcards.js` | FlashcardFeature class | Flashcard generation, spaced repetition UI |
+| `src/canvas_chat/static/js/committee.js` | CommitteeFeature class | Multi-LLM consultation, synthesis |
+| `src/canvas_chat/static/js/matrix.js` | MatrixFeature class | Comparison matrix creation, cell filling |
+| `src/canvas_chat/static/js/factcheck.js` | FactcheckFeature class | Claim verification, web search integration |
+| `src/canvas_chat/static/js/research.js` | ResearchFeature class | Deep research with Exa API |
 
 ### Frontend (HTML/CSS)
 
@@ -41,7 +54,7 @@ Quick reference for which files to edit for common tasks:
 | `NodeType` | `graph-types.js:11-32` | All node type definitions |
 | `EdgeType` | `graph-types.js:82-94` | All edge type definitions |
 | `DEFAULT_NODE_SIZES` | `graph-types.js:40-68` | Default dimensions by node type |
-| `SLASH_COMMANDS` | `app.js:186-192` | Slash command definitions |
+| `SLASH_COMMANDS` | `app.js:15-22` | Slash command definitions |
 | CSS variables | `style.css:10-75` | Colors, sizing, theming |
 
 ### Zoom levels (semantic zoom)
