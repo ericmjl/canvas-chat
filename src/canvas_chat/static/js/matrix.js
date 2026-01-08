@@ -1,0 +1,845 @@
+/**
+ * Matrix Feature Module
+ * Handles matrix node creation, cell filling, editing, and slice extraction.
+ *
+ * Extracted from app.js to reduce file size and improve maintainability.
+ */
+
+/**
+ * MatrixFeature - Encapsulates all matrix-related functionality.
+ * Uses dependency injection via the context object.
+ */
+class MatrixFeature {
+    /**
+     * Create a MatrixFeature instance.
+     * @param {Object} context - Dependencies injected from the App class
+     * @param {Object} context.graph - The CRDTGraph instance
+     * @param {Object} context.canvas - The Canvas instance
+     * @param {Function} context.getModelPicker - Returns the model picker element
+     * @param {Function} context.saveSession - Callback to save session
+     * @param {Function} context.updateEmptyState - Callback to update empty state
+     * @param {Function} context.generateNodeSummary - Callback to generate node summary
+     * @param {Function} context.pushUndo - Callback to push undo action
+     */
+    constructor(context) {
+        this.graph = context.graph;
+        this.canvas = context.canvas;
+        this.getModelPicker = context.getModelPicker;
+        this.saveSession = context.saveSession;
+        this.updateEmptyState = context.updateEmptyState;
+        this.generateNodeSummary = context.generateNodeSummary;
+        this.pushUndo = context.pushUndo;
+
+        // Matrix modal state
+        this._matrixData = null;
+        this._editMatrixData = null;
+        this._currentCellData = null;
+        this._currentSliceData = null;
+
+        // Matrix streaming state - Map of nodeId -> Map of cellKey -> AbortController
+        // Allows stopping all cell fills for a matrix node at once
+        this.streamingMatrixCells = new Map();
+    }
+
+    /**
+     * Handle the /matrix command - parse context and show modal
+     */
+    async handleMatrix(matrixContext) {
+        // Get selected nodes
+        const selectedIds = this.canvas.getSelectedNodeIds();
+
+        console.log('handleMatrix called with context:', matrixContext);
+        console.log('Selected node IDs:', selectedIds);
+
+        if (selectedIds.length === 0) {
+            alert('Please select one or more nodes to provide context for the matrix.');
+            return;
+        }
+
+        const model = this.getModelPicker().value;
+        const apiKey = chat.getApiKeyForModel(model);
+
+        // Clear previous data and show loading state
+        this._matrixData = null;
+        document.getElementById('row-items').innerHTML = '';
+        document.getElementById('col-items').innerHTML = '';
+        document.getElementById('row-count').textContent = '0 items';
+        document.getElementById('col-count').textContent = '0 items';
+        document.getElementById('matrix-warning').style.display = 'none';
+
+        // Show modal with loading indicator
+        const loadingModal = document.getElementById('matrix-modal');
+        console.log('Matrix modal element:', loadingModal);
+        document.getElementById('matrix-context').value = matrixContext;
+        document.getElementById('matrix-loading').style.display = 'flex';
+        document.getElementById('matrix-create-btn').disabled = true;
+        loadingModal.style.display = 'flex';
+        console.log('Modal should now be visible');
+
+        try {
+            // Gather content from all selected nodes
+            const contents = selectedIds.map(id => {
+                const node = this.graph.getNode(id);
+                return node ? node.content : '';
+            }).filter(c => c);
+
+            // Parse two lists from all context nodes
+            const result = await this.parseTwoLists(contents, matrixContext, model, apiKey);
+
+            const rowItems = result.rows;
+            const colItems = result.columns;
+
+            // Hide loading indicator
+            document.getElementById('matrix-loading').style.display = 'none';
+            document.getElementById('matrix-create-btn').disabled = false;
+
+            // Check for max items warning
+            const hasWarning = rowItems.length > 10 || colItems.length > 10;
+            document.getElementById('matrix-warning').style.display = hasWarning ? 'block' : 'none';
+
+            // Store parsed data for modal
+            this._matrixData = {
+                context: matrixContext,
+                contextNodeIds: selectedIds,
+                rowItems: rowItems.slice(0, 10),
+                colItems: colItems.slice(0, 10)
+            };
+
+            // Populate axis items in modal
+            this.populateAxisItems('row-items', this._matrixData.rowItems);
+            this.populateAxisItems('col-items', this._matrixData.colItems);
+
+            document.getElementById('row-count').textContent = `${this._matrixData.rowItems.length} items`;
+            document.getElementById('col-count').textContent = `${this._matrixData.colItems.length} items`;
+
+        } catch (err) {
+            document.getElementById('matrix-loading').style.display = 'none';
+            alert(`Failed to parse list items: ${err.message}`);
+            document.getElementById('matrix-modal').style.display = 'none';
+        }
+    }
+
+    async parseTwoLists(contents, context, model, apiKey) {
+        const baseUrl = chat.getBaseUrlForModel(model);
+        const requestBody = {
+            contents,
+            context,
+            model,
+            api_key: apiKey
+        };
+
+        if (baseUrl) {
+            requestBody.base_url = baseUrl;
+        }
+
+        const response = await fetch('/api/parse-two-lists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to parse lists: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    /**
+     * Get the data source and element IDs for a given axis container.
+     * Supports both create modal (row-items, col-items) and edit modal (edit-row-items, edit-col-items).
+     */
+    getAxisConfig(containerId) {
+        const isEdit = containerId.startsWith('edit-');
+        const isRow = containerId.includes('row');
+        const dataSource = isEdit ? this._editMatrixData : this._matrixData;
+        const countId = isEdit
+            ? (isRow ? 'edit-row-count' : 'edit-col-count')
+            : (isRow ? 'row-count' : 'col-count');
+        const items = dataSource ? (isRow ? dataSource.rowItems : dataSource.colItems) : null;
+        return { dataSource, items, countId, isRow };
+    }
+
+    populateAxisItems(containerId, items) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+
+        items.forEach((item, index) => {
+            const li = document.createElement('li');
+            li.className = 'axis-item';
+            li.dataset.index = index;
+
+            li.innerHTML = `
+                <input type="text" class="axis-item-input" value="${escapeHtmlText(item)}" title="${escapeHtmlText(item)}">
+                <button class="axis-item-remove" title="Remove">×</button>
+            `;
+
+            // Edit handler - update data on change
+            li.querySelector('.axis-item-input').addEventListener('change', (e) => {
+                this.updateAxisItem(containerId, index, e.target.value);
+            });
+
+            // Remove button handler
+            li.querySelector('.axis-item-remove').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.removeAxisItem(containerId, index);
+            });
+
+            container.appendChild(li);
+        });
+    }
+
+    removeAxisItem(containerId, index) {
+        const { items, countId } = this.getAxisConfig(containerId);
+        if (!items) return;
+
+        items.splice(index, 1);
+        this.populateAxisItems(containerId, items);
+        document.getElementById(countId).textContent = `${items.length} items`;
+    }
+
+    updateAxisItem(containerId, index, newValue) {
+        const { items } = this.getAxisConfig(containerId);
+        if (!items || !newValue.trim()) return;
+
+        items[index] = newValue.trim();
+    }
+
+    addAxisItem(containerId) {
+        const { items, countId } = this.getAxisConfig(containerId);
+        if (!items) return;
+
+        if (items.length >= 10) {
+            alert('Maximum 10 items per axis');
+            return;
+        }
+
+        items.push('New item');
+        this.populateAxisItems(containerId, items);
+        document.getElementById(countId).textContent = `${items.length} items`;
+
+        // Focus the new item's input
+        const container = document.getElementById(containerId);
+        const lastInput = container.querySelector('.axis-item:last-child .axis-item-input');
+        if (lastInput) {
+            lastInput.focus();
+            lastInput.select();
+        }
+    }
+
+    swapMatrixAxes() {
+        if (!this._matrixData) return;
+
+        // Swap row and column data
+        const temp = {
+            nodeId: this._matrixData.rowNodeId,
+            items: this._matrixData.rowItems
+        };
+
+        this._matrixData.rowNodeId = this._matrixData.colNodeId;
+        this._matrixData.rowItems = this._matrixData.colItems;
+        this._matrixData.colNodeId = temp.nodeId;
+        this._matrixData.colItems = temp.items;
+
+        // Re-populate UI
+        this.populateAxisItems('row-items', this._matrixData.rowItems);
+        this.populateAxisItems('col-items', this._matrixData.colItems);
+
+        document.getElementById('row-count').textContent = `${this._matrixData.rowItems.length} items`;
+        document.getElementById('col-count').textContent = `${this._matrixData.colItems.length} items`;
+    }
+
+    swapEditMatrixAxes() {
+        if (!this._editMatrixData) return;
+
+        const temp = this._editMatrixData.rowItems;
+        this._editMatrixData.rowItems = this._editMatrixData.colItems;
+        this._editMatrixData.colItems = temp;
+
+        this.populateAxisItems('edit-row-items', this._editMatrixData.rowItems);
+        this.populateAxisItems('edit-col-items', this._editMatrixData.colItems);
+        document.getElementById('edit-row-count').textContent = `${this._editMatrixData.rowItems.length} items`;
+        document.getElementById('edit-col-count').textContent = `${this._editMatrixData.colItems.length} items`;
+    }
+
+    createMatrixNode() {
+        if (!this._matrixData) return;
+
+        const { context, contextNodeIds, rowItems, colItems } = this._matrixData;
+
+        if (rowItems.length === 0 || colItems.length === 0) {
+            alert('Both rows and columns must have at least one item');
+            return;
+        }
+
+        // Get context nodes for positioning
+        const contextNodes = contextNodeIds.map(id => this.graph.getNode(id)).filter(Boolean);
+
+        if (contextNodes.length === 0) {
+            alert('No valid context nodes found');
+            return;
+        }
+
+        // Position matrix to the right of all context nodes, centered vertically
+        const maxX = Math.max(...contextNodes.map(n => n.position.x));
+        const avgY = contextNodes.reduce((sum, n) => sum + n.position.y, 0) / contextNodes.length;
+        const position = {
+            x: maxX + 450,
+            y: avgY
+        };
+
+        // Create matrix node
+        const matrixNode = createMatrixNode(context, contextNodeIds, rowItems, colItems, { position });
+
+        this.graph.addNode(matrixNode);
+        this.canvas.renderNode(matrixNode);
+
+        // Create edges from all context nodes to the matrix
+        for (const contextNode of contextNodes) {
+            const edge = createEdge(contextNode.id, matrixNode.id, EdgeType.REPLY);
+            this.graph.addEdge(edge);
+            this.canvas.renderEdge(edge, contextNode.position, matrixNode.position);
+        }
+
+        // Close modal and clean up
+        document.getElementById('matrix-modal').style.display = 'none';
+        this._matrixData = null;
+
+        // Clear selection
+        this.canvas.clearSelection();
+
+        // Generate summary async (don't await)
+        this.generateNodeSummary(matrixNode.id);
+
+        this.saveSession();
+        this.updateEmptyState();
+    }
+
+    // --- Matrix Cell Handlers ---
+
+    /**
+     * Fill a single matrix cell with AI-generated content.
+     * @param {string} nodeId - Matrix node ID
+     * @param {number} row - Row index
+     * @param {number} col - Column index
+     * @param {AbortController} [abortController] - Optional abort controller for cancellation
+     */
+    async handleMatrixCellFill(nodeId, row, col, abortController = null) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        const model = this.getModelPicker().value;
+        const apiKey = chat.getApiKeyForModel(model);
+        const baseUrl = chat.getBaseUrlForModel(model);
+
+        const rowItem = matrixNode.rowItems[row];
+        const colItem = matrixNode.colItems[col];
+        const context = matrixNode.context;
+
+        // Get DAG history for context
+        const messages = this.graph.resolveContext([nodeId]);
+
+        // Track this cell fill for stop button support
+        const cellKey = `${row}-${col}`;
+        const isStandaloneFill = !abortController;  // Not called from Fill All
+
+        if (isStandaloneFill) {
+            abortController = new AbortController();
+        }
+
+        // Get or create the cell controllers map for this matrix node
+        let cellControllers = this.streamingMatrixCells.get(nodeId);
+        if (!cellControllers) {
+            cellControllers = new Map();
+            this.streamingMatrixCells.set(nodeId, cellControllers);
+        }
+        cellControllers.set(cellKey, abortController);
+
+        // Show stop button when any cell is being filled
+        this.canvas.showStopButton(nodeId);
+
+        try {
+            const requestBody = {
+                row_item: rowItem,
+                col_item: colItem,
+                context: context,
+                messages: buildMessagesForApi(messages),
+                model,
+                api_key: apiKey
+            };
+
+            if (baseUrl) {
+                requestBody.base_url = baseUrl;
+            }
+
+            // Prepare fetch options with optional abort signal
+            const fetchOptions = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            };
+
+            if (abortController) {
+                fetchOptions.signal = abortController.signal;
+            }
+
+            // Start streaming fill
+            const response = await fetch('/api/matrix/fill', fetchOptions);
+
+            if (!response.ok) {
+                throw new Error(`Failed to fill cell: ${response.statusText}`);
+            }
+
+            // Stream the response using shared SSE utility
+            let cellContent = '';
+            // Throttle state for streaming sync
+            let lastStreamSync = 0;
+            const streamSyncInterval = 50;  // Sync every 50ms during streaming
+
+            await SSE.streamSSEContent(response, {
+                onContent: (chunk, fullContent) => {
+                    cellContent = fullContent;
+                    this.canvas.updateMatrixCell(nodeId, row, col, cellContent, true);
+
+                    // Sync streaming content to peers (throttled)
+                    const now = Date.now();
+                    if (now - lastStreamSync >= streamSyncInterval) {
+                        lastStreamSync = now;
+                        // Re-read node to get current state (avoid race condition with parallel fills)
+                        const currentNode = this.graph.getNode(nodeId);
+                        const currentCells = currentNode?.cells || {};
+                        const streamingCells = { ...currentCells, [cellKey]: { content: cellContent, filled: false } };
+                        this.graph.updateNode(nodeId, { cells: streamingCells });
+                    }
+                },
+                onDone: (normalizedContent) => {
+                    cellContent = normalizedContent;
+                    this.canvas.updateMatrixCell(nodeId, row, col, cellContent, false);
+                },
+                onError: (err) => {
+                    throw err;
+                }
+            });
+
+            // Update the graph data - re-read node to get current state
+            // (avoid race condition with parallel fills where stale matrixNode.cells
+            // would overwrite cells filled by concurrent operations)
+            const currentNode = this.graph.getNode(nodeId);
+            const currentCells = currentNode?.cells || {};
+            const oldCell = currentCells[cellKey] ? { ...currentCells[cellKey] } : { content: null, filled: false };
+            const newCell = { content: cellContent, filled: true };
+            const updatedCells = { ...currentCells, [cellKey]: newCell };
+            this.graph.updateNode(nodeId, { cells: updatedCells });
+
+            // Push undo action for cell fill
+            this.pushUndo({
+                type: 'FILL_CELL',
+                nodeId,
+                row,
+                col,
+                oldCell,
+                newCell
+            });
+
+            this.saveSession();
+
+        } catch (err) {
+            // Don't log abort errors as failures
+            if (err.name === 'AbortError') {
+                console.log(`Cell fill aborted: (${row}, ${col})`);
+                return;
+            }
+            console.error('Failed to fill matrix cell:', err);
+            alert(`Failed to fill cell: ${err.message}`);
+        } finally {
+            // Clean up this cell from tracking
+            const controllers = this.streamingMatrixCells.get(nodeId);
+            if (controllers) {
+                controllers.delete(cellKey);
+                // If no more cells are being filled, hide stop button and clean up
+                if (controllers.size === 0) {
+                    this.streamingMatrixCells.delete(nodeId);
+                    this.canvas.hideStopButton(nodeId);
+                }
+            }
+        }
+    }
+
+    handleMatrixCellView(nodeId, row, col) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        const rowItem = matrixNode.rowItems[row];
+        const colItem = matrixNode.colItems[col];
+        const cellKey = `${row}-${col}`;
+        const cell = matrixNode.cells[cellKey];
+
+        if (!cell || !cell.content) return;
+
+        // Store current cell info for pinning
+        this._currentCellData = {
+            matrixId: nodeId,
+            row,
+            col,
+            rowItem,
+            colItem,
+            content: cell.content
+        };
+
+        // Populate and show modal
+        document.getElementById('cell-row-item').textContent = rowItem;
+        document.getElementById('cell-col-item').textContent = colItem;
+        document.getElementById('cell-content').textContent = cell.content;
+        document.getElementById('cell-modal').style.display = 'flex';
+    }
+
+    async handleMatrixFillAll(nodeId) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        const { rowItems, colItems, cells } = matrixNode;
+
+        // Find all empty cells
+        const emptyCells = [];
+        for (let r = 0; r < rowItems.length; r++) {
+            for (let c = 0; c < colItems.length; c++) {
+                const cellKey = `${r}-${c}`;
+                const cell = cells[cellKey];
+                if (!cell || !cell.filled) {
+                    emptyCells.push({ row: r, col: c });
+                }
+            }
+        }
+
+        if (emptyCells.length === 0) {
+            // All cells filled - no action needed, button tooltip already indicates this
+            return;
+        }
+
+        // Fill all cells in parallel - each cell handles its own tracking/cleanup
+        const fillPromises = emptyCells.map(({ row, col }) => {
+            return this.handleMatrixCellFill(nodeId, row, col).catch(err => {
+                if (err.name !== 'AbortError') {
+                    console.error(`Failed to fill cell (${row}, ${col}):`, err);
+                }
+            });
+        });
+
+        await Promise.all(fillPromises);
+    }
+
+    /**
+     * Handle editing matrix rows and columns
+     */
+    handleMatrixEdit(nodeId) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        // Store edit data
+        this._editMatrixData = {
+            nodeId,
+            rowItems: [...matrixNode.rowItems],
+            colItems: [...matrixNode.colItems]
+        };
+
+        // Populate the edit modal (reuses unified populateAxisItems)
+        this.populateAxisItems('edit-row-items', this._editMatrixData.rowItems);
+        this.populateAxisItems('edit-col-items', this._editMatrixData.colItems);
+        document.getElementById('edit-row-count').textContent = `${this._editMatrixData.rowItems.length} items`;
+        document.getElementById('edit-col-count').textContent = `${this._editMatrixData.colItems.length} items`;
+
+        document.getElementById('edit-matrix-modal').style.display = 'flex';
+    }
+
+    /**
+     * Handle index column resize in matrix nodes
+     * @param {string} nodeId - The matrix node ID
+     * @param {string} width - The new width as a CSS percentage (e.g., "30%")
+     */
+    handleMatrixIndexColResize(nodeId, width) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        // Update the node with the new index column width
+        this.graph.updateNode(nodeId, { indexColWidth: width });
+
+        // Save session to persist the change
+        this.saveSession();
+    }
+
+    saveMatrixEdits() {
+        if (!this._editMatrixData) return;
+
+        const { nodeId, rowItems, colItems } = this._editMatrixData;
+
+        if (rowItems.length === 0 || colItems.length === 0) {
+            alert('Both rows and columns must have at least one item');
+            return;
+        }
+
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode) return;
+
+        // Update node data - need to handle cell mapping if items changed
+        const oldRowItems = matrixNode.rowItems;
+        const oldColItems = matrixNode.colItems;
+        const oldCells = matrixNode.cells;
+
+        // Remap cells based on item names (if items were reordered or some removed)
+        const newCells = {};
+        for (let r = 0; r < rowItems.length; r++) {
+            const oldRowIndex = oldRowItems.indexOf(rowItems[r]);
+            for (let c = 0; c < colItems.length; c++) {
+                const oldColIndex = oldColItems.indexOf(colItems[c]);
+                if (oldRowIndex !== -1 && oldColIndex !== -1) {
+                    const oldKey = `${oldRowIndex}-${oldColIndex}`;
+                    const newKey = `${r}-${c}`;
+                    if (oldCells[oldKey]) {
+                        newCells[newKey] = oldCells[oldKey];
+                    }
+                }
+            }
+        }
+
+        // Update the matrix node
+        this.graph.updateNode(nodeId, {
+            rowItems,
+            colItems,
+            cells: newCells
+        });
+
+        // Re-render the node
+        this.canvas.renderNode(this.graph.getNode(nodeId));
+
+        // Close modal
+        document.getElementById('edit-matrix-modal').style.display = 'none';
+        this._editMatrixData = null;
+
+        this.saveSession();
+    }
+
+    pinCellToCanvas() {
+        if (!this._currentCellData) return;
+
+        const { matrixId, row, col, rowItem, colItem, content } = this._currentCellData;
+        const matrixNode = this.graph.getNode(matrixId);
+        if (!matrixNode) return;
+
+        // Create cell node with title combining row and column names
+        const cellTitle = `${rowItem} x ${colItem}`;
+        const cellNode = createCellNode(matrixId, row, col, rowItem, colItem, content, {
+            position: {
+                x: matrixNode.position.x + (matrixNode.width || 500) + 50,
+                y: matrixNode.position.y + (row * 60)
+            },
+            title: cellTitle
+        });
+
+        this.graph.addNode(cellNode);
+        this.canvas.renderNode(cellNode);
+
+        // Create edge from matrix to cell (arrow points to the pinned cell)
+        const edge = createEdge(matrixId, cellNode.id, EdgeType.MATRIX_CELL);
+        this.graph.addEdge(edge);
+        this.canvas.renderEdge(edge, matrixNode.position, cellNode.position);
+
+        // Close modal
+        document.getElementById('cell-modal').style.display = 'none';
+        this._currentCellData = null;
+
+        // Select the new cell node
+        this.canvas.clearSelection();
+        this.canvas.selectNode(cellNode.id);
+
+        // Generate summary async (don't await)
+        this.generateNodeSummary(cellNode.id);
+
+        this.saveSession();
+        this.updateEmptyState();
+    }
+
+    /**
+     * Handle extracting a row from a matrix - show preview modal
+     */
+    handleMatrixRowExtract(nodeId, rowIndex) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        const { rowItems, colItems, cells } = matrixNode;
+        const rowItem = rowItems[rowIndex];
+
+        // Collect cell contents for this row
+        const cellContents = [];
+        for (let c = 0; c < colItems.length; c++) {
+            const cellKey = `${rowIndex}-${c}`;
+            const cell = cells[cellKey];
+            cellContents.push(cell && cell.content ? cell.content : null);
+        }
+
+        // Format content for display
+        let displayContent = '';
+        for (let c = 0; c < colItems.length; c++) {
+            const content = cellContents[c];
+            displayContent += `${colItems[c]}:\n${content || '(empty)'}\n\n`;
+        }
+
+        // Store slice data for pinning
+        this._currentSliceData = {
+            type: 'row',
+            matrixId: nodeId,
+            index: rowIndex,
+            item: rowItem,
+            otherAxisItems: colItems,
+            cellContents: cellContents
+        };
+
+        // Populate and show modal
+        document.getElementById('slice-title').textContent = 'Row Details';
+        document.getElementById('slice-label').textContent = 'Row:';
+        document.getElementById('slice-item').textContent = rowItem;
+        document.getElementById('slice-content').textContent = displayContent.trim();
+        document.getElementById('slice-modal').style.display = 'flex';
+    }
+
+    /**
+     * Handle extracting a column from a matrix - show preview modal
+     */
+    handleMatrixColExtract(nodeId, colIndex) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        const { rowItems, colItems, cells } = matrixNode;
+        const colItem = colItems[colIndex];
+
+        // Collect cell contents for this column
+        const cellContents = [];
+        for (let r = 0; r < rowItems.length; r++) {
+            const cellKey = `${r}-${colIndex}`;
+            const cell = cells[cellKey];
+            cellContents.push(cell && cell.content ? cell.content : null);
+        }
+
+        // Format content for display
+        let displayContent = '';
+        for (let r = 0; r < rowItems.length; r++) {
+            const content = cellContents[r];
+            displayContent += `${rowItems[r]}:\n${content || '(empty)'}\n\n`;
+        }
+
+        // Store slice data for pinning
+        this._currentSliceData = {
+            type: 'column',
+            matrixId: nodeId,
+            index: colIndex,
+            item: colItem,
+            otherAxisItems: rowItems,
+            cellContents: cellContents
+        };
+
+        // Populate and show modal
+        document.getElementById('slice-title').textContent = 'Column Details';
+        document.getElementById('slice-label').textContent = 'Column:';
+        document.getElementById('slice-item').textContent = colItem;
+        document.getElementById('slice-content').textContent = displayContent.trim();
+        document.getElementById('slice-modal').style.display = 'flex';
+    }
+
+    /**
+     * Pin the currently viewed row/column slice to the canvas
+     */
+    pinSliceToCanvas() {
+        if (!this._currentSliceData) return;
+
+        const { type, matrixId, index, item, otherAxisItems, cellContents } = this._currentSliceData;
+        const matrixNode = this.graph.getNode(matrixId);
+        if (!matrixNode) return;
+
+        let sliceNode;
+        if (type === 'row') {
+            sliceNode = createRowNode(matrixId, index, item, otherAxisItems, cellContents, {
+                position: {
+                    x: matrixNode.position.x + (matrixNode.width || 500) + 50,
+                    y: matrixNode.position.y + (index * 60)
+                },
+                title: item
+            });
+        } else {
+            sliceNode = createColumnNode(matrixId, index, item, otherAxisItems, cellContents, {
+                position: {
+                    x: matrixNode.position.x + (matrixNode.width || 500) + 50,
+                    y: matrixNode.position.y + (index * 60)
+                },
+                title: item
+            });
+        }
+
+        this.graph.addNode(sliceNode);
+        this.canvas.renderNode(sliceNode);
+
+        // Create edge from matrix to slice node
+        const edge = createEdge(matrixId, sliceNode.id, EdgeType.MATRIX_CELL);
+        this.graph.addEdge(edge);
+        this.canvas.renderEdge(edge, matrixNode.position, sliceNode.position);
+
+        // Close modal
+        document.getElementById('slice-modal').style.display = 'none';
+        this._currentSliceData = null;
+
+        // Select the new node
+        this.canvas.clearSelection();
+        this.canvas.selectNode(sliceNode.id);
+
+        // Generate summary async
+        this.generateNodeSummary(sliceNode.id);
+
+        this.saveSession();
+        this.updateEmptyState();
+    }
+
+    /**
+     * Stop all streaming cell fills for a matrix node
+     * @param {string} nodeId - The matrix node ID
+     * @returns {number} Number of aborted cell fills
+     */
+    stopAllCellFills(nodeId) {
+        const controllers = this.streamingMatrixCells.get(nodeId);
+        if (!controllers) return 0;
+
+        let aborted = 0;
+        for (const [cellKey, controller] of controllers) {
+            controller.abort();
+            aborted++;
+        }
+        return aborted;
+    }
+
+    /**
+     * Check if any cells are being filled for a matrix node
+     * @param {string} nodeId - The matrix node ID
+     * @returns {boolean} True if cells are being filled
+     */
+    isFillingCells(nodeId) {
+        const controllers = this.streamingMatrixCells.get(nodeId);
+        return controllers && controllers.size > 0;
+    }
+
+    /**
+     * Clear all state when switching graphs
+     */
+    reset() {
+        this._matrixData = null;
+        this._editMatrixData = null;
+        this._currentCellData = null;
+        this._currentSliceData = null;
+        // Abort any active cell fills
+        for (const [_nodeId, controllers] of this.streamingMatrixCells) {
+            for (const [_cellKey, controller] of controllers) {
+                controller.abort();
+            }
+        }
+        this.streamingMatrixCells.clear();
+    }
+}
+
+// Export for browser global access
+window.MatrixFeature = MatrixFeature;
