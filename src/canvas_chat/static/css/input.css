@@ -1,0 +1,119 @@
+/**
+ * Chat input styles - bottom input area
+ */
+
+/* Chat Input */
+#chat-input-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--bg-secondary);
+    padding: 10px 20px;
+    z-index: 100;
+}
+
+.selected-nodes-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 6px 12px;
+    background: var(--selection-bg);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--accent);
+}
+
+.selected-nodes-indicator button {
+    margin-left: auto;
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.chat-input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+#chat-input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 2px solid var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    max-height: 150px;
+    transition: border-color 0.15s;
+}
+
+#chat-input:focus {
+    border-color: var(--accent);
+}
+
+#chat-input::placeholder {
+    color: var(--text-muted);
+}
+
+.send-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: var(--accent);
+    color: white;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.send-btn:hover {
+    background: var(--accent-hover);
+}
+
+.send-btn:active {
+    transform: scale(0.95);
+}
+
+.send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.attach-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+
+.attach-btn:hover {
+    color: var(--accent);
+    background: var(--bg-secondary);
+}
+
+.attach-btn:active {
+    transform: scale(0.95);
+}

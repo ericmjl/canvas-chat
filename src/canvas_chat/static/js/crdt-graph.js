@@ -1733,3 +1733,8 @@ class CRDTGraph {
 
 // Export for use in other modules
 window.CRDTGraph = CRDTGraph;
+
+// CommonJS export for Node.js/testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { CRDTGraph };
+}

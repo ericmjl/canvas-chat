@@ -263,3 +263,8 @@ class Chat {
 
 // Export singleton
 const chat = new Chat();
+
+// CommonJS export for Node.js/testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Chat, chat };
+}

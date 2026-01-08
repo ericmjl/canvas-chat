@@ -53,14 +53,14 @@ global.NodeType = {
 };
 
 // Load graph.js first (defines NodeType, etc. and exports wouldOverlapNodes)
-// First load layout.js which graph.js depends on
+// First load layout.js which graph-types.js depends on
 const layoutPath = path.join(__dirname, '../src/canvas_chat/static/js/layout.js');
 const layoutCode = fs.readFileSync(layoutPath, 'utf8');
 vm.runInThisContext(layoutCode, { filename: layoutPath });
 
-const graphPath = path.join(__dirname, '../src/canvas_chat/static/js/graph.js');
-const graphCode = fs.readFileSync(graphPath, 'utf8');
-vm.runInThisContext(graphCode, { filename: graphPath });
+const graphTypesPath = path.join(__dirname, '../src/canvas_chat/static/js/graph-types.js');
+const graphTypesCode = fs.readFileSync(graphTypesPath, 'utf8');
+vm.runInThisContext(graphTypesCode, { filename: graphTypesPath });
 
 // Load search.js (defines tokenize, calculateIDF, SearchIndex)
 const searchPath = path.join(__dirname, '../src/canvas_chat/static/js/search.js');
@@ -3238,7 +3238,176 @@ test('getBaseUrlForModel: custom model without base_url and no global returns nu
 // These tests verify the fix for the matrix cell persistence bug where
 // concurrent cell fills would overwrite each other due to stale snapshots.
 
-const Graph = global.window.Graph;
+// Mock Graph class for testing (since CRDTGraph requires Yjs which needs browser)
+// This mock provides the same API as the production CRDTGraph for testing graph operations.
+class Graph {
+    constructor(data = {}) {
+        this.nodes = new Map();
+        this.edges = [];
+        this.tags = {};
+        this.outgoingEdges = new Map();
+        this.incomingEdges = new Map();
+
+        if (data.nodes) {
+            for (const node of data.nodes) {
+                if (!node.tags) node.tags = [];
+                this.nodes.set(node.id, node);
+            }
+        }
+        if (data.edges) {
+            for (const edge of data.edges) {
+                this.addEdgeToIndex(edge);
+            }
+            this.edges = data.edges;
+        }
+        if (data.tags) {
+            this.tags = data.tags;
+        }
+    }
+
+    isEmpty() {
+        return this.nodes.size === 0;
+    }
+
+    addEdgeToIndex(edge) {
+        if (!this.outgoingEdges.has(edge.source)) {
+            this.outgoingEdges.set(edge.source, []);
+        }
+        this.outgoingEdges.get(edge.source).push(edge);
+
+        if (!this.incomingEdges.has(edge.target)) {
+            this.incomingEdges.set(edge.target, []);
+        }
+        this.incomingEdges.get(edge.target).push(edge);
+    }
+
+    addNode(node) {
+        this.nodes.set(node.id, node);
+        return node;
+    }
+
+    getNode(id) {
+        return this.nodes.get(id);
+    }
+
+    updateNode(id, updates) {
+        const node = this.nodes.get(id);
+        if (node) {
+            Object.assign(node, updates);
+        }
+        return node;
+    }
+
+    addEdge(edge) {
+        this.edges.push(edge);
+        this.addEdgeToIndex(edge);
+        return edge;
+    }
+
+    getParents(nodeId) {
+        const incoming = this.incomingEdges.get(nodeId) || [];
+        return incoming.map(edge => this.nodes.get(edge.source)).filter(Boolean);
+    }
+
+    getChildren(nodeId) {
+        const outgoing = this.outgoingEdges.get(nodeId) || [];
+        return outgoing.map(edge => this.nodes.get(edge.target)).filter(Boolean);
+    }
+
+    getDescendants(nodeId, visited = new Set()) {
+        if (visited.has(nodeId)) return [];
+        visited.add(nodeId);
+
+        const descendants = [];
+        const children = this.getChildren(nodeId);
+
+        for (const child of children) {
+            if (!visited.has(child.id)) {
+                descendants.push(child);
+                descendants.push(...this.getDescendants(child.id, visited));
+            }
+        }
+        return descendants;
+    }
+
+    isNodeVisible(nodeId) {
+        const node = this.getNode(nodeId);
+        if (!node) return false;
+
+        const parents = this.getParents(nodeId);
+        if (parents.length === 0) return true;
+
+        for (const parent of parents) {
+            if (parent.collapsed) continue;
+            if (this.isNodeVisible(parent.id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    countHiddenDescendants(nodeId) {
+        const descendants = this.getDescendants(nodeId);
+        return descendants.filter(d => !this.isNodeVisible(d.id)).length;
+    }
+
+    getVisibleDescendantsThroughHidden(nodeId) {
+        const result = [];
+        const visited = new Set();
+
+        const traverse = (currentId) => {
+            if (visited.has(currentId)) return;
+            visited.add(currentId);
+
+            const children = this.getChildren(currentId);
+            for (const child of children) {
+                if (this.isNodeVisible(child.id)) {
+                    if (!result.some(n => n.id === child.id)) {
+                        result.push(child);
+                    }
+                } else {
+                    traverse(child.id);
+                }
+            }
+        };
+
+        traverse(nodeId);
+        return result;
+    }
+
+    getVisibleAncestorsThroughHidden(nodeId) {
+        const result = [];
+        const visited = new Set();
+
+        const traverse = (currentId) => {
+            if (visited.has(currentId)) return;
+            visited.add(currentId);
+
+            const parents = this.getParents(currentId);
+            for (const parent of parents) {
+                // A collapsed parent is the visible endpoint we're looking for
+                if (parent.collapsed) {
+                    if (!result.some(n => n.id === parent.id)) {
+                        result.push(parent);
+                    }
+                } else if (this.isNodeVisible(parent.id)) {
+                    if (!result.some(n => n.id === parent.id)) {
+                        result.push(parent);
+                    }
+                } else {
+                    traverse(parent.id);
+                }
+            }
+        };
+
+        traverse(nodeId);
+        return result;
+    }
+
+    getAllNodes() {
+        return Array.from(this.nodes.values());
+    }
+}
 
 test('Matrix cells: sequential updates preserve all cells', () => {
     // Setup: Create a graph with a matrix node

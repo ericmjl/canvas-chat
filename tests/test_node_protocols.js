@@ -7,31 +7,17 @@
 
 // Load required modules (simulate browser environment)
 global.window = global;
-global.NodeType = {
-    HUMAN: 'human',
-    AI: 'ai',
-    NOTE: 'note',
-    SUMMARY: 'summary',
-    REFERENCE: 'reference',
-    SEARCH: 'search',
-    RESEARCH: 'research',
-    HIGHLIGHT: 'highlight',
-    MATRIX: 'matrix',
-    CELL: 'cell',
-    ROW: 'row',
-    COLUMN: 'column',
-    FETCH_RESULT: 'fetch_result',
-    PDF: 'pdf',
-    OPINION: 'opinion',
-    SYNTHESIS: 'synthesis',
-    REVIEW: 'review',
-    IMAGE: 'image'
-};
 
-// Load node-protocols.js by reading and safely executing it in this context
+// Load graph-types.js to get NodeType and factory functions
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+
+const graphTypesPath = path.join(__dirname, '../src/canvas_chat/static/js/graph-types.js');
+const graphTypesCode = fs.readFileSync(graphTypesPath, 'utf8');
+vm.runInThisContext(graphTypesCode, { filename: graphTypesPath });
+
+// Load node-protocols.js
 const nodeProtocolsPath = path.join(__dirname, '../src/canvas_chat/static/js/node-protocols.js');
 const nodeProtocolsCode = fs.readFileSync(nodeProtocolsPath, 'utf8');
 vm.runInThisContext(nodeProtocolsCode, { filename: nodeProtocolsPath });

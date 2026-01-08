@@ -1,0 +1,1243 @@
+/**
+ * Node styles - node types, content, zoom levels, tooltips, markdown
+ */
+
+/* Nodes */
+.node-wrapper {
+    overflow: visible;
+}
+
+.node {
+    position: relative;
+    width: 100%;
+    min-width: 200px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    border: 2px solid transparent;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+    cursor: pointer;
+    overflow: visible;
+}
+
+.node:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+.node.selected {
+    border-color: var(--selection-color);
+    border-width: 3px;
+    box-shadow: var(--shadow-lg), 0 0 0 4px rgba(34, 139, 230, 0.3);
+    outline: 2px dashed var(--selection-color);
+    outline-offset: 4px;
+}
+
+.node.copy-flash {
+    animation: copy-flash 0.3s ease;
+}
+
+@keyframes copy-flash {
+    0%, 100% { background-color: inherit; }
+    50% { background-color: var(--success); opacity: 0.8; }
+}
+
+.node.faded {
+    opacity: 0.4;
+    transition: opacity 0.2s ease;
+}
+
+.node.context-ancestor {
+    border-color: var(--selection-color);
+    background: var(--context-highlight);
+}
+
+/* Ancestors should be less faded than non-ancestors */
+.node.faded.context-ancestor {
+    opacity: 0.85;
+}
+
+/* Nodes highlighted by tag filter */
+.node.tag-highlighted {
+    box-shadow: 0 0 0 3px var(--selection-color), var(--shadow-md);
+}
+
+/* Edges faded during tag highlighting */
+.edge.faded {
+    opacity: 0.15;
+    transition: opacity 0.2s ease;
+}
+
+.node.dragging {
+    opacity: 0.8;
+    transform: scale(1.02);
+    box-shadow: var(--shadow-lg);
+}
+
+/* Node Types */
+.node.human {
+    background: var(--node-human);
+    border-color: var(--node-human-border);
+}
+
+.node.ai {
+    background: var(--node-ai);
+    border-color: var(--node-ai-border);
+}
+
+.node.note {
+    background: var(--node-note);
+    border-color: var(--node-note-border);
+}
+
+.node.summary {
+    background: var(--node-summary);
+    border-color: var(--node-summary-border);
+}
+
+.node.reference {
+    background: var(--node-reference);
+    border-color: var(--node-reference-border);
+}
+
+.node.search {
+    background: var(--node-search);
+    border-color: var(--node-search-border);
+}
+
+.node.research {
+    background: var(--node-research);
+    border-color: var(--node-research-border);
+}
+
+.node.highlight {
+    background: var(--node-highlight);
+    border-color: var(--node-highlight-border);
+    border-style: dashed;
+}
+
+.node.opinion {
+    background: var(--node-opinion);
+    border-color: var(--node-opinion-border);
+}
+
+.node.synthesis {
+    background: var(--node-synthesis);
+    border-color: var(--node-synthesis-border);
+}
+
+.node.review {
+    background: var(--node-review);
+    border-color: var(--node-review-border);
+}
+
+.node.pdf {
+    background: var(--node-pdf);
+    border-color: var(--node-pdf-border);
+}
+
+.node.image {
+    background: var(--node-image);
+    border-color: var(--node-image-border);
+}
+
+.node.flashcard {
+    background: var(--node-flashcard);
+    border-color: var(--node-flashcard-border);
+}
+
+/* Source text highlight - shown in parent node when a highlight excerpt is selected */
+.source-highlight {
+    background: var(--node-highlight);
+    color: inherit;
+    padding: 2px 0;
+    /* Use box-decoration-break to make multi-element highlights appear contiguous */
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    animation: sourceHighlightPulse 2s ease-in-out infinite;
+}
+
+/* Apply border-radius and padding only to first/last marks for seamless look */
+.node-content .source-highlight:first-of-type {
+    padding-left: 4px;
+    border-top-left-radius: 3px;
+    border-bottom-left-radius: 3px;
+}
+
+.node-content .source-highlight:last-of-type {
+    padding-right: 4px;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+
+/* When there's only one highlight, it gets both rounded ends */
+.node-content .source-highlight:only-of-type {
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+@keyframes sourceHighlightPulse {
+    0%, 100% {
+        background: var(--node-highlight);
+    }
+    50% {
+        background: color-mix(in srgb, var(--node-highlight) 70%, var(--node-highlight-border));
+    }
+}
+
+/* Node Summary Overlay (for semantic zoom) */
+.node-summary {
+    display: flex;
+    position: absolute;
+    inset: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    text-align: center;
+    background: inherit;
+    border-radius: inherit;
+    gap: 8px;
+    cursor: pointer;
+    overflow: hidden;
+    /* Start hidden - smooth transitions */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+/* Custom tooltip for node summary - progressive disclosure */
+.node-summary::after {
+    content: "Double-click to edit title";
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 400;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.node-summary:hover::after {
+    opacity: 1;
+}
+
+.node-type-icon {
+    font-size: 28px;
+    line-height: 1;
+    transition: font-size 0.3s ease;
+}
+
+.summary-text {
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--text-primary);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    transition: font-size 0.3s ease, text-align 0.3s ease;
+}
+
+/* Smooth transitions for node content elements */
+.node-header,
+.node-content,
+.node-actions,
+.resize-handle,
+.node-tags {
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+/* Semantic Zoom Levels */
+
+/* Full zoom (scale > 0.6) - normal view */
+.zoom-full .node-summary {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.zoom-full .node-header,
+.zoom-full .node-content,
+.zoom-full .node-actions,
+.zoom-full .resize-handle,
+.zoom-full .node-tags {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Summary zoom (scale 0.35-0.6) - show summary, hide details */
+.zoom-summary .node-summary {
+    opacity: 1;
+    visibility: visible;
+}
+
+.zoom-summary .node-summary .node-type-icon {
+    font-size: 32px;
+}
+
+.zoom-summary .node-summary .summary-text {
+    font-size: 22px;
+}
+
+.zoom-summary .node-header,
+.zoom-summary .node-content,
+.zoom-summary .node-actions,
+.zoom-summary .resize-handle {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* Tags remain visible when zoomed out */
+.zoom-summary .node-tags {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Mini zoom (scale < 0.35) - minimal view */
+.zoom-mini .node-summary {
+    opacity: 1;
+    visibility: visible;
+    flex-direction: row;
+    gap: 12px;
+    padding: 20px;
+}
+
+.zoom-mini .node-summary .node-type-icon {
+    font-size: 48px;
+}
+
+.zoom-mini .node-summary .summary-text {
+    font-size: 32px;
+    text-align: left;
+}
+
+.zoom-mini .node-header,
+.zoom-mini .node-content,
+.zoom-mini .node-actions,
+.zoom-mini .resize-handle {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* Tags remain visible even at mini zoom */
+.zoom-mini .node-tags {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Reply Tooltip - floating tooltip with input on text selection */
+.reply-tooltip {
+    position: fixed;
+    z-index: 10000;
+    background: var(--bg-primary);
+    border: 1px solid var(--edge-color-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 8px;
+    min-width: 280px;
+    max-width: 400px;
+    animation: tooltipFadeIn 0.15s ease-out;
+}
+
+@keyframes tooltipFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.reply-tooltip-selection {
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    background: var(--node-highlight);
+    border-left: 3px solid var(--node-highlight-border);
+    border-radius: var(--radius-sm);
+}
+
+.reply-tooltip-selection-text {
+    font-size: 12px;
+    font-style: italic;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    display: block;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.reply-tooltip-input-row {
+    display: flex;
+    gap: 6px;
+}
+
+.reply-tooltip-input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.reply-tooltip-input:focus {
+    border-color: var(--accent);
+}
+
+.reply-tooltip-input::placeholder {
+    color: var(--text-muted);
+}
+
+.reply-tooltip-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.reply-tooltip-btn:hover {
+    background: var(--accent-hover);
+    transform: scale(1.02);
+}
+
+.reply-tooltip-btn:active {
+    transform: scale(0.98);
+}
+
+/* Image Action Tooltip */
+.image-tooltip {
+    position: fixed;
+    z-index: 10000;
+    background: var(--bg-primary);
+    border: 1px solid var(--edge-color-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 8px;
+    width: 200px;
+    animation: tooltipFadeIn 0.15s ease-out;
+}
+
+.image-tooltip-preview {
+    width: 100%;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.image-tooltip-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.image-tooltip-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.image-tooltip-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.image-tooltip-btn:hover {
+    background: var(--accent);
+    color: white;
+}
+
+.image-tooltip-btn:active {
+    transform: scale(0.98);
+}
+
+/* Slash Command Menu */
+.slash-command-menu {
+    position: fixed;
+    z-index: 10001;
+    background: var(--bg-primary);
+    border: 1px solid var(--edge-color-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 4px;
+    min-width: 200px;
+    max-width: 320px;
+    animation: tooltipFadeIn 0.1s ease-out;
+}
+
+.slash-command-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.slash-command-item:hover,
+.slash-command-item.selected {
+    background: var(--selection-bg);
+}
+
+.slash-command-name {
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--accent);
+}
+
+.slash-command-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.slash-command-hint {
+    padding: 6px 12px;
+    border-top: 1px solid var(--bg-secondary);
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.slash-command-hint kbd {
+    display: inline-block;
+    padding: 1px 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    background: var(--bg-secondary);
+    border-radius: 3px;
+    border: 1px solid var(--edge-color-light);
+    margin: 0 1px;
+}
+
+.slash-command-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.slash-command-item.disabled:hover {
+    background: transparent;
+}
+
+.slash-command-item .requires-exa {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Node Header */
+.node-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* Drag Handle */
+.drag-handle {
+    display: grid;
+    grid-template-columns: repeat(2, 5px);
+    grid-template-rows: repeat(3, 5px);
+    gap: 2px;
+    padding: 4px;
+    margin: -4px;
+    margin-right: 4px;
+    cursor: grab;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+}
+
+.drag-handle:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.grip-dot {
+    width: 3px;
+    height: 3px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    opacity: 0.6;
+}
+
+.drag-handle:hover .grip-dot {
+    opacity: 1;
+}
+
+.node-type {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.node-model {
+    font-family: var(--font-mono);
+}
+
+.node-header .delete-btn {
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+    background: transparent;
+    border: none;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.node:hover .node-header .delete-btn {
+    opacity: 0.6;
+}
+
+.node-header .delete-btn:hover {
+    opacity: 1;
+    background: rgba(250, 82, 82, 0.15);
+    color: var(--danger);
+}
+
+/* Node Content */
+.node-content {
+    padding: 12px;
+    padding-right: 18px;  /* Make room for resize-e handle */
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+}
+
+.node-content::selection {
+    background: var(--selection-bg);
+}
+
+/* Streaming indicator */
+.node-content.streaming::after {
+    content: "▋";
+    animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+    50% { opacity: 0; }
+}
+
+/* Header buttons (stop/continue) - in node header next to delete */
+.header-btn {
+    padding: 4px 8px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: none;
+}
+
+.header-btn.stop-btn {
+    background: var(--danger);
+    color: white;
+}
+
+.header-btn.stop-btn:hover {
+    background: #e03131;
+}
+
+.header-btn.continue-btn {
+    background: var(--success);
+    color: white;
+}
+
+.header-btn.continue-btn:hover {
+    background: #2f9e44;
+}
+
+.header-btn.fit-viewport-btn,
+.header-btn.reset-size-btn {
+    display: inline-flex;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+.node:hover .header-btn.fit-viewport-btn,
+.node:hover .header-btn.reset-size-btn {
+    opacity: 0.6;
+}
+
+.header-btn.fit-viewport-btn:hover,
+.header-btn.reset-size-btn:hover {
+    opacity: 1;
+    background: var(--accent);
+    color: white;
+}
+
+/* Navigation buttons */
+.header-btn.nav-parent-btn,
+.header-btn.nav-child-btn {
+    display: inline-flex;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+    font-size: 14px;
+    font-weight: bold;
+    min-width: 24px;
+    justify-content: center;
+}
+
+.node:hover .header-btn.nav-parent-btn,
+.node:hover .header-btn.nav-child-btn {
+    opacity: 0.6;
+}
+
+.header-btn.nav-parent-btn:hover,
+.header-btn.nav-child-btn:hover {
+    opacity: 1;
+    background: var(--accent);
+    color: white;
+}
+
+/* Disabled state for nav buttons (no parent/child) */
+.header-btn.nav-parent-btn.disabled,
+.header-btn.nav-child-btn.disabled {
+    opacity: 0.2 !important;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.node:hover .header-btn.nav-parent-btn.disabled,
+.node:hover .header-btn.nav-child-btn.disabled {
+    opacity: 0.2 !important;
+}
+
+/* Collapse button styling */
+/* Collapse button - visible when node has children */
+.header-btn.collapse-btn {
+    display: none;  /* Hidden by default, shown via inline style when node has children */
+    min-width: 24px;
+    padding: 2px 6px;
+    font-size: 12px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+/* When collapse button has content (shown via JS), make it visible on hover */
+.node:hover .header-btn.collapse-btn {
+    opacity: 0.6;
+}
+
+.header-btn.collapse-btn:hover {
+    opacity: 1;
+    background: var(--accent);
+    color: white;
+}
+
+.header-btn.collapse-btn.collapsed {
+    background-color: var(--accent-light);
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.node:hover .header-btn.collapse-btn.collapsed {
+    opacity: 1;
+}
+
+/* Collapsed node/edge hidden state - smooth transition */
+.node-wrapper {
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+
+.node-wrapper.collapsed-hidden {
+    opacity: 0;
+    transform: scale(0.95);
+    pointer-events: none;
+    /* Use visibility with delay to fully hide after animation */
+    visibility: hidden;
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out, visibility 0s 0.25s;
+}
+
+/* When becoming visible again, no delay on visibility */
+.node-wrapper:not(.collapsed-hidden) {
+    visibility: visible;
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out, visibility 0s 0s;
+}
+
+.edge {
+    transition: opacity 0.25s ease-out;
+}
+
+.edge.collapsed-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Collapsed-path edge: source is collapsed but target is visible (merge node)
+   Shows a dotted, grayed line to indicate a hidden path connection */
+.edge.collapsed-path {
+    stroke: var(--text-muted) !important;
+    stroke-dasharray: 4, 4 !important;
+    stroke-width: 2 !important;
+    opacity: 0.7;
+    animation: fadeInEdge 0.25s ease-out;
+}
+
+@keyframes fadeInEdge {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 0.7;
+    }
+}
+
+/* Navigation Popover */
+.nav-popover {
+    position: fixed;
+    z-index: 1001;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    min-width: 200px;
+    max-width: 320px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.nav-popover-title {
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    border-bottom: 1px solid var(--border);
+}
+
+.nav-popover-list {
+    padding: 4px;
+}
+
+.nav-popover-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.nav-popover-item:hover {
+    background: var(--selection-bg);
+}
+
+.nav-popover-item.selected {
+    background: var(--selection-bg);
+    outline: 2px solid var(--border);
+    outline-offset: -2px;
+}
+
+/* Navigation toast message */
+.nav-toast {
+    position: fixed;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    box-shadow: var(--shadow-md);
+    pointer-events: none;
+    z-index: 1002;
+    animation: nav-toast-fade 2s ease-in-out forwards;
+}
+
+@keyframes nav-toast-fade {
+    0% { opacity: 0; transform: translateY(8px); }
+    12% { opacity: 1; transform: translateY(0); }
+    88% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-8px); }
+}
+
+.nav-popover-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.nav-popover-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.nav-popover-summary {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Viewport-fitted nodes have scrollable content */
+.node.viewport-fitted {
+    display: flex;
+    flex-direction: column;
+    /* Note: overflow is NOT set here so tags (positioned outside) aren't clipped */
+    /* The .node-content child handles its own overflow:auto */
+}
+
+.node.viewport-fitted .node-content {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    /* Prevent scroll chaining - don't pan canvas when reaching scroll boundaries */
+    overscroll-behavior: contain;
+}
+
+/* Node Actions */
+.node-actions {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px;
+    padding-bottom: 16px;  /* Make room for resize-s handle */
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    opacity: 0;
+    transition: opacity 0.15s;
+    position: relative;
+    z-index: 1;
+}
+
+.node:hover .node-actions {
+    opacity: 1;
+}
+
+.node-action {
+    padding: 4px 8px;
+    border: none;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.node-action:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+/* Error node styling */
+.node.error-node {
+    border-color: var(--danger);
+    background: #fff5f5;
+}
+
+@media (prefers-color-scheme: dark) {
+    .node.error-node {
+        background: #2d1f1f;
+    }
+}
+
+.error-content {
+    text-align: center;
+    padding: 20px 16px;
+}
+
+.error-icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+}
+
+.error-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--danger);
+    margin-bottom: 8px;
+}
+
+.error-description {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    line-height: 1.4;
+}
+
+.error-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.error-retry-btn,
+.error-dismiss-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.error-retry-btn {
+    background: var(--accent);
+    color: white;
+}
+
+.error-retry-btn:hover {
+    background: var(--accent-hover);
+}
+
+.error-dismiss-btn {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+}
+
+.error-dismiss-btn:hover {
+    background: var(--border);
+}
+
+/* Resize Handles */
+.resize-handle {
+    position: absolute;
+    background: transparent;
+    z-index: 10;
+    pointer-events: auto;
+}
+
+.resize-handle:hover {
+    background: var(--accent);
+    opacity: 0.3;
+}
+
+.resize-e {
+    right: 0;
+    top: 0;
+    width: 8px;
+    height: 100%;
+    cursor: ew-resize;
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+}
+
+.resize-s {
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    cursor: ns-resize;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.resize-se {
+    right: 0;
+    bottom: 0;
+    width: 20px;
+    height: 20px;
+    cursor: nwse-resize;
+    border-radius: 0 0 var(--radius-lg) 0;
+}
+
+.resize-se::after {
+    content: "";
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--text-muted);
+    border-bottom: 2px solid var(--text-muted);
+    opacity: 0.5;
+}
+
+.node:hover .resize-se::after {
+    opacity: 1;
+}
+
+/* Markdown Content Styles */
+.node-content h1,
+.node-content h2,
+.node-content h3,
+.node-content h4,
+.node-content h5,
+.node-content h6 {
+    margin-top: 0.5em;
+    margin-bottom: 0.25em;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.node-content h1 { font-size: 1.4em; }
+.node-content h2 { font-size: 1.25em; }
+.node-content h3 { font-size: 1.1em; }
+.node-content h4,
+.node-content h5,
+.node-content h6 { font-size: 1em; }
+
+.node-content p {
+    margin: 0.5em 0;
+}
+
+.node-content ul,
+.node-content ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+}
+
+.node-content li {
+    margin: 0.25em 0;
+}
+
+.node-content code {
+    background: rgba(0, 0, 0, 0.08);
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+}
+
+.node-content pre {
+    background: rgba(0, 0, 0, 0.08);
+    padding: 0.75em 1em;
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    margin: 0.5em 0;
+}
+
+.node-content pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.85em;
+}
+
+.node-content blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 0.5em 0;
+    padding-left: 1em;
+    color: var(--text-secondary);
+}
+
+.node-content a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.node-content a:hover {
+    text-decoration: underline;
+}
+
+.node-content table {
+    border-collapse: collapse;
+    margin: 0.5em 0;
+    width: 100%;
+}
+
+.node-content th,
+.node-content td {
+    border: 1px solid var(--bg-secondary);
+    padding: 0.4em 0.6em;
+    text-align: left;
+}
+
+.node-content th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+}
+
+.node-content hr {
+    border: none;
+    border-top: 1px solid var(--bg-secondary);
+    margin: 1em 0;
+}
+
+.node-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-sm);
+}
+
+/* Image node content (for IMAGE type nodes) */
+.image-node-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    height: 100%;
+    min-height: 150px;
+}
+
+.node-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.node-image:hover {
+    transform: scale(1.02);
+}
+
+/* Dark mode adjustments for markdown */
+@media (prefers-color-scheme: dark) {
+    .node-content code {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .node-content pre {
+        background: rgba(255, 255, 255, 0.08);
+    }
+}
+
+/* Math rendering adjustments */
+.node-content .katex-display {
+    margin: 0.5em 0;
+    overflow-x: auto;
+}
+
+.node-content .katex {
+    font-size: 1em;
+}

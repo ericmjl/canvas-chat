@@ -828,3 +828,34 @@ window.ReviewNode = ReviewNode;
 window.FactcheckNode = FactcheckNode;
 window.ImageNode = ImageNode;
 window.FlashcardNode = FlashcardNode;
+
+// CommonJS export for Node.js/testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        wrapNode,
+        validateNodeProtocol,
+        Actions,
+        HeaderButtons,
+        BaseNode,
+        HumanNode,
+        AINode,
+        NoteNode,
+        SummaryNode,
+        ReferenceNode,
+        SearchNode,
+        ResearchNode,
+        HighlightNode,
+        MatrixNode,
+        CellNode,
+        RowNode,
+        ColumnNode,
+        FetchResultNode,
+        PdfNode,
+        OpinionNode,
+        SynthesisNode,
+        ReviewNode,
+        FactcheckNode,
+        ImageNode,
+        FlashcardNode
+    };
+}
