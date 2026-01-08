@@ -21,6 +21,7 @@ const Actions = {
     CREATE_FLASHCARDS: { id: 'create-flashcards', label: '🎴 Flashcards', title: 'Generate flashcards from content' },
     REVIEW_CARD: { id: 'review-card', label: '📖 Review', title: 'Start review session for this card' },
     ANALYZE: { id: 'analyze', label: '🔬 Analyze', title: 'Generate code to analyze this data' },
+    GENERATE: { id: 'generate', label: '✨ AI', title: 'Generate code with AI' },
     RUN_CODE: { id: 'run-code', label: '▶️ Run', title: 'Execute code (Cmd+Enter)' }
 };
 
@@ -491,14 +492,14 @@ class CodeNode extends BaseNode {
     renderContent(canvas) {
         const code = this.node.code || this.node.content || '';
         const executionState = this.node.executionState || 'idle';
-        const parentCsvIds = this.node.parentCsvIds || [];
+        const csvNodeIds = this.node.csvNodeIds || [];
 
         // Build header comment showing available data
         let dataHint = '';
-        if (parentCsvIds.length === 1) {
+        if (csvNodeIds.length === 1) {
             dataHint = `<div class="code-data-hint"># Data available as: df</div>`;
-        } else if (parentCsvIds.length > 1) {
-            const vars = parentCsvIds.map((_, i) => `df${i + 1}`).join(', ');
+        } else if (csvNodeIds.length > 1) {
+            const vars = csvNodeIds.map((_, i) => `df${i + 1}`).join(', ');
             dataHint = `<div class="code-data-hint"># Data available as: ${vars}</div>`;
         }
 
@@ -512,12 +513,10 @@ class CodeNode extends BaseNode {
             stateClass = 'code-error';
         }
 
-        // Code editor container (CodeMirror will be initialized here)
+        // Code editor container - CodeMirror will be initialized in setupNodeEvents
         let html = `<div class="code-node-content ${stateClass}">`;
         html += dataHint;
-        html += `<div class="code-editor-container" data-node-id="${this.node.id}">`;
-        html += `<textarea class="code-editor-textarea">${canvas.escapeHtml(code)}</textarea>`;
-        html += `</div>`;
+        html += `<div class="code-editor-container" data-node-id="${this.node.id}"></div>`;
         html += stateIndicator;
 
         // Show inline error if present
@@ -529,14 +528,49 @@ class CodeNode extends BaseNode {
         return html;
     }
 
+    /**
+     * Check if this code node has output to display
+     */
+    hasOutput() {
+        return !!(this.node.outputHtml || this.node.outputText || this.node.outputStdout);
+    }
+
+    /**
+     * Render the output panel content (called by canvas for the slide-out panel)
+     */
+    renderOutputPanel(canvas) {
+        const outputHtml = this.node.outputHtml || null;
+        const outputText = this.node.outputText || null;
+        const outputStdout = this.node.outputStdout || null;
+
+        let html = `<div class="code-output-panel-content">`;
+
+        // Show stdout first if present
+        if (outputStdout) {
+            html += `<pre class="code-output-stdout">${canvas.escapeHtml(outputStdout)}</pre>`;
+        }
+
+        // Show result (HTML or text)
+        if (outputHtml) {
+            html += `<div class="code-output-result code-output-html">${outputHtml}</div>`;
+        } else if (outputText) {
+            html += `<pre class="code-output-result code-output-text">${canvas.escapeHtml(outputText)}</pre>`;
+        }
+
+        html += `</div>`;
+        return html;
+    }
+
     getActions() {
-        return [Actions.RUN_CODE, Actions.COPY];
+        return [Actions.GENERATE, Actions.RUN_CODE, Actions.COPY];
     }
 
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,
             HeaderButtons.NAV_CHILD,
+            HeaderButtons.STOP,
+            HeaderButtons.CONTINUE,
             HeaderButtons.COLLAPSE,
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,

@@ -29,6 +29,8 @@ class Canvas {
         // Node elements map
         this.nodeElements = new Map();
         this.edgeElements = new Map();
+        this.outputPanels = new Map();  // Track code output panels separately
+        this.codeEditors = new Map();  // Track CodeMirror editor instances for code nodes
 
         // Track nodes where user has manually scrolled (to pause auto-scroll)
         this.userScrolledNodes = new Set();
@@ -894,6 +896,19 @@ class Canvas {
             if (wrapper) {
                 wrapper.setAttribute('x', newX);
                 wrapper.setAttribute('y', newY);
+
+                // Update output panel position if present (slides from underneath)
+                const outputPanel = this.outputPanels.get(this.draggedNode.id);
+                if (outputPanel) {
+                    const nodeWidth = parseFloat(wrapper.getAttribute('width'));
+                    const nodeHeight = parseFloat(wrapper.getAttribute('height'));
+                    const panelWidth = parseFloat(outputPanel.getAttribute('width'));
+                    const panelOverlap = 10;
+                    const panelX = newX + (nodeWidth - panelWidth) / 2;
+                    const panelY = newY + nodeHeight - panelOverlap;
+                    outputPanel.setAttribute('x', panelX);
+                    outputPanel.setAttribute('y', panelY);
+                }
             }
 
             // Update edges
@@ -963,7 +978,9 @@ class Canvas {
             this.updateViewBox();
         } else {
             // Regular two-finger scroll (pan) - check if we should scroll node content instead
-            const scrollableContent = e.target.closest('.node-content');
+            // Check for any scrollable container within nodes or output panels
+            // Note: .code-output-panel-body handles all scrolling for output panels
+            const scrollableContent = e.target.closest('.node-content, .code-output-panel-body, .csv-preview, .code-error-output');
             if (scrollableContent) {
                 // Check if this content element is actually scrollable (has overflow: auto/scroll)
                 const style = window.getComputedStyle(scrollableContent);
@@ -1698,6 +1715,7 @@ class Canvas {
                               action.id === 'flip-card' ? 'flip-card-btn' :
                               action.id === 'review-card' ? 'review-card-btn' :
                               action.id === 'analyze' ? 'analyze-btn' :
+                              action.id === 'generate' ? 'generate-btn' :
                               action.id === 'run-code' ? 'run-code-btn' : '';
             return `<button class="node-action ${actionClass}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
         }).join('');
@@ -1757,7 +1775,250 @@ class Canvas {
         // Setup node event listeners
         this.setupNodeEvents(wrapper, node);
 
+        // Render output panel for code nodes (if they have output)
+        if (node.type === NodeType.CODE) {
+            this.renderOutputPanel(node, wrapper);
+        }
+
         return wrapper;
+    }
+
+    /**
+     * Render or update the output panel for a code node
+     * @param {Object} node - The code node
+     * @param {Element} nodeWrapper - The node's foreignObject wrapper
+     */
+    renderOutputPanel(node, nodeWrapper) {
+        const wrapped = wrapNode(node);
+
+        // Remove existing output panel if present
+        const existingPanel = this.outputPanels.get(node.id);
+        if (existingPanel) {
+            existingPanel.remove();
+            this.outputPanels.delete(node.id);
+        }
+
+        // Only render if there's output
+        if (!wrapped.hasOutput || !wrapped.hasOutput()) {
+            return;
+        }
+
+        const outputExpanded = node.outputExpanded !== false;
+
+        const nodeX = parseFloat(nodeWrapper.getAttribute('x'));
+        const nodeY = parseFloat(nodeWrapper.getAttribute('y'));
+        const nodeWidth = parseFloat(nodeWrapper.getAttribute('width'));
+        const nodeHeight = parseFloat(nodeWrapper.getAttribute('height'));
+
+        // Panel is 90% width, centered beneath the node
+        const panelWidthRatio = 0.9;
+        const panelWidth = nodeWidth * panelWidthRatio;
+        const panelX = nodeX + (nodeWidth - panelWidth) / 2;
+
+        // Panel slides out from underneath - no gap, overlaps slightly
+        const panelOverlap = 10; // Overlap with node bottom to look like sliding from underneath
+        const panelY = nodeY + nodeHeight - panelOverlap;
+
+        // Use stored height or default
+        const panelHeight = node.outputPanelHeight || 200;
+
+        // Collapsed state: just show a small toggle tab
+        const collapsedHeight = 24;
+        const actualHeight = outputExpanded ? panelHeight : collapsedHeight;
+
+        // Create foreignObject for output panel
+        const panelWrapper = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+        panelWrapper.setAttribute('class', 'output-panel-wrapper');
+        panelWrapper.setAttribute('x', panelX);
+        panelWrapper.setAttribute('y', panelY);
+        panelWrapper.setAttribute('width', panelWidth);
+        panelWrapper.setAttribute('height', actualHeight + panelOverlap); // Extra for overlap
+        panelWrapper.setAttribute('data-node-id', node.id);
+        panelWrapper.setAttribute('data-output-panel', 'true');
+        panelWrapper.setAttribute('data-panel-height', panelHeight); // Store full height for animations
+
+        // Create panel HTML
+        const panelDiv = document.createElement('div');
+        panelDiv.className = `code-output-panel ${outputExpanded ? 'expanded' : 'collapsed'}`;
+        panelDiv.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+        panelDiv.style.width = '100%';
+        panelDiv.style.height = '100%';
+        panelDiv.style.paddingTop = `${panelOverlap}px`; // Offset for overlap area
+
+        // Minimal design: no header, just content with toggle tab at bottom
+        panelDiv.innerHTML = `
+            <div class="code-output-panel-inner">
+                <div class="code-output-panel-body">
+                    ${wrapped.renderOutputPanel(this)}
+                </div>
+                <div class="code-output-panel-footer">
+                    <button class="code-output-toggle" title="${outputExpanded ? 'Collapse output' : 'Expand output'}">
+                        ${outputExpanded ? '▲' : '▼'}
+                    </button>
+                    ${outputExpanded ? '<div class="code-output-resize-handle" title="Drag to resize"></div>' : ''}
+                </div>
+            </div>
+        `;
+
+        panelWrapper.appendChild(panelDiv);
+
+        // Insert BEFORE the node in the DOM so it renders underneath
+        nodeWrapper.before(panelWrapper);
+        this.outputPanels.set(node.id, panelWrapper);
+
+        // Setup event listeners for panel buttons and resize
+        this.setupOutputPanelEvents(panelWrapper, node, nodeWrapper);
+
+        // Animate initial slide-out if expanded
+        if (outputExpanded) {
+            const panelBody = panelDiv.querySelector('.code-output-panel-body');
+            const collapsedHeight = 24;
+            const fullHeight = panelHeight + panelOverlap;
+
+            // Start from collapsed state
+            panelWrapper.setAttribute('height', collapsedHeight + panelOverlap);
+            if (panelBody) {
+                panelBody.style.opacity = '0';
+            }
+
+            // Animate to expanded state
+            const duration = 300;
+            const startTime = performance.now();
+
+            const animate = (currentTime) => {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // Ease out cubic
+                const eased = 1 - Math.pow(1 - progress, 3);
+
+                const currentHeight = (collapsedHeight + panelOverlap) + (fullHeight - collapsedHeight - panelOverlap) * eased;
+                panelWrapper.setAttribute('height', currentHeight);
+
+                if (panelBody) {
+                    panelBody.style.opacity = eased;
+                }
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+
+            // Small delay before starting animation
+            requestAnimationFrame(() => {
+                requestAnimationFrame(animate);
+            });
+        }
+    }
+
+    /**
+     * Animate output panel expand/collapse
+     * @param {string} nodeId - The code node ID
+     * @param {boolean} expand - True to expand, false to collapse
+     * @param {Function} onComplete - Callback when animation completes
+     */
+    animateOutputPanel(nodeId, expand, onComplete) {
+        const panelWrapper = this.outputPanels.get(nodeId);
+        if (!panelWrapper) {
+            onComplete?.();
+            return;
+        }
+
+        const panelDiv = panelWrapper.querySelector('.code-output-panel');
+        const panelInner = panelWrapper.querySelector('.code-output-panel-inner');
+        const panelBody = panelWrapper.querySelector('.code-output-panel-body');
+
+        const panelOverlap = 10;
+        const collapsedHeight = 24;
+        const fullHeight = parseFloat(panelWrapper.getAttribute('data-panel-height')) || 200;
+
+        const duration = 250; // ms
+        const startTime = performance.now();
+        const startHeight = parseFloat(panelWrapper.getAttribute('height'));
+        const targetHeight = expand ? (fullHeight + panelOverlap) : (collapsedHeight + panelOverlap);
+
+        // Show body immediately when expanding (so it's visible during animation)
+        if (expand && panelBody) {
+            panelBody.style.display = '';
+            panelBody.style.opacity = '0';
+        }
+
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Ease out cubic
+            const eased = 1 - Math.pow(1 - progress, 3);
+
+            const currentHeight = startHeight + (targetHeight - startHeight) * eased;
+            panelWrapper.setAttribute('height', currentHeight);
+
+            // Animate body opacity
+            if (panelBody) {
+                if (expand) {
+                    panelBody.style.opacity = eased;
+                } else {
+                    panelBody.style.opacity = 1 - eased;
+                }
+            }
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                // Animation complete
+                if (!expand && panelBody) {
+                    panelBody.style.display = 'none';
+                }
+                onComplete?.();
+            }
+        };
+
+        requestAnimationFrame(animate);
+    }
+
+    /**
+     * Setup event listeners for output panel
+     */
+    setupOutputPanelEvents(panelWrapper, node, nodeWrapper) {
+        const toggleBtn = panelWrapper.querySelector('.code-output-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.emit('nodeOutputToggle', node.id);
+            });
+        }
+
+        // Resize handle for adjusting panel height
+        const resizeHandle = panelWrapper.querySelector('.code-output-resize-handle');
+        if (resizeHandle) {
+            resizeHandle.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+
+                const startY = e.clientY;
+                const startHeight = parseFloat(panelWrapper.getAttribute('height'));
+                const panelOverlap = 10;
+
+                const onMouseMove = (moveEvent) => {
+                    const deltaY = (moveEvent.clientY - startY) / this.scale;
+                    const newHeight = Math.max(100, Math.min(500, startHeight + deltaY)); // Min 100, max 500
+                    panelWrapper.setAttribute('height', newHeight);
+                    panelWrapper.setAttribute('data-panel-height', newHeight - panelOverlap);
+                };
+
+                const onMouseUp = () => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+
+                    // Save the new height
+                    const finalHeight = parseFloat(panelWrapper.getAttribute('data-panel-height'));
+                    this.emit('nodeOutputResize', node.id, finalHeight);
+                };
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        }
     }
 
     /**
@@ -2130,16 +2391,54 @@ class Canvas {
             });
         }
 
-        // Code textarea Cmd+Enter to run (Code nodes)
-        const codeTextarea = div.querySelector('.code-editor-textarea');
-        if (codeTextarea) {
-            codeTextarea.addEventListener('keydown', (e) => {
-                // Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) to run code
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.emit('nodeRunCode', node.id);
-                }
+        // Generate code button (Code nodes)
+        const generateBtn = div.querySelector('.generate-btn');
+        if (generateBtn) {
+            generateBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.emit('nodeGenerate', node.id);
+            });
+        }
+
+        // Initialize CodeMirror editor for Code nodes
+        const codeEditorContainer = div.querySelector('.code-editor-container');
+        if (codeEditorContainer) {
+            // Get code from node (not from HTML attribute to avoid escaping issues)
+            const initialCode = node.code || node.content || '';
+
+            console.log('🎨 Initializing editor for node', node.id, 'with', initialCode.length, 'chars');
+
+            // Create CodeMirror editor (if utils are loaded)
+            if (window.CodeMirrorUtils) {
+                this.initializeCodeEditor(codeEditorContainer, node.id, initialCode);
+            } else {
+                // Wait for CodeMirror to load
+                console.log('Waiting for CodeMirror to load...');
+                const initWhenReady = () => {
+                    if (window.CodeMirrorUtils) {
+                        this.initializeCodeEditor(codeEditorContainer, node.id, initialCode);
+                    } else {
+                        setTimeout(initWhenReady, 50);
+                    }
+                };
+                initWhenReady();
+            }
+        }
+
+        // Code output drawer toggle/clear buttons
+        const outputToggle = div.querySelector('.code-output-toggle');
+        if (outputToggle) {
+            outputToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.emit('nodeOutputToggle', node.id);
+            });
+        }
+
+        const outputClear = div.querySelector('.code-output-clear');
+        if (outputClear) {
+            outputClear.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.emit('nodeOutputClear', node.id);
             });
         }
 
@@ -2531,6 +2830,142 @@ class Canvas {
     }
 
     /**
+     * Show generate input for AI code generation
+     * @param {string} nodeId - The code node ID
+     * @param {Array<Object>} models - Available model options with {id, name}
+     * @param {string} currentModel - Currently selected model ID
+     */
+    showGenerateInput(nodeId, models = [], currentModel = '') {
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) return;
+
+        // Don't add if already present
+        if (wrapper.querySelector('.code-generate-input')) return;
+
+        const div = wrapper.querySelector('.node');
+        const codeContent = div.querySelector('.code-node-content');
+        if (!codeContent) return;
+
+        // Create input container with model dropdown defaulting to current model
+        const inputHtml = `
+            <div class="code-generate-input">
+                <input type="text" placeholder="Describe the code to generate..." class="generate-prompt-input" />
+                <select class="generate-model-select">
+                    ${models.map(m => {
+                        const selected = m.id === currentModel ? 'selected' : '';
+                        return `<option value="${this.escapeHtml(m.id)}" ${selected}>${this.escapeHtml(m.name)}</option>`;
+                    }).join('')}
+                </select>
+                <button class="generate-submit-btn" title="Generate code">→</button>
+                <button class="generate-cancel-btn" title="Cancel">×</button>
+            </div>
+        `;
+
+        // Insert at the beginning of code-node-content (before data hint or editor)
+        codeContent.insertAdjacentHTML('afterbegin', inputHtml);
+
+        // Setup event listeners
+        const input = codeContent.querySelector('.generate-prompt-input');
+        const modelSelect = codeContent.querySelector('.generate-model-select');
+        const submitBtn = codeContent.querySelector('.generate-submit-btn');
+        const cancelBtn = codeContent.querySelector('.generate-cancel-btn');
+
+        const submit = () => {
+            const prompt = input.value.trim();
+            const model = modelSelect.value;
+            if (prompt) {
+                this.emit('nodeGenerateSubmit', nodeId, prompt, model);
+            }
+        };
+
+        submitBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            submit();
+        });
+
+        cancelBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.hideGenerateInput(nodeId);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.hideGenerateInput(nodeId);
+            }
+        });
+
+        // Focus the input
+        input.focus();
+    }
+
+    /**
+     * Hide generate input
+     * @param {string} nodeId - The code node ID
+     */
+    hideGenerateInput(nodeId) {
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) return;
+
+        const input = wrapper.querySelector('.code-generate-input');
+        if (input) {
+            input.remove();
+        }
+    }
+
+    /**
+     * Initialize CodeMirror editor for a code node container
+     * @param {HTMLElement} container - The code editor container element
+     * @param {string} nodeId - The node ID
+     * @param {string} initialCode - Initial code content
+     */
+    initializeCodeEditor(container, nodeId, initialCode) {
+        if (!window.CodeMirrorUtils || this.codeEditors.has(nodeId)) {
+            return; // Already initialized or utils not ready
+        }
+
+        const editor = window.CodeMirrorUtils.createPythonEditor(
+            container,
+            initialCode,
+            (newCode) => {
+                // Debounced save to graph
+                clearTimeout(this.codeEditorDebounce);
+                this.codeEditorDebounce = setTimeout(() => {
+                    this.emit('nodeCodeChange', nodeId, newCode);
+                }, 300);
+            }
+        );
+
+        // Store editor instance
+        this.codeEditors.set(nodeId, editor);
+
+        // Handle Cmd/Ctrl+Enter to run code
+        editor.setOption("extraKeys", {
+            ...editor.getOption("extraKeys"),
+            "Cmd-Enter": () => this.emit('nodeRunCode', nodeId),
+            "Ctrl-Enter": () => this.emit('nodeRunCode', nodeId)
+        });
+
+        console.log('✓ CodeMirror editor initialized for node', nodeId);
+    }
+
+    /**
+     * Update code content in a code node (for AI generation streaming)
+     * @param {string} nodeId - The code node ID
+     * @param {string} code - The code content
+     * @param {boolean} isStreaming - Whether still streaming (unused for CodeMirror)
+     */
+    updateCodeContent(nodeId, code, isStreaming) {
+        const editor = this.codeEditors.get(nodeId);
+        if (editor && window.CodeMirrorUtils) {
+            window.CodeMirrorUtils.updateEditorContent(editor, code);
+        }
+    }
+
+    /**
      * Update the collapse button state for a node.
      * Shows/hides the button based on whether node has children.
      * Updates icon and badge based on collapsed state.
@@ -2715,11 +3150,26 @@ class Canvas {
      * Remove a node from the canvas
      */
     removeNode(nodeId) {
+        // Clean up CodeMirror editor if exists
+        const editor = this.codeEditors.get(nodeId);
+        if (editor && window.CodeMirrorUtils) {
+            window.CodeMirrorUtils.destroyEditor(editor);
+            this.codeEditors.delete(nodeId);
+        }
+
         const wrapper = this.nodeElements.get(nodeId);
         if (wrapper) {
             wrapper.remove();
             this.nodeElements.delete(nodeId);
         }
+
+        // Also remove output panel if exists
+        const outputPanel = this.outputPanels.get(nodeId);
+        if (outputPanel) {
+            outputPanel.remove();
+            this.outputPanels.delete(nodeId);
+        }
+
         this.selectedNodes.delete(nodeId);
     }
 

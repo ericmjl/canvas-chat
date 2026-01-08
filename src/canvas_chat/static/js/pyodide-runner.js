@@ -297,12 +297,30 @@ except ImportError:
 ${setupCode}
 ${dataInjection}
 
-# User code
+# User code - handle last expression specially for notebook-like behavior
 _result = None
+_user_code = '''${code.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'''
+
+# Parse the code to separate statements from final expression
+import ast
 try:
-    _result = eval(compile('''${code.replace(/'/g, "\\'")}''', '<user>', 'eval'))
-except SyntaxError:
-    exec(compile('''${code.replace(/'/g, "\\'")}''', '<user>', 'exec'))
+    _tree = ast.parse(_user_code)
+    if _tree.body:
+        # Check if last statement is an expression (not assignment, etc.)
+        _last = _tree.body[-1]
+        if isinstance(_last, ast.Expr):
+            # Execute all but the last statement
+            if len(_tree.body) > 1:
+                _exec_tree = ast.Module(body=_tree.body[:-1], type_ignores=[])
+                exec(compile(_exec_tree, '<user>', 'exec'))
+            # Eval the last expression to get its value
+            _expr_tree = ast.Expression(body=_last.value)
+            _result = eval(compile(_expr_tree, '<user>', 'eval'))
+        else:
+            # Last statement is not an expression, just exec everything
+            exec(compile(_tree, '<user>', 'exec'))
+except SyntaxError as e:
+    raise e
 
 # Capture any pending matplotlib figures
 try:
@@ -315,10 +333,30 @@ except:
 # Restore stdout
 sys.stdout = sys.__stdout__
 
+# Get rich representation of result
+_result_html = None
+_result_text = None
+if _result is not None:
+    # Try _repr_html_ first (pandas DataFrames, etc.)
+    if hasattr(_result, '_repr_html_'):
+        try:
+            _result_html = _result._repr_html_()
+        except:
+            pass
+    # Fallback to repr/str
+    try:
+        _result_text = repr(_result)
+    except:
+        try:
+            _result_text = str(_result)
+        except:
+            _result_text = '<unprintable object>'
+
 # Return results
 {
     'stdout': _stdout_capture.getvalue(),
-    'returnValue': repr(_result) if _result is not None else None,
+    'resultHtml': _result_html,
+    'resultText': _result_text,
     'figures': _figures,
     'error': None
 }
@@ -337,6 +375,67 @@ sys.stdout = sys.__stdout__
         }
     }
 
+    /**
+     * Introspect DataFrames to get metadata for AI code generation
+     * @param {Object} csvDataMap - Map of {varName: csvString}
+     * @returns {Promise<Array>} Array of {varName, columns, dtypes, shape, head}
+     */
+    async function introspectDataFrames(csvDataMap) {
+        await ensureLoaded();
+
+        const results = [];
+
+        for (const [varName, csvData] of Object.entries(csvDataMap)) {
+            try {
+                // Escape the CSV data for Python string literal
+                const escaped = csvData.replace(/\\/g, '\\\\').replace(/"""/g, '\\"""');
+
+                const code = `
+import pandas as pd
+import io
+import json
+
+${varName} = pd.read_csv(io.StringIO("""${escaped}"""))
+
+# Gather metadata
+info = {
+    "varName": "${varName}",
+    "columns": list(${varName}.columns),
+    "dtypes": {col: str(dtype) for col, dtype in ${varName}.dtypes.items()},
+    "shape": list(${varName}.shape),
+    "head": ${varName}.head(3).to_csv(index=False)
+}
+
+# Print as JSON (not repr, so it's valid JSON)
+print(json.dumps(info))
+`;
+
+                // Run introspection code
+                const result = await run(code, {});
+
+                if (result.error) {
+                    console.warn(`Failed to introspect ${varName}:`, result.error);
+                    continue;
+                }
+
+                // Parse the JSON result from stdout (we print() it in Python)
+                const jsonString = result.stdout?.trim();
+                if (!jsonString) {
+                    console.warn(`No stdout result for ${varName} introspection`);
+                    continue;
+                }
+
+                const metadata = JSON.parse(jsonString);
+                results.push(metadata);
+
+            } catch (err) {
+                console.warn(`Failed to introspect ${varName}:`, err);
+            }
+        }
+
+        return results;
+    }
+
     // Public API
     return {
         ensureLoaded,
@@ -346,6 +445,7 @@ sys.stdout = sys.__stdout__
         preload,
         getState,
         onStateChange,
+        introspectDataFrames,
     };
 })();
 

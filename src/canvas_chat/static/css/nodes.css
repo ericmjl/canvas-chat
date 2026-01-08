@@ -1295,13 +1295,145 @@
     border-bottom: 1px solid var(--color-border, #e0e0e0);
 }
 
+/* Generate input (AI code generation) */
+.code-generate-input {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--color-bg-secondary, #f0f4f8);
+    border-bottom: 1px solid var(--color-border, #e0e0e0);
+    gap: 8px;
+}
+
+.code-generate-input input[type="text"] {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border, #ccc);
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.code-generate-input input[type="text"]:focus {
+    outline: none;
+    border-color: var(--color-accent, #4a9eff);
+    box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.1);
+}
+
+.code-generate-input select {
+    padding: 4px 8px;
+    font-size: 0.8em;
+    border: 1px solid var(--color-border, #ccc);
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+}
+
+.code-generate-input button {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background 0.15s, color 0.15s;
+}
+
+.generate-submit-btn {
+    background: var(--color-accent, #4a9eff);
+    color: white;
+}
+
+.generate-submit-btn:hover {
+    background: var(--color-accent-dark, #3a8eef);
+}
+
+.generate-cancel-btn {
+    background: var(--color-bg-tertiary, #e0e0e0);
+    color: var(--color-text-secondary, #666);
+}
+
+.generate-cancel-btn:hover {
+    background: var(--color-bg-hover, #d0d0d0);
+}
+
 .code-editor-container {
     flex: 1;
     min-height: 150px;
     overflow: hidden;
+    position: relative;
+    border-radius: 0 0 var(--radius-sm, 4px) var(--radius-sm, 4px);
 }
 
+/* CodeMirror editor takes full height */
+.code-editor-container .CodeMirror {
+    height: 100%;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.9em;
+}
+
+/* Ensure gutters don't overlap with code */
+.code-editor-container .CodeMirror-gutters {
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.code-editor-container .CodeMirror-linenumber {
+    padding: 0 8px;
+    min-width: 30px;
+}
+
+/* Ensure code content has proper left padding */
+.code-editor-container .CodeMirror-lines {
+    padding: 4px 0;
+}
+
+.code-state-indicator {
+    padding: 6px 12px;
+    background: var(--color-accent, #4a9eff);
+    color: white;
+    font-size: 0.8em;
+    text-align: center;
+}
+
+.code-node-content.code-running .code-editor-container {
+    opacity: 0.7;
+}
+
+.code-node-content.code-error .code-editor-container {
+    border: 2px solid var(--error, #ff6b6b);
+}
+
+/* Syntax-highlighted code layer (behind textarea) */
+.code-highlight-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    padding: 12px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.9em;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow: auto;
+    pointer-events: none;
+    border-radius: 0 0 var(--radius-sm, 4px) var(--radius-sm, 4px);
+}
+
+.code-highlight-layer code {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    background: none !important;
+    padding: 0 !important;
+}
+
+/* Textarea overlay (transparent text, visible caret) */
 .code-editor-textarea {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     min-height: 150px;
@@ -1310,15 +1442,23 @@
     line-height: 1.5;
     padding: 12px;
     border: none;
-    background: var(--color-bg-code, #1e1e1e);
-    color: var(--color-text-code, #d4d4d4);
+    background: transparent;
+    color: transparent;
+    caret-color: #fff;
     resize: none;
     outline: none;
     border-radius: 0 0 var(--radius-sm, 4px) var(--radius-sm, 4px);
+    z-index: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+.code-editor-textarea::selection {
+    background: rgba(100, 150, 255, 0.3);
 }
 
 .code-editor-textarea:focus {
-    background: var(--color-bg-code-focus, #252526);
+    background: transparent;
 }
 
 .code-state-indicator {
@@ -1345,18 +1485,199 @@
     font-size: 0.8em;
     border-top: 1px solid var(--color-error, #e74c3c);
     white-space: pre-wrap;
-    max-height: 100px;
-    overflow-y: auto;
+    word-break: break-word;
+    max-height: 150px;
+    overflow: auto;
 }
 
 /* Light mode adjustments for code */
 @media (prefers-color-scheme: light) {
-    .code-editor-textarea {
-        background: #f5f5f5;
-        color: #333;
+    .code-data-hint {
+        color: var(--text-muted);
+        background: var(--bg-secondary);
     }
+}
 
     .code-editor-textarea:focus {
         background: #fff;
+    }
+}
+
+/* =============================================================================
+   Code Node Output Panel (External slide-out from underneath)
+   ============================================================================= */
+
+.output-panel-wrapper {
+    pointer-events: auto;
+    overflow: visible;
+}
+
+.code-output-panel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.code-output-panel-inner {
+    background: var(--color-bg-primary, #fff);
+    border: 1px solid var(--color-border, #e0e0e0);
+    border-top: none;
+    border-radius: 0 0 var(--radius-md, 8px) var(--radius-md, 8px);
+    box-shadow:
+        inset 0 8px 12px -8px rgba(0,0,0,0.15),
+        0 4px 8px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Scrollable content area */
+.code-output-panel-body {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    min-height: 0;
+}
+
+.code-output-panel.collapsed .code-output-panel-body {
+    display: none;
+}
+
+.code-output-panel-content {
+    min-height: 0;
+}
+
+/* Footer with toggle button */
+.code-output-panel-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    background: var(--color-bg-secondary, #f8f8f8);
+    border-top: 1px solid var(--color-border, #e8e8e8);
+    gap: 8px;
+    flex-shrink: 0;
+    min-height: 20px;
+    position: relative;
+}
+
+.code-output-toggle {
+    background: none;
+    border: none;
+    padding: 2px 12px;
+    cursor: pointer;
+    color: var(--color-text-tertiary, #aaa);
+    font-size: 0.7em;
+    border-radius: 3px;
+    transition: background 0.15s, color 0.15s;
+}
+
+.code-output-toggle:hover {
+    background: var(--color-bg-hover, #e8e8e8);
+    color: var(--color-text-secondary, #666);
+}
+
+/* Collapsed state - just show the footer tab */
+.code-output-panel.collapsed .code-output-panel-inner {
+    border-radius: var(--radius-md, 8px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.code-output-panel.collapsed .code-output-panel-footer {
+    border-top: none;
+    border-radius: var(--radius-md, 8px);
+}
+
+/* Resize handle - inline with toggle */
+.code-output-resize-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.code-output-resize-handle::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 3px;
+    background: var(--color-border, #ddd);
+    border-radius: 2px;
+    transition: background 0.15s;
+}
+
+.code-output-resize-handle:hover::before {
+    background: var(--color-text-tertiary, #aaa);
+}
+
+.code-output-stdout {
+    background: var(--color-bg-code, #1e1e1e);
+    color: var(--color-text-code, #d4d4d4);
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.85em;
+    margin: 0 0 8px 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.code-output-result {
+    margin: 0;
+}
+
+.code-output-text {
+    background: var(--color-bg-code, #1e1e1e);
+    color: var(--color-text-code, #d4d4d4);
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.85em;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.code-output-html {
+    background: white;
+    border-radius: 4px;
+    /* No overflow here - parent .code-output-panel-body handles scrolling */
+}
+
+/* Style pandas DataFrame HTML tables */
+.code-output-html table {
+    border-collapse: collapse;
+    font-size: 0.85em;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+.code-output-html th,
+.code-output-html td {
+    padding: 4px 8px;
+    border: 1px solid var(--color-border, #ddd);
+    text-align: left;
+}
+
+.code-output-html th {
+    background: var(--color-bg-tertiary, #f0f0f0);
+    font-weight: 600;
+}
+
+.code-output-html tr:nth-child(even) {
+    background: var(--color-bg-secondary, #fafafa);
+}
+
+/* Light mode adjustments for output */
+@media (prefers-color-scheme: light) {
+    .code-output-stdout,
+    .code-output-text {
+        background: #f5f5f5;
+        color: #333;
     }
 }

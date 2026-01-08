@@ -443,7 +443,13 @@ class App {
             .on('nodeCollapse', this.handleNodeCollapse.bind(this))
             // CSV/Code execution events
             .on('nodeAnalyze', this.handleNodeAnalyze.bind(this))
-            .on('nodeRunCode', this.handleNodeRunCode.bind(this));
+            .on('nodeRunCode', this.handleNodeRunCode.bind(this))
+            .on('nodeCodeChange', this.handleNodeCodeChange.bind(this))
+            .on('nodeGenerate', this.handleNodeGenerate.bind(this))
+            .on('nodeGenerateSubmit', this.handleNodeGenerateSubmit.bind(this))
+            .on('nodeOutputToggle', this.handleNodeOutputToggle.bind(this))
+            .on('nodeOutputClear', this.handleNodeOutputClear.bind(this))
+            .on('nodeOutputResize', this.handleNodeOutputResize.bind(this));
 
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
@@ -2012,7 +2018,7 @@ class App {
                 position: nodePosition,
                 title: file.name,
                 filename: file.name,
-                csvData: data,  // Store parsed data for code execution
+                csvData: text,  // Store raw CSV string for code execution
                 columns: columns
             });
 
@@ -2518,8 +2524,8 @@ class App {
     // --- CSV/Code Execution Methods ---
 
     /**
-     * Handle /code slash command - creates a Code node (optionally linked to selected CSVs)
-     * @param {string} description - Optional description from user
+     * Handle /code slash command - creates a Code node, optionally with AI-generated code
+     * @param {string} description - Optional prompt for AI code generation
      */
     async handleCode(description) {
         const selectedIds = this.canvas.getSelectedNodeIds();
@@ -2528,38 +2534,41 @@ class App {
             return node && node.type === NodeType.CSV;
         });
 
-        // Create code node with appropriate starter template
-        let starterCode;
-        let position;
+        // Determine position
+        const position = csvNodeIds.length > 0
+            ? this.graph.autoPosition(csvNodeIds)
+            : this.graph.autoPosition([]);
 
-        if (csvNodeIds.length > 0) {
-            // CSV nodes selected - create template with DataFrame references
-            const csvNodes = csvNodeIds.map(id => this.graph.getNode(id));
-            const csvNames = csvNodes.map((_n, i) => csvNodeIds.length === 1 ? 'df' : `df${i + 1}`);
-            starterCode = `# Available DataFrames: ${csvNames.join(', ')}
-# ${description || 'Analyze the data'}
+        // Create code node with placeholder if we're generating, or template if not
+        let initialCode;
+        const hasPrompt = description && description.trim();
+
+        if (hasPrompt) {
+            // AI generation - start with placeholder
+            initialCode = '# Generating code...\n';
+        } else if (csvNodeIds.length > 0) {
+            // Template with CSV context
+            const csvNames = csvNodeIds.map((_id, i) => csvNodeIds.length === 1 ? 'df' : `df${i + 1}`);
+            initialCode = `# Available DataFrames: ${csvNames.join(', ')}
+# Analyze the data
 
 import pandas as pd
 
 # Example: Display first few rows
 ${csvNames[0]}.head()
 `;
-            // Position near the first CSV node
-            position = this.graph.autoPosition(csvNodeIds);
         } else {
-            // No CSV selected - create standalone code node
-            starterCode = `# ${description || 'Python code'}
+            // Standalone template
+            initialCode = `# Python code
 
 import numpy as np
 
 # Your code here
 print("Hello from Pyodide!")
 `;
-            // Position in viewport center
-            position = this.graph.autoPosition([]);
         }
 
-        const codeNode = createNode(NodeType.CODE, starterCode, {
+        const codeNode = createNode(NodeType.CODE, initialCode, {
             position,
             csvNodeIds: csvNodeIds,  // Empty array if no CSVs
         });
@@ -2573,12 +2582,20 @@ print("Hello from Pyodide!")
         }
 
         this.canvas.renderNode(codeNode);
-        this.canvas.renderEdges();
+        this.canvas.updateAllEdges(this.graph);
+        this.canvas.updateAllNavButtonStates(this.graph);
         this.canvas.panToNodeAnimated(codeNode.id);
         this.saveSession();
 
         // Preload Pyodide in the background so it's ready when user clicks Run
         pyodideRunner.preload();
+
+        // If description provided, trigger AI generation
+        if (hasPrompt) {
+            // Use the currently selected model
+            const model = this.modelPicker.value;
+            await this.handleNodeGenerateSubmit(codeNode.id, description.trim(), model);
+        }
     }
 
     /**
@@ -2611,7 +2628,8 @@ df.head()
         this.graph.addEdge(edge);
 
         this.canvas.renderNode(codeNode);
-        this.canvas.renderEdges();
+        this.canvas.updateAllEdges(this.graph);
+        this.canvas.updateAllNavButtonStates(this.graph);
         this.canvas.panToNodeAnimated(codeNode.id);
         this.saveSession();
 
@@ -2627,7 +2645,17 @@ df.head()
         const codeNode = this.graph.getNode(nodeId);
         if (!codeNode || codeNode.type !== NodeType.CODE) return;
 
-        const code = codeNode.content;
+        // IMPORTANT: Get the code BEFORE re-rendering (which destroys the editor)
+        const editor = this.canvas.codeEditors.get(nodeId);
+        const code = editor && window.CodeMirrorUtils
+            ? window.CodeMirrorUtils.getEditorContent(editor)
+            : (codeNode.content || '');
+
+        console.log('🏃 Running code, length:', code.length, 'chars');
+
+        // Save the current code to the graph before running
+        this.graph.updateNode(nodeId, { content: code });
+
         const csvNodeIds = codeNode.csvNodeIds || [];
 
         // Build csvDataMap from linked CSV nodes
@@ -2640,83 +2668,327 @@ df.head()
             }
         });
 
-        // Show appropriate loading state based on Pyodide status
-        const pyodideState = pyodideRunner.getState();
-        if (pyodideState !== 'ready') {
-            this.canvas.updateNodeContent(nodeId, code + '\n\n# Loading Python runtime...', true);
-        } else {
-            this.canvas.updateNodeContent(nodeId, code + '\n\n# Running...', true);
-        }
+        // Set execution state to 'running' and re-render the node
+        // (CodeNode.renderContent() handles showing the "Running..." indicator)
+        this.graph.updateNode(nodeId, { executionState: 'running', lastError: null });
+        this.canvas.renderNode(this.graph.getNode(nodeId));
 
         try {
             // Run code with Pyodide
             const result = await pyodideRunner.run(code, csvDataMap);
 
-            // Create output nodes for results
-            const outputs = [];
-
-            // Text output (stdout)
-            if (result.stdout && result.stdout.trim()) {
-                outputs.push({
-                    type: NodeType.NOTE,
-                    content: '```\n' + result.stdout.trim() + '\n```',
-                    title: 'Output'
+            // Check for Python errors returned from Pyodide
+            if (result.error) {
+                this.graph.updateNode(nodeId, {
+                    executionState: 'error',
+                    lastError: result.error,
+                    outputStdout: result.stdout?.trim() || null,  // May have partial stdout before error
+                    outputHtml: null,
+                    outputText: null,
+                    outputExpanded: true
                 });
+                this.canvas.renderNode(this.graph.getNode(nodeId));
+                this.saveSession();
+                return;
             }
 
-            // Figure outputs (base64 images)
+            // Store stdout and result in the node for inline display
+            const stdout = result.stdout?.trim() || null;
+            const resultHtml = result.resultHtml || null;
+            const resultText = result.resultText || null;
+
+            // Update node with output for inline drawer display
+            this.graph.updateNode(nodeId, {
+                executionState: 'idle',
+                lastError: null,
+                outputStdout: stdout,
+                outputHtml: resultHtml,
+                outputText: resultText,
+                outputExpanded: true  // Auto-expand when there's new output
+            });
+
+            // Create child nodes only for figures (they need visual space)
             if (result.figures && result.figures.length > 0) {
-                result.figures.forEach((base64, i) => {
-                    outputs.push({
-                        type: NodeType.IMAGE,
-                        content: `data:image/png;base64,${base64}`,
-                        title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`
-                    });
-                });
+                for (let i = 0; i < result.figures.length; i++) {
+                    const dataUrl = result.figures[i];
+                    // dataUrl is already "data:image/png;base64,..." from pyodide-runner
+                    // Extract just the base64 part for ImageNode
+                    const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+                    if (base64Match) {
+                        const position = this.graph.autoPosition([nodeId]);
+                        const outputNode = createNode(NodeType.IMAGE, '', {
+                            position,
+                            title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`,
+                            imageData: base64Match[2],
+                            mimeType: base64Match[1]
+                        });
+
+                        this.graph.addNode(outputNode);
+                        const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
+                        this.graph.addEdge(edge);
+                        this.canvas.renderNode(outputNode);
+                    }
+                }
             }
 
-            // Create output nodes positioned below the code node
-            for (const output of outputs) {
-                const position = this.graph.autoPosition([nodeId]);
-
-                const outputNode = createNode(output.type, output.content, {
-                    position,
-                    title: output.title
-                });
-
-                this.graph.addNode(outputNode);
-
-                // Create edge from code node to output
-                const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
-                this.graph.addEdge(edge);
-
-                this.canvas.renderNode(outputNode);
-            }
-
-            // Restore code node content (remove "Running...")
-            this.canvas.updateNodeContent(nodeId, code, false);
-            this.canvas.renderEdges();
+            // Re-render code node to show output drawer
+            this.canvas.renderNode(this.graph.getNode(nodeId));
+            this.canvas.updateAllEdges(this.graph);
+            this.canvas.updateAllNavButtonStates(this.graph);
             this.saveSession();
 
         } catch (error) {
-            // Show error in output
-            const position = this.graph.autoPosition([nodeId]);
-
-            const errorNode = createNode(NodeType.NOTE, '```\nError: ' + error.message + '\n```', {
-                position,
-                title: 'Error'
+            // Show error in the inline drawer (not as child node)
+            this.graph.updateNode(nodeId, {
+                executionState: 'error',
+                lastError: error.message,
+                outputStdout: null,
+                outputHtml: null,
+                outputText: null,
+                outputExpanded: true
             });
-
-            this.graph.addNode(errorNode);
-
-            const edge = createEdge(nodeId, errorNode.id, EdgeType.GENERATES);
-            this.graph.addEdge(edge);
-
-            this.canvas.renderNode(errorNode);
-            this.canvas.updateNodeContent(nodeId, code, false);
-            this.canvas.renderEdges();
+            this.canvas.renderNode(this.graph.getNode(nodeId));
             this.saveSession();
         }
+    }
+
+    /**
+     * Handle code content changes from Code node textarea
+     * @param {string} nodeId - The Code node ID
+     * @param {string} code - The new code content
+     */
+    handleNodeCodeChange(nodeId, code) {
+        const node = this.graph.getNode(nodeId);
+        if (!node || node.type !== NodeType.CODE) return;
+
+        this.graph.updateNode(nodeId, { content: code });
+        this.saveSession();
+    }
+
+    /**
+     * Handle Generate button click on Code node - shows AI generation input
+     * @param {string} nodeId - The Code node ID
+     */
+    handleNodeGenerate(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node || node.type !== NodeType.CODE) return;
+
+        // Get available models for dropdown
+        const models = chat.models || [];
+        const currentModel = this.modelPicker.value;
+        this.canvas.showGenerateInput(nodeId, models, currentModel);
+    }
+
+    /**
+     * Handle AI code generation submission
+     * @param {string} nodeId - The Code node ID
+     * @param {string} prompt - User's natural language description
+     * @param {string} model - Selected model ID
+     */
+    async handleNodeGenerateSubmit(nodeId, prompt, model) {
+        const node = this.graph.getNode(nodeId);
+        if (!node || node.type !== NodeType.CODE) return;
+
+        // Hide the generate input
+        this.canvas.hideGenerateInput(nodeId);
+
+        try {
+            // Gather context for code generation
+            const context = await this.gatherCodeGenerationContext(nodeId);
+
+            // Set placeholder code to signal generation in progress
+            const placeholderCode = '# Generating code...\n';
+            this.canvas.updateCodeContent(nodeId, placeholderCode, true);
+            this.graph.updateNode(nodeId, { content: placeholderCode });
+
+            // Show stop button
+            this.canvas.showStopButton(nodeId);
+
+            // Create AbortController for this stream
+            const abortController = new AbortController();
+            this.streamingNodes.set(nodeId, {
+                abortController,
+                context: { prompt, model, nodeContext: context }
+            });
+
+            // Build request body
+            const apiKey = chat.getApiKeyForModel(model);
+            const baseUrl = chat.getBaseUrlForModel(model);
+
+            const requestBody = {
+                prompt,
+                existing_code: context.existingCode,
+                dataframe_info: context.dataframeInfo,
+                context: context.ancestorContext,
+                model,
+                api_key: apiKey
+            };
+
+            // Log DataFrame info for debugging
+            if (context.dataframeInfo && context.dataframeInfo.length > 0) {
+                console.log('📊 DataFrame info being sent to AI:', context.dataframeInfo);
+            }
+
+            if (baseUrl) {
+                requestBody.base_url = baseUrl;
+            }
+
+            // Stream code generation
+            const response = await fetch('/api/generate-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+                signal: abortController.signal
+            });
+
+            if (!response.ok) {
+                throw new Error(`API error: ${response.statusText}`);
+            }
+
+            let generatedCode = '';
+            await SSE.readSSEStream(response, {
+                onEvent: (eventType, data) => {
+                    if (eventType === 'message' && data) {
+                        generatedCode += data;
+                        this.canvas.updateCodeContent(nodeId, generatedCode, true);
+                    }
+                },
+                onDone: () => {
+                    // Clean up streaming state
+                    this.streamingNodes.delete(nodeId);
+                    this.canvas.hideStopButton(nodeId);
+
+                    // Final update ensures editor has final content
+                    this.canvas.updateCodeContent(nodeId, generatedCode, false);
+                    this.graph.updateNode(nodeId, { content: generatedCode });
+                    this.saveSession();
+                },
+                onError: (err) => {
+                    throw err;
+                }
+            });
+
+        } catch (error) {
+            // Clean up on error
+            this.streamingNodes.delete(nodeId);
+            this.canvas.hideStopButton(nodeId);
+
+            // Check if it was aborted (user clicked stop)
+            if (error.name === 'AbortError') {
+                // Leave partial code in place
+                return;
+            }
+
+            // Show error
+            console.error('Code generation failed:', error);
+            const errorCode = `# Code generation failed: ${error.message}\n`;
+            this.canvas.updateCodeContent(nodeId, errorCode, false);
+            this.graph.updateNode(nodeId, { content: errorCode });
+            this.saveSession();
+        }
+    }
+
+    /**
+     * Gather context for AI code generation
+     * @param {string} nodeId - The Code node ID
+     * @returns {Promise<Object>} Context object with dataframeInfo, ancestorContext, existingCode
+     */
+    async gatherCodeGenerationContext(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return { dataframeInfo: [], ancestorContext: [], existingCode: '' };
+
+        // Get existing code (if any, and not the placeholder)
+        const existingCode = node.content && !node.content.includes('# Generating')
+            ? node.content
+            : '';
+
+        // Get DataFrame metadata (cached on node, or introspect now)
+        let dataframeInfo = node.dataframeMetadata || [];
+        if (dataframeInfo.length === 0) {
+            // Introspect DataFrames from linked CSV nodes
+            const csvNodeIds = node.csvNodeIds || [];
+            if (csvNodeIds.length > 0) {
+                const csvDataMap = {};
+                csvNodeIds.forEach((csvId, index) => {
+                    const csvNode = this.graph.getNode(csvId);
+                    if (csvNode && csvNode.csvData) {
+                        const varName = csvNodeIds.length === 1 ? 'df' : `df${index + 1}`;
+                        csvDataMap[varName] = csvNode.csvData;
+                    }
+                });
+
+                // Run introspection
+                dataframeInfo = await pyodideRunner.introspectDataFrames(csvDataMap);
+
+                console.log('📊 DataFrame introspection results:', dataframeInfo);
+
+                // Cache on node for future generations
+                this.graph.updateNode(nodeId, { dataframeMetadata: dataframeInfo });
+            }
+        }
+
+        // Get ancestor context (conversation history)
+        const ancestors = this.graph.getAncestors(nodeId);
+        const ancestorContext = ancestors
+            .filter(n => [NodeType.HUMAN, NodeType.AI, NodeType.NOTE].includes(n.type))
+            .map(n => ({
+                role: n.type === NodeType.HUMAN ? 'user' : 'assistant',
+                content: n.content
+            }));
+
+        return { dataframeInfo, ancestorContext, existingCode };
+    }
+
+    /**
+     * Handle output drawer toggle (expand/collapse) with animation
+     * @param {string} nodeId - The Code node ID
+     */
+    handleNodeOutputToggle(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node || node.type !== NodeType.CODE) return;
+
+        const currentExpanded = node.outputExpanded !== false;
+        const newExpanded = !currentExpanded;
+
+        // Animate the panel before updating state
+        this.canvas.animateOutputPanel(nodeId, newExpanded, () => {
+            // After animation completes, update state and re-render
+            this.graph.updateNode(nodeId, { outputExpanded: newExpanded });
+            this.canvas.renderNode(this.graph.getNode(nodeId));
+            this.saveSession();
+        });
+    }
+
+    /**
+     * Handle output clear button click
+     * @param {string} nodeId - The Code node ID
+     */
+    handleNodeOutputClear(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node || node.type !== NodeType.CODE) return;
+
+        this.graph.updateNode(nodeId, {
+            outputStdout: null,
+            outputHtml: null,
+            outputText: null,
+            lastError: null,
+            executionState: 'idle'
+        });
+        this.canvas.renderNode(this.graph.getNode(nodeId));
+        this.saveSession();
+    }
+
+    /**
+     * Handle output panel resize
+     * @param {string} nodeId - The Code node ID
+     * @param {number} height - The new panel height
+     */
+    handleNodeOutputResize(nodeId, height) {
+        const node = this.graph.getNode(nodeId);
+        if (!node || node.type !== NodeType.CODE) return;
+
+        this.graph.updateNode(nodeId, { outputPanelHeight: height });
+        this.saveSession();
     }
 
     // --- Matrix Feature Wrappers ---
