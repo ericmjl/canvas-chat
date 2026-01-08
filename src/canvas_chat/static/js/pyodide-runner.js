@@ -290,34 +290,6 @@ const pyodideRunner = (function() {
         const imports = extractImports(code);
         await autoInstallPackages(imports, onInstallProgress);
 
-        // Check if matplotlib is used
-        const useMatplotlib = imports.includes('matplotlib') ||
-                              imports.includes('plt') ||
-                              code.includes('matplotlib') ||
-                              code.includes('plt.');
-
-        // Load matplotlib if needed
-        if (useMatplotlib && !installedPackages.has('matplotlib')) {
-            const msg = '📦 Installing matplotlib...';
-            console.log(msg);
-            if (onInstallProgress) {
-                onInstallProgress(msg);
-                // Yield to browser to allow UI updates
-                await new Promise(resolve => setTimeout(resolve, 0));
-            }
-
-            await pyodide.loadPackage('matplotlib');
-            installedPackages.add('matplotlib');
-
-            const successMsg = '✅ Installed matplotlib';
-            console.log(successMsg);
-            if (onInstallProgress) {
-                onInstallProgress(successMsg);
-                // Yield to browser to allow UI updates
-                await new Promise(resolve => setTimeout(resolve, 0));
-            }
-        }
-
         // Prepare the execution environment
         const setupCode = `
 import sys
