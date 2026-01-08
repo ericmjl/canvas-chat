@@ -1432,13 +1432,48 @@ class Canvas {
      * Animated version of fitToContent
      */
     fitToContentAnimated(duration = 500) {
-        const nodes = Array.from(this.nodeElements.values());
-        if (nodes.length === 0) return;
+        const nodeIds = Array.from(this.nodeElements.keys());
+        if (nodeIds.length === 0) return;
 
+        // Get bounding box of all nodes (with padding)
+        const bounds = this.getNodesBoundingBox(nodeIds, 50);
+
+        // Get viewport dimensions
+        const rect = this.container.getBoundingClientRect();
+        const scaleX = rect.width / bounds.width;
+        const scaleY = rect.height / bounds.height;
+        const endScale = Math.min(scaleX, scaleY, 1);
+
+        const endX = bounds.x;
+        const endY = bounds.y;
+        const endWidth = rect.width / endScale;
+        const endHeight = rect.height / endScale;
+
+        this.animateViewport({ endX, endY, endWidth, endHeight, endScale, duration });
+    }
+
+    /**
+     * Get the visible viewport dimensions in screen pixels
+     */
+    getViewportDimensions() {
+        const rect = this.container.getBoundingClientRect();
+        return { width: rect.width, height: rect.height };
+    }
+
+    /**
+     * Get the bounding box containing all specified nodes
+     * @param {string[]} nodeIds - Array of node IDs to include
+     * @param {number} padding - Padding around the bounding box (default 50)
+     * @returns {{x: number, y: number, width: number, height: number}} Bounding box
+     */
+    getNodesBoundingBox(nodeIds, padding = 50) {
         let minX = Infinity, minY = Infinity;
         let maxX = -Infinity, maxY = -Infinity;
 
-        for (const wrapper of nodes) {
+        for (const nodeId of nodeIds) {
+            const wrapper = this.nodeElements.get(nodeId);
+            if (!wrapper) continue;
+
             const x = parseFloat(wrapper.getAttribute('x'));
             const y = parseFloat(wrapper.getAttribute('y'));
             const width = parseFloat(wrapper.getAttribute('width')) || 420;
@@ -1450,32 +1485,40 @@ class Canvas {
             maxY = Math.max(maxY, y + height);
         }
 
-        const padding = 50;
-        const contentWidth = maxX - minX + padding * 2;
-        const contentHeight = maxY - minY + padding * 2;
+        // Return with padding applied
+        return {
+            x: minX - padding,
+            y: minY - padding,
+            width: maxX - minX + padding * 2,
+            height: maxY - minY + padding * 2
+        };
+    }
 
-        const rect = this.container.getBoundingClientRect();
-        const scaleX = rect.width / contentWidth;
-        const scaleY = rect.height / contentHeight;
-        const endScale = Math.min(scaleX, scaleY, 1);
-
+    /**
+     * Animate viewport to target position and scale
+     * @param {Object} options - Animation options
+     * @param {number} options.endX - Target viewBox.x
+     * @param {number} options.endY - Target viewBox.y
+     * @param {number} options.endWidth - Target viewBox.width
+     * @param {number} options.endHeight - Target viewBox.height
+     * @param {number} options.endScale - Target scale
+     * @param {number} options.duration - Animation duration in ms (default 300)
+     */
+    animateViewport({ endX, endY, endWidth, endHeight, endScale, duration = 300 }) {
         const startX = this.viewBox.x;
         const startY = this.viewBox.y;
         const startWidth = this.viewBox.width;
         const startHeight = this.viewBox.height;
         const startScale = this.scale;
-
-        const endX = minX - padding;
-        const endY = minY - padding;
-        const endWidth = rect.width / endScale;
-        const endHeight = rect.height / endScale;
-
         const startTime = performance.now();
 
         const animate = (currentTime) => {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3);
+            // ease-in-out cubic: smoother for combined zoom + pan
+            const eased = progress < 0.5
+                ? 4 * progress * progress * progress
+                : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
             this.viewBox.x = startX + (endX - startX) * eased;
             this.viewBox.y = startY + (endY - startY) * eased;
@@ -1493,11 +1536,39 @@ class Canvas {
     }
 
     /**
-     * Get the visible viewport dimensions in screen pixels
+     * Zoom to fit the specified nodes in viewport
+     * @param {string[]} nodeIds - Array of node IDs to zoom to
+     * @param {number} targetFill - How much of viewport to fill (default 0.8 = 80%)
+     * @param {number} duration - Animation duration in ms (default 300)
      */
-    getViewportDimensions() {
-        const rect = this.container.getBoundingClientRect();
-        return { width: rect.width, height: rect.height };
+    zoomToSelectionAnimated(nodeIds, targetFill = 0.8, duration = 300) {
+        if (!nodeIds || nodeIds.length === 0) return;
+
+        // Get bounding box of selected nodes (with padding)
+        const bounds = this.getNodesBoundingBox(nodeIds, 50);
+
+        // Get viewport dimensions in screen pixels
+        const viewport = this.getViewportDimensions();
+
+        // Calculate scale needed to fill targetFill of viewport
+        const scaleX = (viewport.width * targetFill) / bounds.width;
+        const scaleY = (viewport.height * targetFill) / bounds.height;
+        const targetScale = Math.min(scaleX, scaleY, this.maxScale);
+
+        // Clamp to min scale
+        const endScale = Math.max(targetScale, this.minScale);
+
+        // Calculate viewport dimensions at target scale
+        const endWidth = viewport.width / endScale;
+        const endHeight = viewport.height / endScale;
+
+        // Center the bounds in viewport
+        const boundsCenterX = bounds.x + bounds.width / 2;
+        const boundsCenterY = bounds.y + bounds.height / 2;
+        const endX = boundsCenterX - endWidth / 2;
+        const endY = boundsCenterY - endHeight / 2;
+
+        this.animateViewport({ endX, endY, endWidth, endHeight, endScale, duration });
     }
 
     /**

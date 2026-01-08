@@ -1228,6 +1228,21 @@ class App {
                     }
                 }
             }
+
+            // 'z' to zoom to selected nodes (fit selection in viewport at 80%)
+            if (e.key === 'z' && !e.shiftKey && !e.target.matches('input, textarea') && !(e.metaKey || e.ctrlKey)) {
+                const selectedNodeIds = this.canvas.getSelectedNodeIds();
+                if (selectedNodeIds.length > 0) {
+                    e.preventDefault();
+                    this.canvas.zoomToSelectionAnimated(selectedNodeIds);
+                }
+            }
+
+            // 'Shift+Z' to zoom out to fit all content (same as double-click on canvas)
+            if (e.key === 'Z' && e.shiftKey && !e.target.matches('input, textarea')) {
+                e.preventDefault();
+                this.canvas.fitToContentAnimated(400);
+            }
         });
 
         // Clipboard paste handler for images
