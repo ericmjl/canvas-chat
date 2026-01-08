@@ -16,6 +16,24 @@ const pyodideRunner = (function() {
     const stateListeners = new Set();  // Callbacks for state changes
 
     /**
+     * Yield to the browser to allow UI updates and user interactions.
+     * Uses requestAnimationFrame + setTimeout for reliable yielding.
+     * @param {number} minDelay - Minimum delay in ms after RAF (default: 0)
+     * @returns {Promise<void>}
+     */
+    function yieldToBrowser(minDelay = 0) {
+        return new Promise(resolve => {
+            requestAnimationFrame(() => {
+                if (minDelay > 0) {
+                    setTimeout(resolve, minDelay);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
      * Notify all listeners of state change
      */
     function notifyStateChange(state) {
@@ -149,8 +167,8 @@ const pyodideRunner = (function() {
         console.log(msg);
         if (onProgress) {
             onProgress(msg);
-            // Yield to browser to allow UI updates - use longer timeout for reliability
-            await new Promise(resolve => setTimeout(resolve, 10));
+            // Yield to browser to allow UI updates before blocking operation
+            await yieldToBrowser(10);
         }
 
         const micropip = pyodide.pyimport('micropip');
@@ -162,8 +180,8 @@ const pyodideRunner = (function() {
                 console.log(tryMsg);
                 if (onProgress) {
                     onProgress(tryMsg);
-                    // Yield to browser to allow UI updates
-                    await new Promise(resolve => setTimeout(resolve, 10));
+                    // Yield to browser before the blocking loadPackage call
+                    await yieldToBrowser(10);
                 }
 
                 await pyodide.loadPackage(pipName);
@@ -173,8 +191,7 @@ const pyodideRunner = (function() {
                 console.log(successMsg);
                 if (onProgress) {
                     onProgress(successMsg);
-                    // Yield to browser to allow UI updates
-                    await new Promise(resolve => setTimeout(resolve, 10));
+                    await yieldToBrowser();
                 }
             } catch (pyodideErr) {
                 // Fall back to micropip for pure Python packages
@@ -183,8 +200,8 @@ const pyodideRunner = (function() {
                     console.log(fallbackMsg);
                     if (onProgress) {
                         onProgress(fallbackMsg);
-                        // Yield to browser to allow UI updates
-                        await new Promise(resolve => setTimeout(resolve, 10));
+                        // Yield to browser before the blocking micropip call
+                        await yieldToBrowser(10);
                     }
 
                     await micropip.install(pipName);
@@ -194,16 +211,14 @@ const pyodideRunner = (function() {
                     console.log(successMsg);
                     if (onProgress) {
                         onProgress(successMsg);
-                        // Yield to browser to allow UI updates
-                        await new Promise(resolve => setTimeout(resolve, 10));
+                        await yieldToBrowser();
                     }
                 } catch (micropipErr) {
                     const failMsg = `❌ Failed to install ${pipName}`;
                     console.error(failMsg, micropipErr);
                     if (onProgress) {
                         onProgress(failMsg);
-                        // Yield to browser to allow UI updates
-                        await new Promise(resolve => setTimeout(resolve, 10));
+                        await yieldToBrowser();
                     }
                     failed.push(pipName);
                 }

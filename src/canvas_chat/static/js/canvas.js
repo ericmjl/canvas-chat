@@ -1788,12 +1788,18 @@ class Canvas {
      * Render or update the output panel for a code node
      * @param {Object} node - The code node
      * @param {Element} nodeWrapper - The node's foreignObject wrapper
+     * @param {Object} options - Render options
+     * @param {boolean} options.skipAnimation - Skip the slide-out animation (default: false)
      */
-    renderOutputPanel(node, nodeWrapper) {
+    renderOutputPanel(node, nodeWrapper, options = {}) {
+        const { skipAnimation = false } = options;
         const wrapped = wrapNode(node);
 
-        // Remove existing output panel if present
+        // Track if we're replacing an existing panel (to skip animation)
         const existingPanel = this.outputPanels.get(node.id);
+        const hadExistingPanel = !!existingPanel;
+
+        // Remove existing output panel if present
         if (existingPanel) {
             existingPanel.remove();
             this.outputPanels.delete(node.id);
@@ -1870,8 +1876,10 @@ class Canvas {
         // Setup event listeners for panel buttons and resize
         this.setupOutputPanelEvents(panelWrapper, node, nodeWrapper);
 
-        // Animate initial slide-out if expanded
-        if (outputExpanded) {
+        // Animate initial slide-out if expanded (skip if replacing existing panel or explicitly requested)
+        const shouldAnimate = outputExpanded && !skipAnimation && !hadExistingPanel;
+
+        if (shouldAnimate) {
             const panelBody = panelDiv.querySelector('.code-output-panel-body');
             const collapsedHeight = 24;
             const fullHeight = panelHeight + panelOverlap;
