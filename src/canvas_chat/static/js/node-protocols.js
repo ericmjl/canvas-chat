@@ -508,7 +508,15 @@ class CodeNode extends BaseNode {
         let stateIndicator = '';
         if (executionState === 'running') {
             stateClass = 'code-running';
-            stateIndicator = '<div class="code-state-indicator">Running...</div>';
+            // Show installation progress if available
+            if (this.node.installProgress && this.node.installProgress.length > 0) {
+                const progressHtml = this.node.installProgress
+                    .map(msg => canvas.escapeHtml(msg))
+                    .join('<br>');
+                stateIndicator = `<div class="code-state-indicator">${progressHtml}</div>`;
+            } else {
+                stateIndicator = '<div class="code-state-indicator">Running...</div>';
+            }
         } else if (executionState === 'error') {
             stateClass = 'code-error';
         }

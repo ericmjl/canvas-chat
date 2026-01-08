@@ -2670,12 +2670,27 @@ df.head()
 
         // Set execution state to 'running' and re-render the node
         // (CodeNode.renderContent() handles showing the "Running..." indicator)
-        this.graph.updateNode(nodeId, { executionState: 'running', lastError: null });
+        this.graph.updateNode(nodeId, {
+            executionState: 'running',
+            lastError: null,
+            installProgress: []  // Track installation messages
+        });
         this.canvas.renderNode(this.graph.getNode(nodeId));
 
+        // Collect installation progress messages
+        const installMessages = [];
+        const onInstallProgress = (msg) => {
+            installMessages.push(msg);
+            // Update node with current progress
+            this.graph.updateNode(nodeId, {
+                installProgress: [...installMessages]
+            });
+            this.canvas.renderNode(this.graph.getNode(nodeId));
+        };
+
         try {
-            // Run code with Pyodide
-            const result = await pyodideRunner.run(code, csvDataMap);
+            // Run code with Pyodide and installation progress callback
+            const result = await pyodideRunner.run(code, csvDataMap, onInstallProgress);
 
             // Check for Python errors returned from Pyodide
             if (result.error) {
@@ -2685,7 +2700,8 @@ df.head()
                     outputStdout: result.stdout?.trim() || null,  // May have partial stdout before error
                     outputHtml: null,
                     outputText: null,
-                    outputExpanded: true
+                    outputExpanded: true,
+                    installProgress: null  // Clear installation progress
                 });
                 this.canvas.renderNode(this.graph.getNode(nodeId));
                 this.saveSession();
@@ -2704,7 +2720,8 @@ df.head()
                 outputStdout: stdout,
                 outputHtml: resultHtml,
                 outputText: resultText,
-                outputExpanded: true  // Auto-expand when there's new output
+                outputExpanded: true,  // Auto-expand when there's new output
+                installProgress: null  // Clear installation progress
             });
 
             // Create child nodes only for figures (they need visual space)
@@ -2745,7 +2762,8 @@ df.head()
                 outputStdout: null,
                 outputHtml: null,
                 outputText: null,
-                outputExpanded: true
+                outputExpanded: true,
+                installProgress: null  // Clear installation progress
             });
             this.canvas.renderNode(this.graph.getNode(nodeId));
             this.saveSession();

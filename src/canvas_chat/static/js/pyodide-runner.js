@@ -121,9 +121,10 @@ const pyodideRunner = (function() {
     /**
      * Install packages via micropip if needed
      * @param {string[]} packages - List of package names
+     * @param {function} onProgress - Optional callback for progress updates (msg) => void
      * @throws {Error} If package installation fails
      */
-    async function autoInstallPackages(packages) {
+    async function autoInstallPackages(packages, onProgress = null) {
         if (!pyodide) return;
 
         const toInstall = [];
@@ -144,26 +145,42 @@ const pyodideRunner = (function() {
 
         if (toInstall.length === 0) return;
 
-        console.log('📦 Installing packages:', toInstall.map(p => p.pipName));
+        const msg = `📦 Installing packages: ${toInstall.map(p => p.pipName).join(', ')}`;
+        console.log(msg);
+        if (onProgress) onProgress(msg);
 
         const micropip = pyodide.pyimport('micropip');
 
         for (const { importName, pipName } of toInstall) {
             try {
                 // Try Pyodide prebuilt packages first (faster)
-                console.log(`📦 Trying Pyodide package: ${pipName}`);
+                const tryMsg = `📦 Installing ${pipName}...`;
+                console.log(tryMsg);
+                if (onProgress) onProgress(tryMsg);
+
                 await pyodide.loadPackage(pipName);
                 installedPackages.add(importName);
-                console.log(`✅ Installed ${pipName} (Pyodide)`);
+
+                const successMsg = `✅ Installed ${pipName} (Pyodide)`;
+                console.log(successMsg);
+                if (onProgress) onProgress(successMsg);
             } catch (pyodideErr) {
                 // Fall back to micropip for pure Python packages
                 try {
-                    console.log(`📦 Falling back to micropip: ${pipName}`);
+                    const fallbackMsg = `📦 Trying micropip for ${pipName}...`;
+                    console.log(fallbackMsg);
+                    if (onProgress) onProgress(fallbackMsg);
+
                     await micropip.install(pipName);
                     installedPackages.add(importName);
-                    console.log(`✅ Installed ${pipName} (micropip)`);
+
+                    const successMsg = `✅ Installed ${pipName} (micropip)`;
+                    console.log(successMsg);
+                    if (onProgress) onProgress(successMsg);
                 } catch (micropipErr) {
-                    console.error(`❌ Failed to install ${pipName}:`, micropipErr);
+                    const failMsg = `❌ Failed to install ${pipName}`;
+                    console.error(failMsg, micropipErr);
+                    if (onProgress) onProgress(failMsg);
                     failed.push(pipName);
                 }
             }
@@ -239,14 +256,15 @@ const pyodideRunner = (function() {
      *
      * @param {string} code - Python code to execute
      * @param {Object} csvDataMap - Map of variable names to CSV strings (e.g., { df: "a,b\n1,2" })
+     * @param {function} onInstallProgress - Optional callback for package installation progress
      * @returns {Promise<{stdout: string, returnValue: any, figures: string[], error: string|null}>}
      */
-    async function run(code, csvDataMap) {
+    async function run(code, csvDataMap, onInstallProgress = null) {
         await ensureLoaded();
 
         // Extract imports and install packages
         const imports = extractImports(code);
-        await autoInstallPackages(imports);
+        await autoInstallPackages(imports, onInstallProgress);
 
         // Check if matplotlib is used
         const useMatplotlib = imports.includes('matplotlib') ||
@@ -256,8 +274,16 @@ const pyodideRunner = (function() {
 
         // Load matplotlib if needed
         if (useMatplotlib && !installedPackages.has('matplotlib')) {
+            const msg = '📦 Installing matplotlib...';
+            console.log(msg);
+            if (onInstallProgress) onInstallProgress(msg);
+
             await pyodide.loadPackage('matplotlib');
             installedPackages.add('matplotlib');
+
+            const successMsg = '✅ Installed matplotlib';
+            console.log(successMsg);
+            if (onInstallProgress) onInstallProgress(successMsg);
         }
 
         // Prepare the execution environment
