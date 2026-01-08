@@ -1978,6 +1978,25 @@ class Canvas {
     }
 
     /**
+     * Update output panel content without full re-render
+     * @param {string} nodeId - The node ID
+     * @param {Object} node - The updated node object
+     */
+    updateOutputPanelContent(nodeId, node) {
+        const panelWrapper = this.outputPanels.get(nodeId);
+        if (!panelWrapper) return;
+
+        const panelBody = panelWrapper.querySelector('.code-output-panel-body');
+        if (!panelBody) return;
+
+        const wrapped = wrapNode(node);
+        if (!wrapped.renderOutputPanel) return;
+
+        // Update just the body content
+        panelBody.innerHTML = wrapped.renderOutputPanel(this);
+    }
+
+    /**
      * Setup event listeners for output panel
      */
     setupOutputPanelEvents(panelWrapper, node, nodeWrapper) {

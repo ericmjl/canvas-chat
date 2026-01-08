@@ -2684,13 +2684,23 @@ df.head()
 
         const onInstallProgress = (msg) => {
             installMessages.push(msg);
-            // Update node with current progress and expand drawer on first message
-            this.graph.updateNode(nodeId, {
-                installProgress: [...installMessages],
-                outputExpanded: true  // Expand drawer to show installation progress
-            });
-            drawerOpenedForInstall = true;
-            this.canvas.renderNode(this.graph.getNode(nodeId));
+
+            // On first message, expand the drawer
+            if (!drawerOpenedForInstall) {
+                this.graph.updateNode(nodeId, {
+                    installProgress: [...installMessages],
+                    outputExpanded: true
+                });
+                this.canvas.renderNode(this.graph.getNode(nodeId));
+                drawerOpenedForInstall = true;
+            } else {
+                // For subsequent messages, just update the content without re-rendering
+                this.graph.updateNode(nodeId, {
+                    installProgress: [...installMessages]
+                });
+                const node = this.graph.getNode(nodeId);
+                this.canvas.updateOutputPanelContent(nodeId, node);
+            }
         };
 
         try {
