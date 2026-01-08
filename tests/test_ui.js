@@ -880,6 +880,147 @@ test('findMatchRegion: returns null for no match', () => {
 });
 
 // ============================================================
+// Drawer animation skip logic tests
+// ============================================================
+
+/**
+ * Simulates the shouldAnimate decision logic from canvas.js renderOutputPanel().
+ * Animation should only run on the first render of a drawer, not on re-renders.
+ *
+ * @param {boolean} outputExpanded - Whether the drawer is in expanded state
+ * @param {boolean} skipAnimation - Explicit flag to skip animation
+ * @param {boolean} hadExistingPanel - Whether a panel already existed before this render
+ * @returns {boolean} - Whether animation should run
+ */
+function shouldAnimateDrawer(outputExpanded, skipAnimation, hadExistingPanel) {
+    return outputExpanded && !skipAnimation && !hadExistingPanel;
+}
+
+test('Drawer animation: animates on first render when expanded', () => {
+    const result = shouldAnimateDrawer(
+        true,   // outputExpanded
+        false,  // skipAnimation
+        false   // hadExistingPanel (first render)
+    );
+    assertTrue(result, 'Should animate on first render when expanded');
+});
+
+test('Drawer animation: skips animation when collapsed', () => {
+    const result = shouldAnimateDrawer(
+        false,  // outputExpanded (collapsed)
+        false,  // skipAnimation
+        false   // hadExistingPanel
+    );
+    assertFalse(result, 'Should not animate when drawer is collapsed');
+});
+
+test('Drawer animation: skips animation when skipAnimation is true', () => {
+    const result = shouldAnimateDrawer(
+        true,   // outputExpanded
+        true,   // skipAnimation (explicit skip)
+        false   // hadExistingPanel
+    );
+    assertFalse(result, 'Should not animate when skipAnimation is explicitly true');
+});
+
+test('Drawer animation: skips animation when re-rendering existing panel', () => {
+    const result = shouldAnimateDrawer(
+        true,   // outputExpanded
+        false,  // skipAnimation
+        true    // hadExistingPanel (re-render)
+    );
+    assertFalse(result, 'Should not animate when replacing an existing panel');
+});
+
+test('Drawer animation: skips when both skipAnimation and hadExistingPanel are true', () => {
+    const result = shouldAnimateDrawer(
+        true,   // outputExpanded
+        true,   // skipAnimation
+        true    // hadExistingPanel
+    );
+    assertFalse(result, 'Should not animate when both skip flags are true');
+});
+
+test('Drawer animation: skips when collapsed even if first render', () => {
+    const result = shouldAnimateDrawer(
+        false,  // outputExpanded (collapsed)
+        false,  // skipAnimation
+        false   // hadExistingPanel (first render)
+    );
+    assertFalse(result, 'Should not animate collapsed drawer even on first render');
+});
+
+/**
+ * Simulates the drawer render flow during package installation.
+ * Tests the sequence of calls and animation decisions.
+ */
+test('Drawer animation: installation flow - first message animates, subsequent do not', () => {
+    // Simulate the outputPanels Map
+    const outputPanels = new Map();
+
+    // Track animation calls
+    const animationCalls = [];
+
+    // Simulate renderOutputPanel logic
+    function simulateRenderOutputPanel(nodeId, outputExpanded, skipAnimation) {
+        const existingPanel = outputPanels.get(nodeId);
+        const hadExistingPanel = !!existingPanel;
+
+        // Remove existing if present (simulated)
+        if (existingPanel) {
+            outputPanels.delete(nodeId);
+        }
+
+        // Create new panel
+        outputPanels.set(nodeId, { id: nodeId });
+
+        // Decide whether to animate
+        const shouldAnimate = outputExpanded && !skipAnimation && !hadExistingPanel;
+        animationCalls.push({ nodeId, shouldAnimate, hadExistingPanel });
+
+        return shouldAnimate;
+    }
+
+    // First progress message - creates drawer, should animate
+    const firstRender = simulateRenderOutputPanel('node-1', true, false);
+    assertTrue(firstRender, 'First render should animate');
+
+    // Second progress message - re-renders, should NOT animate
+    const secondRender = simulateRenderOutputPanel('node-1', true, false);
+    assertFalse(secondRender, 'Second render should not animate (existing panel)');
+
+    // Third progress message - re-renders, should NOT animate
+    const thirdRender = simulateRenderOutputPanel('node-1', true, false);
+    assertFalse(thirdRender, 'Third render should not animate (existing panel)');
+
+    // Verify animation was only called once
+    const animatedCount = animationCalls.filter(c => c.shouldAnimate).length;
+    assertEqual(animatedCount, 1);
+});
+
+test('Drawer animation: different nodes animate independently', () => {
+    const outputPanels = new Map();
+
+    function simulateRenderOutputPanel(nodeId, outputExpanded) {
+        const hadExistingPanel = outputPanels.has(nodeId);
+        outputPanels.set(nodeId, { id: nodeId });
+        return outputExpanded && !hadExistingPanel;
+    }
+
+    // First node, first render - animates
+    assertTrue(simulateRenderOutputPanel('node-1', true));
+
+    // Second node, first render - animates (different node)
+    assertTrue(simulateRenderOutputPanel('node-2', true));
+
+    // First node, second render - does not animate
+    assertFalse(simulateRenderOutputPanel('node-1', true));
+
+    // Second node, second render - does not animate
+    assertFalse(simulateRenderOutputPanel('node-2', true));
+});
+
+// ============================================================
 // Summary
 // ============================================================
 
