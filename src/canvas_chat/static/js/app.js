@@ -1,342 +1,15 @@
 /**
  * Main application - ties together all modules
- */
-
-
-
-/**
- * Detect if content is a URL (used by handleNote to route to handleNoteFromUrl)
- * @param {string} content - The content to check
- * @returns {boolean} True if content is a URL
- */
-function isUrlContent(content) {
-    const urlPattern = /^https?:\/\/[^\s]+$/;
-    return urlPattern.test(content.trim());
-}
-
-/**
- * Extract URL from Reference node content (format: **[Title](url)**)
- * @param {string} content - The node content
- * @returns {string|null} The URL or null if not found
- */
-function extractUrlFromReferenceNode(content) {
-    // Match markdown link pattern: [text](url)
-    const match = content.match(/\[([^\]]+)\]\(([^)]+)\)/);
-    if (match && match[2]) {
-        return match[2];
-    }
-    return null;
-}
-
-/**
- * Format a technical error into a user-friendly message
- * @param {Error|string} error - The error to format
- * @returns {{ title: string, description: string, canRetry: boolean }}
- */
-function formatUserError(error) {
-    const errMsg = error?.message || String(error);
-    const errLower = errMsg.toLowerCase();
-
-    // Timeout errors
-    if (errLower.includes('timeout') || errLower.includes('etimedout') || errLower.includes('took too long')) {
-        return {
-            title: 'Request timed out',
-            description: 'The server is taking too long to respond. This may be due to high load.',
-            canRetry: true
-        };
-    }
-
-    // Authentication errors
-    if (errLower.includes('401') || errLower.includes('unauthorized') || errLower.includes('invalid api key')) {
-        return {
-            title: 'Authentication failed',
-            description: 'Your API key may be invalid or expired. Please check your settings.',
-            canRetry: false
-        };
-    }
-
-    // Rate limit errors
-    if (errLower.includes('429') || errLower.includes('rate limit') || errLower.includes('too many requests')) {
-        return {
-            title: 'Rate limit reached',
-            description: 'Too many requests. Please wait a moment before trying again.',
-            canRetry: true
-        };
-    }
-
-    // Server errors
-    if (errLower.includes('500') || errLower.includes('502') || errLower.includes('503') || errLower.includes('server error')) {
-        return {
-            title: 'Server error',
-            description: 'The server encountered an error. Please try again later.',
-            canRetry: true
-        };
-    }
-
-    // Network errors
-    if (errLower.includes('failed to fetch') || errLower.includes('network') || errLower.includes('connection')) {
-        return {
-            title: 'Network error',
-            description: 'Could not connect to the server. Please check your internet connection.',
-            canRetry: true
-        };
-    }
-
-    // Context length errors
-    if (errLower.includes('context length') || errLower.includes('too long') || errLower.includes('maximum context')) {
-        return {
-            title: 'Message too long',
-            description: 'The conversation is too long for this model. Try selecting fewer nodes.',
-            canRetry: false
-        };
-    }
-
-    // Default error
-    return {
-        title: 'Something went wrong',
-        description: errMsg || 'An unexpected error occurred. Please try again.',
-        canRetry: true
-    };
-}
-
-/**
- * Truncate text to a maximum length
- * @param {string} text - The text to truncate
- * @param {number} maxLength - Maximum length
- * @returns {string} Truncated text with ellipsis
- */
-function truncateText(text, maxLength) {
-    if (!text) return '';
-    if (text.length <= maxLength) return text;
-    return text.slice(0, maxLength - 1) + '…';
-}
-
-/**
- * Escape HTML special characters
- * @param {string} text - The text to escape
- * @returns {string} Escaped HTML
- */
-function escapeHtmlText(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-/**
- * Format a matrix node as a markdown table
- * @param {Object} matrixNode - The matrix node
- * @returns {string} Markdown table representation
- */
-function formatMatrixAsText(matrixNode) {
-    const { context, rowItems, colItems, cells } = matrixNode;
-
-    let text = `## ${context}\n\n`;
-
-    // Header row
-    text += '| |';
-    for (const colItem of colItems) {
-        text += ` ${colItem} |`;
-    }
-    text += '\n';
-
-    // Separator row
-    text += '|---|';
-    for (let c = 0; c < colItems.length; c++) {
-        text += '---|';
-    }
-    text += '\n';
-
-    // Data rows
-    for (let r = 0; r < rowItems.length; r++) {
-        text += `| ${rowItems[r]} |`;
-        for (let c = 0; c < colItems.length; c++) {
-            const cellKey = `${r}-${c}`;
-            const cell = cells[cellKey];
-            const content = cell && cell.content ? cell.content.replace(/\n/g, ' ').replace(/\|/g, '\\|') : '';
-            text += ` ${content} |`;
-        }
-        text += '\n';
-    }
-
-    return text;
-}
-
-/**
- * Build messages for LLM API from resolved context.
- * Handles multimodal content (images + text).
  *
- * When a user sends a message with image nodes in context, the images
- * should be combined with the user's text into a single multimodal message.
- *
- * @param {Array} contextMessages - Messages from graph.resolveContext()
- * @returns {Array} - Messages formatted for the LLM API
+ * Utility functions are in utils.js (loaded before this file):
+ * - isUrlContent, extractUrlFromReferenceNode
+ * - formatUserError, truncateText, escapeHtmlText
+ * - formatMatrixAsText, buildMessagesForApi
+ * - applySM2, isFlashcardDue, getDueFlashcards
+ * - resizeImage
  */
-function buildMessagesForApi(contextMessages) {
-    const result = [];
-    let pendingImages = [];  // Collect consecutive image messages
 
-    for (let i = 0; i < contextMessages.length; i++) {
-        const msg = contextMessages[i];
-
-        if (msg.imageData) {
-            // Collect image for potential merging
-            pendingImages.push({
-                type: 'image_url',
-                image_url: {
-                    url: `data:${msg.mimeType};base64,${msg.imageData}`
-                }
-            });
-        } else if (msg.content) {
-            // Text message - check if we should merge with pending images
-            if (pendingImages.length > 0 && msg.role === 'user') {
-                // Merge images with this text message
-                result.push({
-                    role: 'user',
-                    content: [
-                        ...pendingImages,
-                        { type: 'text', text: msg.content }
-                    ]
-                });
-                pendingImages = [];
-            } else {
-                // Flush any pending images as separate messages first
-                for (const imgPart of pendingImages) {
-                    result.push({
-                        role: 'user',
-                        content: [imgPart]
-                    });
-                }
-                pendingImages = [];
-
-                // Add text message
-                result.push({
-                    role: msg.role,
-                    content: msg.content
-                });
-            }
-        }
-    }
-
-    // Flush any remaining pending images
-    for (const imgPart of pendingImages) {
-        result.push({
-            role: 'user',
-            content: [imgPart]
-        });
-    }
-
-    return result;
-}
-
-/**
- * SM-2 Spaced Repetition Algorithm implementation.
- * quality: 0-2 = fail, 3 = hard, 4 = good, 5 = easy
- *
- * @param {Object} srs - Current SRS state {interval, easeFactor, repetitions, nextReviewDate, lastReviewDate}
- * @param {number} quality - Response quality (0-5)
- * @returns {Object} - New SRS state
- */
-function applySM2(srs, quality) {
-    const result = { ...srs };
-
-    if (quality < 3) {
-        // Failed: reset to beginning
-        result.repetitions = 0;
-        result.interval = 1;
-    } else {
-        // Passed: calculate new interval
-        if (result.repetitions === 0) {
-            result.interval = 1;
-        } else if (result.repetitions === 1) {
-            result.interval = 6;
-        } else {
-            result.interval = Math.round(result.interval * result.easeFactor);
-        }
-
-        // Update ease factor based on quality
-        result.easeFactor += (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-        result.easeFactor = Math.max(1.3, result.easeFactor);
-        result.repetitions++;
-    }
-
-    result.lastReviewDate = new Date().toISOString();
-    result.nextReviewDate = new Date(Date.now() + result.interval * 86400000).toISOString();
-
-    return result;
-}
-
-/**
- * Check if a flashcard is due for review.
- * A card is due if:
- * - It's a FLASHCARD node AND
- * - nextReviewDate is null (new card) OR
- * - nextReviewDate is in the past or now
- *
- * @param {Object} card - Node object
- * @returns {boolean} - Whether the card is due
- */
-function isFlashcardDue(card) {
-    if (card.type !== NodeType.FLASHCARD) return false;
-    if (!card.srs || !card.srs.nextReviewDate) return true; // New card
-    return new Date(card.srs.nextReviewDate) <= new Date();
-}
-
-/**
- * Filter an array of nodes to get only due flashcards.
- * Pure function for testing.
- *
- * @param {Array} nodes - Array of node objects
- * @returns {Array} - Array of flashcard nodes that are due for review
- */
-function getDueFlashcards(nodes) {
-    const now = Date.now();
-    return nodes
-        .filter(n => n.type === NodeType.FLASHCARD)
-        .filter(n => !n.srs?.nextReviewDate || new Date(n.srs.nextReviewDate) <= now);
-}
-
-/**
- * Resize an image file to max dimensions, returns base64 data URL.
- *
- * @param {File} file - The image file to resize
- * @param {number} maxDimension - Maximum width or height (default 2048)
- * @returns {Promise<string>} - The resized image as a data URL
- */
-async function resizeImage(file, maxDimension = 2048) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-            let { width, height } = img;
-
-            // Only resize if needed
-            if (width > maxDimension || height > maxDimension) {
-                const ratio = Math.min(maxDimension / width, maxDimension / height);
-                width = Math.round(width * ratio);
-                height = Math.round(height * ratio);
-            }
-
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-
-            // JPEG for photos (smaller), PNG if original was PNG (transparency)
-            const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-            const quality = outputType === 'image/jpeg' ? 0.85 : undefined;
-            const dataUrl = canvas.toDataURL(outputType, quality);
-
-            URL.revokeObjectURL(img.src);  // Clean up
-            resolve(dataUrl);
-        };
-        img.onerror = () => {
-            URL.revokeObjectURL(img.src);
-            reject(new Error('Failed to load image'));
-        };
-        img.src = URL.createObjectURL(file);
-    });
-}
+/* global FlashcardFeature, CommitteeFeature, MatrixFeature, FactcheckFeature, ResearchFeature, resizeImage */
 
 // Slash command definitions
 const SLASH_COMMANDS = [
@@ -669,10 +342,6 @@ class App {
         // Streaming state - Map of nodeId -> { abortController, context }
         this.streamingNodes = new Map();
 
-        // Matrix streaming state - Map of nodeId -> Map of cellKey -> AbortController
-        // Allows stopping all cell fills for a matrix node at once
-        this.streamingMatrixCells = new Map();
-
         // Retry contexts for error recovery
         this.retryContexts = new Map();  // nodeId -> { type, ...context }
 
@@ -681,6 +350,13 @@ class App {
 
         // Tag highlighting state
         this.highlightedTagColor = null;  // Currently highlighted tag color, or null if none
+
+        // Feature modules (initialized lazily)
+        this._flashcardFeature = null;
+        this._committeeFeature = null;
+        this._matrixFeature = null;
+        this._factcheckFeature = null;
+        this._researchFeature = null;
 
         // Undo/Redo manager
         this.undoManager = new UndoManager();
@@ -784,6 +460,98 @@ class App {
 
         // Show empty state if needed
         this.updateEmptyState();
+    }
+
+    /**
+     * Get the flashcard feature module (lazy initialization).
+     * @returns {FlashcardFeature}
+     */
+    get flashcardFeature() {
+        if (!this._flashcardFeature) {
+            this._flashcardFeature = new FlashcardFeature({
+                graph: this.graph,
+                canvas: this.canvas,
+                modelPicker: this.modelPicker,
+                saveSession: () => this.saveSession(),
+                updateEmptyState: () => this.updateEmptyState(),
+                showToast: (msg, type) => this.showToast(msg, type),
+                updateCollapseButtonForNode: (nodeId) => this.updateCollapseButtonForNode(nodeId)
+            });
+        }
+        return this._flashcardFeature;
+    }
+
+    /**
+     * Get the committee feature module (lazy initialization).
+     * @returns {CommitteeFeature}
+     */
+    get committeeFeature() {
+        if (!this._committeeFeature) {
+            this._committeeFeature = new CommitteeFeature({
+                graph: this.graph,
+                canvas: this.canvas,
+                modelPicker: this.modelPicker,
+                chatInput: this.chatInput,
+                saveSession: () => this.saveSession(),
+                updateEmptyState: () => this.updateEmptyState()
+            });
+        }
+        return this._committeeFeature;
+    }
+
+    /**
+     * Get the matrix feature module (lazy initialization).
+     * @returns {MatrixFeature}
+     */
+    get matrixFeature() {
+        if (!this._matrixFeature) {
+            this._matrixFeature = new MatrixFeature({
+                graph: this.graph,
+                canvas: this.canvas,
+                getModelPicker: () => this.modelPicker,
+                saveSession: () => this.saveSession(),
+                updateEmptyState: () => this.updateEmptyState(),
+                generateNodeSummary: (nodeId) => this.generateNodeSummary(nodeId),
+                pushUndo: (action) => this.undoManager.push(action)
+            });
+        }
+        return this._matrixFeature;
+    }
+
+    /**
+     * Get the factcheck feature module (lazy initialization).
+     * @returns {FactcheckFeature}
+     */
+    get factcheckFeature() {
+        if (!this._factcheckFeature) {
+            this._factcheckFeature = new FactcheckFeature({
+                graph: this.graph,
+                canvas: this.canvas,
+                getModelPicker: () => this.modelPicker,
+                saveSession: () => this.saveSession(),
+                buildLLMRequest: (params) => this.buildLLMRequest(params)
+            });
+        }
+        return this._factcheckFeature;
+    }
+
+    /**
+     * Get the research feature module (lazy initialization).
+     * @returns {ResearchFeature}
+     */
+    get researchFeature() {
+        if (!this._researchFeature) {
+            this._researchFeature = new ResearchFeature({
+                graph: this.graph,
+                canvas: this.canvas,
+                saveSession: () => this.saveSession(),
+                updateEmptyState: () => this.updateEmptyState(),
+                buildLLMRequest: (params) => this.buildLLMRequest(params),
+                generateNodeSummary: (nodeId) => this.generateNodeSummary(nodeId),
+                showSettingsModal: () => this.showSettingsModal()
+            });
+        }
+        return this._researchFeature;
     }
 
     async loadModels() {
@@ -893,6 +661,11 @@ class App {
         // Create CRDTGraph with automatic persistence
         console.log('%c[App] Using CRDT Graph mode', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(session.id, session);
+        this._flashcardFeature = null;  // Reset feature modules for new graph
+        this._committeeFeature = null;
+        this._matrixFeature = null;
+        this._factcheckFeature = null;
+        this._researchFeature = null;
         await this.graph.enablePersistence();
 
         // Render graph
@@ -963,6 +736,11 @@ class App {
 
             console.log('%c[App] Creating empty CRDT Graph for shared session', 'color: #2196F3; font-weight: bold');
             this.graph = new CRDTGraph(sessionId);
+            this._flashcardFeature = null;  // Reset feature modules for new graph
+            this._committeeFeature = null;
+            this._matrixFeature = null;
+            this._factcheckFeature = null;
+            this._researchFeature = null;
             await this.graph.enablePersistence();
 
             // Render empty graph (will populate via sync)
@@ -999,6 +777,11 @@ class App {
         // Create new CRDT Graph
         console.log('%c[App] Creating new session with CRDT Graph', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(sessionId);
+        this._flashcardFeature = null;  // Reset feature modules for new graph
+        this._committeeFeature = null;
+        this._matrixFeature = null;
+        this._factcheckFeature = null;
+        this._researchFeature = null;
         await this.graph.enablePersistence();
 
         this.canvas.clear();
@@ -1190,72 +973,70 @@ class App {
         // Matrix modal
         document.getElementById('matrix-close').addEventListener('click', () => {
             document.getElementById('matrix-modal').style.display = 'none';
-            this._matrixData = null;
+            this.matrixFeature._matrixData = null;
         });
         document.getElementById('matrix-cancel-btn').addEventListener('click', () => {
             document.getElementById('matrix-modal').style.display = 'none';
-            this._matrixData = null;
+            this.matrixFeature._matrixData = null;
         });
         document.getElementById('swap-axes-btn').addEventListener('click', () => {
-            this.swapMatrixAxes();
+            this.matrixFeature.swapMatrixAxes();
         });
         document.getElementById('matrix-create-btn').addEventListener('click', () => {
-            this.createMatrixNode();
+            this.matrixFeature.createMatrixNode();
         });
         document.getElementById('add-row-btn').addEventListener('click', () => {
-            this.addAxisItem('row-items');
+            this.matrixFeature.addAxisItem('row-items');
         });
         document.getElementById('add-col-btn').addEventListener('click', () => {
-            this.addAxisItem('col-items');
+            this.matrixFeature.addAxisItem('col-items');
         });
 
         // Edit matrix modal
         document.getElementById('edit-matrix-close').addEventListener('click', () => {
             document.getElementById('edit-matrix-modal').style.display = 'none';
-            this._editMatrixData = null;
+            this.matrixFeature._editMatrixData = null;
         });
         document.getElementById('edit-matrix-cancel-btn').addEventListener('click', () => {
             document.getElementById('edit-matrix-modal').style.display = 'none';
-            this._editMatrixData = null;
+            this.matrixFeature._editMatrixData = null;
         });
         document.getElementById('edit-matrix-save-btn').addEventListener('click', () => {
-            this.saveMatrixEdits();
+            this.matrixFeature.saveMatrixEdits();
         });
         document.getElementById('edit-swap-axes-btn').addEventListener('click', () => {
-            this.swapEditMatrixAxes();
+            this.matrixFeature.swapEditMatrixAxes();
         });
         document.getElementById('edit-add-row-btn').addEventListener('click', () => {
-            this.addAxisItem('edit-row-items');
+            this.matrixFeature.addAxisItem('edit-row-items');
         });
         document.getElementById('edit-add-col-btn').addEventListener('click', () => {
-            this.addAxisItem('edit-col-items');
+            this.matrixFeature.addAxisItem('edit-col-items');
         });
 
         // Committee modal
         document.getElementById('committee-close').addEventListener('click', () => {
-            document.getElementById('committee-modal').style.display = 'none';
-            this._committeeData = null;
+            this.committeeFeature.closeModal();
         });
         document.getElementById('committee-cancel-btn').addEventListener('click', () => {
-            document.getElementById('committee-modal').style.display = 'none';
-            this._committeeData = null;
+            this.committeeFeature.closeModal();
         });
         document.getElementById('committee-execute-btn').addEventListener('click', () => {
-            this.executeCommittee();
+            this.committeeFeature.executeCommittee();
         });
 
         // Factcheck modal
         document.getElementById('factcheck-close').addEventListener('click', () => {
-            this.closeFactcheckModal();
+            this.factcheckFeature.closeFactcheckModal();
         });
         document.getElementById('factcheck-cancel-btn').addEventListener('click', () => {
-            this.closeFactcheckModal();
+            this.factcheckFeature.closeFactcheckModal();
         });
         document.getElementById('factcheck-execute-btn').addEventListener('click', () => {
-            this.executeFactcheckFromModal();
+            this.factcheckFeature.executeFactcheckFromModal();
         });
         document.getElementById('factcheck-select-all').addEventListener('change', (e) => {
-            this.handleFactcheckSelectAll(e.target.checked);
+            this.factcheckFeature.handleFactcheckSelectAll(e.target.checked);
         });
 
         // Cell detail modal
@@ -1266,7 +1047,7 @@ class App {
             document.getElementById('cell-modal').style.display = 'none';
         });
         document.getElementById('cell-pin-btn').addEventListener('click', () => {
-            this.pinCellToCanvas();
+            this.matrixFeature.pinCellToCanvas();
         });
         document.getElementById('cell-copy-btn').addEventListener('click', async () => {
             const content = document.getElementById('cell-content').textContent;
@@ -1286,14 +1067,14 @@ class App {
         // Row/Column (slice) detail modal
         document.getElementById('slice-close').addEventListener('click', () => {
             document.getElementById('slice-modal').style.display = 'none';
-            this._currentSliceData = null;
+            this.matrixFeature._currentSliceData = null;
         });
         document.getElementById('slice-close-btn').addEventListener('click', () => {
             document.getElementById('slice-modal').style.display = 'none';
-            this._currentSliceData = null;
+            this.matrixFeature._currentSliceData = null;
         });
         document.getElementById('slice-pin-btn').addEventListener('click', () => {
-            this.pinSliceToCanvas();
+            this.matrixFeature.pinSliceToCanvas();
         });
         document.getElementById('slice-copy-btn').addEventListener('click', async () => {
             const content = document.getElementById('slice-content').textContent;
@@ -1747,150 +1528,7 @@ class App {
      * @param {string} context - Optional context to help refine the query (e.g., selected text)
      */
     async handleSearch(query, context = null) {
-        // Check which search provider to use
-        const hasExa = storage.hasExaApiKey();
-        const exaKey = hasExa ? storage.getExaApiKey() : null;
-        const provider = hasExa ? 'Exa' : 'DuckDuckGo';
-
-        // Get selected nodes for positioning
-        let parentIds = this.canvas.getSelectedNodeIds();
-        if (parentIds.length === 0) {
-            const leaves = this.graph.getLeafNodes();
-            if (leaves.length > 0) {
-                leaves.sort((a, b) => b.created_at - a.created_at);
-                parentIds = [leaves[0].id];
-            }
-        }
-
-        // Create search node with original query initially
-        const searchNode = createNode(NodeType.SEARCH, `Searching (${provider}): "${query}"`, {
-            position: this.graph.autoPosition(parentIds)
-        });
-
-        this.graph.addNode(searchNode);
-        this.canvas.renderNode(searchNode);
-
-        // Create edges from parents
-        for (const parentId of parentIds) {
-            const edge = createEdge(parentId, searchNode.id, EdgeType.REFERENCE);
-            this.graph.addEdge(edge);
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, searchNode.position);
-        }
-
-        this.canvas.clearSelection();
-        this.saveSession();
-        this.updateEmptyState();
-
-        // Smoothly pan to search node
-        this.canvas.centerOnAnimated(
-            searchNode.position.x + 160,
-            searchNode.position.y + 100,
-            300
-        );
-
-        try {
-            let effectiveQuery = query;
-
-            // If context is provided, use LLM to generate a better search query
-            if (context && context.trim()) {
-                this.canvas.updateNodeContent(searchNode.id, `Refining search query...`, true);
-
-                const refineResponse = await fetch('/api/refine-query', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.buildLLMRequest({
-                        user_query: query,
-                        context: context,
-                        command_type: 'search'
-                    }))
-                });
-
-                if (refineResponse.ok) {
-                    const refineData = await refineResponse.json();
-                    effectiveQuery = refineData.refined_query;
-                    // Update node to show what we're actually searching for
-                    this.canvas.updateNodeContent(searchNode.id, `Searching (${provider}): "${effectiveQuery}"`, true);
-                }
-            }
-
-            // Call appropriate search API based on provider
-            let response;
-            if (hasExa) {
-                response = await fetch('/api/exa/search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        query: effectiveQuery,
-                        api_key: exaKey,
-                        num_results: 5
-                    })
-                });
-            } else {
-                response = await fetch('/api/ddg/search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        query: effectiveQuery,
-                        max_results: 10
-                    })
-                });
-            }
-
-            if (!response.ok) {
-                throw new Error(`Search failed: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-
-            // Update search node with result count (show both original and effective query if different)
-            let searchContent;
-            if (effectiveQuery !== query) {
-                searchContent = `**Search (${provider}):** "${query}"\n*Searched for: "${effectiveQuery}"*\n\n*Found ${data.num_results} results*`;
-            } else {
-                searchContent = `**Search (${provider}):** "${query}"\n\n*Found ${data.num_results} results*`;
-            }
-
-            // Add one-time DDG tip for first-time users
-            if (!hasExa && !sessionStorage.getItem('ddg-tip-shown')) {
-                searchContent += '\n\n---\n*Tip: For richer search with content extraction, add an Exa API key in Settings.*';
-                sessionStorage.setItem('ddg-tip-shown', 'true');
-            }
-
-            this.canvas.updateNodeContent(searchNode.id, searchContent, false);
-            this.graph.updateNode(searchNode.id, { content: searchContent });
-
-            // Create reference nodes for each result
-            let offsetY = 0;
-            for (const result of data.results) {
-                const resultContent = `**[${result.title}](${result.url})**\n\n${result.snippet}${result.published_date ? `\n\n*${result.published_date}*` : ''}`;
-
-                const resultNode = createNode(NodeType.REFERENCE, resultContent, {
-                    position: {
-                        x: searchNode.position.x + 400,
-                        y: searchNode.position.y + offsetY
-                    }
-                });
-
-                this.graph.addNode(resultNode);
-                this.canvas.renderNode(resultNode);
-
-                // Edge from search to result
-                const edge = createEdge(searchNode.id, resultNode.id, EdgeType.SEARCH_RESULT);
-                this.graph.addEdge(edge);
-                this.canvas.renderEdge(edge, searchNode.position, resultNode.position);
-
-                offsetY += 200; // Space between result nodes
-            }
-
-            this.saveSession();
-
-        } catch (err) {
-            const errorContent = `**Search (${provider}):** "${query}"\n\n*Error: ${err.message}*`;
-            this.canvas.updateNodeContent(searchNode.id, errorContent, false);
-            this.graph.updateNode(searchNode.id, { content: errorContent });
-            this.saveSession();
-        }
+        return this.researchFeature.handleSearch(query, context);
     }
 
     /**
@@ -2707,154 +2345,7 @@ class App {
      * @param {string} context - Optional context to help refine the instructions (e.g., selected text)
      */
     async handleResearch(instructions, context = null) {
-        // Get Exa API key - research requires Exa (no fallback available)
-        const exaKey = storage.getExaApiKey();
-        if (!exaKey) {
-            alert('The /research command requires an Exa API key.\n\nPlease add your Exa key in Settings, or use /search for basic web search (works without Exa).');
-            this.showSettingsModal();
-            return;
-        }
-
-        // Get selected nodes for positioning
-        let parentIds = this.canvas.getSelectedNodeIds();
-        if (parentIds.length === 0) {
-            const leaves = this.graph.getLeafNodes();
-            if (leaves.length > 0) {
-                leaves.sort((a, b) => b.created_at - a.created_at);
-                parentIds = [leaves[0].id];
-            }
-        }
-
-        // Create research node with original instructions initially
-        const researchNode = createNode(NodeType.RESEARCH, `**Research:** ${instructions}\n\n*Starting research...*`, {
-            position: this.graph.autoPosition(parentIds),
-            width: 500  // Research nodes are wider for markdown reports
-        });
-
-        this.graph.addNode(researchNode);
-        this.canvas.renderNode(researchNode);
-
-        // Create edges from parents
-        for (const parentId of parentIds) {
-            const edge = createEdge(parentId, researchNode.id, EdgeType.REFERENCE);
-            this.graph.addEdge(edge);
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, researchNode.position);
-        }
-
-        this.canvas.clearSelection();
-        this.saveSession();
-        this.updateEmptyState();
-
-        // Smoothly pan to research node
-        this.canvas.centerOnAnimated(
-            researchNode.position.x + 250,
-            researchNode.position.y + 100,
-            300
-        );
-
-        try {
-            let effectiveInstructions = instructions;
-
-            // If context is provided, use LLM to generate better research instructions
-            if (context && context.trim()) {
-                this.canvas.updateNodeContent(researchNode.id, `**Research:** ${instructions}\n\n*Refining research instructions...*`, true);
-
-                const refineResponse = await fetch('/api/refine-query', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.buildLLMRequest({
-                        user_query: instructions,
-                        context: context,
-                        command_type: 'research'
-                    }))
-                });
-
-                if (refineResponse.ok) {
-                    const refineData = await refineResponse.json();
-                    effectiveInstructions = refineData.refined_query;
-                    // Update node to show what we're actually researching
-                    this.canvas.updateNodeContent(researchNode.id, `**Research:** ${instructions}\n*Researching: "${effectiveInstructions}"*\n\n*Starting research...*`, true);
-                }
-            }
-
-            // Call Exa Research API (SSE stream)
-            const response = await fetch('/api/exa/research', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    instructions: effectiveInstructions,
-                    api_key: exaKey,
-                    model: 'exa-research'
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Research failed: ${response.statusText}`);
-            }
-
-            // Parse SSE stream using shared utility
-            // Show both original and refined instructions if different
-            let reportHeader;
-            if (effectiveInstructions !== instructions) {
-                reportHeader = `**Research:** ${instructions}\n*Researching: "${effectiveInstructions}"*\n\n`;
-            } else {
-                reportHeader = `**Research:** ${instructions}\n\n`;
-            }
-            let reportContent = reportHeader;
-            let sources = [];
-
-            await SSE.readSSEStream(response, {
-                onEvent: (eventType, data) => {
-                    if (eventType === 'status') {
-                        const statusContent = `${reportHeader}*${data.trim()}*`;
-                        this.canvas.updateNodeContent(researchNode.id, statusContent, true);
-                    } else if (eventType === 'content') {
-                        // Add separator if we already have content beyond the header
-                        if (reportContent.length > reportHeader.length) {
-                            reportContent += '\n\n---\n\n';
-                        }
-                        reportContent += data;
-                        this.canvas.updateNodeContent(researchNode.id, reportContent, true);
-                        this.graph.updateNode(researchNode.id, { content: reportContent });
-                    } else if (eventType === 'sources') {
-                        try {
-                            sources = JSON.parse(data);
-                        } catch (e) {
-                            console.error('Failed to parse sources:', e);
-                        }
-                    }
-                },
-                onDone: () => {
-                    // Normalize the report content
-                    reportContent = SSE.normalizeText(reportContent);
-
-                    // Add sources to the report if available
-                    if (sources.length > 0) {
-                        reportContent += '\n\n---\n**Sources:**\n';
-                        for (const source of sources) {
-                            reportContent += `- [${source.title}](${source.url})\n`;
-                        }
-                    }
-                    this.canvas.updateNodeContent(researchNode.id, reportContent, false);
-                    this.graph.updateNode(researchNode.id, { content: reportContent });
-
-                    // Generate summary async (don't await)
-                    this.generateNodeSummary(researchNode.id);
-                },
-                onError: (err) => {
-                    throw err;
-                }
-            });
-
-            this.saveSession();
-
-        } catch (err) {
-            const errorContent = `**Research:** ${instructions}\n\n*Error: ${err.message}*`;
-            this.canvas.updateNodeContent(researchNode.id, errorContent, false);
-            this.graph.updateNode(researchNode.id, { content: errorContent });
-            this.saveSession();
-        }
+        return this.researchFeature.handleResearch(instructions, context);
     }
 
     /**
@@ -2863,1349 +2354,64 @@ class App {
      * @param {string} context - Optional context from selected nodes
      */
     async handleFactcheck(input, context = null) {
-        console.log('[Factcheck] Starting with input:', input, 'context:', context);
-
-        const model = this.modelPicker.value;
-        const apiKey = chat.getApiKeyForModel(model);
-
-        // Get parent node IDs for positioning
-        let parentIds = this.canvas.getSelectedNodeIds();
-        if (parentIds.length === 0) {
-            const leaves = this.graph.getLeafNodes();
-            if (leaves.length > 0) {
-                leaves.sort((a, b) => b.created_at - a.created_at);
-                parentIds = [leaves[0].id];
-            }
-        }
-
-        // Create a loading node immediately for feedback
-        const loadingNode = createNode(NodeType.FACTCHECK, '🔄 **Analyzing text for claims...**', {
-            position: this.graph.autoPosition(parentIds)
-        });
-        this.graph.addNode(loadingNode);
-        this.canvas.renderNode(loadingNode);
-
-        // Connect to parent nodes
-        for (const parentId of parentIds) {
-            const edge = createEdge(parentId, loadingNode.id, EdgeType.REFERENCE);
-            this.graph.addEdge(edge);
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, loadingNode.position);
-        }
-
-        this.canvas.clearSelection();
-        this.canvas.panToNodeAnimated(loadingNode.id);
-
-        try {
-            // If context provided but input is vague, refine it
-            let effectiveInput = input;
-            if (context && context.trim() && (!input || input.length < 20)) {
-                console.log('[Factcheck] Refining vague input with context');
-                this.canvas.updateNodeContent(loadingNode.id, '🔄 **Refining query...**', true);
-
-                const refineResponse = await fetch('/api/refine-query', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.buildLLMRequest({
-                        user_query: input || 'verify this',
-                        context: context,
-                        command_type: 'factcheck'
-                    }))
-                });
-                if (refineResponse.ok) {
-                    const refineData = await refineResponse.json();
-                    effectiveInput = refineData.refined_query;
-                    console.log('[Factcheck] Refined to:', effectiveInput);
-                } else {
-                    console.warn('[Factcheck] Refine failed, using context directly');
-                    effectiveInput = context;
-                }
-            }
-
-            // Use context as input if no direct input provided
-            if (!effectiveInput && context) {
-                effectiveInput = context;
-            }
-
-            console.log('[Factcheck] Final effectiveInput:', effectiveInput);
-            this.canvas.updateNodeContent(loadingNode.id, '🔄 **Extracting claims...**', true);
-
-            // Extract individual claims from input
-            const claims = await this.extractFactcheckClaims(effectiveInput, model, apiKey);
-
-            if (claims.length === 0) {
-                // No claims found - update loading node with error message
-                const errorContent = '**No verifiable claims found.**\n\nPlease provide specific factual statements to verify.';
-                this.canvas.updateNodeContent(loadingNode.id, errorContent, false);
-                this.graph.updateNode(loadingNode.id, { content: errorContent });
-                this.saveSession();
-                return;
-            }
-
-            if (claims.length > 5) {
-                // Too many claims - show modal for selection
-                // Store the loading node ID so we can reuse it after modal
-                this._factcheckData = {
-                    claims: claims,
-                    parentIds: parentIds,
-                    model: model,
-                    apiKey: apiKey,
-                    loadingNodeId: loadingNode.id
-                };
-                this.canvas.updateNodeContent(loadingNode.id, `🔄 **Found ${claims.length} claims.** Select which to verify...`, false);
-                this.showFactcheckModal(claims);
-                return;
-            }
-
-            // Proceed directly with all claims (≤5) - reuse the loading node
-            await this.executeFactcheck(claims, parentIds, model, apiKey, loadingNode.id);
-
-        } catch (err) {
-            console.error('Factcheck error:', err);
-            // Update loading node with error
-            const errorContent = `**Fact-check failed**\n\n*Error: ${err.message}*`;
-            this.canvas.updateNodeContent(loadingNode.id, errorContent, false);
-            this.graph.updateNode(loadingNode.id, { content: errorContent });
-            this.saveSession();
-        }
+        return this.factcheckFeature.handleFactcheck(input, context);
     }
 
-    /**
-     * Show the factcheck claim selection modal
-     * @param {string[]} claims - Array of extracted claims
-     */
-    showFactcheckModal(claims) {
-        const modal = document.getElementById('factcheck-modal');
-        const claimsList = document.getElementById('factcheck-claims-list');
-        const selectAll = document.getElementById('factcheck-select-all');
-
-        // Clear previous claims
-        claimsList.innerHTML = '';
-
-        // Populate claims list (first 5 pre-selected)
-        claims.forEach((claim, index) => {
-            const item = document.createElement('label');
-            item.className = 'factcheck-claim-item';
-            if (index < 5) {
-                item.classList.add('selected');
-            }
-
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = index;
-            checkbox.checked = index < 5;
-            checkbox.addEventListener('change', () => this.updateFactcheckSelection());
-
-            const textSpan = document.createElement('span');
-            textSpan.className = 'claim-text';
-            textSpan.textContent = claim;
-
-            item.appendChild(checkbox);
-            item.appendChild(textSpan);
-            claimsList.appendChild(item);
-
-            // Click on label toggles checkbox
-            item.addEventListener('click', (e) => {
-                if (e.target !== checkbox) {
-                    checkbox.checked = !checkbox.checked;
-                    checkbox.dispatchEvent(new Event('change'));
-                }
-            });
-        });
-
-        // Reset select all state
-        selectAll.checked = false;
-        selectAll.indeterminate = claims.length > 5;
-
-        // Update selection state
-        this.updateFactcheckSelection();
-
-        // Show modal
-        modal.style.display = 'flex';
-    }
+    // =========================================================================
+    // Committee Feature (delegated to CommitteeFeature module)
+    // =========================================================================
 
     /**
-     * Close the factcheck modal
-     * @param {boolean} [cancelled=true] - Whether the modal was cancelled (vs executed)
-     */
-    closeFactcheckModal(cancelled = true) {
-        const modal = document.getElementById('factcheck-modal');
-        modal.style.display = 'none';
-
-        // If cancelled and there's a loading node, remove it
-        if (cancelled && this._factcheckData?.loadingNodeId) {
-            const loadingNodeId = this._factcheckData.loadingNodeId;
-            this.canvas.removeNode(loadingNodeId);
-            this.graph.removeNode(loadingNodeId);
-            this.saveSession();
-        }
-
-        this._factcheckData = null;
-    }
-
-    /**
-     * Handle select all checkbox change
-     * @param {boolean} checked - Whether select all is checked
-     */
-    handleFactcheckSelectAll(checked) {
-        const checkboxes = document.querySelectorAll('#factcheck-claims-list input[type="checkbox"]');
-        checkboxes.forEach(cb => {
-            cb.checked = checked;
-        });
-        this.updateFactcheckSelection();
-    }
-
-    /**
-     * Update factcheck selection UI and validation
-     */
-    updateFactcheckSelection() {
-        const checkboxes = document.querySelectorAll('#factcheck-claims-list input[type="checkbox"]');
-        const selectAll = document.getElementById('factcheck-select-all');
-        const selectedClaims = [];
-
-        checkboxes.forEach((cb, index) => {
-            const item = cb.closest('.factcheck-claim-item');
-            if (cb.checked) {
-                selectedClaims.push(parseInt(cb.value));
-                item.classList.add('selected');
-            } else {
-                item.classList.remove('selected');
-            }
-        });
-
-        // Update select all state and label
-        const totalCount = checkboxes.length;
-        const selectedCount = selectedClaims.length;
-        selectAll.checked = selectedCount === totalCount;
-        selectAll.indeterminate = selectedCount > 0 && selectedCount < totalCount;
-
-        // Update the label text based on state
-        const labelText = selectAll.parentElement.querySelector('.checkbox-text');
-        if (labelText) {
-            labelText.textContent = selectedCount === totalCount ? 'Deselect All' : 'Select All';
-        }
-
-        // Update count display
-        const countEl = document.getElementById('factcheck-selection-count');
-        const isValid = selectedCount >= 1;
-
-        countEl.textContent = `${selectedCount} of ${totalCount} selected`;
-        countEl.classList.toggle('valid', isValid);
-        countEl.classList.toggle('invalid', !isValid);
-
-        // Show/hide limit warning (informational, not blocking)
-        const warningEl = document.getElementById('factcheck-limit-warning');
-        if (warningEl) {
-            warningEl.style.display = selectedCount > 5 ? 'inline' : 'none';
-        }
-
-        // Enable/disable execute button (only require at least 1 selected)
-        document.getElementById('factcheck-execute-btn').disabled = !isValid;
-    }
-
-    /**
-     * Execute factcheck from modal with selected claims
-     */
-    async executeFactcheckFromModal() {
-        if (!this._factcheckData) return;
-
-        const checkboxes = document.querySelectorAll('#factcheck-claims-list input[type="checkbox"]:checked');
-        const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.value));
-        const selectedClaims = selectedIndices.map(i => this._factcheckData.claims[i]);
-
-        // Store data before closing modal (close nullifies _factcheckData)
-        const { parentIds, model, apiKey, loadingNodeId } = this._factcheckData;
-
-        // Close modal (not cancelled - we're executing)
-        this.closeFactcheckModal(false);
-
-        // Execute with selected claims, reusing the loading node
-        await this.executeFactcheck(selectedClaims, parentIds, model, apiKey, loadingNodeId);
-    }
-
-    /**
-     * Execute factcheck for the given claims
-     * Creates a FACTCHECK node (or reuses existing) and verifies each claim in parallel
-     * @param {string[]} claims - Array of claims to verify
-     * @param {string[]} parentIds - Parent node IDs
-     * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
-     * @param {string} [existingNodeId] - Optional existing node ID to reuse
-     */
-    async executeFactcheck(claims, parentIds, model, apiKey, existingNodeId = null) {
-        // Create the claims data with initial state
-        const claimsData = claims.map((claim, index) => ({
-            text: claim,
-            status: 'checking', // checking | verified | partially_true | misleading | false | unverifiable | error
-            verdict: null,
-            explanation: null,
-            sources: []
-        }));
-
-        const nodeContent = this.buildFactcheckContent(claimsData);
-
-        let factcheckNode;
-        if (existingNodeId) {
-            // Reuse existing node
-            factcheckNode = this.graph.getNode(existingNodeId);
-            factcheckNode.claims = claimsData;
-            factcheckNode.content = nodeContent;
-            this.graph.updateNode(existingNodeId, { content: nodeContent, claims: claimsData });
-            this.canvas.renderNode(factcheckNode);
-        } else {
-            // Create new node
-            factcheckNode = createNode(NodeType.FACTCHECK, nodeContent, {
-                position: this.graph.autoPosition(parentIds),
-                claims: claimsData
-            });
-
-            this.graph.addNode(factcheckNode);
-            this.canvas.renderNode(factcheckNode);
-
-            // Connect to parent nodes
-            for (const parentId of parentIds) {
-                const edge = createEdge(parentId, factcheckNode.id, EdgeType.REFERENCE);
-                this.graph.addEdge(edge);
-                const parentNode = this.graph.getNode(parentId);
-                this.canvas.renderEdge(edge, parentNode.position, factcheckNode.position);
-            }
-
-            this.canvas.panToNodeAnimated(factcheckNode.id);
-        }
-
-        this.canvas.clearSelection();
-        this.saveSession();
-
-        // Verify each claim in parallel
-        const verificationPromises = claims.map((claim, index) =>
-            this.verifyClaim(factcheckNode.id, index, claim, model, apiKey)
-        );
-
-        await Promise.allSettled(verificationPromises);
-
-        // Final save after all verifications complete
-        this.saveSession();
-    }
-
-    /**
-     * Build the content string for a FACTCHECK node
-     * @param {Object[]} claimsData - Array of claim data objects
-     * @returns {string} - Formatted content for the node
-     */
-    buildFactcheckContent(claimsData) {
-        const lines = [`**FACTCHECK · ${claimsData.length} claim${claimsData.length !== 1 ? 's' : ''}**\n`];
-
-        claimsData.forEach((claim, index) => {
-            const badge = this.getVerdictBadge(claim.status);
-            lines.push(`${badge} **Claim ${index + 1}:** ${claim.text}`);
-
-            if (claim.status === 'checking') {
-                lines.push(`_Checking..._\n`);
-            } else if (claim.explanation) {
-                lines.push(`${claim.explanation}`);
-                if (claim.sources && claim.sources.length > 0) {
-                    lines.push(`**Sources:** ${claim.sources.map(s => `[${s.title}](${s.url})`).join(', ')}`);
-                }
-                lines.push('');
-            }
-        });
-
-        return lines.join('\n');
-    }
-
-    /**
-     * Get the emoji badge for a verdict status
-     * @param {string} status - The verdict status
-     * @returns {string} - Emoji badge
-     */
-    getVerdictBadge(status) {
-        const badges = {
-            'checking': '🔄',
-            'verified': '✅',
-            'partially_true': '⚠️',
-            'misleading': '🔶',
-            'false': '❌',
-            'unverifiable': '❓',
-            'error': '⚠️'
-        };
-        return badges[status] || '❓';
-    }
-
-    /**
-     * Verify a single claim using web search and LLM analysis
-     * @param {string} nodeId - The FACTCHECK node ID
-     * @param {number} claimIndex - Index of the claim in the claims array
-     * @param {string} claim - The claim text to verify
-     * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
-     */
-    async verifyClaim(nodeId, claimIndex, claim, model, apiKey) {
-        const node = this.graph.getNode(nodeId);
-        if (!node || !node.claims) return;
-
-        try {
-            // 1. Generate search queries for this claim
-            const queries = await this.generateFactcheckQueries(claim, model, apiKey);
-
-            // 2. Perform web searches
-            const hasExa = storage.hasExaApiKey();
-            const exaKey = hasExa ? storage.getExaApiKey() : null;
-
-            const searchResults = [];
-            for (const query of queries.slice(0, 3)) { // Max 3 queries per claim
-                try {
-                    let response;
-                    if (hasExa) {
-                        response = await fetch('/api/exa/search', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                query: query,
-                                api_key: exaKey,
-                                num_results: 3
-                            })
-                        });
-                    } else {
-                        response = await fetch('/api/ddg/search', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                query: query,
-                                max_results: 5
-                            })
-                        });
-                    }
-
-                    if (response.ok) {
-                        const data = await response.json();
-                        searchResults.push(...data.results);
-                    }
-                } catch (searchErr) {
-                    console.warn('Search query failed:', query, searchErr);
-                }
-            }
-
-            // Deduplicate results by URL
-            const uniqueResults = [];
-            const seenUrls = new Set();
-            for (const result of searchResults) {
-                if (!seenUrls.has(result.url)) {
-                    seenUrls.add(result.url);
-                    uniqueResults.push(result);
-                }
-            }
-
-            // 3. Analyze search results to produce verdict
-            const verdict = await this.analyzeClaimVerdict(claim, uniqueResults, model, apiKey);
-
-            // 4. Update the claim in the node
-            node.claims[claimIndex] = {
-                ...node.claims[claimIndex],
-                status: verdict.status,
-                verdict: verdict.verdict,
-                explanation: verdict.explanation,
-                sources: verdict.sources
-            };
-
-            // Update node data and re-render with protocol
-            const newContent = this.buildFactcheckContent(node.claims);
-            this.graph.updateNode(nodeId, { content: newContent, claims: node.claims });
-            this.canvas.renderNode(this.graph.getNode(nodeId));
-
-        } catch (err) {
-            console.error('Claim verification error:', err);
-
-            // Mark claim as error
-            node.claims[claimIndex] = {
-                ...node.claims[claimIndex],
-                status: 'error',
-                explanation: `Verification failed: ${err.message}`,
-                sources: []
-            };
-
-            const newContent = this.buildFactcheckContent(node.claims);
-            this.graph.updateNode(nodeId, { content: newContent, claims: node.claims });
-            this.canvas.renderNode(this.graph.getNode(nodeId));
-        }
-    }
-
-    /**
-     * Extract verifiable claims from input text using LLM
-     * @param {string} input - Text containing potential claims
-     * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
-     * @returns {Promise<string[]>} - Array of extracted claims (max 10)
-     */
-    async extractFactcheckClaims(input, model, apiKey) {
-        const systemPrompt = `You are a fact-checking assistant. Your task is to extract discrete, verifiable factual claims from the given text.
-
-Rules:
-1. Extract factual claims that can potentially be verified through research
-2. Each claim should be a single, standalone statement
-3. Rephrase fragments into complete, clear statements if needed
-4. Maximum 10 claims - prioritize the most significant ones
-5. Be inclusive - if something looks like a factual assertion, include it
-6. Political statements about countries' actions or positions ARE verifiable claims
-
-Respond with a JSON array of claim strings. Example:
-["The Eiffel Tower is 330 meters tall", "Paris is the capital of France"]
-
-If the input contains no factual content at all (e.g., just greetings or questions), respond with an empty array: []`;
-
-        console.log('[Factcheck] Extracting claims from:', input);
-
-        const response = await chat.sendMessageNonStreaming(
-            [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: input }
-            ],
-            model,
-            apiKey
-        );
-
-        console.log('[Factcheck] LLM response:', response);
-
-        try {
-            // Parse JSON from response
-            const jsonMatch = response.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-                const claims = JSON.parse(jsonMatch[0]);
-                console.log('[Factcheck] Parsed claims:', claims);
-                return claims.filter(c => typeof c === 'string' && c.trim().length > 0);
-            }
-            console.warn('[Factcheck] No JSON array found in response');
-            return [];
-        } catch (e) {
-            console.warn('[Factcheck] Failed to parse claims:', e);
-            return [];
-        }
-    }
-
-    /**
-     * Generate search queries to verify a claim
-     * @param {string} claim - The claim to verify
-     * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
-     * @returns {Promise<string[]>} - Array of search queries (2-3)
-     */
-    async generateFactcheckQueries(claim, model, apiKey) {
-        const systemPrompt = `You are a fact-checking assistant. Generate 2-3 search queries to verify the given claim.
-
-Guidelines:
-1. Create queries that would find authoritative sources (news, official documents, Wikipedia, etc.)
-2. Include the key entities and facts from the claim
-3. Vary query phrasing to find different perspectives
-4. Add keywords like "fact check", "true", or "false" if helpful
-
-Respond with a JSON array of query strings. Example:
-["Eiffel Tower height meters", "How tall is Eiffel Tower Wikipedia", "Eiffel Tower official dimensions"]`;
-
-        const response = await chat.sendMessageNonStreaming(
-            [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: claim }
-            ],
-            model,
-            apiKey
-        );
-
-        try {
-            const jsonMatch = response.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-                const queries = JSON.parse(jsonMatch[0]);
-                return queries.filter(q => typeof q === 'string' && q.trim().length > 0);
-            }
-            return [claim]; // Fallback to claim itself as query
-        } catch (e) {
-            console.warn('Failed to parse queries:', e);
-            return [claim];
-        }
-    }
-
-    /**
-     * Analyze search results to produce a verdict for a claim
-     * @param {string} claim - The claim being verified
-     * @param {Object[]} searchResults - Array of search results with title, url, snippet
-     * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
-     * @returns {Promise<Object>} - Verdict object with status, explanation, sources
-     */
-    async analyzeClaimVerdict(claim, searchResults, model, apiKey) {
-        if (searchResults.length === 0) {
-            return {
-                status: 'unverifiable',
-                verdict: 'UNVERIFIABLE',
-                explanation: 'No relevant sources found to verify this claim.',
-                sources: []
-            };
-        }
-
-        // Format search results for the prompt
-        const resultsText = searchResults.slice(0, 8).map((r, i) =>
-            `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet || ''}`
-        ).join('\n\n');
-
-        const systemPrompt = `You are a fact-checking assistant. Analyze the search results to verify the given claim.
-
-Your verdict must be one of:
-- VERIFIED: The claim is accurate and supported by reliable sources
-- PARTIALLY_TRUE: The claim is mostly correct but contains inaccuracies or missing context
-- MISLEADING: The claim is technically true but presented in a misleading way
-- FALSE: The claim is factually incorrect
-- UNVERIFIABLE: Cannot determine truth due to lack of reliable sources
-
-Respond in this exact JSON format:
-{
-  "verdict": "VERIFIED|PARTIALLY_TRUE|MISLEADING|FALSE|UNVERIFIABLE",
-  "explanation": "Brief explanation of why this verdict was reached (1-2 sentences)",
-  "sources": [
-    {"title": "Source title", "url": "https://example.com"}
-  ]
-}
-
-Include only the most relevant sources (max 3) that support your verdict.`;
-
-        const userPrompt = `CLAIM: ${claim}
-
-SEARCH RESULTS:
-${resultsText}`;
-
-        const response = await chat.sendMessageNonStreaming(
-            [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userPrompt }
-            ],
-            model,
-            apiKey
-        );
-
-        try {
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const result = JSON.parse(jsonMatch[0]);
-                const statusMap = {
-                    'VERIFIED': 'verified',
-                    'PARTIALLY_TRUE': 'partially_true',
-                    'MISLEADING': 'misleading',
-                    'FALSE': 'false',
-                    'UNVERIFIABLE': 'unverifiable'
-                };
-                return {
-                    status: statusMap[result.verdict] || 'unverifiable',
-                    verdict: result.verdict,
-                    explanation: result.explanation || 'No explanation provided.',
-                    sources: Array.isArray(result.sources) ? result.sources.slice(0, 3) : []
-                };
-            }
-            throw new Error('No JSON found in response');
-        } catch (e) {
-            console.warn('Failed to parse verdict:', e);
-            return {
-                status: 'unverifiable',
-                verdict: 'UNVERIFIABLE',
-                explanation: 'Failed to analyze search results.',
-                sources: []
-            };
-        }
-    }
-
-    /**
-     * Handle /committee slash command - show modal to configure LLM committee
+     * Handle /committee slash command - show modal to configure LLM committee.
+     * @param {string} question - The question to ask the committee
+     * @param {string|null} context - Optional context text
      */
     async handleCommittee(question, context = null) {
-        // Store data for the modal
-        this._committeeData = {
-            question: question,
-            context: context,
-            selectedModels: [],
-            chairmanModel: this.modelPicker.value,
-            includeReview: false
-        };
-
-        // Get the question textarea and populate it
-        const questionTextarea = document.getElementById('committee-question');
-        questionTextarea.value = question;
-
-        // Populate model checkboxes
-        const modelsGrid = document.getElementById('committee-models-grid');
-        modelsGrid.innerHTML = '';
-
-        // Get recently used models for pre-selection
-        const recentModels = storage.getRecentModels();
-        const currentModel = this.modelPicker.value;
-
-        // Get all available models from the model picker
-        const availableModels = Array.from(this.modelPicker.options).map(opt => ({
-            id: opt.value,
-            name: opt.textContent
-        }));
-
-        // Pre-select up to 3 models: current + 2 most recent (excluding current)
-        const preSelected = new Set();
-        preSelected.add(currentModel);
-        for (const modelId of recentModels) {
-            if (preSelected.size >= 3) break;
-            if (availableModels.some(m => m.id === modelId)) {
-                preSelected.add(modelId);
-            }
-        }
-
-        // Create checkboxes for each model
-        for (const model of availableModels) {
-            const item = document.createElement('label');
-            item.className = 'committee-model-item';
-            if (preSelected.has(model.id)) {
-                item.classList.add('selected');
-            }
-
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = model.id;
-            checkbox.checked = preSelected.has(model.id);
-            checkbox.addEventListener('change', () => this.updateCommitteeSelection());
-
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'model-name';
-            nameSpan.textContent = model.name;
-
-            item.appendChild(checkbox);
-            item.appendChild(nameSpan);
-            modelsGrid.appendChild(item);
-
-            // Click on label toggles checkbox
-            item.addEventListener('click', (e) => {
-                if (e.target !== checkbox) {
-                    checkbox.checked = !checkbox.checked;
-                    checkbox.dispatchEvent(new Event('change'));
-                }
-            });
-        }
-
-        // Populate chairman dropdown
-        const chairmanSelect = document.getElementById('committee-chairman');
-        chairmanSelect.innerHTML = '';
-        for (const model of availableModels) {
-            const option = document.createElement('option');
-            option.value = model.id;
-            option.textContent = model.name;
-            chairmanSelect.appendChild(option);
-        }
-        chairmanSelect.value = currentModel;
-
-        // Reset review checkbox
-        document.getElementById('committee-include-review').checked = false;
-
-        // Update selection state
-        this.updateCommitteeSelection();
-
-        // Show modal
-        document.getElementById('committee-modal').style.display = 'flex';
+        return this.committeeFeature.handleCommittee(question, context);
     }
 
     /**
-     * Update committee selection UI and validation
-     */
-    updateCommitteeSelection() {
-        const checkboxes = document.querySelectorAll('#committee-models-grid input[type="checkbox"]');
-        const selectedModels = [];
-
-        checkboxes.forEach(cb => {
-            const item = cb.closest('.committee-model-item');
-            if (cb.checked) {
-                selectedModels.push(cb.value);
-                item.classList.add('selected');
-            } else {
-                item.classList.remove('selected');
-            }
-        });
-
-        // Update count display
-        const countEl = document.getElementById('committee-models-count');
-        const count = selectedModels.length;
-        const isValid = count >= 2 && count <= 5;
-
-        countEl.textContent = `${count} selected (2-5 required)`;
-        countEl.classList.toggle('valid', isValid);
-        countEl.classList.toggle('invalid', !isValid);
-
-        // Enable/disable execute button
-        document.getElementById('committee-execute-btn').disabled = !isValid;
-
-        // Store selected models
-        if (this._committeeData) {
-            this._committeeData.selectedModels = selectedModels;
-        }
-    }
-
-    /**
-     * Execute the committee consultation
-     */
-    async executeCommittee() {
-        if (!this._committeeData) return;
-
-        const { question, context, selectedModels } = this._committeeData;
-        const chairmanModel = document.getElementById('committee-chairman').value;
-        const includeReview = document.getElementById('committee-include-review').checked;
-
-        // Close modal
-        document.getElementById('committee-modal').style.display = 'none';
-
-        // Track recently used models
-        for (const modelId of selectedModels) {
-            storage.addRecentModel(modelId);
-        }
-        storage.addRecentModel(chairmanModel);
-
-        // Get selected nodes for conversation context
-        const selectedIds = this.canvas.getSelectedNodeIds();
-
-        // Build conversation context from selected nodes
-        const messages = [];
-        if (selectedIds.length > 0) {
-            for (const id of selectedIds) {
-                const node = this.graph.getNode(id);
-                if (node && node.content) {
-                    const role = node.type === NodeType.HUMAN ? 'user' : 'assistant';
-                    messages.push({ role, content: node.content });
-                }
-            }
-        }
-
-        // Add the question as the final user message
-        messages.push({ role: 'user', content: question });
-
-        // Create human node for the question
-        const humanNode = createNode(NodeType.HUMAN, `/committee ${question}`, {
-            position: this.graph.autoPosition(selectedIds)
-        });
-        this.graph.addNode(humanNode);
-        this.canvas.renderNode(humanNode);
-
-        // Create edges from selected nodes
-        for (const parentId of selectedIds) {
-            const edge = createEdge(parentId, humanNode.id, EdgeType.REPLY);
-            this.graph.addEdge(edge);
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, humanNode.position);
-        }
-
-        // Calculate positions for opinion nodes (fan layout)
-        const basePos = humanNode.position;
-        const spacing = 380;
-        const verticalOffset = 200;
-        const totalWidth = (selectedModels.length - 1) * spacing;
-        const startX = basePos.x - totalWidth / 2;
-
-        // Create opinion nodes for each model
-        const opinionNodes = [];
-        const opinionNodeMap = {}; // index -> nodeId
-
-        for (let i = 0; i < selectedModels.length; i++) {
-            const modelId = selectedModels[i];
-            const modelName = this.getModelDisplayName(modelId);
-
-            const opinionNode = createNode(NodeType.OPINION, `*Waiting for ${modelName}...*`, {
-                position: {
-                    x: startX + i * spacing,
-                    y: basePos.y + verticalOffset
-                },
-                model: modelId
-            });
-
-            this.graph.addNode(opinionNode);
-            this.canvas.renderNode(opinionNode);
-
-            // Edge from human to opinion
-            const edge = createEdge(humanNode.id, opinionNode.id, EdgeType.OPINION);
-            this.graph.addEdge(edge);
-            this.canvas.renderEdge(edge, humanNode.position, opinionNode.position);
-
-            opinionNodes.push(opinionNode);
-            opinionNodeMap[i] = opinionNode.id;
-        }
-
-        // Create synthesis node (will be connected after opinions complete)
-        const synthesisY = basePos.y + verticalOffset * (includeReview ? 3 : 2);
-        const synthesisNode = createNode(NodeType.SYNTHESIS, '*Waiting for opinions...*', {
-            position: { x: basePos.x, y: synthesisY },
-            model: chairmanModel
-        });
-        this.graph.addNode(synthesisNode);
-        this.canvas.renderNode(synthesisNode);
-
-        // Review nodes (if enabled) - will be created when review starts
-        const reviewNodes = [];
-        const reviewNodeMap = {}; // reviewer_index -> nodeId
-
-        // Clear input and save
-        this.chatInput.value = '';
-        this.chatInput.style.height = 'auto';
-        this.canvas.clearSelection();
-        this.saveSession();
-        this.updateEmptyState();
-
-        // Pan to see the committee
-        this.canvas.centerOnAnimated(basePos.x, basePos.y + verticalOffset, 300);
-
-        // Collect API keys by provider for all models (uses canonical mapping from storage.js)
-        const apiKeys = storage.getApiKeysForModels([...selectedModels, chairmanModel]);
-
-        // Get base URL if configured
-        const baseUrl = storage.getBaseUrl() || null;
-
-        // Track accumulated content for each opinion/review
-        const opinionContents = {};
-        const reviewContents = {};
-        let synthesisContent = '';
-
-        // Create abort controller for this committee session
-        const abortController = new AbortController();
-
-        // Show stop buttons on all opinion nodes
-        for (const node of opinionNodes) {
-            this.canvas.showStopButton(node.id);
-        }
-
-        // Store streaming state for potential abort
-        this._activeCommittee = {
-            abortController,
-            opinionNodeIds: opinionNodes.map(n => n.id),
-            reviewNodeIds: [],
-            synthesisNodeId: synthesisNode.id
-        };
-
-        try {
-            const response = await fetch('/api/committee', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    question,
-                    context: messages,
-                    models: selectedModels,
-                    chairman_model: chairmanModel,
-                    api_keys: apiKeys,
-                    base_url: baseUrl,
-                    include_review: includeReview
-                }),
-                signal: abortController.signal
-            });
-
-            if (!response.ok) {
-                throw new Error(`Committee request failed: ${response.statusText}`);
-            }
-
-            // Process SSE stream
-            await SSE.readSSEStream(response, {
-                onEvent: (eventType, data) => {
-                    let parsed;
-                    try {
-                        parsed = JSON.parse(data);
-                    } catch {
-                        parsed = data;
-                    }
-
-                    if (eventType === 'opinion_start') {
-                        const nodeId = opinionNodeMap[parsed.index];
-                        const modelName = this.getModelDisplayName(parsed.model);
-                        opinionContents[parsed.index] = '';
-                        this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n*Thinking...*`, true);
-                        this.canvas.showStopButton(nodeId);
-
-                    } else if (eventType === 'opinion_chunk') {
-                        const nodeId = opinionNodeMap[parsed.index];
-                        opinionContents[parsed.index] = (opinionContents[parsed.index] || '') + parsed.content;
-                        const model = selectedModels[parsed.index];
-                        const modelName = this.getModelDisplayName(model);
-                        this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${opinionContents[parsed.index]}`, true);
-
-                    } else if (eventType === 'opinion_done') {
-                        const nodeId = opinionNodeMap[parsed.index];
-                        const model = selectedModels[parsed.index];
-                        const modelName = this.getModelDisplayName(model);
-                        const finalContent = `**${modelName}**\n\n${parsed.full_content}`;
-                        this.canvas.updateNodeContent(nodeId, finalContent, false);
-                        this.canvas.hideStopButton(nodeId);
-                        this.graph.updateNode(nodeId, { content: finalContent });
-
-                    } else if (eventType === 'review_start') {
-                        // Create review node for this reviewer
-                        const reviewerIndex = parsed.reviewer_index;
-                        const modelName = this.getModelDisplayName(parsed.model);
-
-                        // Position review nodes between opinions and synthesis
-                        const reviewY = basePos.y + verticalOffset * 2;
-                        const reviewNode = createNode(NodeType.REVIEW, `**${modelName} Review**\n\n*Reviewing other opinions...*`, {
-                            position: {
-                                x: startX + reviewerIndex * spacing,
-                                y: reviewY
-                            },
-                            model: parsed.model
-                        });
-
-                        this.graph.addNode(reviewNode);
-                        this.canvas.renderNode(reviewNode);
-                        reviewNodes.push(reviewNode);
-                        reviewNodeMap[reviewerIndex] = reviewNode.id;
-
-                        // Edge from opinion to its review
-                        const opinionNodeId = opinionNodeMap[reviewerIndex];
-                        const opinionNode = this.graph.getNode(opinionNodeId);
-                        const reviewEdge = createEdge(opinionNodeId, reviewNode.id, EdgeType.REVIEW);
-                        this.graph.addEdge(reviewEdge);
-                        this.canvas.renderEdge(reviewEdge, opinionNode.position, reviewNode.position);
-
-                        this.canvas.showStopButton(reviewNode.id);
-                        reviewContents[reviewerIndex] = '';
-
-                        if (this._activeCommittee) {
-                            this._activeCommittee.reviewNodeIds.push(reviewNode.id);
-                        }
-
-                    } else if (eventType === 'review_chunk') {
-                        const nodeId = reviewNodeMap[parsed.reviewer_index];
-                        if (nodeId) {
-                            reviewContents[parsed.reviewer_index] = (reviewContents[parsed.reviewer_index] || '') + parsed.content;
-                            const model = selectedModels[parsed.reviewer_index];
-                            const modelName = this.getModelDisplayName(model);
-                            this.canvas.updateNodeContent(nodeId, `**${modelName} Review**\n\n${reviewContents[parsed.reviewer_index]}`, true);
-                        }
-
-                    } else if (eventType === 'review_done') {
-                        const nodeId = reviewNodeMap[parsed.reviewer_index];
-                        if (nodeId) {
-                            const model = selectedModels[parsed.reviewer_index];
-                            const modelName = this.getModelDisplayName(model);
-                            const finalContent = `**${modelName} Review**\n\n${parsed.full_content}`;
-                            this.canvas.updateNodeContent(nodeId, finalContent, false);
-                            this.canvas.hideStopButton(nodeId);
-                            this.graph.updateNode(nodeId, { content: finalContent });
-                        }
-
-                    } else if (eventType === 'synthesis_start') {
-                        // Connect all opinion/review nodes to synthesis
-                        const sourceNodes = reviewNodes.length > 0 ? reviewNodes : opinionNodes;
-                        for (const node of sourceNodes) {
-                            const synthEdge = createEdge(node.id, synthesisNode.id, EdgeType.SYNTHESIS);
-                            this.graph.addEdge(synthEdge);
-                            this.canvas.renderEdge(synthEdge, node.position, synthesisNode.position);
-                        }
-
-                        const chairmanName = this.getModelDisplayName(parsed.model);
-                        synthesisContent = '';
-                        this.canvas.updateNodeContent(synthesisNode.id, `**Synthesis (${chairmanName})**\n\n*Synthesizing opinions...*`, true);
-                        this.canvas.showStopButton(synthesisNode.id);
-
-                    } else if (eventType === 'synthesis_chunk') {
-                        synthesisContent += parsed.content;
-                        const chairmanName = this.getModelDisplayName(chairmanModel);
-                        this.canvas.updateNodeContent(synthesisNode.id, `**Synthesis (${chairmanName})**\n\n${synthesisContent}`, true);
-
-                    } else if (eventType === 'synthesis_done') {
-                        const chairmanName = this.getModelDisplayName(chairmanModel);
-                        const finalContent = `**Synthesis (${chairmanName})**\n\n${parsed.full_content}`;
-                        this.canvas.updateNodeContent(synthesisNode.id, finalContent, false);
-                        this.canvas.hideStopButton(synthesisNode.id);
-                        this.graph.updateNode(synthesisNode.id, { content: finalContent });
-
-                    } else if (eventType === 'error') {
-                        console.error('Committee error:', parsed.message);
-                    }
-                },
-                onDone: () => {
-                    // Hide all stop buttons
-                    for (const nodeId of Object.values(opinionNodeMap)) {
-                        this.canvas.hideStopButton(nodeId);
-                    }
-                    for (const nodeId of Object.values(reviewNodeMap)) {
-                        this.canvas.hideStopButton(nodeId);
-                    }
-                    this.canvas.hideStopButton(synthesisNode.id);
-
-                    this._activeCommittee = null;
-                    this.saveSession();
-                },
-                onError: (err) => {
-                    console.error('Committee stream error:', err);
-                    this._activeCommittee = null;
-                }
-            });
-
-        } catch (err) {
-            if (err.name === 'AbortError') {
-                console.log('Committee request aborted');
-            } else {
-                console.error('Committee error:', err);
-                // Update synthesis node with error
-                this.canvas.updateNodeContent(synthesisNode.id, `**Error**\n\n${err.message}`, false);
-                this.canvas.hideStopButton(synthesisNode.id);
-            }
-            this._activeCommittee = null;
-            this.saveSession();
-        }
-    }
-
-    /**
-     * Get display name for a model ID
+     * Get display name for a model ID.
+     * @param {string} modelId - The model ID
+     * @returns {string} - Display name for the model
      */
     getModelDisplayName(modelId) {
-        const option = this.modelPicker.querySelector(`option[value="${modelId}"]`);
-        return option ? option.textContent : modelId.split('/').pop();
+        return this.committeeFeature.getModelDisplayName(modelId);
     }
+
+    // --- Matrix Feature Wrappers ---
+    // Matrix feature is implemented in matrix.js with MatrixFeature class
 
     async handleMatrix(matrixContext) {
-        // Get selected nodes
-        const selectedIds = this.canvas.getSelectedNodeIds();
-
-        console.log('handleMatrix called with context:', matrixContext);
-        console.log('Selected node IDs:', selectedIds);
-
-        if (selectedIds.length === 0) {
-            alert('Please select one or more nodes to provide context for the matrix.');
-            return;
-        }
-
-        const model = this.modelPicker.value;
-        const apiKey = chat.getApiKeyForModel(model);
-
-        // Clear previous data and show loading state
-        this._matrixData = null;
-        document.getElementById('row-items').innerHTML = '';
-        document.getElementById('col-items').innerHTML = '';
-        document.getElementById('row-count').textContent = '0 items';
-        document.getElementById('col-count').textContent = '0 items';
-        document.getElementById('matrix-warning').style.display = 'none';
-
-        // Show modal with loading indicator
-        const loadingModal = document.getElementById('matrix-modal');
-        console.log('Matrix modal element:', loadingModal);
-        document.getElementById('matrix-context').value = matrixContext;
-        document.getElementById('matrix-loading').style.display = 'flex';
-        document.getElementById('matrix-create-btn').disabled = true;
-        loadingModal.style.display = 'flex';
-        console.log('Modal should now be visible');
-
-        try {
-            // Gather content from all selected nodes
-            const contents = selectedIds.map(id => {
-                const node = this.graph.getNode(id);
-                return node ? node.content : '';
-            }).filter(c => c);
-
-            // Parse two lists from all context nodes
-            const result = await this.parseTwoLists(contents, matrixContext, model, apiKey);
-
-            const rowItems = result.rows;
-            const colItems = result.columns;
-
-            // Hide loading indicator
-            document.getElementById('matrix-loading').style.display = 'none';
-            document.getElementById('matrix-create-btn').disabled = false;
-
-            // Check for max items warning
-            const hasWarning = rowItems.length > 10 || colItems.length > 10;
-            document.getElementById('matrix-warning').style.display = hasWarning ? 'block' : 'none';
-
-            // Store parsed data for modal
-            this._matrixData = {
-                context: matrixContext,
-                contextNodeIds: selectedIds,
-                rowItems: rowItems.slice(0, 10),
-                colItems: colItems.slice(0, 10)
-            };
-
-            // Populate axis items in modal
-            this.populateAxisItems('row-items', this._matrixData.rowItems);
-            this.populateAxisItems('col-items', this._matrixData.colItems);
-
-            document.getElementById('row-count').textContent = `${this._matrixData.rowItems.length} items`;
-            document.getElementById('col-count').textContent = `${this._matrixData.colItems.length} items`;
-
-        } catch (err) {
-            document.getElementById('matrix-loading').style.display = 'none';
-            alert(`Failed to parse list items: ${err.message}`);
-            document.getElementById('matrix-modal').style.display = 'none';
-        }
+        return this.matrixFeature.handleMatrix(matrixContext);
     }
 
-    async parseTwoLists(contents, context, model, apiKey) {
-        const baseUrl = chat.getBaseUrlForModel(model);
-        const requestBody = {
-            contents,
-            context,
-            model,
-            api_key: apiKey
-        };
-
-        if (baseUrl) {
-            requestBody.base_url = baseUrl;
-        }
-
-        const response = await fetch('/api/parse-two-lists', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to parse lists: ${response.statusText}`);
-        }
-
-        return response.json();
+    async handleMatrixCellFill(nodeId, row, col, abortController = null) {
+        return this.matrixFeature.handleMatrixCellFill(nodeId, row, col, abortController);
     }
 
-    /**
-     * Get the data source and element IDs for a given axis container.
-     * Supports both create modal (row-items, col-items) and edit modal (edit-row-items, edit-col-items).
-     */
-    getAxisConfig(containerId) {
-        const isEdit = containerId.startsWith('edit-');
-        const isRow = containerId.includes('row');
-        const dataSource = isEdit ? this._editMatrixData : this._matrixData;
-        const countId = isEdit
-            ? (isRow ? 'edit-row-count' : 'edit-col-count')
-            : (isRow ? 'row-count' : 'col-count');
-        const items = dataSource ? (isRow ? dataSource.rowItems : dataSource.colItems) : null;
-        return { dataSource, items, countId, isRow };
+    handleMatrixCellView(nodeId, row, col) {
+        return this.matrixFeature.handleMatrixCellView(nodeId, row, col);
     }
 
-    populateAxisItems(containerId, items) {
-        const container = document.getElementById(containerId);
-        container.innerHTML = '';
-
-        items.forEach((item, index) => {
-            const li = document.createElement('li');
-            li.className = 'axis-item';
-            li.dataset.index = index;
-
-            li.innerHTML = `
-                <input type="text" class="axis-item-input" value="${this.escapeHtml(item)}" title="${this.escapeHtml(item)}">
-                <button class="axis-item-remove" title="Remove">×</button>
-            `;
-
-            // Edit handler - update data on change
-            li.querySelector('.axis-item-input').addEventListener('change', (e) => {
-                this.updateAxisItem(containerId, index, e.target.value);
-            });
-
-            // Remove button handler
-            li.querySelector('.axis-item-remove').addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.removeAxisItem(containerId, index);
-            });
-
-            container.appendChild(li);
-        });
+    async handleMatrixFillAll(nodeId) {
+        return this.matrixFeature.handleMatrixFillAll(nodeId);
     }
 
-    removeAxisItem(containerId, index) {
-        const { items, countId } = this.getAxisConfig(containerId);
-        if (!items) return;
-
-        items.splice(index, 1);
-        this.populateAxisItems(containerId, items);
-        document.getElementById(countId).textContent = `${items.length} items`;
+    handleMatrixEdit(nodeId) {
+        return this.matrixFeature.handleMatrixEdit(nodeId);
     }
 
-    updateAxisItem(containerId, index, newValue) {
-        const { items } = this.getAxisConfig(containerId);
-        if (!items || !newValue.trim()) return;
-
-        items[index] = newValue.trim();
+    handleMatrixIndexColResize(nodeId, width) {
+        return this.matrixFeature.handleMatrixIndexColResize(nodeId, width);
     }
 
-    addAxisItem(containerId) {
-        const { items, countId } = this.getAxisConfig(containerId);
-        if (!items) return;
-
-        if (items.length >= 10) {
-            alert('Maximum 10 items per axis');
-            return;
-        }
-
-        items.push('New item');
-        this.populateAxisItems(containerId, items);
-        document.getElementById(countId).textContent = `${items.length} items`;
-
-        // Focus the new item's input
-        const container = document.getElementById(containerId);
-        const lastInput = container.querySelector('.axis-item:last-child .axis-item-input');
-        if (lastInput) {
-            lastInput.focus();
-            lastInput.select();
-        }
+    handleMatrixRowExtract(nodeId, rowIndex) {
+        return this.matrixFeature.handleMatrixRowExtract(nodeId, rowIndex);
     }
 
-    swapMatrixAxes() {
-        // Swap row and column data
-        const temp = {
-            nodeId: this._matrixData.rowNodeId,
-            items: this._matrixData.rowItems
-        };
-
-        this._matrixData.rowNodeId = this._matrixData.colNodeId;
-        this._matrixData.rowItems = this._matrixData.colItems;
-        this._matrixData.colNodeId = temp.nodeId;
-        this._matrixData.colItems = temp.items;
-
-        // Re-populate UI
-        this.populateAxisItems('row-items', this._matrixData.rowItems);
-        this.populateAxisItems('col-items', this._matrixData.colItems);
-
-        document.getElementById('row-count').textContent = `${this._matrixData.rowItems.length} items`;
-        document.getElementById('col-count').textContent = `${this._matrixData.colItems.length} items`;
-    }
-
-    createMatrixNode() {
-        if (!this._matrixData) return;
-
-        const { context, contextNodeIds, rowItems, colItems } = this._matrixData;
-
-        if (rowItems.length === 0 || colItems.length === 0) {
-            alert('Both rows and columns must have at least one item');
-            return;
-        }
-
-        // Get context nodes for positioning
-        const contextNodes = contextNodeIds.map(id => this.graph.getNode(id)).filter(Boolean);
-
-        if (contextNodes.length === 0) {
-            alert('No valid context nodes found');
-            return;
-        }
-
-        // Position matrix to the right of all context nodes, centered vertically
-        const maxX = Math.max(...contextNodes.map(n => n.position.x));
-        const avgY = contextNodes.reduce((sum, n) => sum + n.position.y, 0) / contextNodes.length;
-        const position = {
-            x: maxX + 450,
-            y: avgY
-        };
-
-        // Create matrix node
-        const matrixNode = createMatrixNode(context, contextNodeIds, rowItems, colItems, { position });
-
-        this.graph.addNode(matrixNode);
-        this.canvas.renderNode(matrixNode);
-
-        // Create edges from all context nodes to the matrix
-        for (const contextNode of contextNodes) {
-            const edge = createEdge(contextNode.id, matrixNode.id, EdgeType.REPLY);
-            this.graph.addEdge(edge);
-            this.canvas.renderEdge(edge, contextNode.position, matrixNode.position);
-        }
-
-        // Close modal and clean up
-        document.getElementById('matrix-modal').style.display = 'none';
-        this._matrixData = null;
-
-        // Clear selection
-        this.canvas.clearSelection();
-
-        // Generate summary async (don't await)
-        this.generateNodeSummary(matrixNode.id);
-
-        this.saveSession();
-        this.updateEmptyState();
+    handleMatrixColExtract(nodeId, colIndex) {
+        return this.matrixFeature.handleMatrixColExtract(nodeId, colIndex);
     }
 
     truncate(text, maxLength) {
@@ -4214,500 +2420,6 @@ ${resultsText}`;
 
     escapeHtml(text) {
         return escapeHtmlText(text);
-    }
-
-    // --- Matrix Cell Handlers ---
-
-    /**
-     * Fill a single matrix cell with AI-generated content.
-     * @param {string} nodeId - Matrix node ID
-     * @param {number} row - Row index
-     * @param {number} col - Column index
-     * @param {AbortController} [abortController] - Optional abort controller for cancellation
-     */
-    async handleMatrixCellFill(nodeId, row, col, abortController = null) {
-        const matrixNode = this.graph.getNode(nodeId);
-        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
-
-        const model = this.modelPicker.value;
-        const apiKey = chat.getApiKeyForModel(model);
-        const baseUrl = chat.getBaseUrlForModel(model);
-
-        const rowItem = matrixNode.rowItems[row];
-        const colItem = matrixNode.colItems[col];
-        const context = matrixNode.context;
-
-        // Get DAG history for context
-        const messages = this.graph.resolveContext([nodeId]);
-
-        // Track this cell fill for stop button support
-        const cellKey = `${row}-${col}`;
-        const isStandaloneFill = !abortController;  // Not called from Fill All
-
-        if (isStandaloneFill) {
-            abortController = new AbortController();
-        }
-
-        // Get or create the cell controllers map for this matrix node
-        let cellControllers = this.streamingMatrixCells.get(nodeId);
-        if (!cellControllers) {
-            cellControllers = new Map();
-            this.streamingMatrixCells.set(nodeId, cellControllers);
-        }
-        cellControllers.set(cellKey, abortController);
-
-        // Show stop button when any cell is being filled
-        this.canvas.showStopButton(nodeId);
-
-        try {
-            const requestBody = {
-                row_item: rowItem,
-                col_item: colItem,
-                context: context,
-                messages: buildMessagesForApi(messages),
-                model,
-                api_key: apiKey
-            };
-
-            if (baseUrl) {
-                requestBody.base_url = baseUrl;
-            }
-
-            // Prepare fetch options with optional abort signal
-            const fetchOptions = {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            };
-
-            if (abortController) {
-                fetchOptions.signal = abortController.signal;
-            }
-
-            // Start streaming fill
-            const response = await fetch('/api/matrix/fill', fetchOptions);
-
-            if (!response.ok) {
-                throw new Error(`Failed to fill cell: ${response.statusText}`);
-            }
-
-            // Stream the response using shared SSE utility
-            let cellContent = '';
-            // Throttle state for streaming sync
-            let lastStreamSync = 0;
-            const streamSyncInterval = 50;  // Sync every 50ms during streaming
-
-            await SSE.streamSSEContent(response, {
-                onContent: (chunk, fullContent) => {
-                    cellContent = fullContent;
-                    this.canvas.updateMatrixCell(nodeId, row, col, cellContent, true);
-
-                    // Sync streaming content to peers (throttled)
-                    const now = Date.now();
-                    if (now - lastStreamSync >= streamSyncInterval) {
-                        lastStreamSync = now;
-                        // Re-read node to get current state (avoid race condition with parallel fills)
-                        const currentNode = this.graph.getNode(nodeId);
-                        const currentCells = currentNode?.cells || {};
-                        const streamingCells = { ...currentCells, [cellKey]: { content: cellContent, filled: false } };
-                        this.graph.updateNode(nodeId, { cells: streamingCells });
-                    }
-                },
-                onDone: (normalizedContent) => {
-                    cellContent = normalizedContent;
-                    this.canvas.updateMatrixCell(nodeId, row, col, cellContent, false);
-                },
-                onError: (err) => {
-                    throw err;
-                }
-            });
-
-            // Update the graph data - re-read node to get current state
-            // (avoid race condition with parallel fills where stale matrixNode.cells
-            // would overwrite cells filled by concurrent operations)
-            const currentNode = this.graph.getNode(nodeId);
-            const currentCells = currentNode?.cells || {};
-            const oldCell = currentCells[cellKey] ? { ...currentCells[cellKey] } : { content: null, filled: false };
-            const newCell = { content: cellContent, filled: true };
-            const updatedCells = { ...currentCells, [cellKey]: newCell };
-            this.graph.updateNode(nodeId, { cells: updatedCells });
-
-            // Push undo action for cell fill
-            this.undoManager.push({
-                type: 'FILL_CELL',
-                nodeId,
-                row,
-                col,
-                oldCell,
-                newCell
-            });
-
-            this.saveSession();
-
-        } catch (err) {
-            // Don't log abort errors as failures
-            if (err.name === 'AbortError') {
-                console.log(`Cell fill aborted: (${row}, ${col})`);
-                return;
-            }
-            console.error('Failed to fill matrix cell:', err);
-            alert(`Failed to fill cell: ${err.message}`);
-        } finally {
-            // Clean up this cell from tracking
-            const controllers = this.streamingMatrixCells.get(nodeId);
-            if (controllers) {
-                controllers.delete(cellKey);
-                // If no more cells are being filled, hide stop button and clean up
-                if (controllers.size === 0) {
-                    this.streamingMatrixCells.delete(nodeId);
-                    this.canvas.hideStopButton(nodeId);
-                }
-            }
-        }
-    }
-
-    handleMatrixCellView(nodeId, row, col) {
-        const matrixNode = this.graph.getNode(nodeId);
-        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
-
-        const rowItem = matrixNode.rowItems[row];
-        const colItem = matrixNode.colItems[col];
-        const cellKey = `${row}-${col}`;
-        const cell = matrixNode.cells[cellKey];
-
-        if (!cell || !cell.content) return;
-
-        // Store current cell info for pinning
-        this._currentCellData = {
-            matrixId: nodeId,
-            row,
-            col,
-            rowItem,
-            colItem,
-            content: cell.content
-        };
-
-        // Populate and show modal
-        document.getElementById('cell-row-item').textContent = rowItem;
-        document.getElementById('cell-col-item').textContent = colItem;
-        document.getElementById('cell-content').textContent = cell.content;
-        document.getElementById('cell-modal').style.display = 'flex';
-    }
-
-    async handleMatrixFillAll(nodeId) {
-        const matrixNode = this.graph.getNode(nodeId);
-        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
-
-        const { rowItems, colItems, cells } = matrixNode;
-
-        // Find all empty cells
-        const emptyCells = [];
-        for (let r = 0; r < rowItems.length; r++) {
-            for (let c = 0; c < colItems.length; c++) {
-                const cellKey = `${r}-${c}`;
-                const cell = cells[cellKey];
-                if (!cell || !cell.filled) {
-                    emptyCells.push({ row: r, col: c });
-                }
-            }
-        }
-
-        if (emptyCells.length === 0) {
-            // All cells filled - no action needed, button tooltip already indicates this
-            return;
-        }
-
-        // Fill all cells in parallel - each cell handles its own tracking/cleanup
-        const fillPromises = emptyCells.map(({ row, col }) => {
-            return this.handleMatrixCellFill(nodeId, row, col).catch(err => {
-                if (err.name !== 'AbortError') {
-                    console.error(`Failed to fill cell (${row}, ${col}):`, err);
-                }
-            });
-        });
-
-        await Promise.all(fillPromises);
-    }
-
-    /**
-     * Handle editing matrix rows and columns
-     */
-    handleMatrixEdit(nodeId) {
-        const matrixNode = this.graph.getNode(nodeId);
-        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
-
-        // Store edit data
-        this._editMatrixData = {
-            nodeId,
-            rowItems: [...matrixNode.rowItems],
-            colItems: [...matrixNode.colItems]
-        };
-
-        // Populate the edit modal (reuses unified populateAxisItems)
-        this.populateAxisItems('edit-row-items', this._editMatrixData.rowItems);
-        this.populateAxisItems('edit-col-items', this._editMatrixData.colItems);
-        document.getElementById('edit-row-count').textContent = `${this._editMatrixData.rowItems.length} items`;
-        document.getElementById('edit-col-count').textContent = `${this._editMatrixData.colItems.length} items`;
-
-        document.getElementById('edit-matrix-modal').style.display = 'flex';
-    }
-
-    /**
-     * Handle index column resize in matrix nodes
-     * @param {string} nodeId - The matrix node ID
-     * @param {string} width - The new width as a CSS percentage (e.g., "30%")
-     */
-    handleMatrixIndexColResize(nodeId, width) {
-        const matrixNode = this.graph.getNode(nodeId);
-        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
-
-        // Update the node with the new index column width
-        this.graph.updateNode(nodeId, { indexColWidth: width });
-
-        // Save session to persist the change
-        this.saveSession();
-    }
-
-    swapEditMatrixAxes() {
-        if (!this._editMatrixData) return;
-
-        const temp = this._editMatrixData.rowItems;
-        this._editMatrixData.rowItems = this._editMatrixData.colItems;
-        this._editMatrixData.colItems = temp;
-
-        this.populateAxisItems('edit-row-items', this._editMatrixData.rowItems);
-        this.populateAxisItems('edit-col-items', this._editMatrixData.colItems);
-        document.getElementById('edit-row-count').textContent = `${this._editMatrixData.rowItems.length} items`;
-        document.getElementById('edit-col-count').textContent = `${this._editMatrixData.colItems.length} items`;
-    }
-
-    saveMatrixEdits() {
-        if (!this._editMatrixData) return;
-
-        const { nodeId, rowItems, colItems } = this._editMatrixData;
-
-        if (rowItems.length === 0 || colItems.length === 0) {
-            alert('Both rows and columns must have at least one item');
-            return;
-        }
-
-        const matrixNode = this.graph.getNode(nodeId);
-        if (!matrixNode) return;
-
-        // Update node data - need to handle cell mapping if items changed
-        const oldRowItems = matrixNode.rowItems;
-        const oldColItems = matrixNode.colItems;
-        const oldCells = matrixNode.cells;
-
-        // Remap cells based on item names (if items were reordered or some removed)
-        const newCells = {};
-        for (let r = 0; r < rowItems.length; r++) {
-            const oldRowIndex = oldRowItems.indexOf(rowItems[r]);
-            for (let c = 0; c < colItems.length; c++) {
-                const oldColIndex = oldColItems.indexOf(colItems[c]);
-                if (oldRowIndex !== -1 && oldColIndex !== -1) {
-                    const oldKey = `${oldRowIndex}-${oldColIndex}`;
-                    const newKey = `${r}-${c}`;
-                    if (oldCells[oldKey]) {
-                        newCells[newKey] = oldCells[oldKey];
-                    }
-                }
-            }
-        }
-
-        // Update the matrix node
-        this.graph.updateNode(nodeId, {
-            rowItems,
-            colItems,
-            cells: newCells
-        });
-
-        // Re-render the node
-        this.canvas.renderNode(this.graph.getNode(nodeId));
-
-        // Close modal
-        document.getElementById('edit-matrix-modal').style.display = 'none';
-        this._editMatrixData = null;
-
-        this.saveSession();
-    }
-
-    pinCellToCanvas() {
-        if (!this._currentCellData) return;
-
-        const { matrixId, row, col, rowItem, colItem, content } = this._currentCellData;
-        const matrixNode = this.graph.getNode(matrixId);
-        if (!matrixNode) return;
-
-        // Create cell node with title combining row and column names
-        const cellTitle = `${rowItem} x ${colItem}`;
-        const cellNode = createCellNode(matrixId, row, col, rowItem, colItem, content, {
-            position: {
-                x: matrixNode.position.x + (matrixNode.width || 500) + 50,
-                y: matrixNode.position.y + (row * 60)
-            },
-            title: cellTitle
-        });
-
-        this.graph.addNode(cellNode);
-        this.canvas.renderNode(cellNode);
-
-        // Create edge from matrix to cell (arrow points to the pinned cell)
-        const edge = createEdge(matrixId, cellNode.id, EdgeType.MATRIX_CELL);
-        this.graph.addEdge(edge);
-        this.canvas.renderEdge(edge, matrixNode.position, cellNode.position);
-
-        // Close modal
-        document.getElementById('cell-modal').style.display = 'none';
-        this._currentCellData = null;
-
-        // Select the new cell node
-        this.canvas.clearSelection();
-        this.canvas.selectNode(cellNode.id);
-
-        // Generate summary async (don't await)
-        this.generateNodeSummary(cellNode.id);
-
-        this.saveSession();
-        this.updateEmptyState();
-    }
-
-    /**
-     * Handle extracting a row from a matrix - show preview modal
-     */
-    handleMatrixRowExtract(nodeId, rowIndex) {
-        const matrixNode = this.graph.getNode(nodeId);
-        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
-
-        const { rowItems, colItems, cells } = matrixNode;
-        const rowItem = rowItems[rowIndex];
-
-        // Collect cell contents for this row
-        const cellContents = [];
-        for (let c = 0; c < colItems.length; c++) {
-            const cellKey = `${rowIndex}-${c}`;
-            const cell = cells[cellKey];
-            cellContents.push(cell && cell.content ? cell.content : null);
-        }
-
-        // Format content for display
-        let displayContent = '';
-        for (let c = 0; c < colItems.length; c++) {
-            const content = cellContents[c];
-            displayContent += `${colItems[c]}:\n${content || '(empty)'}\n\n`;
-        }
-
-        // Store slice data for pinning
-        this._currentSliceData = {
-            type: 'row',
-            matrixId: nodeId,
-            index: rowIndex,
-            item: rowItem,
-            otherAxisItems: colItems,
-            cellContents: cellContents
-        };
-
-        // Populate and show modal
-        document.getElementById('slice-title').textContent = 'Row Details';
-        document.getElementById('slice-label').textContent = 'Row:';
-        document.getElementById('slice-item').textContent = rowItem;
-        document.getElementById('slice-content').textContent = displayContent.trim();
-        document.getElementById('slice-modal').style.display = 'flex';
-    }
-
-    /**
-     * Handle extracting a column from a matrix - show preview modal
-     */
-    handleMatrixColExtract(nodeId, colIndex) {
-        const matrixNode = this.graph.getNode(nodeId);
-        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
-
-        const { rowItems, colItems, cells } = matrixNode;
-        const colItem = colItems[colIndex];
-
-        // Collect cell contents for this column
-        const cellContents = [];
-        for (let r = 0; r < rowItems.length; r++) {
-            const cellKey = `${r}-${colIndex}`;
-            const cell = cells[cellKey];
-            cellContents.push(cell && cell.content ? cell.content : null);
-        }
-
-        // Format content for display
-        let displayContent = '';
-        for (let r = 0; r < rowItems.length; r++) {
-            const content = cellContents[r];
-            displayContent += `${rowItems[r]}:\n${content || '(empty)'}\n\n`;
-        }
-
-        // Store slice data for pinning
-        this._currentSliceData = {
-            type: 'column',
-            matrixId: nodeId,
-            index: colIndex,
-            item: colItem,
-            otherAxisItems: rowItems,
-            cellContents: cellContents
-        };
-
-        // Populate and show modal
-        document.getElementById('slice-title').textContent = 'Column Details';
-        document.getElementById('slice-label').textContent = 'Column:';
-        document.getElementById('slice-item').textContent = colItem;
-        document.getElementById('slice-content').textContent = displayContent.trim();
-        document.getElementById('slice-modal').style.display = 'flex';
-    }
-
-    /**
-     * Pin the currently viewed row/column slice to the canvas
-     */
-    pinSliceToCanvas() {
-        if (!this._currentSliceData) return;
-
-        const { type, matrixId, index, item, otherAxisItems, cellContents } = this._currentSliceData;
-        const matrixNode = this.graph.getNode(matrixId);
-        if (!matrixNode) return;
-
-        let sliceNode;
-        if (type === 'row') {
-            sliceNode = createRowNode(matrixId, index, item, otherAxisItems, cellContents, {
-                position: {
-                    x: matrixNode.position.x + (matrixNode.width || 500) + 50,
-                    y: matrixNode.position.y + (index * 60)
-                },
-                title: item
-            });
-        } else {
-            sliceNode = createColumnNode(matrixId, index, item, otherAxisItems, cellContents, {
-                position: {
-                    x: matrixNode.position.x + (matrixNode.width || 500) + 50,
-                    y: matrixNode.position.y + (index * 60)
-                },
-                title: item
-            });
-        }
-
-        this.graph.addNode(sliceNode);
-        this.canvas.renderNode(sliceNode);
-
-        // Create edge from matrix to slice node
-        const edge = createEdge(matrixId, sliceNode.id, EdgeType.MATRIX_CELL);
-        this.graph.addEdge(edge);
-        this.canvas.renderEdge(edge, matrixNode.position, sliceNode.position);
-
-        // Close modal
-        document.getElementById('slice-modal').style.display = 'none';
-        this._currentSliceData = null;
-
-        // Select the new node
-        this.canvas.clearSelection();
-        this.canvas.selectNode(sliceNode.id);
-
-        // Generate summary async
-        this.generateNodeSummary(sliceNode.id);
-
-        this.saveSession();
-        this.updateEmptyState();
     }
 
     handleAutoLayout() {
@@ -5408,7 +3120,7 @@ ${resultsText}`;
      */
     handleNodeStopGeneration(nodeId) {
         // Check if this is a matrix node with active cell fills
-        const matrixCellControllers = this.streamingMatrixCells.get(nodeId);
+        const matrixCellControllers = this.matrixFeature.streamingMatrixCells.get(nodeId);
         if (matrixCellControllers) {
             // Abort all active cell fills for this matrix
             for (const [cellKey, controller] of matrixCellControllers) {
@@ -5939,722 +3651,54 @@ ${resultsText}`;
         this.updateEmptyState();
     }
 
+    // =========================================================================
+    // Flashcard Feature (delegated to FlashcardFeature module)
+    // =========================================================================
+
     /**
-     * Handle creating flashcards from a content node
-     * Shows modal with generated flashcard candidates for user selection
+     * Handle creating flashcards from a content node.
      * @param {string} nodeId - ID of the source node
      */
     async handleCreateFlashcards(nodeId) {
-        const sourceNode = this.graph.getNode(nodeId);
-        if (!sourceNode) return;
-
-        const model = this.modelPicker.value;
-        const apiKey = chat.getApiKeyForModel(model);
-
-        if (!apiKey) {
-            alert('Please set an API key for the selected model in Settings.');
-            return;
-        }
-
-        // Get modal elements
-        const modal = document.getElementById('flashcard-generation-modal');
-        const statusEl = document.getElementById('flashcard-generation-status');
-        const candidatesEl = document.getElementById('flashcard-candidates');
-        const acceptBtn = document.getElementById('flashcard-accept-selected');
-        const cancelBtn = document.getElementById('flashcard-cancel');
-        const closeBtn = document.getElementById('flashcard-generation-close');
-
-        // Reset modal state
-        statusEl.textContent = 'Generating flashcards...';
-        statusEl.style.display = 'block';
-        candidatesEl.innerHTML = '';
-        acceptBtn.disabled = true;
-
-        // Show modal
-        modal.style.display = 'flex';
-
-        // Close handlers
-        const closeModal = () => {
-            modal.style.display = 'none';
-        };
-
-        // Remove previous handlers to avoid duplicates
-        const newCloseBtn = closeBtn.cloneNode(true);
-        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-        const newCancelBtn = cancelBtn.cloneNode(true);
-        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-        const newAcceptBtn = acceptBtn.cloneNode(true);
-        acceptBtn.parentNode.replaceChild(newAcceptBtn, acceptBtn);
-
-        newCloseBtn.addEventListener('click', closeModal);
-        newCancelBtn.addEventListener('click', closeModal);
-
-        // Generate flashcards via LLM
-        const nodeContent = sourceNode.content || '';
-        const prompt = `Based on the following content, generate 3-5 flashcards for spaced repetition learning.
-Each flashcard should test a key concept, fact, or relationship.
-
-Return ONLY a JSON array with no additional text: [{"front": "question", "back": "concise answer"}, ...]
-
-Content:
-${nodeContent}`;
-
-        const messages = [{ role: 'user', content: prompt }];
-
-        try {
-            let fullResponse = '';
-
-            await new Promise((resolve, reject) => {
-                chat.sendMessage(
-                    messages,
-                    model,
-                    // onChunk
-                    (chunk) => {
-                        fullResponse += chunk;
-                    },
-                    // onDone
-                    () => {
-                        resolve();
-                    },
-                    // onError
-                    (err) => {
-                        reject(err);
-                    }
-                );
-            });
-
-            // Parse JSON response - extract JSON array from response
-            let flashcards;
-            try {
-                // Try to find JSON array in the response (handle markdown code blocks)
-                const jsonMatch = fullResponse.match(/\[[\s\S]*\]/);
-                if (jsonMatch) {
-                    flashcards = JSON.parse(jsonMatch[0]);
-                } else {
-                    throw new Error('No JSON array found in response');
-                }
-            } catch (parseError) {
-                statusEl.textContent = 'Error parsing flashcards. Please try again.';
-                console.error('Failed to parse flashcard JSON:', parseError, fullResponse);
-                return;
-            }
-
-            if (!Array.isArray(flashcards) || flashcards.length === 0) {
-                statusEl.textContent = 'No flashcards generated. Try with different content.';
-                return;
-            }
-
-            // Hide status and show candidates
-            statusEl.style.display = 'none';
-
-            // Render candidate cards with checkboxes
-            flashcards.forEach((card, idx) => {
-                const candidateEl = document.createElement('div');
-                candidateEl.className = 'flashcard-candidate';
-                candidateEl.innerHTML = `
-                    <input type="checkbox" id="flashcard-check-${idx}" checked data-index="${idx}">
-                    <div class="flashcard-candidate-content">
-                        <div class="flashcard-candidate-question">${this.canvas.escapeHtml(card.front || '')}</div>
-                        <div class="flashcard-candidate-answer">${this.canvas.escapeHtml(card.back || '')}</div>
-                    </div>
-                `;
-                candidatesEl.appendChild(candidateEl);
-            });
-
-            // Enable accept button and update based on checkbox state
-            newAcceptBtn.disabled = false;
-
-            const updateAcceptButton = () => {
-                const checkedCount = candidatesEl.querySelectorAll('input[type="checkbox"]:checked').length;
-                newAcceptBtn.disabled = checkedCount === 0;
-                newAcceptBtn.textContent = checkedCount > 0 ? `Accept Selected (${checkedCount})` : 'Accept Selected';
-            };
-
-            candidatesEl.addEventListener('change', updateAcceptButton);
-            updateAcceptButton();
-
-            // Accept handler
-            newAcceptBtn.addEventListener('click', () => {
-                const selectedCards = [];
-                candidatesEl.querySelectorAll('input[type="checkbox"]:checked').forEach((checkbox) => {
-                    const idx = parseInt(checkbox.dataset.index, 10);
-                    if (flashcards[idx]) {
-                        selectedCards.push(flashcards[idx]);
-                    }
-                });
-
-                if (selectedCards.length > 0) {
-                    this.acceptFlashcards(selectedCards, nodeId);
-                }
-
-                closeModal();
-            });
-
-        } catch (err) {
-            statusEl.textContent = `Error: ${err.message}`;
-            console.error('Flashcard generation error:', err);
-        }
+        return this.flashcardFeature.handleCreateFlashcards(nodeId);
     }
 
     /**
-     * Create flashcard nodes from selected candidates
-     * @param {Array} cards - Array of {front, back} objects
-     * @param {string} sourceNodeId - ID of the source node
-     */
-    acceptFlashcards(cards, sourceNodeId) {
-        const sourceNode = this.graph.getNode(sourceNodeId);
-        if (!sourceNode || cards.length === 0) return;
-
-        // Position flashcards below source node in a row
-        const startX = sourceNode.position.x;
-        const startY = sourceNode.position.y + (sourceNode.height || 200) + 60;
-        const cardWidth = 400;
-        const cardGap = 30;
-
-        const createdNodes = [];
-
-        cards.forEach((card, idx) => {
-            // Create flashcard node with SRS metadata
-            const flashcardNode = createNode(NodeType.FLASHCARD, card.front, {
-                position: {
-                    x: startX + idx * (cardWidth + cardGap),
-                    y: startY
-                },
-                back: card.back,
-                srs: {
-                    easeFactor: 2.5,      // SM-2 default
-                    interval: 0,           // Days until next review
-                    repetitions: 0,        // Number of successful reviews
-                    nextReviewDate: null   // Will be set on first review
-                }
-            });
-
-            this.graph.addNode(flashcardNode);
-
-            // Create edge from source to flashcard
-            const edge = createEdge(sourceNodeId, flashcardNode.id, EdgeType.GENERATES);
-            this.graph.addEdge(edge);
-
-            // Render
-            this.canvas.renderNode(flashcardNode);
-            this.canvas.renderEdge(edge, sourceNode.position, flashcardNode.position);
-
-            createdNodes.push(flashcardNode);
-        });
-
-        // Update collapse button for source node (now has flashcard children)
-        this.updateCollapseButtonForNode(sourceNodeId);
-
-        // Pan to first created flashcard
-        if (createdNodes.length > 0) {
-            this.canvas.centerOnAnimated(
-                createdNodes[0].position.x + 200,
-                createdNodes[0].position.y + 100,
-                300
-            );
-        }
-
-        this.saveSession();
-        this.updateEmptyState();
-    }
-
-    /**
-     * Show the flashcard review modal with due cards
+     * Show the flashcard review modal with due cards.
      * @param {string[]} dueCardIds - Array of flashcard node IDs to review
      */
     showReviewModal(dueCardIds) {
-        if (!dueCardIds || dueCardIds.length === 0) {
-            this.showToast('No cards due for review', 'info');
-            return;
-        }
-
-        // Store review state
-        this.reviewState = {
-            cardIds: dueCardIds,
-            currentIndex: 0,
-            currentQuality: null,   // Will be set by grading
-            hasSubmitted: false
-        };
-
-        // Set up event listeners (clone to remove previous)
-        // IMPORTANT: This must be called BEFORE getting element references
-        // because it replaces elements with clones
-        this.setupReviewModalListeners();
-
-        // Get modal elements AFTER setupReviewModalListeners has cloned them
-        const modal = document.getElementById('flashcard-review-modal');
-        const progressEl = document.getElementById('review-progress');
-        const answerInput = document.getElementById('review-answer-input');
-        const submitBtn = document.getElementById('review-submit');
-        const resultEl = document.getElementById('review-result');
-        const nextBtn = document.getElementById('review-next');
-
-        // Show first card
-        this.displayReviewCard(0);
-
-        // Reset state
-        answerInput.value = '';
-        answerInput.style.display = 'block';
-        submitBtn.style.display = 'block';
-        submitBtn.textContent = 'Submit Answer';
-        submitBtn.disabled = false;
-        resultEl.style.display = 'none';
-        nextBtn.style.display = 'none';
-
-        // Update progress
-        progressEl.textContent = `1/${dueCardIds.length}`;
-
-        // Show modal
-        modal.style.display = 'flex';
-        answerInput.focus();
+        return this.flashcardFeature.showReviewModal(dueCardIds);
     }
 
     /**
-     * Set up event listeners for review modal
-     */
-    setupReviewModalListeners() {
-        const modal = document.getElementById('flashcard-review-modal');
-        const closeBtn = document.getElementById('flashcard-review-close');
-        const submitBtn = document.getElementById('review-submit');
-        const nextBtn = document.getElementById('review-next');
-        const endBtn = document.getElementById('review-end');
-        const overrideCorrectBtn = document.getElementById('review-override-correct');
-        const overrideIncorrectBtn = document.getElementById('review-override-incorrect');
-
-        // Clone buttons to remove previous listeners
-        const newCloseBtn = closeBtn.cloneNode(true);
-        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-        const newSubmitBtn = submitBtn.cloneNode(true);
-        submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
-        const newNextBtn = nextBtn.cloneNode(true);
-        nextBtn.parentNode.replaceChild(newNextBtn, nextBtn);
-        const newEndBtn = endBtn.cloneNode(true);
-        endBtn.parentNode.replaceChild(newEndBtn, endBtn);
-        const newOverrideCorrect = overrideCorrectBtn.cloneNode(true);
-        overrideCorrectBtn.parentNode.replaceChild(newOverrideCorrect, overrideCorrectBtn);
-        const newOverrideIncorrect = overrideIncorrectBtn.cloneNode(true);
-        overrideIncorrectBtn.parentNode.replaceChild(newOverrideIncorrect, overrideIncorrectBtn);
-
-        // Add listeners
-        newCloseBtn.addEventListener('click', () => this.closeReviewModal());
-        newEndBtn.addEventListener('click', () => this.closeReviewModal());
-        newSubmitBtn.addEventListener('click', () => this.handleReviewSubmit());
-        newNextBtn.addEventListener('click', () => this.handleReviewNext());
-        newOverrideCorrect.addEventListener('click', () => this.handleReviewOverride(true));
-        newOverrideIncorrect.addEventListener('click', () => this.handleReviewOverride(false));
-
-        // Enter key submits
-        const answerInput = document.getElementById('review-answer-input');
-        const newAnswerInput = answerInput.cloneNode(true);
-        answerInput.parentNode.replaceChild(newAnswerInput, answerInput);
-        newAnswerInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (!this.reviewState.hasSubmitted) {
-                    this.handleReviewSubmit();
-                }
-            }
-        });
-    }
-
-    /**
-     * Display a specific card in the review modal
-     * @param {number} index - Index of card in reviewState.cardIds
-     */
-    displayReviewCard(index) {
-        const cardId = this.reviewState.cardIds[index];
-        const card = this.graph.getNode(cardId);
-
-        if (!card) return;
-
-        const questionEl = document.getElementById('review-question');
-        const progressEl = document.getElementById('review-progress');
-
-        questionEl.textContent = card.content || 'No question';
-        progressEl.textContent = `${index + 1}/${this.reviewState.cardIds.length}`;
-    }
-
-    /**
-     * Close the review modal
-     */
-    closeReviewModal() {
-        const modal = document.getElementById('flashcard-review-modal');
-        modal.style.display = 'none';
-        this.reviewState = null;
-    }
-
-    /**
-     * Handle submit button in review modal - grade the answer
-     */
-    async handleReviewSubmit() {
-        if (!this.reviewState || this.reviewState.hasSubmitted) return;
-
-        const answerInput = document.getElementById('review-answer-input');
-        const submitBtn = document.getElementById('review-submit');
-        const resultEl = document.getElementById('review-result');
-        const correctAnswerText = document.getElementById('review-correct-answer-text');
-        const verdictEl = document.getElementById('review-verdict');
-        const explanationEl = document.getElementById('review-explanation');
-        const nextBtn = document.getElementById('review-next');
-
-        const userAnswer = answerInput.value.trim();
-        if (!userAnswer) {
-            this.showToast('Please enter an answer', 'warning');
-            return;
-        }
-
-        const cardId = this.reviewState.cardIds[this.reviewState.currentIndex];
-        const card = this.graph.getNode(cardId);
-        if (!card) return;
-
-        // Show loading state
-        submitBtn.textContent = 'Grading...';
-        submitBtn.disabled = true;
-
-        try {
-            // Grade the answer using LLM
-            const grading = await this.gradeAnswer(card, userAnswer);
-
-            // Update display
-            correctAnswerText.textContent = card.back || 'No answer provided';
-
-            // Set verdict based on grading
-            verdictEl.className = 'review-verdict';
-            if (grading.correct) {
-                verdictEl.classList.add('correct');
-                verdictEl.textContent = '✓ Correct';
-                this.reviewState.currentQuality = 4; // Good
-            } else if (grading.partial) {
-                verdictEl.classList.add('partial');
-                verdictEl.textContent = '⚠ Partially Correct';
-                this.reviewState.currentQuality = 3; // Hard
-            } else {
-                verdictEl.classList.add('incorrect');
-                verdictEl.textContent = '✗ Incorrect';
-                this.reviewState.currentQuality = 1; // Fail
-            }
-
-            explanationEl.textContent = grading.explanation || '';
-
-            // Show result and hide input
-            this.reviewState.hasSubmitted = true;
-            answerInput.style.display = 'none';
-            submitBtn.style.display = 'none';
-            resultEl.style.display = 'block';
-            nextBtn.style.display = 'inline-block';
-
-            // Check if this is the last card
-            if (this.reviewState.currentIndex >= this.reviewState.cardIds.length - 1) {
-                nextBtn.textContent = 'Finish Review';
-            } else {
-                nextBtn.textContent = 'Next Card';
-            }
-
-        } catch (err) {
-            console.error('Grading error:', err);
-            // Fallback: show result without grading
-            correctAnswerText.textContent = card.back || 'No answer provided';
-            verdictEl.className = 'review-verdict';
-            verdictEl.textContent = 'Could not auto-grade - please self-assess';
-            explanationEl.textContent = '';
-            this.reviewState.currentQuality = 4; // Default to good
-
-            this.reviewState.hasSubmitted = true;
-            answerInput.style.display = 'none';
-            submitBtn.style.display = 'none';
-            resultEl.style.display = 'block';
-            nextBtn.style.display = 'inline-block';
-        }
-    }
-
-    /**
-     * Grade a user's answer using LLM
-     * @param {Object} card - Flashcard node
-     * @param {string} userAnswer - User's typed answer
-     * @returns {Promise<{correct: boolean, partial: boolean, explanation: string}>}
-     */
-    async gradeAnswer(card, userAnswer) {
-        const model = this.modelPicker.value;
-        const apiKey = chat.getApiKeyForModel(model);
-
-        if (!apiKey) {
-            throw new Error('No API key configured');
-        }
-
-        // Get strictness setting and build appropriate grading rules
-        const strictness = storage.getFlashcardStrictness();
-        let gradingRules;
-
-        if (strictness === 'lenient') {
-            gradingRules = `Rules (LENIENT grading - be generous):
-- "correct": true if the answer captures the general gist or idea, even with different wording, synonyms, or minor inaccuracies
-- "partial": true only if the answer is mostly off-topic but shows some related understanding
-- Accept paraphrasing, informal language, and answers that demonstrate understanding without exact terminology
-- When in doubt, mark as correct`;
-        } else if (strictness === 'strict') {
-            gradingRules = `Rules (STRICT grading - be demanding):
-- "correct": true only if the answer closely matches the expected answer with accurate terminology and complete coverage of key points
-- "partial": true if the answer shows understanding but is missing important details, uses imprecise language, or has minor errors
-- Require precise terminology and complete explanations
-- Penalize vague or incomplete answers`;
-        } else {
-            // Default: medium
-            gradingRules = `Rules (MEDIUM grading - balanced):
-- "correct": true if the answer captures the key concepts, even if wording differs
-- "partial": true if some key elements are correct but others are missing or wrong
-- Accept reasonable paraphrasing but require core concepts to be present
-- Minor terminology differences are OK, but major conceptual gaps are not`;
-        }
-
-        const prompt = `You are grading a flashcard answer. Compare the user's answer to the correct answer and determine if it's correct, partially correct, or incorrect.
-
-Question: ${card.content}
-Correct Answer: ${card.back}
-User's Answer: ${userAnswer}
-
-Respond with ONLY a JSON object (no markdown code blocks):
-{"correct": true/false, "partial": true/false, "explanation": "brief explanation"}
-
-${gradingRules}
-- Both "correct" and "partial" cannot be true at the same time
-- Keep explanation under 50 words`;
-
-        const messages = [{ role: 'user', content: prompt }];
-
-        return new Promise((resolve, reject) => {
-            let fullResponse = '';
-
-            chat.sendMessage(
-                messages,
-                model,
-                (chunk) => { fullResponse += chunk; },
-                () => {
-                    try {
-                        // Extract JSON from response
-                        const jsonMatch = fullResponse.match(/\{[\s\S]*\}/);
-                        if (jsonMatch) {
-                            const result = JSON.parse(jsonMatch[0]);
-                            resolve({
-                                correct: result.correct === true,
-                                partial: result.partial === true && result.correct !== true,
-                                explanation: result.explanation || ''
-                            });
-                        } else {
-                            reject(new Error('No JSON in response'));
-                        }
-                    } catch (e) {
-                        reject(e);
-                    }
-                },
-                (err) => { reject(err); }
-            );
-        });
-    }
-
-    /**
-     * Handle override button - user manually marks as correct/incorrect
-     * @param {boolean} wasCorrect - True if user says they knew it
-     */
-    handleReviewOverride(wasCorrect) {
-        if (!this.reviewState) return;
-
-        const verdictEl = document.getElementById('review-verdict');
-
-        // Update quality based on override
-        if (wasCorrect) {
-            this.reviewState.currentQuality = 4; // Good
-            verdictEl.className = 'review-verdict correct';
-            verdictEl.textContent = '✓ Marked as known';
-        } else {
-            this.reviewState.currentQuality = 1; // Fail
-            verdictEl.className = 'review-verdict incorrect';
-            verdictEl.textContent = '✗ Marked as unknown';
-        }
-    }
-
-    /**
-     * Handle Next button - apply SM-2 and show next card or finish
-     */
-    handleReviewNext() {
-        if (!this.reviewState) return;
-
-        // Apply SM-2 to current card
-        const cardId = this.reviewState.cardIds[this.reviewState.currentIndex];
-        const card = this.graph.getNode(cardId);
-
-        if (card) {
-            const quality = this.reviewState.currentQuality || 4;
-            const currentSrs = card.srs || {
-                interval: 0,
-                easeFactor: 2.5,
-                repetitions: 0,
-                nextReviewDate: null,
-                lastReviewDate: null
-            };
-
-            const newSrs = applySM2(currentSrs, quality);
-
-            // Update node
-            this.graph.updateNode(cardId, { srs: newSrs });
-
-            // Re-render the card to update status display
-            // Must re-fetch the node to get the updated reference
-            const updatedCard = this.graph.getNode(cardId);
-            this.canvas.renderNode(updatedCard);
-        }
-
-        // Move to next card or finish
-        this.reviewState.currentIndex++;
-
-        if (this.reviewState.currentIndex >= this.reviewState.cardIds.length) {
-            // Finished review - save count before closing modal (which sets reviewState to null)
-            const reviewedCount = this.reviewState.cardIds.length;
-            this.closeReviewModal();
-            this.saveSession();
-            this.showToast(`Reviewed ${reviewedCount} cards`, 'success');
-        } else {
-            // Show next card
-            this.reviewState.hasSubmitted = false;
-            this.reviewState.currentQuality = null;
-
-            const answerInput = document.getElementById('review-answer-input');
-            const submitBtn = document.getElementById('review-submit');
-            const resultEl = document.getElementById('review-result');
-            const nextBtn = document.getElementById('review-next');
-
-            // Reset input
-            answerInput.value = '';
-            answerInput.style.display = 'block';
-            submitBtn.style.display = 'block';
-            submitBtn.textContent = 'Submit Answer';
-            submitBtn.disabled = false;
-            resultEl.style.display = 'none';
-            nextBtn.style.display = 'none';
-
-            // Display next card
-            this.displayReviewCard(this.reviewState.currentIndex);
-            answerInput.focus();
-        }
-    }
-
-    /**
-     * Start a review session with all due flashcards
+     * Start a review session with all due flashcards.
      */
     startFlashcardReview() {
-        // Find all due flashcards
-        const dueCardIds = this.graph.nodes
-            .filter(node => isFlashcardDue(node))
-            .map(node => node.id);
-
-        if (dueCardIds.length === 0) {
-            this.showToast('No flashcards due for review', 'info');
-            return;
-        }
-
-        this.showReviewModal(dueCardIds);
+        return this.flashcardFeature.startFlashcardReview();
     }
 
     /**
-     * Review a single flashcard
+     * Review a single flashcard.
      * @param {string} cardId - Flashcard node ID
      */
     reviewSingleCard(cardId) {
-        const card = this.graph.getNode(cardId);
-        if (!card || card.type !== NodeType.FLASHCARD) return;
-
-        this.showReviewModal([cardId]);
+        return this.flashcardFeature.reviewSingleCard(cardId);
     }
 
     /**
-     * Handle flipping a flashcard to show/hide the answer
-     * Toggles a CSS class on the node to reveal the back of the card
+     * Handle flipping a flashcard to show/hide the answer.
      * @param {string} cardId - Flashcard node ID
      */
     handleFlipCard(cardId) {
-        const card = this.graph.getNode(cardId);
-        if (!card || card.type !== NodeType.FLASHCARD) return;
-
-        // Toggle the flipped state on the node element
-        const nodeWrapper = this.canvas.nodeElements.get(cardId);
-        if (nodeWrapper) {
-            const nodeDiv = nodeWrapper.querySelector('.node');
-            if (nodeDiv) {
-                nodeDiv.classList.toggle('flashcard-flipped');
-            }
-        }
+        return this.flashcardFeature.handleFlipCard(cardId);
     }
 
     /**
-     * Check for due flashcards and show toast notification if any
+     * Check for due flashcards and show toast notification if any.
      */
     checkDueFlashcardsOnLoad() {
-        const dueCards = getDueFlashcards(this.graph.getAllNodes());
-
-        if (dueCards.length > 0) {
-            const cardIds = dueCards.map(c => c.id);
-            this.showDueCardsToast(dueCards.length, cardIds);
-        }
-    }
-
-    /**
-     * Show a toast notification for due flashcards
-     * @param {number} count - Number of due cards
-     * @param {string[]} cardIds - Array of due card IDs
-     */
-    showDueCardsToast(count, cardIds) {
-        const toast = document.getElementById('flashcard-due-toast');
-        const messageEl = document.getElementById('due-toast-message');
-        const reviewBtn = document.getElementById('due-toast-review');
-        const laterBtn = document.getElementById('due-toast-later');
-
-        // Set message
-        const cardWord = count === 1 ? 'card' : 'cards';
-        messageEl.textContent = `You have ${count} ${cardWord} due for review`;
-
-        // Clone buttons to remove previous listeners
-        const newReviewBtn = reviewBtn.cloneNode(true);
-        reviewBtn.parentNode.replaceChild(newReviewBtn, reviewBtn);
-        const newLaterBtn = laterBtn.cloneNode(true);
-        laterBtn.parentNode.replaceChild(newLaterBtn, laterBtn);
-
-        // Add listeners
-        newReviewBtn.addEventListener('click', () => {
-            this.hideDueCardsToast();
-            this.showReviewModal(cardIds);
-        });
-
-        newLaterBtn.addEventListener('click', () => {
-            this.hideDueCardsToast();
-        });
-
-        // Show toast
-        toast.classList.remove('hiding');
-        toast.style.display = 'flex';
-
-        // Auto-dismiss after 10 seconds
-        this.dueToastTimeout = setTimeout(() => {
-            this.hideDueCardsToast();
-        }, 10000);
-    }
-
-    /**
-     * Hide the due cards toast notification
-     */
-    hideDueCardsToast() {
-        const toast = document.getElementById('flashcard-due-toast');
-
-        // Clear any pending timeout
-        if (this.dueToastTimeout) {
-            clearTimeout(this.dueToastTimeout);
-            this.dueToastTimeout = null;
-        }
-
-        // Animate out
-        toast.classList.add('hiding');
-        setTimeout(() => {
-            toast.style.display = 'none';
-            toast.classList.remove('hiding');
-        }, 300);
+        return this.flashcardFeature.checkDueFlashcardsOnLoad();
     }
 
     /**
@@ -8430,31 +5474,13 @@ ${gradingRules}
     }
 }
 
-// Export pure functions for testing
-window.formatUserError = formatUserError;
-window.buildMessagesForApi = buildMessagesForApi;
-window.isUrlContent = isUrlContent;
-window.extractUrlFromReferenceNode = extractUrlFromReferenceNode;
-window.truncateText = truncateText;
-window.escapeHtmlText = escapeHtmlText;
-window.formatMatrixAsText = formatMatrixAsText;
-window.applySM2 = applySM2;
-window.isFlashcardDue = isFlashcardDue;
-window.getDueFlashcards = getDueFlashcards;
+// Export classes for browser
+window.SlashCommandMenu = SlashCommandMenu;
+window.App = App;
 
 // CommonJS export for Node.js/testing
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        formatUserError,
-        buildMessagesForApi,
-        isUrlContent,
-        extractUrlFromReferenceNode,
-        truncateText,
-        escapeHtmlText,
-        formatMatrixAsText,
-        applySM2,
-        isFlashcardDue,
-        getDueFlashcards,
         SlashCommandMenu,
         App
     };

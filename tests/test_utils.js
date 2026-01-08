@@ -67,7 +67,17 @@ const searchPath = path.join(__dirname, '../src/canvas_chat/static/js/search.js'
 const searchCode = fs.readFileSync(searchPath, 'utf8');
 vm.runInThisContext(searchCode, { filename: searchPath });
 
-// Load app.js (defines formatUserError, buildMessagesForApi, App class)
+// Load utils.js (defines formatUserError, buildMessagesForApi, etc.)
+const utilsPath = path.join(__dirname, '../src/canvas_chat/static/js/utils.js');
+const utilsCode = fs.readFileSync(utilsPath, 'utf8');
+vm.runInThisContext(utilsCode, { filename: utilsPath });
+
+// Load flashcards.js (defines FlashcardFeature class)
+const flashcardsPath = path.join(__dirname, '../src/canvas_chat/static/js/flashcards.js');
+const flashcardsCode = fs.readFileSync(flashcardsPath, 'utf8');
+vm.runInThisContext(flashcardsCode, { filename: flashcardsPath });
+
+// Load app.js (defines SlashCommandMenu, App class)
 // Note: app.js has DOM dependencies, but some functions and the App class can be tested with mocks
 const appPath = path.join(__dirname, '../src/canvas_chat/static/js/app.js');
 const appCode = fs.readFileSync(appPath, 'utf8');
