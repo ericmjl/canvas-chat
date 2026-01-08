@@ -2734,6 +2734,7 @@ df.head()
 
             // Update node with output for inline drawer display
             // Keep drawer open if it was opened for installation, or open it if there's output
+            // Keep installProgress to preserve drawer, but mark as complete
             this.graph.updateNode(nodeId, {
                 executionState: 'idle',
                 lastError: null,
@@ -2741,7 +2742,8 @@ df.head()
                 outputHtml: resultHtml,
                 outputText: resultText,
                 outputExpanded: drawerOpenedForInstall || hasOutput,  // Keep open if installation opened it, or if there's output
-                installProgress: null  // Clear installation progress
+                installProgress: drawerOpenedForInstall ? installMessages : null,  // Keep messages if drawer was opened
+                installComplete: drawerOpenedForInstall  // Mark installation as complete
             });
 
             // Create child nodes only for figures (they need visual space)

@@ -149,8 +149,8 @@ const pyodideRunner = (function() {
         console.log(msg);
         if (onProgress) {
             onProgress(msg);
-            // Yield to browser to allow UI updates
-            await new Promise(resolve => setTimeout(resolve, 0));
+            // Yield to browser to allow UI updates - use longer timeout for reliability
+            await new Promise(resolve => setTimeout(resolve, 10));
         }
 
         const micropip = pyodide.pyimport('micropip');
@@ -163,7 +163,7 @@ const pyodideRunner = (function() {
                 if (onProgress) {
                     onProgress(tryMsg);
                     // Yield to browser to allow UI updates
-                    await new Promise(resolve => setTimeout(resolve, 0));
+                    await new Promise(resolve => setTimeout(resolve, 10));
                 }
 
                 await pyodide.loadPackage(pipName);
@@ -174,7 +174,7 @@ const pyodideRunner = (function() {
                 if (onProgress) {
                     onProgress(successMsg);
                     // Yield to browser to allow UI updates
-                    await new Promise(resolve => setTimeout(resolve, 0));
+                    await new Promise(resolve => setTimeout(resolve, 10));
                 }
             } catch (pyodideErr) {
                 // Fall back to micropip for pure Python packages
@@ -184,7 +184,7 @@ const pyodideRunner = (function() {
                     if (onProgress) {
                         onProgress(fallbackMsg);
                         // Yield to browser to allow UI updates
-                        await new Promise(resolve => setTimeout(resolve, 0));
+                        await new Promise(resolve => setTimeout(resolve, 10));
                     }
 
                     await micropip.install(pipName);
@@ -195,7 +195,7 @@ const pyodideRunner = (function() {
                     if (onProgress) {
                         onProgress(successMsg);
                         // Yield to browser to allow UI updates
-                        await new Promise(resolve => setTimeout(resolve, 0));
+                        await new Promise(resolve => setTimeout(resolve, 10));
                     }
                 } catch (micropipErr) {
                     const failMsg = `❌ Failed to install ${pipName}`;
@@ -203,7 +203,7 @@ const pyodideRunner = (function() {
                     if (onProgress) {
                         onProgress(failMsg);
                         // Yield to browser to allow UI updates
-                        await new Promise(resolve => setTimeout(resolve, 0));
+                        await new Promise(resolve => setTimeout(resolve, 10));
                     }
                     failed.push(pipName);
                 }
