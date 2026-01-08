@@ -980,7 +980,8 @@ class Canvas {
             // Regular two-finger scroll (pan) - check if we should scroll node content instead
             // Check for any scrollable container within nodes or output panels
             // Note: .code-output-panel-body handles all scrolling for output panels
-            const scrollableContent = e.target.closest('.node-content, .code-output-panel-body, .csv-preview, .code-error-output');
+            // Note: .CodeMirror-scroll is CodeMirror's internal scrollable container
+            const scrollableContent = e.target.closest('.node-content, .code-output-panel-body, .csv-preview, .code-error-output, .CodeMirror-scroll');
             if (scrollableContent) {
                 // Check if this content element is actually scrollable (has overflow: auto/scroll)
                 const style = window.getComputedStyle(scrollableContent);
