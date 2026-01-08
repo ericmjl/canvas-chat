@@ -7,6 +7,47 @@
  * - Y.Text for node content (future collaborative editing)
  * - Legacy DB is source of truth (CRDT DB is overlay for real-time sync)
  * - Defensive value extraction (always convert Y types to plain JS)
+ *
+ * @see ./graph-types.js for Node, Edge, and other type definitions
+ */
+
+// =============================================================================
+// Type Imports (JSDoc)
+// =============================================================================
+
+/**
+ * @typedef {import('./graph-types.js').Node} Node
+ * @typedef {import('./graph-types.js').Edge} Edge
+ * @typedef {import('./graph-types.js').Position} Position
+ * @typedef {import('./graph-types.js').NodeTypeValue} NodeTypeValue
+ * @typedef {import('./graph-types.js').EdgeTypeValue} EdgeTypeValue
+ */
+
+/**
+ * Node lock info for collaborative editing
+ * @typedef {Object} NodeLock
+ * @property {number} clientId - Yjs client ID that holds the lock
+ * @property {number} timestamp - When the lock was acquired
+ * @property {boolean} [isOurs] - Whether this client holds the lock
+ */
+
+/**
+ * Multiplayer connection status
+ * @typedef {Object} MultiplayerStatus
+ * @property {boolean} enabled - Whether multiplayer is enabled
+ * @property {boolean} [connected] - Whether connected to signaling
+ * @property {string} [room] - Room name
+ * @property {number} [peers] - Number of connected peers
+ */
+
+/**
+ * Message format for context resolution
+ * @typedef {Object} ContextMessage
+ * @property {'user'|'assistant'} role - Message role
+ * @property {string} content - Message content
+ * @property {string} nodeId - Source node ID
+ * @property {string} [imageData] - Base64 image data
+ * @property {string} [mimeType] - Image MIME type
  */
 
 // =============================================================================
