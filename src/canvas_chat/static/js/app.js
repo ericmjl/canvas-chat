@@ -2581,6 +2581,9 @@ print("Hello from Pyodide!")
         this.canvas.renderEdges();
         this.canvas.panToNodeAnimated(codeNode.id);
         this.saveSession();
+
+        // Preload Pyodide in the background so it's ready when user clicks Run
+        pyodideRunner.preload();
     }
 
     /**
@@ -2620,6 +2623,9 @@ df.head()
         this.canvas.renderEdges();
         this.canvas.panToNodeAnimated(codeNode.id);
         this.saveSession();
+
+        // Preload Pyodide in the background so it's ready when user clicks Run
+        pyodideRunner.preload();
     }
 
     /**
@@ -2643,8 +2649,13 @@ df.head()
             }
         });
 
-        // Show loading state
-        this.canvas.updateNodeContent(nodeId, code + '\n\n# Running...', true);
+        // Show appropriate loading state based on Pyodide status
+        const pyodideState = pyodideRunner.getState();
+        if (pyodideState !== 'ready') {
+            this.canvas.updateNodeContent(nodeId, code + '\n\n# Loading Python runtime...', true);
+        } else {
+            this.canvas.updateNodeContent(nodeId, code + '\n\n# Running...', true);
+        }
 
         try {
             // Run code with Pyodide

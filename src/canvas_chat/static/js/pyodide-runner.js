@@ -11,7 +11,43 @@ const pyodideRunner = (function() {
     // Private state
     let pyodide = null;
     let loadingPromise = null;
+    let loadingState = 'idle';  // 'idle' | 'loading' | 'ready'
     const installedPackages = new Set(['pandas', 'numpy']);  // Track installed packages
+    const stateListeners = new Set();  // Callbacks for state changes
+
+    /**
+     * Notify all listeners of state change
+     */
+    function notifyStateChange(state) {
+        loadingState = state;
+        for (const listener of stateListeners) {
+            try {
+                listener(state);
+            } catch (e) {
+                console.error('State listener error:', e);
+            }
+        }
+    }
+
+    /**
+     * Subscribe to loading state changes
+     * @param {function} callback - Called with state: 'idle' | 'loading' | 'ready'
+     * @returns {function} Unsubscribe function
+     */
+    function onStateChange(callback) {
+        stateListeners.add(callback);
+        // Immediately call with current state
+        callback(loadingState);
+        return () => stateListeners.delete(callback);
+    }
+
+    /**
+     * Get current loading state
+     * @returns {'idle' | 'loading' | 'ready'}
+     */
+    function getState() {
+        return loadingState;
+    }
 
     /**
      * Extract import statements from Python code
@@ -137,6 +173,8 @@ const pyodideRunner = (function() {
 
         if (loadingPromise) return loadingPromise;
 
+        notifyStateChange('loading');
+
         loadingPromise = (async () => {
             console.log('Loading Pyodide...');
             const startTime = Date.now();
@@ -152,10 +190,25 @@ const pyodideRunner = (function() {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             console.log(`Pyodide loaded in ${elapsed}s`);
 
+            notifyStateChange('ready');
+
             return pyodide;
         })();
 
         return loadingPromise;
+    }
+
+    /**
+     * Preload Pyodide in the background (fire and forget)
+     * Call this when a code node is created to start loading early
+     */
+    function preload() {
+        if (loadingState === 'idle') {
+            ensureLoaded().catch(err => {
+                console.error('Pyodide preload failed:', err);
+                notifyStateChange('idle');  // Reset on failure
+            });
+        }
     }
 
     /**
@@ -290,6 +343,9 @@ sys.stdout = sys.__stdout__
         isLoaded,
         run,
         extractImports,
+        preload,
+        getState,
+        onStateChange,
     };
 })();
 
