@@ -19,7 +19,7 @@ const SLASH_COMMANDS = [
     { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
     { command: '/committee', description: 'Consult multiple LLMs and synthesize', placeholder: 'question' },
     { command: '/factcheck', description: 'Verify claims with web search', placeholder: 'claim(s) to verify', requiresContext: true },
-    { command: '/code', description: 'Create code node linked to selected CSV(s)', placeholder: 'optional description', requiresCsv: true },
+    { command: '/code', description: 'Create Python code node (optionally linked to selected CSVs)', placeholder: 'optional description' },
 ];
 
 /**
@@ -2518,7 +2518,7 @@ class App {
     // --- CSV/Code Execution Methods ---
 
     /**
-     * Handle /code slash command - creates a Code node linked to selected CSV(s)
+     * Handle /code slash command - creates a Code node (optionally linked to selected CSVs)
      * @param {string} description - Optional description from user
      */
     async handleCode(description) {
@@ -2528,15 +2528,15 @@ class App {
             return node && node.type === NodeType.CSV;
         });
 
-        if (csvNodeIds.length === 0) {
-            alert('Please select at least one CSV node first');
-            return;
-        }
+        // Create code node with appropriate starter template
+        let starterCode;
+        let position;
 
-        // Create code node with starter template
-        const csvNodes = csvNodeIds.map(id => this.graph.getNode(id));
-        const csvNames = csvNodes.map((n, i) => csvNodes.length === 1 ? 'df' : `df${i + 1}`);
-        const starterCode = `# Available DataFrames: ${csvNames.join(', ')}
+        if (csvNodeIds.length > 0) {
+            // CSV nodes selected - create template with DataFrame references
+            const csvNodes = csvNodeIds.map(id => this.graph.getNode(id));
+            const csvNames = csvNodes.map((_n, i) => csvNodeIds.length === 1 ? 'df' : `df${i + 1}`);
+            starterCode = `# Available DataFrames: ${csvNames.join(', ')}
 # ${description || 'Analyze the data'}
 
 import pandas as pd
@@ -2544,23 +2544,34 @@ import pandas as pd
 # Example: Display first few rows
 ${csvNames[0]}.head()
 `;
+            // Position near the first CSV node
+            const firstCsvNode = this.graph.getNode(csvNodeIds[0]);
+            position = this.graph.findNonOverlappingPosition(
+                firstCsvNode.position.x + firstCsvNode.width + 50,
+                firstCsvNode.position.y,
+                400, 300
+            );
+        } else {
+            // No CSV selected - create standalone code node
+            starterCode = `# ${description || 'Python code'}
 
-        // Position near the first CSV node
-        const firstCsvNode = this.graph.getNode(csvNodeIds[0]);
-        const position = this.graph.findNonOverlappingPosition(
-            firstCsvNode.position.x + firstCsvNode.width + 50,
-            firstCsvNode.position.y,
-            400, 300
-        );
+import numpy as np
+
+# Your code here
+print("Hello from Pyodide!")
+`;
+            // Position in viewport center
+            position = this.graph.autoPosition([]);
+        }
 
         const codeNode = createNode(NodeType.CODE, starterCode, {
             position,
-            csvNodeIds: csvNodeIds,  // Link to source CSV nodes
+            csvNodeIds: csvNodeIds,  // Empty array if no CSVs
         });
 
         this.graph.addNode(codeNode);
 
-        // Create edges from CSV nodes to code node
+        // Create edges from CSV nodes to code node (if any)
         for (const csvId of csvNodeIds) {
             const edge = createEdge(csvId, codeNode.id, EdgeType.GENERATES);
             this.graph.addEdge(edge);
