@@ -2685,19 +2685,14 @@ df.head()
         const onInstallProgress = (msg) => {
             installMessages.push(msg);
 
-            // On first message, create drawer and animate it open
+            // On first message, expand drawer with animation
             if (!drawerOpenedForInstall) {
                 this.graph.updateNode(nodeId, {
                     installProgress: [...installMessages],
-                    outputExpanded: false  // Start collapsed
+                    outputExpanded: true  // Expand it
                 });
-                // Create the drawer (collapsed)
+                // Re-render to create drawer in expanded state (will animate automatically)
                 this.canvas.renderNode(this.graph.getNode(nodeId));
-
-                // Then animate it open
-                this.graph.updateNode(nodeId, { outputExpanded: true });
-                this.canvas.animateOutputPanel(nodeId, true);
-
                 drawerOpenedForInstall = true;
             } else {
                 // For subsequent messages, just update the content without re-rendering
@@ -2712,21 +2707,6 @@ df.head()
         try {
             // Run code with Pyodide and installation progress callback
             const result = await pyodideRunner.run(code, csvDataMap, onInstallProgress);
-
-            // If drawer was opened for installation, animate it closed before showing results
-            if (drawerOpenedForInstall && installMessages.length > 0) {
-                // Small delay to see installation complete
-                await new Promise(resolve => setTimeout(resolve, 500));
-
-                // Animate drawer closed
-                this.graph.updateNode(nodeId, { outputExpanded: false });
-                await new Promise(resolve => {
-                    this.canvas.animateOutputPanel(nodeId, false, resolve);
-                });
-
-                // Small pause after close
-                await new Promise(resolve => setTimeout(resolve, 200));
-            }
 
             // Check for Python errors returned from Pyodide
             if (result.error) {
