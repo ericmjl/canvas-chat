@@ -29,6 +29,7 @@ image = (
         "pymupdf>=1.24.0",
         "python-multipart>=0.0.9",
         "html2text>=2024.0.0",
+        "ruamel.yaml>=0.18.0",
     )
     .add_local_dir("src/canvas_chat", remote_path="/app/canvas_chat")
 )
