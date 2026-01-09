@@ -228,6 +228,19 @@ class ResearchNode extends BaseNode {
     getTypeLabel() { return 'Research'; }
     getTypeIcon() { return '📚'; }
 
+    getHeaderButtons() {
+        return [
+            HeaderButtons.NAV_PARENT,
+            HeaderButtons.NAV_CHILD,
+            HeaderButtons.COLLAPSE,
+            HeaderButtons.STOP,  // For stopping research generation
+            HeaderButtons.CONTINUE,  // For continuing stopped research
+            HeaderButtons.RESET_SIZE,
+            HeaderButtons.FIT_VIEWPORT,
+            HeaderButtons.DELETE
+        ];
+    }
+
     getActions() {
         return [Actions.REPLY, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }

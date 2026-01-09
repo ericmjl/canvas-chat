@@ -12,6 +12,9 @@
  * - buildLLMRequest: function to build LLM request with base_url
  * - generateNodeSummary: function to generate summary for a node
  * - showSettingsModal: function to show settings modal
+ * - getModelPicker: function returning modelPicker element
+ * - registerStreaming: function to register abort controller for stop button
+ * - unregisterStreaming: function to unregister streaming state
  *
  * Global dependencies:
  * - storage: For Exa API key (hasExaApiKey, getExaApiKey)
@@ -33,6 +36,9 @@ class ResearchFeature {
         this.buildLLMRequest = context.buildLLMRequest;
         this.generateNodeSummary = context.generateNodeSummary;
         this.showSettingsModal = context.showSettingsModal;
+        this.getModelPicker = context.getModelPicker;
+        this.registerStreaming = context.registerStreaming;
+        this.unregisterStreaming = context.unregisterStreaming;
     }
 
     /**
@@ -191,49 +197,84 @@ class ResearchFeature {
      * Handle research command.
      * @param {string} instructions - The user's research instructions
      * @param {string} context - Optional context to help refine the instructions (e.g., selected text)
+     * @param {string} existingNodeId - Optional existing node ID to update instead of creating new node (for continue)
      */
-    async handleResearch(instructions, context = null) {
+    async handleResearch(instructions, context = null, existingNodeId = null) {
         const hasExa = storage.hasExaApiKey();
         const exaKey = hasExa ? storage.getExaApiKey() : null;
 
-        // Get selected nodes for positioning
-        let parentIds = this.canvas.getSelectedNodeIds();
-        if (parentIds.length === 0) {
-            const leaves = this.graph.getLeafNodes();
-            if (leaves.length > 0) {
-                leaves.sort((a, b) => b.created_at - a.created_at);
-                parentIds = [leaves[0].id];
-            }
-        }
+        // Get the model being used (Exa uses 'exa-research', DDG uses selected model)
+        const model = hasExa ? 'exa-research' : this.getModelPicker().value;
 
+        let researchNode;
         const providerLabel = hasExa ? '' : ' (DDG)';
-        // Create research node with original instructions initially
-        const researchNode = createNode(NodeType.RESEARCH, `**Research${providerLabel}:** ${instructions}\n\n*Starting research...*`, {
-            position: this.graph.autoPosition(parentIds),
-            width: 500  // Research nodes are wider for markdown reports
-        });
 
-        this.graph.addNode(researchNode);
-        this.canvas.renderNode(researchNode);
+        if (existingNodeId) {
+            // Continue on existing node
+            researchNode = this.graph.getNode(existingNodeId);
+            if (!researchNode || researchNode.type !== NodeType.RESEARCH) {
+                console.error('Invalid existing node for research continue');
+                return;
+            }
+            // Update model if needed
+            if (researchNode.model !== model) {
+                this.graph.updateNode(existingNodeId, { model: model });
+                this.canvas.renderNode(researchNode);
+            }
+            // Reset content to show we're restarting
+            const restartContent = `**Research${providerLabel}:** ${instructions}\n\n*Restarting research...*`;
+            this.canvas.updateNodeContent(existingNodeId, restartContent, true);
+            this.graph.updateNode(existingNodeId, { content: restartContent });
+        } else {
+            // Create new research node
+            // Get selected nodes for positioning
+            let parentIds = this.canvas.getSelectedNodeIds();
+            if (parentIds.length === 0) {
+                const leaves = this.graph.getLeafNodes();
+                if (leaves.length > 0) {
+                    leaves.sort((a, b) => b.created_at - a.created_at);
+                    parentIds = [leaves[0].id];
+                }
+            }
 
-        // Create edges from parents
-        for (const parentId of parentIds) {
-            const edge = createEdge(parentId, researchNode.id, EdgeType.REFERENCE);
-            this.graph.addEdge(edge);
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, researchNode.position);
+            // Create research node with original instructions initially
+            researchNode = createNode(NodeType.RESEARCH, `**Research${providerLabel}:** ${instructions}\n\n*Starting research...*`, {
+                position: this.graph.autoPosition(parentIds),
+                width: 500,  // Research nodes are wider for markdown reports
+                model: model  // Store model for display in header
+            });
+
+            this.graph.addNode(researchNode);
+            this.canvas.renderNode(researchNode);
+
+            // Create edges from parents
+            for (const parentId of parentIds) {
+                const edge = createEdge(parentId, researchNode.id, EdgeType.REFERENCE);
+                this.graph.addEdge(edge);
+                const parentNode = this.graph.getNode(parentId);
+                this.canvas.renderEdge(edge, parentNode.position, researchNode.position);
+            }
+
+            this.canvas.clearSelection();
+            this.saveSession();
+            this.updateEmptyState();
+
+            // Smoothly pan to research node
+            this.canvas.centerOnAnimated(
+                researchNode.position.x + 250,
+                researchNode.position.y + 100,
+                300
+            );
         }
 
-        this.canvas.clearSelection();
-        this.saveSession();
-        this.updateEmptyState();
-
-        // Smoothly pan to research node
-        this.canvas.centerOnAnimated(
-            researchNode.position.x + 250,
-            researchNode.position.y + 100,
-            300
-        );
+        // Create abort controller for stop button support
+        const abortController = new AbortController();
+        this.registerStreaming(researchNode.id, abortController, {
+            type: 'research',
+            originalInstructions: instructions,
+            originalContext: context
+        });
+        this.canvas.showStopButton(researchNode.id);
 
         try {
             let effectiveInstructions = instructions;
@@ -270,7 +311,8 @@ class ResearchFeature {
                         instructions: effectiveInstructions,
                         api_key: exaKey,
                         model: 'exa-research'
-                    })
+                    }),
+                    signal: abortController.signal
                 });
             } else {
                 response = await fetch('/api/ddg/research', {
@@ -281,7 +323,8 @@ class ResearchFeature {
                         context: context || null,
                         max_iterations: 4,
                         max_sources: 40
-                    }))
+                    })),
+                    signal: abortController.signal
                 });
             }
 
@@ -365,6 +408,10 @@ class ResearchFeature {
                     }
                 },
                 onDone: () => {
+                    // Clean up streaming state
+                    this.unregisterStreaming(researchNode.id);
+                    this.canvas.hideStopButton(researchNode.id);
+
                     if (!hasExa && ddgFinalReport) {
                         reportContent = reportHeader + ddgFinalReport;
                     }
@@ -386,13 +433,38 @@ class ResearchFeature {
                     this.generateNodeSummary(researchNode.id);
                 },
                 onError: (err) => {
-                    throw err;
+                    // Clean up streaming state on error
+                    this.unregisterStreaming(researchNode.id);
+                    this.canvas.hideStopButton(researchNode.id);
+
+                    // Re-throw if not an abort error
+                    if (err.name !== 'AbortError') {
+                        throw err;
+                    }
                 }
             });
 
             this.saveSession();
 
         } catch (err) {
+            // Clean up streaming state
+            this.unregisterStreaming(researchNode.id);
+            this.canvas.hideStopButton(researchNode.id);
+
+            // Check if it was aborted (user clicked stop)
+            if (err.name === 'AbortError') {
+                // Add stopped indicator to current content
+                const node = this.graph.getNode(researchNode.id);
+                if (node) {
+                    const stoppedContent = node.content + '\n\n*[Research stopped]*';
+                    this.canvas.updateNodeContent(researchNode.id, stoppedContent, false);
+                    this.graph.updateNode(researchNode.id, { content: stoppedContent });
+                }
+                this.saveSession();
+                return;
+            }
+
+            // Other errors
             const errorContent = `**Research:** ${instructions}\n\n*Error: ${err.message}*`;
             this.canvas.updateNodeContent(researchNode.id, errorContent, false);
             this.graph.updateNode(researchNode.id, { content: errorContent });

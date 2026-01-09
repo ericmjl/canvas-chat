@@ -1314,7 +1314,16 @@ Write in markdown. Rules:
 - Provide a clear structure with headings.
 - Prefer precise, falsifiable statements over vague generalities.
 - When making a claim that comes from a source, cite it inline as a markdown
-  link to that source URL.
+  link: [Source Name](url)
+- CRITICAL: URLs in markdown links must be formatted exactly as:
+  [text](https://example.com/path)
+  - The URL must be complete and valid
+  - Do NOT add any characters after the URL inside the parentheses
+  - Do NOT add brackets, punctuation, or special characters after the URL
+  - The closing parenthesis ) must immediately follow the last character of the URL
+- Example CORRECT: [The Guardian](https://example.com/article)
+- Example WRONG: [The Guardian](https://example.com/article【)
+- Example WRONG: [The Guardian](https://example.com/article)【
 - If evidence is thin or conflicting, say so explicitly.
 """
 
@@ -1495,7 +1504,10 @@ async def ddg_research(request: DDGResearchRequest):
 
                     yield {
                         "event": "status",
-                        "data": f"Iteration {iteration}/{max_iterations}: searching DuckDuckGo...",
+                        "data": (
+                            f"Iteration {iteration}/{max_iterations}: "
+                            "searching DuckDuckGo..."
+                        ),
                     }
 
                     # Collect search results (preserve first associated query per URL)
@@ -1557,7 +1569,8 @@ async def ddg_research(request: DDGResearchRequest):
                                 combined_text = f"{title} {snippet}"
 
                                 # Check if result contains query keywords
-                                # Require at least 2 query words to match (or 1 if query is short)
+                                # Require at least 2 query words to match
+                                # (or 1 if query is short)
                                 min_matches = 2 if len(query_words) > 2 else 1
                                 matches = sum(
                                     1 for word in query_words if word in combined_text
@@ -1591,15 +1604,16 @@ async def ddg_research(request: DDGResearchRequest):
                                 "This may indicate rate limiting or poor query quality."
                             ),
                         }
-                        # If we have no sources at all and this is iteration 1, fail early
+                        # If we have no sources at all and this is iteration 1,
+                        # fail early
                         if iteration == 1 and len(sources) == 0:
                             yield {
                                 "event": "error",
                                 "data": (
                                     "No relevant search results found. "
                                     "This may be due to DuckDuckGo rate limiting. "
-                                    "Please try again in a few minutes, or add an Exa API key "
-                                    "for more reliable research."
+                                    "Please try again in a few minutes, "
+                                    "or add an Exa API key for more reliable research."
                                 ),
                             }
                             return
@@ -1615,7 +1629,8 @@ async def ddg_research(request: DDGResearchRequest):
                             user_prompt=(
                                 f"Research instructions:\n{instructions}\n\n"
                                 f"What we learned so far:\n{learned_blob}\n\n"
-                                f"Previous queries:\n{', '.join(sorted(seen_queries))}\n\n"
+                                f"Previous queries:\n"
+                                f"{', '.join(sorted(seen_queries))}\n\n"
                                 "Return JSON array of new DDG queries."
                             ),
                         )
@@ -1694,7 +1709,8 @@ async def ddg_research(request: DDGResearchRequest):
                                     max_tokens=450,
                                 )
 
-                                # Prefer fetched title, but fall back to DDG title if fetched is "Untitled"
+                                # Prefer fetched title, but fall back to DDG title
+                                # if fetched is "Untitled"
                                 final_title = (
                                     title
                                     if title and title != "Untitled"
@@ -1758,7 +1774,8 @@ async def ddg_research(request: DDGResearchRequest):
                     # Build a more detailed prompt to ensure diverse queries
                     query_prompt = (
                         f"Research instructions:\n{instructions}\n\n"
-                        f"What we've learned so far ({len(sources)} sources):\n{learned_blob}\n\n"
+                        f"What we've learned so far ({len(sources)} sources):\n"
+                        f"{learned_blob}\n\n"
                         f"Previous search queries we've already tried:\n"
                         f"{', '.join(sorted(list(seen_queries)[-20:]))}\n\n"
                         f"Generate NEW search queries that explore DIFFERENT aspects "
@@ -1781,7 +1798,8 @@ async def ddg_research(request: DDGResearchRequest):
                     # If we didn't get enough new queries, generate fallback queries
                     if not next_queries or len(next_queries) < 2:
                         logger.warning(
-                            f"Iteration {iteration}: LLM didn't generate enough queries, "
+                            f"Iteration {iteration}: "
+                            "LLM didn't generate enough queries, "
                             "creating fallback queries"
                         )
                         # Create fallback queries based on instructions
@@ -1874,7 +1892,10 @@ async def ddg_research(request: DDGResearchRequest):
                 )
             ):
                 # Report ends mid-sentence, likely truncated
-                report += "\n\n*Note: Report may be incomplete due to response length limits.*"
+                report += (
+                    "\n\n*Note: Report may be incomplete "
+                    "due to response length limits.*"
+                )
 
             yield {"event": "content", "data": report}
             yield {

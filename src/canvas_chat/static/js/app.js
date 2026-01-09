@@ -642,7 +642,18 @@ class App {
                 updateEmptyState: () => this.updateEmptyState(),
                 buildLLMRequest: (params) => this.buildLLMRequest(params),
                 generateNodeSummary: (nodeId) => this.generateNodeSummary(nodeId),
-                showSettingsModal: () => this.showSettingsModal()
+                showSettingsModal: () => this.showSettingsModal(),
+                getModelPicker: () => this.modelPicker,
+                registerStreaming: (nodeId, abortController, context = null) => {
+                    // Register research streaming state for stop button support
+                    this.streamingNodes.set(nodeId, {
+                        abortController: abortController,
+                        context: context || { type: 'research' }
+                    });
+                },
+                unregisterStreaming: (nodeId) => {
+                    this.streamingNodes.delete(nodeId);
+                }
             });
         }
         return this._researchFeature;
@@ -3946,7 +3957,68 @@ df.head()
     async handleNodeContinueGeneration(nodeId) {
         const node = this.graph.getNode(nodeId);
         const streamingState = this.streamingNodes.get(nodeId);
-        if (!node || !streamingState?.context) return;
+        if (!node) return;
+
+        // Special case: Research nodes restart the research process
+        if (node.type === NodeType.RESEARCH) {
+            // Get original instructions and context from streaming state
+            const instructions = streamingState?.context?.originalInstructions;
+            const context = streamingState?.context?.originalContext || null;
+
+            if (!instructions) {
+                // Fallback: try to extract from node content
+                const contentMatch = node.content.match(/^\*\*Research(?: \(DDG\))?:\*\* (.+?)(?:\n\n|$)/);
+                if (!contentMatch) {
+                    console.error('Could not extract instructions from research node');
+                    return;
+                }
+                // Use extracted instructions, but we don't have context
+                const extractedInstructions = contentMatch[1].trim();
+
+                // Hide continue button, show stop button
+                this.canvas.hideContinueButton(nodeId);
+                this.canvas.showStopButton(nodeId);
+
+                // Clear the stopped indicator and restart
+                const cleanedContent = node.content.replace(/\n\n\*\[Research stopped\]\*$/, '').replace(/\n\n\*\[Generation stopped\]\*$/, '');
+                this.canvas.updateNodeContent(nodeId, cleanedContent, false);
+
+                // Restart research with extracted instructions (no context) on existing node
+                try {
+                    await this.researchFeature.handleResearch(extractedInstructions, null, nodeId);
+                } catch (err) {
+                    console.error('Error continuing research:', err);
+                    const errorContent = node.content + `\n\n*Error continuing research: ${err.message}*`;
+                    this.canvas.updateNodeContent(nodeId, errorContent, false);
+                    this.graph.updateNode(nodeId, { content: errorContent });
+                    this.saveSession();
+                }
+                return;
+            }
+
+            // Hide continue button, show stop button
+            this.canvas.hideContinueButton(nodeId);
+            this.canvas.showStopButton(nodeId);
+
+            // Clear the stopped indicator from content
+            const cleanedContent = node.content.replace(/\n\n\*\[Research stopped\]\*$/, '').replace(/\n\n\*\[Generation stopped\]\*$/, '');
+            this.canvas.updateNodeContent(nodeId, cleanedContent, false);
+
+            // Restart research with same instructions and context on existing node
+            try {
+                await this.researchFeature.handleResearch(instructions, context, nodeId);
+            } catch (err) {
+                console.error('Error continuing research:', err);
+                const errorContent = node.content + `\n\n*Error continuing research: ${err.message}*`;
+                this.canvas.updateNodeContent(nodeId, errorContent, false);
+                this.graph.updateNode(nodeId, { content: errorContent });
+                this.saveSession();
+            }
+            return;
+        }
+
+        // Regular AI node continue logic
+        if (!streamingState?.context) return;
 
         // Hide continue button, show stop button
         this.canvas.hideContinueButton(nodeId);
