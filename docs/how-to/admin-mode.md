@@ -62,7 +62,7 @@ See `config.example.yaml` in the repository for a complete template with all com
 | `name` | No | Display name shown in UI (defaults to `id`) |
 | `apiKeyEnvVar` | Yes | Environment variable name containing the API key |
 | `contextWindow` | No | Token limit for context building (default: 128000) |
-| `endpoint` | No | Custom endpoint URL for self-hosted or proxy models |
+| `endpointEnvVar` | No | Environment variable name for custom endpoint URL |
 
 ## Step 2: Set environment variables
 
@@ -108,18 +108,27 @@ ValueError: Missing environment variables for admin mode:
 
 ## Adding custom or self-hosted models
 
-For internal or self-hosted LLMs, use the `endpoint` field:
+For internal or self-hosted LLMs, use the `endpointEnvVar` field to specify an environment variable containing the endpoint URL:
 
 ```yaml
 models:
   - id: "custom/internal-llm"
     name: "Internal LLM"
-    endpoint: "https://llm.internal.company.com/v1"
     apiKeyEnvVar: "INTERNAL_LLM_KEY"
+    endpointEnvVar: "INTERNAL_LLM_ENDPOINT"
     contextWindow: 32000
 ```
 
-The `endpoint` is passed to LiteLLM as `base_url`, so it should be OpenAI-compatible.
+Then set the environment variable:
+
+```bash
+export INTERNAL_LLM_ENDPOINT="https://llm.internal.company.com/v1"
+export INTERNAL_LLM_KEY="your-internal-key"
+```
+
+Using environment variables for endpoints (rather than hardcoded URLs) allows the same `config.yaml` to work across dev, test, and production environments - just set different values for the environment variables in each environment.
+
+The endpoint is passed to LiteLLM as `base_url`, so it should be OpenAI-compatible.
 
 ## Modal deployment with admin mode
 

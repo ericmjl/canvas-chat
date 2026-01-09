@@ -22,13 +22,18 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelConfig:
-    """Configuration for a single admin-managed model."""
+    """Configuration for a single admin-managed model.
+
+    Both API keys and endpoints are configured via environment variables,
+    allowing different values for dev/test/prod environments without
+    changing the config file.
+    """
 
     id: str  # LiteLLM-compatible model ID (provider/model-name)
     name: str  # Display name shown in UI
     api_key_env_var: str  # Environment variable name containing the API key
     context_window: int = 128000  # Token limit for context building
-    endpoint: str | None = None  # Optional custom endpoint URL
+    endpoint_env_var: str | None = None  # Optional env var for custom endpoint
 
     @classmethod
     def from_dict(cls, data: dict, index: int) -> "ModelConfig":
@@ -47,7 +52,7 @@ class ModelConfig:
             name=data.get("name", model_id),
             api_key_env_var=data["apiKeyEnvVar"],
             context_window=data.get("contextWindow", 128000),
-            endpoint=data.get("endpoint"),
+            endpoint_env_var=data.get("endpointEnvVar"),
         )
 
 
@@ -165,7 +170,10 @@ class AdminConfig:
             return (None, None)
 
         api_key = os.environ.get(model.api_key_env_var)
-        return (api_key, model.endpoint)
+        endpoint = None
+        if model.endpoint_env_var:
+            endpoint = os.environ.get(model.endpoint_env_var)
+        return (api_key, endpoint)
 
     def get_frontend_models(self) -> list[dict]:
         """Get a safe model list for the frontend (no secrets).

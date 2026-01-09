@@ -14,7 +14,7 @@ def test_model_config_from_dict_valid():
         "name": "GPT-4o",
         "apiKeyEnvVar": "OPENAI_API_KEY",
         "contextWindow": 128000,
-        "endpoint": "https://custom.endpoint.com/v1",
+        "endpointEnvVar": "OPENAI_ENDPOINT",
     }
     model = ModelConfig.from_dict(data, 0)
 
@@ -22,7 +22,7 @@ def test_model_config_from_dict_valid():
     assert model.name == "GPT-4o"
     assert model.api_key_env_var == "OPENAI_API_KEY"
     assert model.context_window == 128000
-    assert model.endpoint == "https://custom.endpoint.com/v1"
+    assert model.endpoint_env_var == "OPENAI_ENDPOINT"
 
 
 def test_model_config_from_dict_defaults():
@@ -36,7 +36,7 @@ def test_model_config_from_dict_defaults():
     assert model.id == "openai/gpt-4o"
     assert model.name == "openai/gpt-4o"  # defaults to id
     assert model.context_window == 128000  # default
-    assert model.endpoint is None  # default
+    assert model.endpoint_env_var is None  # default
 
 
 def test_model_config_from_dict_missing_id():
@@ -244,10 +244,11 @@ def test_admin_config_resolve_credentials_found(tmp_path, monkeypatch):
 models:
   - id: "custom/internal-llm"
     apiKeyEnvVar: "TEST_CUSTOM_KEY"
-    endpoint: "https://internal.example.com/v1"
+    endpointEnvVar: "TEST_CUSTOM_ENDPOINT"
 """)
 
     monkeypatch.setenv("TEST_CUSTOM_KEY", "sk-custom-secret")
+    monkeypatch.setenv("TEST_CUSTOM_ENDPOINT", "https://internal.example.com/v1")
 
     config = AdminConfig.load(config_file)
     api_key, base_url = config.resolve_credentials("custom/internal-llm")
@@ -272,6 +273,26 @@ models:
 
     assert api_key == "sk-test-key"
     assert base_url is None
+
+
+def test_admin_config_resolve_credentials_endpoint_env_not_set(tmp_path, monkeypatch):
+    """Test resolve_credentials returns None for endpoint when env var not set."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+models:
+  - id: "custom/internal-llm"
+    apiKeyEnvVar: "TEST_CUSTOM_KEY"
+    endpointEnvVar: "TEST_CUSTOM_ENDPOINT"
+""")
+
+    monkeypatch.setenv("TEST_CUSTOM_KEY", "sk-custom-secret")
+    monkeypatch.delenv("TEST_CUSTOM_ENDPOINT", raising=False)
+
+    config = AdminConfig.load(config_file)
+    api_key, base_url = config.resolve_credentials("custom/internal-llm")
+
+    assert api_key == "sk-custom-secret"
+    assert base_url is None  # env var not set, so endpoint is None
 
 
 def test_admin_config_resolve_credentials_not_found(tmp_path):
