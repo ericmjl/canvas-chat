@@ -5,11 +5,13 @@ The `/research` command performs comprehensive research on a topic by querying m
 ## Prerequisites
 
 **With Exa API key (recommended):**
+
 - Higher quality, curated sources
 - Faster research (30-90 seconds)
 - Costs $0.01-0.05 per research
 
 **Without Exa API key (free fallback):**
+
 - Uses DuckDuckGo search + your LLM
 - Slower (2-5 minutes)
 - Broader but potentially noisier sources
@@ -198,19 +200,23 @@ Use `/research` when you want:
 ## Limits
 
 **With Exa:**
+
 - Costs $0.01-0.05 per research
 - Takes 30-90 seconds to complete
-- Cannot be stopped once started - Exa's Research API does not support cancellation
+- Can be stopped using the stop button in the node header
 
 **With DuckDuckGo fallback:**
+
 - Free (only LLM token costs)
 - Takes 2-5 minutes (more API calls)
 - May be rate-limited by DuckDuckGo (retries automatically)
 - Quality depends on your LLM model
+- Can be stopped using the stop button in the node header
 
 **Both:**
+
 - Wide nodes may overflow on small screens
-- Cannot be stopped once started
+- Can be stopped and resumed using the stop/continue buttons
 
 ## Troubleshooting
 
