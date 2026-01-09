@@ -82,6 +82,8 @@
 
     "isUrlContent": "writable",
     "extractUrlFromReferenceNode": "writable",
+    "getBasePath": "writable",
+    "apiUrl": "writable",
     "truncateText": "writable",
     "escapeHtmlText": "writable",
     "formatMatrixAsText": "writable",

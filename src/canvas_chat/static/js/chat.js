@@ -75,7 +75,7 @@ class Chat {
      */
     async fetchModels() {
         try {
-            const response = await fetch('/api/models');
+            const response = await fetch(apiUrl('/api/models'));
             if (response.ok) {
                 this.models = await response.json();
                 return this.models;
@@ -94,7 +94,7 @@ class Chat {
      */
     async fetchProviderModels(provider, apiKey) {
         try {
-            const response = await fetch('/api/provider-models', {
+            const response = await fetch(apiUrl('/api/provider-models'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ provider, api_key: apiKey })
@@ -168,7 +168,7 @@ class Chat {
                 requestBody.base_url = baseUrl;
             }
 
-            const response = await fetch('/api/chat', {
+            const response = await fetch(apiUrl('/api/chat'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -234,7 +234,7 @@ class Chat {
             requestBody.base_url = baseUrl;
         }
 
-        const response = await fetch('/api/chat', {
+        const response = await fetch(apiUrl('/api/chat'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -283,7 +283,7 @@ class Chat {
                 requestBody.base_url = baseUrl;
             }
 
-            const response = await fetch('/api/summarize', {
+            const response = await fetch(apiUrl('/api/summarize'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

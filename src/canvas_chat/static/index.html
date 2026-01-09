@@ -4,6 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Canvas Chat</title>
+    <!-- Set base path dynamically for load balancer support -->
+    <script>
+        (function() {
+            const pathname = window.location.pathname;
+            let basePath = '';
+            if (pathname !== '/' && pathname !== '') {
+                if (pathname.endsWith('/')) {
+                    basePath = pathname;
+                } else {
+                    basePath = pathname.replace(/\/[^/]*$/, '') + '/';
+                }
+            }
+            const base = document.createElement('base');
+            base.href = basePath;
+            document.head.insertBefore(base, document.head.firstChild);
+        })();
+    </script>
     <link rel="stylesheet" href="/static/css/style.css">
     <!-- Marked.js for markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
