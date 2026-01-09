@@ -4,12 +4,25 @@ The `/research` command performs comprehensive research on a topic by querying m
 
 ## Prerequisites
 
-You need an Exa API key configured in Settings:
+**With Exa API key (recommended):**
+- Higher quality, curated sources
+- Faster research (30-90 seconds)
+- Costs $0.01-0.05 per research
+
+**Without Exa API key (free fallback):**
+- Uses DuckDuckGo search + your LLM
+- Slower (2-5 minutes)
+- Broader but potentially noisier sources
+- Free (only LLM token costs)
+
+To configure Exa:
 
 1. Click the ⚙️ Settings button
 2. Get an API key from [Exa](https://exa.ai/)
 3. Paste it into the "Exa API Key" field
 4. Click Save
+
+If you don't have an Exa key, `/research` will automatically use the DuckDuckGo fallback.
 
 ## Basic research
 
@@ -29,21 +42,31 @@ The research process typically takes 30-90 seconds depending on the topic's comp
 
 ## How research works
 
-Exa's research API:
+**With Exa API key:**
+Exa's research API handles the entire process:
 
 1. **Plans the research** - Breaks down your topic into sub-questions
 2. **Searches multiple sources** - Queries the web for relevant information
 3. **Synthesizes findings** - Combines information from all sources into a coherent report
 4. **Cites sources** - Includes links to the pages used
 
+**With DuckDuckGo fallback (no Exa key):**
+The system performs iterative research using your LLM:
+
+1. **Generates search queries** - Converts your instructions into DuckDuckGo search terms
+2. **Searches and fetches** - Finds pages and extracts content (3-5 iterations)
+3. **Summarizes sources** - Your LLM creates tailored summaries for each page
+4. **Expands queries** - Generates new queries to explore adjacent topics
+5. **Synthesizes report** - Combines all summaries into a final report
+
 You'll see status updates as it progresses. Example status messages include:
 
-- "Research started..."
-- "Planning research..."
-- "Searching sources..."
-- "Synthesizing report..."
+- "Generating initial search queries..."
+- "Iteration 1/4: searching DuckDuckGo..."
+- "Iteration 1: fetching 12 pages in parallel..."
+- "Synthesizing final report..."
 
-The exact messages may vary based on Exa's API responses.
+The exact messages depend on which provider is used.
 
 ## Context-aware research
 
@@ -170,14 +193,24 @@ Use `/research` when you want:
 - Comprehensive coverage of a topic
 - Citation-backed analysis
 
-**Note:** `/research` requires an Exa API key and has no fallback. If you don't have an Exa key, use `/search` which works with DuckDuckGo.
+**Note:** `/research` works with or without an Exa API key. Without Exa, it uses a free DuckDuckGo-based fallback that performs iterative research using your LLM. The fallback is slower but produces comprehensive reports.
 
 ## Limits
 
-- Requires Exa API key (paid feature, costs $0.01-0.05 per research)
-- Research takes 30-90 seconds to complete
-- Cannot be stopped once started - Exa's Research API does not support cancellation of ongoing research tasks. Once initiated, research runs to completion.
+**With Exa:**
+- Costs $0.01-0.05 per research
+- Takes 30-90 seconds to complete
+- Cannot be stopped once started - Exa's Research API does not support cancellation
+
+**With DuckDuckGo fallback:**
+- Free (only LLM token costs)
+- Takes 2-5 minutes (more API calls)
+- May be rate-limited by DuckDuckGo (retries automatically)
+- Quality depends on your LLM model
+
+**Both:**
 - Wide nodes may overflow on small screens
+- Cannot be stopped once started
 
 ## Troubleshooting
 
@@ -197,3 +230,17 @@ Use `/research` when you want:
 - Check that the research completed successfully
 - Sources should appear as markdown links `[text](url)`
 - If plain URLs appear, the research may have been interrupted
+
+### DuckDuckGo fallback returns irrelevant sources
+
+- This may indicate rate limiting
+- The system automatically retries with exponential backoff
+- If you see "Warning: Only found X relevant sources", wait a few minutes and try again
+- Consider adding an Exa API key for more reliable results
+
+### Research report is cut off mid-sentence
+
+- This can happen if the LLM hits token limits during synthesis
+- The system detects truncation and adds a warning note
+- Try rephrasing your research query to be more specific
+- With Exa, this is less common as Exa handles synthesis internally

@@ -193,13 +193,8 @@ class ResearchFeature {
      * @param {string} context - Optional context to help refine the instructions (e.g., selected text)
      */
     async handleResearch(instructions, context = null) {
-        // Get Exa API key - research requires Exa (no fallback available)
-        const exaKey = storage.getExaApiKey();
-        if (!exaKey) {
-            alert('The /research command requires an Exa API key.\n\nPlease add your Exa key in Settings, or use /search for basic web search (works without Exa).');
-            this.showSettingsModal();
-            return;
-        }
+        const hasExa = storage.hasExaApiKey();
+        const exaKey = hasExa ? storage.getExaApiKey() : null;
 
         // Get selected nodes for positioning
         let parentIds = this.canvas.getSelectedNodeIds();
@@ -211,8 +206,9 @@ class ResearchFeature {
             }
         }
 
+        const providerLabel = hasExa ? '' : ' (DDG)';
         // Create research node with original instructions initially
-        const researchNode = createNode(NodeType.RESEARCH, `**Research:** ${instructions}\n\n*Starting research...*`, {
+        const researchNode = createNode(NodeType.RESEARCH, `**Research${providerLabel}:** ${instructions}\n\n*Starting research...*`, {
             position: this.graph.autoPosition(parentIds),
             width: 500  // Research nodes are wider for markdown reports
         });
@@ -264,16 +260,30 @@ class ResearchFeature {
                 }
             }
 
-            // Call Exa Research API (SSE stream)
-            const response = await fetch('/api/exa/research', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    instructions: effectiveInstructions,
-                    api_key: exaKey,
-                    model: 'exa-research'
-                })
-            });
+            // Call research API (SSE stream): Exa if configured, otherwise DDG fallback
+            let response;
+            if (hasExa) {
+                response = await fetch('/api/exa/research', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        instructions: effectiveInstructions,
+                        api_key: exaKey,
+                        model: 'exa-research'
+                    })
+                });
+            } else {
+                response = await fetch('/api/ddg/research', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.buildLLMRequest({
+                        instructions: effectiveInstructions,
+                        context: context || null,
+                        max_iterations: 4,
+                        max_sources: 40
+                    }))
+                });
+            }
 
             if (!response.ok) {
                 throw new Error(`Research failed: ${response.statusText}`);
@@ -283,26 +293,69 @@ class ResearchFeature {
             // Show both original and refined instructions if different
             let reportHeader;
             if (effectiveInstructions !== instructions) {
-                reportHeader = `**Research:** ${instructions}\n*Researching: "${effectiveInstructions}"*\n\n`;
+                reportHeader = `**Research${providerLabel}:** ${instructions}\n*Researching: "${effectiveInstructions}"*\n\n`;
             } else {
-                reportHeader = `**Research:** ${instructions}\n\n`;
+                reportHeader = `**Research${providerLabel}:** ${instructions}\n\n`;
             }
             let reportContent = reportHeader;
             let sources = [];
+            let lastStatus = '';
+            let ddgSourcesMd = '';
+            let ddgSourceCount = 0;
+            let ddgFinalReport = '';
 
             await SSE.readSSEStream(response, {
                 onEvent: (eventType, data) => {
                     if (eventType === 'status') {
-                        const statusContent = `${reportHeader}*${data.trim()}*`;
-                        this.canvas.updateNodeContent(researchNode.id, statusContent, true);
-                    } else if (eventType === 'content') {
-                        // Add separator if we already have content beyond the header
-                        if (reportContent.length > reportHeader.length) {
-                            reportContent += '\n\n---\n\n';
+                        lastStatus = data.trim();
+                        if (!hasExa) {
+                            const sourcesBlock = ddgSourceCount > 0
+                                ? `## Sources (${ddgSourceCount})\n\n${ddgSourcesMd}`
+                                : '';
+                            const statusContent = `${reportHeader}*${lastStatus}*\n\n${sourcesBlock}`.trim();
+                            this.canvas.updateNodeContent(researchNode.id, statusContent, true);
+                        } else {
+                            const statusContent = `${reportHeader}*${lastStatus}*`;
+                            this.canvas.updateNodeContent(researchNode.id, statusContent, true);
                         }
-                        reportContent += data;
-                        this.canvas.updateNodeContent(researchNode.id, reportContent, true);
-                        this.graph.updateNode(researchNode.id, { content: reportContent });
+                    } else if (eventType === 'content') {
+                        if (!hasExa) {
+                            // DDG fallback sends the final report as one payload
+                            ddgFinalReport = data;
+                            reportContent = reportHeader + ddgFinalReport;
+                            this.canvas.updateNodeContent(researchNode.id, reportContent, true);
+                            this.graph.updateNode(researchNode.id, { content: reportContent });
+                        } else {
+                            // Exa sends report chunks progressively
+                            if (reportContent.length > reportHeader.length) {
+                                reportContent += '\n\n---\n\n';
+                            }
+                            reportContent += data;
+                            this.canvas.updateNodeContent(researchNode.id, reportContent, true);
+                            this.graph.updateNode(researchNode.id, { content: reportContent });
+                        }
+                    } else if (eventType === 'source') {
+                        // DDG fallback emits individual sources as JSON
+                        try {
+                            const source = JSON.parse(data);
+                            ddgSourceCount += 1;
+
+                            const title = source.title || 'Untitled';
+                            const url = source.url || '';
+                            const summary = source.summary || '';
+                            const query = source.query ? `\n\n*Query:* \`${source.query}\`` : '';
+
+                            ddgSourcesMd += `### [${title}](${url})${query}\n\n${summary}\n\n---\n\n`;
+
+                            // While the loop runs, show status + growing sources list
+                            const sourcesBlock = `## Sources (${ddgSourceCount})\n\n${ddgSourcesMd}`;
+                            const statusBlock = lastStatus ? `*${lastStatus}*\n\n` : '';
+                            const content = `${reportHeader}${statusBlock}${sourcesBlock}`;
+                            this.canvas.updateNodeContent(researchNode.id, content, true);
+                            this.graph.updateNode(researchNode.id, { content: content });
+                        } catch (e) {
+                            console.error('Failed to parse DDG source event:', e);
+                        }
                     } else if (eventType === 'sources') {
                         try {
                             sources = JSON.parse(data);
@@ -312,6 +365,10 @@ class ResearchFeature {
                     }
                 },
                 onDone: () => {
+                    if (!hasExa && ddgFinalReport) {
+                        reportContent = reportHeader + ddgFinalReport;
+                    }
+
                     // Normalize the report content
                     reportContent = SSE.normalizeText(reportContent);
 

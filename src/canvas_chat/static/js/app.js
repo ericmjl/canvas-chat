@@ -15,7 +15,7 @@
 const SLASH_COMMANDS = [
     { command: '/note', description: 'Add a note or fetch URL content', placeholder: 'markdown or https://...' },
     { command: '/search', description: 'Search the web', placeholder: 'query' },
-    { command: '/research', description: 'Deep research (requires Exa)', placeholder: 'topic', requiresExa: true },
+    { command: '/research', description: 'Deep research', placeholder: 'topic' },
     { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
     { command: '/committee', description: 'Consult multiple LLMs and synthesize', placeholder: 'question' },
     { command: '/factcheck', description: 'Verify claims with web search', placeholder: 'claim(s) to verify', requiresContext: true },
@@ -308,11 +308,22 @@ class SlashCommandMenu {
             } else if (isCsvDisabled) {
                 disabledSuffix = ' <span class="requires-csv">(requires selected CSV node)</span>';
             }
+
+            // Show which provider will be used for search/research commands
+            let description = cmd.description;
+            if (cmd.command === '/search') {
+                const provider = hasExa ? 'Exa' : 'DuckDuckGo';
+                description = `Search the web (${provider})`;
+            } else if (cmd.command === '/research') {
+                const provider = hasExa ? 'Exa' : 'DuckDuckGo';
+                description = `Deep research (${provider})`;
+            }
+
             return `
             <div class="slash-command-item ${index === this.selectedIndex ? 'selected' : ''} ${disabledClass}"
                  data-index="${index}">
                 <span class="slash-command-name">${cmd.command}</span>
-                <span class="slash-command-desc">${cmd.description}${disabledSuffix}</span>
+                <span class="slash-command-desc">${description}${disabledSuffix}</span>
             </div>
         `;
         }).join('');
@@ -1566,9 +1577,13 @@ class App {
             slashContext = contextParts.join('\n\n');
         }
 
-        if (await this.tryHandleSlashCommand(content, slashContext)) {
+        // Clear input immediately for slash commands (node creation is synchronous)
+        if (content.startsWith('/')) {
             this.chatInput.value = '';
             this.chatInput.style.height = 'auto';
+        }
+
+        if (await this.tryHandleSlashCommand(content, slashContext)) {
             return;
         }
 

@@ -5,6 +5,8 @@ from pydantic import ValidationError
 
 from canvas_chat.app import (
     CommitteeRequest,
+    DDGResearchRequest,
+    DDGResearchSource,
     DDGSearchRequest,
     DDGSearchResult,
     ExaContentsResult,
@@ -392,3 +394,101 @@ def test_ddg_search_result_missing_required():
 
     with pytest.raises(ValidationError):
         DDGSearchResult(url="https://example.com", snippet="snippet")
+
+
+# --- DDGResearchRequest and DDGResearchSource tests ---
+
+
+def test_ddg_research_request_valid():
+    """Test that DDGResearchRequest validates correct input."""
+    request = DDGResearchRequest(
+        instructions="Research quantum computing",
+        model="openai/gpt-4o-mini",
+        api_key="test-key",
+        context="Some context",
+        max_iterations=4,
+        max_sources=40,
+    )
+    assert request.instructions == "Research quantum computing"
+    assert request.model == "openai/gpt-4o-mini"
+    assert request.api_key == "test-key"
+    assert request.context == "Some context"
+    assert request.max_iterations == 4
+    assert request.max_sources == 40
+
+
+def test_ddg_research_request_defaults():
+    """Test DDGResearchRequest default values."""
+    request = DDGResearchRequest(
+        instructions="Research topic", model="openai/gpt-4o-mini", api_key="test-key"
+    )
+    assert request.instructions == "Research topic"
+    assert request.context is None
+    assert request.base_url is None
+    assert request.max_iterations == 4
+    assert request.max_sources == 40
+    assert request.max_queries_per_iteration == 4
+    assert request.max_results_per_query == 10
+
+
+def test_ddg_research_request_missing_required():
+    """Test that DDGResearchRequest requires instructions, model, and api_key."""
+    with pytest.raises(ValidationError):
+        DDGResearchRequest(model="openai/gpt-4o-mini", api_key="test-key")
+
+    with pytest.raises(ValidationError):
+        DDGResearchRequest(instructions="Research", api_key="test-key")
+
+    with pytest.raises(ValidationError):
+        DDGResearchRequest(instructions="Research", model="openai/gpt-4o-mini")
+
+
+def test_ddg_research_source_valid():
+    """Test that DDGResearchSource validates correct input."""
+    source = DDGResearchSource(
+        url="https://example.com/article",
+        title="Example Article",
+        summary="This is a summary of the article.",
+        iteration=1,
+        query="research query",
+    )
+    assert source.url == "https://example.com/article"
+    assert source.title == "Example Article"
+    assert source.summary == "This is a summary of the article."
+    assert source.iteration == 1
+    assert source.query == "research query"
+    assert source.snippet is None  # Optional field
+
+
+def test_ddg_research_source_with_snippet():
+    """Test DDGResearchSource with optional snippet field."""
+    source = DDGResearchSource(
+        url="https://example.com/article",
+        title="Example Article",
+        summary="Summary",
+        iteration=2,
+        query="query",
+        snippet="Article snippet text",
+    )
+    assert source.snippet == "Article snippet text"
+
+
+def test_ddg_research_source_missing_required():
+    """Test that DDGResearchSource requires url, title, summary, iteration, and query."""
+    with pytest.raises(ValidationError):
+        DDGResearchSource(
+            title="Title", summary="Summary", iteration=1, query="query"
+        )
+
+    with pytest.raises(ValidationError):
+        DDGResearchSource(
+            url="https://example.com",
+            summary="Summary",
+            iteration=1,
+            query="query",
+        )
+
+    with pytest.raises(ValidationError):
+        DDGResearchSource(
+            url="https://example.com", title="Title", iteration=1, query="query"
+        )
