@@ -432,15 +432,21 @@ def test_ddg_research_request_defaults():
 
 
 def test_ddg_research_request_missing_required():
-    """Test that DDGResearchRequest requires instructions, model, and api_key."""
+    """Test that DDGResearchRequest requires instructions and model.
+
+    api_key is optional.
+    """
     with pytest.raises(ValidationError):
         DDGResearchRequest(model="openai/gpt-4o-mini", api_key="test-key")
 
     with pytest.raises(ValidationError):
         DDGResearchRequest(instructions="Research", api_key="test-key")
 
-    with pytest.raises(ValidationError):
-        DDGResearchRequest(instructions="Research", model="openai/gpt-4o-mini")
+    # api_key is optional, so this should work
+    request = DDGResearchRequest(instructions="Research", model="openai/gpt-4o-mini")
+    assert request.instructions == "Research"
+    assert request.model == "openai/gpt-4o-mini"
+    assert request.api_key is None
 
 
 def test_ddg_research_source_valid():
@@ -474,11 +480,9 @@ def test_ddg_research_source_with_snippet():
 
 
 def test_ddg_research_source_missing_required():
-    """Test that DDGResearchSource requires url, title, summary, iteration, and query."""
+    """Test that DDGResearchSource requires url, title, summary, iteration, query."""
     with pytest.raises(ValidationError):
-        DDGResearchSource(
-            title="Title", summary="Summary", iteration=1, query="query"
-        )
+        DDGResearchSource(title="Title", summary="Summary", iteration=1, query="query")
 
     with pytest.raises(ValidationError):
         DDGResearchSource(
