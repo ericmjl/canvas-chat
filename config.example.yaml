@@ -4,7 +4,8 @@
 # Copy to config.yaml and customize for your deployment.
 #
 # IMPORTANT: This file should be committed to version control.
-# API keys should be set via environment variables, NOT in this file.
+# API keys and endpoints should be set via environment variables, NOT in this file.
+# This allows the same config.yaml to work across dev/test/prod environments.
 
 models:
   # OpenAI models
@@ -41,11 +42,12 @@ models:
     apiKeyEnvVar: "GROQ_API_KEY"
     contextWindow: 128000
 
-  # Example: Custom/internal LLM endpoint
+  # Example: Custom/internal LLM endpoint with environment-specific URL
+  # The endpointEnvVar allows different endpoints for dev/test/prod
   # - id: "custom/internal-llm"
   #   name: "Internal LLM"
-  #   endpoint: "https://llm.internal.company.com/v1"
   #   apiKeyEnvVar: "INTERNAL_LLM_KEY"
+  #   endpointEnvVar: "INTERNAL_LLM_ENDPOINT"  # e.g., https://llm.dev.company.com/v1
   #   contextWindow: 32000
 
 # Exa API key for web search features (optional)
