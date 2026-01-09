@@ -359,6 +359,10 @@ class App {
         // Tag highlighting state
         this.highlightedTagColor = null;  // Currently highlighted tag color, or null if none
 
+        // Admin mode state (set by loadConfig)
+        this.adminMode = false;
+        this.adminModels = [];  // Models configured by admin (only in admin mode)
+
         // Feature modules (initialized lazily)
         this._flashcardFeature = null;
         this._committeeFeature = null;
@@ -467,8 +471,16 @@ class App {
             };
         }
 
-        // Load models
+        // Load admin config first (determines if admin mode is enabled)
+        await this.loadConfig();
+
+        // Load models (behavior differs based on admin mode)
         await this.loadModels();
+
+        // Hide admin-restricted UI elements if in admin mode
+        if (this.adminMode) {
+            this.hideAdminRestrictedUI();
+        }
 
         // Load or create session
         await this.loadSession();
@@ -478,6 +490,56 @@ class App {
 
         // Show empty state if needed
         this.updateEmptyState();
+    }
+
+    /**
+     * Load application config from backend.
+     * Determines if admin mode is enabled and gets admin-configured models.
+     */
+    async loadConfig() {
+        try {
+            const response = await fetch('/api/config');
+            if (response.ok) {
+                const config = await response.json();
+                this.adminMode = config.adminMode || false;
+                this.adminModels = config.models || [];
+
+                if (this.adminMode) {
+                    console.log('%c[App] Admin mode enabled', 'color: #FF9800; font-weight: bold');
+                    console.log('[App] Available models:', this.adminModels.map(m => m.id));
+                }
+            }
+        } catch (error) {
+            console.warn('[App] Failed to load config, using normal mode:', error);
+            this.adminMode = false;
+            this.adminModels = [];
+        }
+    }
+
+    /**
+     * Hide UI elements that should not be shown in admin mode.
+     * In admin mode, users don't configure API keys or custom models.
+     */
+    hideAdminRestrictedUI() {
+        // Hide API keys section in settings modal
+        const apiKeysSection = document.getElementById('settings-api-keys-section');
+        if (apiKeysSection) {
+            apiKeysSection.style.display = 'none';
+        }
+
+        // Hide LLM proxy section in settings modal (admin controls endpoints)
+        const proxySection = document.getElementById('settings-proxy-section');
+        if (proxySection) {
+            proxySection.style.display = 'none';
+        }
+
+        // Hide custom models section in settings modal
+        const customModelsSection = document.getElementById('settings-custom-models-section');
+        if (customModelsSection) {
+            customModelsSection.style.display = 'none';
+        }
+
+        console.log('[App] Hidden admin-restricted UI elements (API keys, proxy, custom models)');
     }
 
     /**
@@ -493,7 +555,8 @@ class App {
                 saveSession: () => this.saveSession(),
                 updateEmptyState: () => this.updateEmptyState(),
                 showToast: (msg, type) => this.showToast(msg, type),
-                updateCollapseButtonForNode: (nodeId) => this.updateCollapseButtonForNode(nodeId)
+                updateCollapseButtonForNode: (nodeId) => this.updateCollapseButtonForNode(nodeId),
+                buildLLMRequest: (params) => this.buildLLMRequest(params)
             });
         }
         return this._flashcardFeature;
@@ -511,7 +574,8 @@ class App {
                 modelPicker: this.modelPicker,
                 chatInput: this.chatInput,
                 saveSession: () => this.saveSession(),
-                updateEmptyState: () => this.updateEmptyState()
+                updateEmptyState: () => this.updateEmptyState(),
+                buildLLMRequest: (params) => this.buildLLMRequest(params)
             });
         }
         return this._committeeFeature;
@@ -530,7 +594,8 @@ class App {
                 saveSession: () => this.saveSession(),
                 updateEmptyState: () => this.updateEmptyState(),
                 generateNodeSummary: (nodeId) => this.generateNodeSummary(nodeId),
-                pushUndo: (action) => this.undoManager.push(action)
+                pushUndo: (action) => this.undoManager.push(action),
+                buildLLMRequest: (params) => this.buildLLMRequest(params)
             });
         }
         return this._matrixFeature;
@@ -573,7 +638,13 @@ class App {
     }
 
     async loadModels() {
-        // Fetch models dynamically from each provider with configured API keys
+        // In admin mode, use admin-configured models
+        if (this.adminMode) {
+            await this.loadModelsAdminMode();
+            return;
+        }
+
+        // Normal mode: fetch models dynamically from each provider with configured API keys
         const keys = storage.getApiKeys();
         const allModels = [];
 
@@ -631,6 +702,46 @@ class App {
                 const option = document.createElement('option');
                 option.value = model.id;
                 option.textContent = `${model.name} (${model.provider})`;
+                this.modelPicker.appendChild(option);
+            }
+
+            // Restore last selected model (if still available)
+            const savedModel = storage.getCurrentModel();
+            if (savedModel && allModels.find(m => m.id === savedModel)) {
+                this.modelPicker.value = savedModel;
+            }
+        }
+    }
+
+    /**
+     * Load models in admin mode.
+     * Uses admin-configured models from the backend instead of fetching from providers.
+     */
+    async loadModelsAdminMode() {
+        const allModels = this.adminModels;
+
+        // Update chat.models for context window lookups
+        chat.models = allModels;
+
+        // Populate model picker
+        this.modelPicker.innerHTML = '';
+
+        if (allModels.length === 0) {
+            // No models configured by admin
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'No models configured. Contact your administrator.';
+            option.disabled = true;
+            this.modelPicker.appendChild(option);
+            this.modelPicker.classList.add('no-keys');
+        } else {
+            this.modelPicker.classList.remove('no-keys');
+            for (const model of allModels) {
+                const option = document.createElement('option');
+                option.value = model.id;
+                // Admin models may have provider from config or extract from id
+                const provider = model.provider || model.id.split('/')[0];
+                option.textContent = `${model.name} (${provider})`;
                 this.modelPicker.appendChild(option);
             }
 
@@ -1398,11 +1509,23 @@ class App {
      * Build an LLM request payload with model, API key, and base URL.
      * This ensures all LLM requests include proxy configuration if set.
      *
+     * In admin mode, credentials are omitted since the backend injects them.
+     *
      * @param {Object} additionalParams - Additional parameters to include in the request
      * @returns {Object} Request payload with model, api_key, base_url, and any additional params
      */
     buildLLMRequest(additionalParams = {}) {
         const model = this.modelPicker.value;
+
+        // In admin mode, backend handles credentials
+        if (this.adminMode) {
+            return {
+                model: model,
+                ...additionalParams
+            };
+        }
+
+        // Normal mode: include user-provided credentials
         const apiKey = chat.getApiKeyForModel(model);
         const baseUrl = chat.getBaseUrlForModel(model);
 
@@ -2851,26 +2974,17 @@ df.head()
                 context: { prompt, model, nodeContext: context }
             });
 
-            // Build request body
-            const apiKey = chat.getApiKeyForModel(model);
-            const baseUrl = chat.getBaseUrlForModel(model);
-
-            const requestBody = {
+            // Build request body using centralized helper
+            const requestBody = this.buildLLMRequest({
                 prompt,
                 existing_code: context.existingCode,
                 dataframe_info: context.dataframeInfo,
-                context: context.ancestorContext,
-                model,
-                api_key: apiKey
-            };
+                context: context.ancestorContext
+            });
 
             // Log DataFrame info for debugging
             if (context.dataframeInfo && context.dataframeInfo.length > 0) {
                 console.log('📊 DataFrame info being sent to AI:', context.dataframeInfo);
-            }
-
-            if (baseUrl) {
-                requestBody.base_url = baseUrl;
             }
 
             // Stream code generation
@@ -3889,20 +4003,11 @@ df.head()
      * @param {Function} onError - Callback on error (err)
      */
     async streamWithAbort(nodeId, abortController, messages, model, onChunk, onDone, onError) {
-        const apiKey = chat.getApiKeyForModel(model);
-        const baseUrl = chat.getBaseUrlForModel(model);
-
         try {
-            const requestBody = {
+            const requestBody = this.buildLLMRequest({
                 messages,
-                model,
-                api_key: apiKey,
-                temperature: 0.7,
-            };
-
-            if (baseUrl) {
-                requestBody.base_url = baseUrl;
-            }
+                temperature: 0.7
+            });
 
             const response = await fetch('/api/chat', {
                 method: 'POST',
@@ -4219,10 +4324,11 @@ df.head()
         const url = refNode?.url || 'the fetched content';
 
         const model = this.modelPicker.value;
-        const apiKey = chat.getApiKeyForModel(model);
 
-        if (!apiKey) {
-            alert('Please set an API key for the selected model in Settings.');
+        // Check if we have a valid model (in admin mode, backend handles credentials)
+        const request = this.buildLLMRequest({});
+        if (!request.model) {
+            alert('Please select a model in the toolbar.');
             return;
         }
 
@@ -4575,19 +4681,9 @@ df.head()
                 return;
             }
 
-            const model = this.modelPicker.value;
-            const apiKey = chat.getApiKeyForModel(model);
-            const baseUrl = chat.getBaseUrlForModel(model);
-
-            const requestBody = {
-                content,
-                model,
-                api_key: apiKey
-            };
-
-            if (baseUrl) {
-                requestBody.base_url = baseUrl;
-            }
+            const requestBody = this.buildLLMRequest({
+                content
+            });
 
             const response = await fetch('/api/generate-title', {
                 method: 'POST',
@@ -4632,10 +4728,6 @@ df.head()
         if (node.type !== NodeType.MATRIX && !node.content) return;
 
         try {
-            const model = this.modelPicker.value;
-            const apiKey = chat.getApiKeyForModel(model);
-            const baseUrl = chat.getBaseUrlForModel(model);
-
             // Build content string based on node type
             let contentForSummary;
             if (node.type === NodeType.MATRIX) {
@@ -4650,15 +4742,9 @@ df.head()
                 contentForSummary = node.content;
             }
 
-            const requestBody = {
-                content: contentForSummary,
-                model,
-                api_key: apiKey
-            };
-
-            if (baseUrl) {
-                requestBody.base_url = baseUrl;
-            }
+            const requestBody = this.buildLLMRequest({
+                content: contentForSummary
+            });
 
             const response = await fetch('/api/generate-summary', {
                 method: 'POST',

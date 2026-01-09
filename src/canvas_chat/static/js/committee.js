@@ -23,6 +23,7 @@ class CommitteeFeature {
      * @param {HTMLElement} context.chatInput - Chat input element
      * @param {Function} context.saveSession - Save session callback
      * @param {Function} context.updateEmptyState - Update empty state callback
+     * @param {Function} context.buildLLMRequest - Build LLM request with credentials callback
      */
     constructor(context) {
         this.graph = context.graph;
@@ -31,6 +32,7 @@ class CommitteeFeature {
         this.chatInput = context.chatInput;
         this.saveSession = context.saveSession;
         this.updateEmptyState = context.updateEmptyState;
+        this.buildLLMRequest = context.buildLLMRequest;
 
         // Committee state
         this._committeeData = null;
@@ -285,11 +287,16 @@ class CommitteeFeature {
         // Pan to see the committee
         this.canvas.centerOnAnimated(basePos.x, basePos.y + verticalOffset, 300);
 
-        // Collect API keys by provider for all models (uses canonical mapping from storage.js)
-        const apiKeys = storage.getApiKeysForModels([...selectedModels, chairmanModel]);
+        // Build base request to check if we're in admin mode
+        const baseRequest = this.buildLLMRequest({});
+        const isAdminMode = !baseRequest.api_key;  // Admin mode doesn't include api_key
 
-        // Get base URL if configured
-        const baseUrl = storage.getBaseUrl() || null;
+        // Collect API keys by provider for all models (in normal mode)
+        // In admin mode, backend handles credentials so we pass empty object
+        const apiKeys = isAdminMode ? {} : storage.getApiKeysForModels([...selectedModels, chairmanModel]);
+
+        // Get base URL if configured (only in normal mode)
+        const baseUrl = isAdminMode ? null : (storage.getBaseUrl() || null);
 
         // Track accumulated content for each opinion/review
         const opinionContents = {};

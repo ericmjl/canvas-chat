@@ -1,0 +1,53 @@
+# Admin-controlled model configuration for canvas-chat
+#
+# This file is used when running with --admin-mode flag.
+# Copy to config.yaml and customize for your deployment.
+#
+# IMPORTANT: This file should be committed to version control.
+# API keys should be set via environment variables, NOT in this file.
+
+models:
+  # OpenAI models
+  - id: "openai/gpt-4o"
+    name: "GPT-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+    contextWindow: 128000
+
+  - id: "openai/gpt-4o-mini"
+    name: "GPT-4o Mini"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+    contextWindow: 128000
+
+  # Anthropic models
+  - id: "anthropic/claude-sonnet-4-20250514"
+    name: "Claude Sonnet 4"
+    apiKeyEnvVar: "ANTHROPIC_API_KEY"
+    contextWindow: 200000
+
+  - id: "anthropic/claude-3-5-haiku-20241022"
+    name: "Claude 3.5 Haiku"
+    apiKeyEnvVar: "ANTHROPIC_API_KEY"
+    contextWindow: 200000
+
+  # Google models
+  - id: "gemini/gemini-1.5-pro"
+    name: "Gemini 1.5 Pro"
+    apiKeyEnvVar: "GEMINI_API_KEY"
+    contextWindow: 2000000
+
+  # Groq models (fast inference)
+  - id: "groq/llama-3.1-70b-versatile"
+    name: "Llama 3.1 70B (Groq)"
+    apiKeyEnvVar: "GROQ_API_KEY"
+    contextWindow: 128000
+
+  # Example: Custom/internal LLM endpoint
+  # - id: "custom/internal-llm"
+  #   name: "Internal LLM"
+  #   endpoint: "https://llm.internal.company.com/v1"
+  #   apiKeyEnvVar: "INTERNAL_LLM_KEY"
+  #   contextWindow: 32000
+
+# Exa API key for web search features (optional)
+# Set via EXA_API_KEY environment variable
+# exaApiKeyEnvVar: "EXA_API_KEY"

@@ -43,7 +43,6 @@ class FactcheckFeature {
         console.log('[Factcheck] Starting with input:', input, 'context:', context);
 
         const model = this.getModelPicker().value;
-        const apiKey = chat.getApiKeyForModel(model);
 
         // Get parent node IDs for positioning
         let parentIds = this.canvas.getSelectedNodeIds();
@@ -108,7 +107,7 @@ class FactcheckFeature {
             this.canvas.updateNodeContent(loadingNode.id, '🔄 **Extracting claims...**', true);
 
             // Extract individual claims from input
-            const claims = await this.extractFactcheckClaims(effectiveInput, model, apiKey);
+            const claims = await this.extractFactcheckClaims(effectiveInput, model);
 
             if (claims.length === 0) {
                 // No claims found - update loading node with error message
@@ -122,6 +121,8 @@ class FactcheckFeature {
             if (claims.length > 5) {
                 // Too many claims - show modal for selection
                 // Store the loading node ID so we can reuse it after modal
+                // Get API key (may be null in admin mode, backend handles it)
+                const apiKey = chat.getApiKeyForModel(model);
                 this._factcheckData = {
                     claims: claims,
                     parentIds: parentIds,
@@ -135,6 +136,8 @@ class FactcheckFeature {
             }
 
             // Proceed directly with all claims (≤5) - reuse the loading node
+            // Get API key (may be null in admin mode, backend handles it)
+            const apiKey = chat.getApiKeyForModel(model);
             await this.executeFactcheck(claims, parentIds, model, apiKey, loadingNode.id);
 
         } catch (err) {
@@ -513,7 +516,7 @@ class FactcheckFeature {
      * @param {string} apiKey - API key for the model
      * @returns {Promise<string[]>} - Array of extracted claims (max 10)
      */
-    async extractFactcheckClaims(input, model, apiKey) {
+    async extractFactcheckClaims(input, model) {
         const systemPrompt = `You are a fact-checking assistant. Your task is to extract discrete, verifiable factual claims from the given text.
 
 Rules:
@@ -530,6 +533,9 @@ Respond with a JSON array of claim strings. Example:
 If the input contains no factual content at all (e.g., just greetings or questions), respond with an empty array: []`;
 
         console.log('[Factcheck] Extracting claims from:', input);
+
+        // Get API key (may be null in admin mode, backend handles it)
+        const apiKey = chat.getApiKeyForModel(model);
 
         const response = await chat.sendMessageNonStreaming(
             [

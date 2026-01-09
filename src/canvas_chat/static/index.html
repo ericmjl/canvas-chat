@@ -179,84 +179,93 @@
                 <button class="modal-close" id="settings-close">&times;</button>
             </div>
             <div class="modal-body">
-                <h3>API Keys</h3>
-                <p class="settings-note">Keys are stored locally in your browser and sent directly to providers.</p>
+                <!-- API Keys Section (hidden in admin mode) -->
+                <div id="settings-api-keys-section" class="settings-section">
+                    <h3>API Keys</h3>
+                    <p class="settings-note">Keys are stored locally in your browser and sent directly to providers.</p>
 
-                <div class="api-key-group">
-                    <label for="openai-key">OpenAI API Key</label>
-                    <input type="password" id="openai-key" placeholder="sk-...">
-                </div>
-
-                <div class="api-key-group">
-                    <label for="anthropic-key">Anthropic API Key</label>
-                    <input type="password" id="anthropic-key" placeholder="sk-ant-...">
-                </div>
-
-                <div class="api-key-group">
-                    <label for="google-key">Google AI API Key</label>
-                    <input type="password" id="google-key" placeholder="AI...">
-                </div>
-
-                <div class="api-key-group">
-                    <label for="groq-key">Groq API Key</label>
-                    <input type="password" id="groq-key" placeholder="gsk_...">
-                </div>
-
-                <div class="api-key-group">
-                    <label for="github-key">GitHub Token (for GitHub Models)</label>
-                    <input type="password" id="github-key" placeholder="ghp_... or github_pat_...">
-                    <small class="key-hint">PAT with <code>models:read</code> scope. <a href="https://github.com/settings/tokens" target="_blank">Create token</a></small>
-                </div>
-
-                <div class="api-key-group copilot-note">
-                    <strong>GitHub Copilot Models</strong>
-                    <small class="key-hint">Copilot models (e.g., <code>github_copilot/gpt-4</code>) require device authentication. On first use, check your <strong>server terminal</strong> for a device code and URL to authenticate with GitHub.</small>
-                </div>
-
-                <div class="api-key-group">
-                    <label for="exa-key">Exa API Key (for web search)</label>
-                    <input type="password" id="exa-key" placeholder="exa-...">
-                    <small class="key-hint">Use <code>/search query</code> to search the web. <a href="https://dashboard.exa.ai/api-keys" target="_blank">Get API key</a></small>
-                </div>
-
-                <h3>LLM Proxy</h3>
-                <p class="settings-note">Configure a custom base URL to use your own LLM proxy (e.g., LiteLLM proxy, OpenRouter).</p>
-
-                <div class="api-key-group">
-                    <label for="base-url">Base URL (optional)</label>
-                    <input type="text" id="base-url" placeholder="https://your-proxy.example.com/v1">
-                    <small class="key-hint">Leave empty to use default provider endpoints. Supports OpenAI-compatible APIs.</small>
-                </div>
-
-                <h3>Custom Models</h3>
-                <p class="settings-note">Add LiteLLM-compatible models for self-hosted or proxy endpoints.</p>
-
-                <div id="custom-models-list" class="custom-models-list">
-                    <!-- Custom models will be populated here -->
-                </div>
-
-                <div class="custom-model-form">
                     <div class="api-key-group">
-                        <label for="custom-model-id">Model ID *</label>
-                        <input type="text" id="custom-model-id" placeholder="openai/gpt-4.1-mini">
-                        <small class="key-hint">Format: provider/model-name (e.g., openai/my-model, ollama_chat/llama3.1)</small>
+                        <label for="openai-key">OpenAI API Key</label>
+                        <input type="password" id="openai-key" placeholder="sk-...">
                     </div>
+
                     <div class="api-key-group">
-                        <label for="custom-model-name">Display Name</label>
-                        <input type="text" id="custom-model-name" placeholder="My Custom Model">
-                        <small class="key-hint">Optional. Defaults to model ID if not specified.</small>
+                        <label for="anthropic-key">Anthropic API Key</label>
+                        <input type="password" id="anthropic-key" placeholder="sk-ant-...">
                     </div>
-                    <div class="custom-model-form-row">
+
+                    <div class="api-key-group">
+                        <label for="google-key">Google AI API Key</label>
+                        <input type="password" id="google-key" placeholder="AI...">
+                    </div>
+
+                    <div class="api-key-group">
+                        <label for="groq-key">Groq API Key</label>
+                        <input type="password" id="groq-key" placeholder="gsk_...">
+                    </div>
+
+                    <div class="api-key-group">
+                        <label for="github-key">GitHub Token (for GitHub Models)</label>
+                        <input type="password" id="github-key" placeholder="ghp_... or github_pat_...">
+                        <small class="key-hint">PAT with <code>models:read</code> scope. <a href="https://github.com/settings/tokens" target="_blank">Create token</a></small>
+                    </div>
+
+                    <div class="api-key-group copilot-note">
+                        <strong>GitHub Copilot Models</strong>
+                        <small class="key-hint">Copilot models (e.g., <code>github_copilot/gpt-4</code>) require device authentication. On first use, check your <strong>server terminal</strong> for a device code and URL to authenticate with GitHub.</small>
+                    </div>
+
+                    <div class="api-key-group">
+                        <label for="exa-key">Exa API Key (for web search)</label>
+                        <input type="password" id="exa-key" placeholder="exa-...">
+                        <small class="key-hint">Use <code>/search query</code> to search the web. <a href="https://dashboard.exa.ai/api-keys" target="_blank">Get API key</a></small>
+                    </div>
+                </div>
+
+                <!-- LLM Proxy Section (hidden in admin mode) -->
+                <div id="settings-proxy-section" class="settings-section">
+                    <h3>LLM Proxy</h3>
+                    <p class="settings-note">Configure a custom base URL to use your own LLM proxy (e.g., LiteLLM proxy, OpenRouter).</p>
+
+                    <div class="api-key-group">
+                        <label for="base-url">Base URL (optional)</label>
+                        <input type="text" id="base-url" placeholder="https://your-proxy.example.com/v1">
+                        <small class="key-hint">Leave empty to use default provider endpoints. Supports OpenAI-compatible APIs.</small>
+                    </div>
+                </div>
+
+                <!-- Custom Models Section (hidden in admin mode) -->
+                <div id="settings-custom-models-section" class="settings-section">
+                    <h3>Custom Models</h3>
+                    <p class="settings-note">Add LiteLLM-compatible models for self-hosted or proxy endpoints.</p>
+
+                    <div id="custom-models-list" class="custom-models-list">
+                        <!-- Custom models will be populated here -->
+                    </div>
+
+                    <div class="custom-model-form">
                         <div class="api-key-group">
-                            <label for="custom-model-context">Context Window</label>
-                            <input type="number" id="custom-model-context" placeholder="128000" min="1">
+                            <label for="custom-model-id">Model ID *</label>
+                            <input type="text" id="custom-model-id" placeholder="openai/gpt-4.1-mini">
+                            <small class="key-hint">Format: provider/model-name (e.g., openai/my-model, ollama_chat/llama3.1)</small>
                         </div>
                         <div class="api-key-group">
-                            <label for="custom-model-baseurl">Base URL</label>
-                            <input type="text" id="custom-model-baseurl" placeholder="https://my-proxy.com/v1">
+                            <label for="custom-model-name">Display Name</label>
+                            <input type="text" id="custom-model-name" placeholder="My Custom Model">
+                            <small class="key-hint">Optional. Defaults to model ID if not specified.</small>
                         </div>
+                        <div class="custom-model-form-row">
+                            <div class="api-key-group">
+                                <label for="custom-model-context">Context Window</label>
+                                <input type="number" id="custom-model-context" placeholder="128000" min="1">
+                            </div>
+                            <div class="api-key-group">
+                                <label for="custom-model-baseurl">Base URL</label>
+                                <input type="text" id="custom-model-baseurl" placeholder="https://my-proxy.com/v1">
+                            </div>
+                        </div>
+                        <button id="add-custom-model-btn" class="secondary-btn">+ Add Model</button>
                     </div>
-                    <button id="add-custom-model-btn" class="secondary-btn">+ Add Model</button>
                 </div>
 
                 <h3>Flashcard Settings</h3>

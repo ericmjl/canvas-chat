@@ -18,8 +18,10 @@ merging, and exploration of topics as a DAG.
 import asyncio
 import json
 import logging
+import os
 import traceback
 from pathlib import Path
+from typing import TypeVar
 
 import httpx
 import litellm
@@ -39,6 +41,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from canvas_chat.admin_config import AdminConfig
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,6 +51,30 @@ logger = logging.getLogger(__name__)
 litellm.drop_params = True  # Drop unsupported params gracefully
 
 app = FastAPI(title="Canvas Chat", version="0.1.0")
+
+# --- Admin Mode Configuration ---
+# This is initialized at module load time based on environment variable
+# set by the CLI (--admin-mode flag)
+_admin_config: AdminConfig | None = None
+
+
+def get_admin_config() -> AdminConfig:
+    """Get the admin configuration, initializing if needed."""
+    global _admin_config
+    if _admin_config is None:
+        if os.environ.get("CANVAS_CHAT_ADMIN_MODE") == "true":
+            try:
+                _admin_config = AdminConfig.load()
+                logger.info(
+                    f"Admin mode: {len(_admin_config.models)} models configured"
+                )
+            except Exception as e:
+                logger.error(f"Failed to load admin config: {e}")
+                _admin_config = AdminConfig.disabled()
+        else:
+            _admin_config = AdminConfig.disabled()
+    return _admin_config
+
 
 # Mount static files
 STATIC_DIR = Path(__file__).parent / "static"
@@ -682,6 +710,124 @@ async def root():
     return HTMLResponse(content=index_path.read_text())
 
 
+@app.get("/api/config")
+async def get_config():
+    """Get application configuration for the frontend.
+
+    Returns admin mode status and available models.
+    In admin mode, returns admin-configured models (without secrets).
+    In normal mode, returns empty models (frontend will fetch from providers).
+    """
+    config = get_admin_config()
+    return {
+        "adminMode": config.enabled,
+        "models": config.get_frontend_models() if config.enabled else [],
+    }
+
+
+# --- Credential Injection for Admin Mode ---
+
+
+# TypeVar for any request with model, api_key, and base_url fields
+T = TypeVar("T")
+
+
+def inject_admin_credentials(request: T) -> T:
+    """Inject admin credentials into a request if admin mode is enabled.
+
+    Works with any request object that has `model`, `api_key`, and optionally
+    `base_url` attributes (e.g., ChatRequest, SummarizeRequest, etc.).
+
+    In normal mode (admin mode disabled), this is a no-op.
+
+    Args:
+        request: Any request object with model/api_key/base_url fields
+
+    Returns:
+        The same request object, with credentials injected if in admin mode
+
+    Raises:
+        HTTPException: If admin mode is enabled but the requested model
+            is not configured or the API key env var is not set.
+    """
+    config = get_admin_config()
+
+    if not config.enabled:
+        return request
+
+    model_id = getattr(request, "model", None)
+    if model_id is None:
+        return request
+
+    api_key, base_url = config.resolve_credentials(model_id)
+
+    if api_key is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{model_id}' not available in admin mode",
+        )
+
+    # Inject credentials into the request
+    request.api_key = api_key
+    if base_url and hasattr(request, "base_url"):
+        request.base_url = base_url
+
+    return request
+
+
+def inject_admin_credentials_committee(request: CommitteeRequest) -> CommitteeRequest:
+    """Inject admin credentials into a CommitteeRequest if admin mode is enabled.
+
+    CommitteeRequest is special because it has multiple models (committee members
+    plus chairman) and uses api_keys dict instead of a single api_key field.
+
+    In admin mode, we populate the api_keys dict with credentials for all models
+    used in the request.
+
+    Args:
+        request: CommitteeRequest with models, chairman_model, and api_keys fields
+
+    Returns:
+        The same request object, with api_keys populated if in admin mode
+
+    Raises:
+        HTTPException: If admin mode is enabled but a requested model
+            is not configured or the API key env var is not set.
+    """
+    config = get_admin_config()
+
+    if not config.enabled:
+        return request
+
+    # Collect all models that need credentials
+    all_models = list(request.models) + [request.chairman_model]
+
+    # Build api_keys dict from admin config
+    admin_api_keys: dict[str, str] = {}
+    for model_id in all_models:
+        api_key, base_url = config.resolve_credentials(model_id)
+
+        if api_key is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model '{model_id}' not available in admin mode",
+            )
+
+        # Extract provider from model_id (e.g., "openai/gpt-4o" -> "openai")
+        provider = extract_provider(model_id)
+        admin_api_keys[provider] = api_key
+
+        # If base_url is configured, set it on the request
+        # (all models in a committee share the same base_url)
+        if base_url and request.base_url is None:
+            request.base_url = base_url
+
+    # Replace the api_keys dict with admin-provided credentials
+    request.api_keys = admin_api_keys
+
+    return request
+
+
 @app.get("/api/models")
 async def list_models() -> list[ModelInfo]:
     """List available models, including dynamically fetched Ollama models."""
@@ -730,6 +876,9 @@ async def chat(request: ChatRequest, http_request: Request):
     The frontend sends the full conversation context (resolved from the DAG).
     We proxy to LiteLLM and stream the response back via SSE.
     """
+    # Inject admin credentials if in admin mode
+    inject_admin_credentials(request)
+
     # Build kwargs for litellm
     kwargs = {
         "model": request.model,
@@ -817,6 +966,9 @@ async def summarize(request: SummarizeRequest):
 
     Used for creating summary nodes that condense long branches.
     """
+    # Inject admin credentials if in admin mode
+    inject_admin_credentials(request)
+
     # Build the summarization prompt
     conversation = "\n".join([f"{m.role}: {m.content}" for m in request.messages])
 
@@ -888,6 +1040,9 @@ async def refine_query(request: RefineQueryRequest):
     into specific queries based on the surrounding context.
     Works for search queries, research instructions, and factcheck claims.
     """
+    # Inject admin credentials if in admin mode
+    inject_admin_credentials(request)
+
     logger.info(
         f"Refine query: user_query='{request.user_query}', "
         f"command_type={request.command_type}, "
@@ -1598,6 +1753,9 @@ async def parse_two_lists(request: ParseTwoListsRequest):
 
     Returns two lists: one for rows, one for columns (max 10 each).
     """
+    # Inject admin credentials if in admin mode
+    inject_admin_credentials(request)
+
     combined_content = "\n\n---\n\n".join(request.contents)
     logger.info(
         f"Parse two lists request: {len(request.contents)} nodes, "
@@ -1684,6 +1842,9 @@ async def matrix_fill(request: MatrixFillRequest):
 
     Returns SSE stream with the evaluation content.
     """
+    # Inject admin credentials if in admin mode
+    inject_admin_credentials(request)
+
     logger.info(
         f"Matrix fill request: row_item={request.row_item[:50]}..., "
         f"col_item={request.col_item[:50]}..."
@@ -1771,6 +1932,9 @@ async def generate_title(request: GenerateTitleRequest):
 
     Returns a short, descriptive title for the canvas session.
     """
+    # Inject admin credentials if in admin mode
+    inject_admin_credentials(request)
+
     logger.info(f"Generate title request: content length={len(request.content)}")
 
     provider = extract_provider(request.model)
@@ -1843,6 +2007,9 @@ async def generate_summary(request: GenerateSummaryRequest):
 
     Returns a concise 5-10 word summary suitable for display when zoomed out.
     """
+    # Inject admin credentials if in admin mode
+    inject_admin_credentials(request)
+
     logger.info(f"Generate summary request: content length={len(request.content)}")
 
     provider = extract_provider(request.model)
@@ -1928,6 +2095,9 @@ async def generate_code(request: GenerateCodeRequest, http_request: Request):
 
     Returns SSE stream of code tokens.
     """
+    # Inject admin credentials if in admin mode
+    inject_admin_credentials(request)
+
     logger.info(f"Code generation request: {request.prompt[:50]}...")
 
     try:
@@ -2255,6 +2425,9 @@ async def committee(request: CommitteeRequest):
 
     Returns an SSE stream with opinion, review, and synthesis events.
     """
+    # Inject admin credentials if in admin mode
+    inject_admin_credentials_committee(request)
+
     logger.info(
         f"Committee request: question='{request.question[:50]}...', "
         f"models={request.models}, chairman={request.chairman_model}, "

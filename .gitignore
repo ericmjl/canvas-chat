@@ -178,3 +178,6 @@ pyrightconfig.json
 
 # Node.js
 node_modules/
+
+# Admin mode config (contains API key env var references)
+config.yaml

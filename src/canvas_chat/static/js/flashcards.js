@@ -24,6 +24,7 @@ class FlashcardFeature {
      * @param {Function} context.updateEmptyState - Update empty state callback
      * @param {Function} context.showToast - Show toast notification callback
      * @param {Function} context.updateCollapseButtonForNode - Update collapse button callback
+     * @param {Function} context.buildLLMRequest - Build LLM request with credentials callback
      */
     constructor(context) {
         this.graph = context.graph;
@@ -33,6 +34,7 @@ class FlashcardFeature {
         this.updateEmptyState = context.updateEmptyState;
         this.showToast = context.showToast;
         this.updateCollapseButtonForNode = context.updateCollapseButtonForNode;
+        this.buildLLMRequest = context.buildLLMRequest;
 
         // Review state
         this.reviewState = null;
@@ -49,10 +51,12 @@ class FlashcardFeature {
         if (!sourceNode) return;
 
         const model = this.modelPicker.value;
-        const apiKey = chat.getApiKeyForModel(model);
 
-        if (!apiKey) {
-            alert('Please set an API key for the selected model in Settings.');
+        // In normal mode, check for API key. In admin mode, backend handles credentials.
+        const request = this.buildLLMRequest({});
+        if (!request.api_key && !request.model) {
+            // No model selected (neither admin mode nor user-configured)
+            alert('Please select a model in the toolbar.');
             return;
         }
 
@@ -475,10 +479,11 @@ ${nodeContent}`;
      */
     async gradeAnswer(card, userAnswer) {
         const model = this.modelPicker.value;
-        const apiKey = chat.getApiKeyForModel(model);
 
-        if (!apiKey) {
-            throw new Error('No API key configured');
+        // Check if we have a valid model (in admin mode, backend handles credentials)
+        const request = this.buildLLMRequest({});
+        if (!request.model) {
+            throw new Error('No model selected');
         }
 
         // Get strictness setting and build appropriate grading rules

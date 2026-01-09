@@ -20,6 +20,7 @@ class MatrixFeature {
      * @param {Function} context.updateEmptyState - Callback to update empty state
      * @param {Function} context.generateNodeSummary - Callback to generate node summary
      * @param {Function} context.pushUndo - Callback to push undo action
+     * @param {Function} context.buildLLMRequest - Callback to build LLM request with credentials
      */
     constructor(context) {
         this.graph = context.graph;
@@ -29,6 +30,7 @@ class MatrixFeature {
         this.updateEmptyState = context.updateEmptyState;
         this.generateNodeSummary = context.generateNodeSummary;
         this.pushUndo = context.pushUndo;
+        this.buildLLMRequest = context.buildLLMRequest;
 
         // Matrix modal state
         this._matrixData = null;
@@ -47,7 +49,6 @@ class MatrixFeature {
     async handleMatrix(matrixContext) {
         // Get selected nodes
         const selectedIds = this.canvas.getSelectedNodeIds();
-
         console.log('handleMatrix called with context:', matrixContext);
         console.log('Selected node IDs:', selectedIds);
 
@@ -57,7 +58,6 @@ class MatrixFeature {
         }
 
         const model = this.getModelPicker().value;
-        const apiKey = chat.getApiKeyForModel(model);
 
         // Clear previous data and show loading state
         this._matrixData = null;
@@ -84,7 +84,7 @@ class MatrixFeature {
             }).filter(c => c);
 
             // Parse two lists from all context nodes
-            const result = await this.parseTwoLists(contents, matrixContext, model, apiKey);
+            const result = await this.parseTwoLists(contents, matrixContext, model);
 
             const rowItems = result.rows;
             const colItems = result.columns;
@@ -119,18 +119,11 @@ class MatrixFeature {
         }
     }
 
-    async parseTwoLists(contents, context, model, apiKey) {
-        const baseUrl = chat.getBaseUrlForModel(model);
-        const requestBody = {
+    async parseTwoLists(contents, context, model) {
+        const requestBody = this.buildLLMRequest({
             contents,
-            context,
-            model,
-            api_key: apiKey
-        };
-
-        if (baseUrl) {
-            requestBody.base_url = baseUrl;
-        }
+            context
+        });
 
         const response = await fetch('/api/parse-two-lists', {
             method: 'POST',
@@ -328,10 +321,6 @@ class MatrixFeature {
         const matrixNode = this.graph.getNode(nodeId);
         if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
 
-        const model = this.getModelPicker().value;
-        const apiKey = chat.getApiKeyForModel(model);
-        const baseUrl = chat.getBaseUrlForModel(model);
-
         const rowItem = matrixNode.rowItems[row];
         const colItem = matrixNode.colItems[col];
         const context = matrixNode.context;
@@ -359,18 +348,12 @@ class MatrixFeature {
         this.canvas.showStopButton(nodeId);
 
         try {
-            const requestBody = {
+            const requestBody = this.buildLLMRequest({
                 row_item: rowItem,
                 col_item: colItem,
                 context: context,
-                messages: buildMessagesForApi(messages),
-                model,
-                api_key: apiKey
-            };
-
-            if (baseUrl) {
-                requestBody.base_url = baseUrl;
-            }
+                messages: buildMessagesForApi(messages)
+            });
 
             // Prepare fetch options with optional abort signal
             const fetchOptions = {

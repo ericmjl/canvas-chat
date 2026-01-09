@@ -50,6 +50,18 @@ Click the ⚙️ Settings button to add your API keys:
 
 Keys are stored locally in your browser's localStorage.
 
+### Admin mode (enterprise)
+
+For enterprise deployments where administrators control API keys server-side:
+
+```bash
+uvx canvas-chat --admin-mode
+```
+
+This reads model configuration from `config.yaml` and API keys from environment variables. Users don't need to configure anything - models are pre-configured and credentials are injected server-side.
+
+See [Admin Mode Setup](docs/how-to/admin-mode.md) for details.
+
 ## Usage
 
 1. **Start chatting**: Type a message and press Enter
