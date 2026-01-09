@@ -276,12 +276,15 @@ class ResearchFeature {
         });
         this.canvas.showStopButton(researchNode.id);
 
+        // Capture nodeId early to avoid closure issues with parallel research
+        const nodeId = researchNode.id;
+
         try {
             let effectiveInstructions = instructions;
 
             // If context is provided, use LLM to generate better research instructions
             if (context && context.trim()) {
-                this.canvas.updateNodeContent(researchNode.id, `**Research:** ${instructions}\n\n*Refining research instructions...*`, true);
+                this.canvas.updateNodeContent(nodeId, `**Research${providerLabel}:** ${instructions}\n\n*Refining research instructions...*`, true);
 
                 const refineResponse = await fetch('/api/refine-query', {
                     method: 'POST',
@@ -297,7 +300,7 @@ class ResearchFeature {
                     const refineData = await refineResponse.json();
                     effectiveInstructions = refineData.refined_query;
                     // Update node to show what we're actually researching
-                    this.canvas.updateNodeContent(researchNode.id, `**Research:** ${instructions}\n*Researching: "${effectiveInstructions}"*\n\n*Starting research...*`, true);
+                    this.canvas.updateNodeContent(nodeId, `**Research${providerLabel}:** ${instructions}\n*Researching: "${effectiveInstructions}"*\n\n*Starting research...*`, true);
                 }
             }
 
@@ -333,12 +336,17 @@ class ResearchFeature {
             }
 
             // Parse SSE stream using shared utility
+            // Capture values in closure to prevent issues with parallel research tasks
+            const capturedInstructions = instructions;
+            const capturedEffectiveInstructions = effectiveInstructions;
+            const capturedProviderLabel = providerLabel;
+
             // Show both original and refined instructions if different
             let reportHeader;
-            if (effectiveInstructions !== instructions) {
-                reportHeader = `**Research${providerLabel}:** ${instructions}\n*Researching: "${effectiveInstructions}"*\n\n`;
+            if (capturedEffectiveInstructions !== capturedInstructions) {
+                reportHeader = `**Research${capturedProviderLabel}:** ${capturedInstructions}\n*Researching: "${capturedEffectiveInstructions}"*\n\n`;
             } else {
-                reportHeader = `**Research${providerLabel}:** ${instructions}\n\n`;
+                reportHeader = `**Research${capturedProviderLabel}:** ${capturedInstructions}\n\n`;
             }
             let reportContent = reportHeader;
             let sources = [];
@@ -356,26 +364,26 @@ class ResearchFeature {
                                 ? `## Sources (${ddgSourceCount})\n\n${ddgSourcesMd}`
                                 : '';
                             const statusContent = `${reportHeader}*${lastStatus}*\n\n${sourcesBlock}`.trim();
-                            this.canvas.updateNodeContent(researchNode.id, statusContent, true);
+                            this.canvas.updateNodeContent(nodeId, statusContent, true);
                         } else {
                             const statusContent = `${reportHeader}*${lastStatus}*`;
-                            this.canvas.updateNodeContent(researchNode.id, statusContent, true);
+                            this.canvas.updateNodeContent(nodeId, statusContent, true);
                         }
                     } else if (eventType === 'content') {
                         if (!hasExa) {
                             // DDG fallback sends the final report as one payload
                             ddgFinalReport = data;
                             reportContent = reportHeader + ddgFinalReport;
-                            this.canvas.updateNodeContent(researchNode.id, reportContent, true);
-                            this.graph.updateNode(researchNode.id, { content: reportContent });
+                            this.canvas.updateNodeContent(nodeId, reportContent, true);
+                            this.graph.updateNode(nodeId, { content: reportContent });
                         } else {
                             // Exa sends report chunks progressively
                             if (reportContent.length > reportHeader.length) {
                                 reportContent += '\n\n---\n\n';
                             }
                             reportContent += data;
-                            this.canvas.updateNodeContent(researchNode.id, reportContent, true);
-                            this.graph.updateNode(researchNode.id, { content: reportContent });
+                            this.canvas.updateNodeContent(nodeId, reportContent, true);
+                            this.graph.updateNode(nodeId, { content: reportContent });
                         }
                     } else if (eventType === 'source') {
                         // DDG fallback emits individual sources as JSON
@@ -394,8 +402,8 @@ class ResearchFeature {
                             const sourcesBlock = `## Sources (${ddgSourceCount})\n\n${ddgSourcesMd}`;
                             const statusBlock = lastStatus ? `*${lastStatus}*\n\n` : '';
                             const content = `${reportHeader}${statusBlock}${sourcesBlock}`;
-                            this.canvas.updateNodeContent(researchNode.id, content, true);
-                            this.graph.updateNode(researchNode.id, { content: content });
+                            this.canvas.updateNodeContent(nodeId, content, true);
+                            this.graph.updateNode(nodeId, { content: content });
                         } catch (e) {
                             console.error('Failed to parse DDG source event:', e);
                         }
@@ -409,8 +417,8 @@ class ResearchFeature {
                 },
                 onDone: () => {
                     // Clean up streaming state
-                    this.unregisterStreaming(researchNode.id);
-                    this.canvas.hideStopButton(researchNode.id);
+                    this.unregisterStreaming(nodeId);
+                    this.canvas.hideStopButton(nodeId);
 
                     if (!hasExa && ddgFinalReport) {
                         reportContent = reportHeader + ddgFinalReport;
@@ -426,16 +434,16 @@ class ResearchFeature {
                             reportContent += `- [${source.title}](${source.url})\n`;
                         }
                     }
-                    this.canvas.updateNodeContent(researchNode.id, reportContent, false);
-                    this.graph.updateNode(researchNode.id, { content: reportContent });
+                    this.canvas.updateNodeContent(nodeId, reportContent, false);
+                    this.graph.updateNode(nodeId, { content: reportContent });
 
                     // Generate summary async (don't await)
-                    this.generateNodeSummary(researchNode.id);
+                    this.generateNodeSummary(nodeId);
                 },
                 onError: (err) => {
                     // Clean up streaming state on error
-                    this.unregisterStreaming(researchNode.id);
-                    this.canvas.hideStopButton(researchNode.id);
+                    this.unregisterStreaming(nodeId);
+                    this.canvas.hideStopButton(nodeId);
 
                     // Re-throw if not an abort error
                     if (err.name !== 'AbortError') {
@@ -448,26 +456,27 @@ class ResearchFeature {
 
         } catch (err) {
             // Clean up streaming state
-            this.unregisterStreaming(researchNode.id);
-            this.canvas.hideStopButton(researchNode.id);
+            const nodeId = researchNode.id;
+            this.unregisterStreaming(nodeId);
+            this.canvas.hideStopButton(nodeId);
 
             // Check if it was aborted (user clicked stop)
             if (err.name === 'AbortError') {
                 // Add stopped indicator to current content
-                const node = this.graph.getNode(researchNode.id);
+                const node = this.graph.getNode(nodeId);
                 if (node) {
                     const stoppedContent = node.content + '\n\n*[Research stopped]*';
-                    this.canvas.updateNodeContent(researchNode.id, stoppedContent, false);
-                    this.graph.updateNode(researchNode.id, { content: stoppedContent });
+                    this.canvas.updateNodeContent(nodeId, stoppedContent, false);
+                    this.graph.updateNode(nodeId, { content: stoppedContent });
                 }
                 this.saveSession();
                 return;
             }
 
-            // Other errors
-            const errorContent = `**Research:** ${instructions}\n\n*Error: ${err.message}*`;
-            this.canvas.updateNodeContent(researchNode.id, errorContent, false);
-            this.graph.updateNode(researchNode.id, { content: errorContent });
+            // Other errors - use captured instructions to avoid closure issues
+            const errorContent = `**Research${providerLabel}:** ${instructions}\n\n*Error: ${err.message}*`;
+            this.canvas.updateNodeContent(nodeId, errorContent, false);
+            this.graph.updateNode(nodeId, { content: errorContent });
             this.saveSession();
         }
     }
