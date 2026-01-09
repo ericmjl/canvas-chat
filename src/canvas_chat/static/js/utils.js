@@ -8,6 +8,53 @@
 // =============================================================================
 
 /**
+ * Get the base path from the current URL.
+ * Detects the base path when deployed behind a load balancer or reverse proxy.
+ * @returns {string} The base path (always ends with /, or empty string for root)
+ */
+function getBasePath() {
+    // Get the current pathname
+    const pathname = window.location.pathname;
+
+    // If we're at the root, return empty string (no base path)
+    if (pathname === '/' || pathname === '') {
+        return '';
+    }
+
+    // If pathname ends with /, that's the base path
+    if (pathname.endsWith('/')) {
+        return pathname;
+    }
+
+    // Otherwise, remove the last segment (filename) and add /
+    // For example: /thing/stuff/before/it -> /thing/stuff/before/it/
+    // Or: /thing/stuff/before/it/index.html -> /thing/stuff/before/it/
+    const basePath = pathname.replace(/\/[^/]*$/, '');
+    return basePath + '/';
+}
+
+/**
+ * Get the full API URL for an endpoint.
+ * Prepends the base path to support deployment behind load balancers.
+ * @param {string} endpoint - The API endpoint (e.g., '/api/chat' or 'api/chat')
+ * @returns {string} The full API URL with base path (always starts with /)
+ */
+function apiUrl(endpoint) {
+    // Normalize endpoint: remove leading / if present
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+
+    // Get base path
+    const basePath = getBasePath();
+
+    // Combine: basePath already ends with / or is empty
+    // Result should always start with /
+    if (basePath === '') {
+        return '/' + normalizedEndpoint;
+    }
+    return basePath + normalizedEndpoint;
+}
+
+/**
  * Detect if content is a URL (used by handleNote to route to handleNoteFromUrl)
  * @param {string} content - The content to check
  * @returns {boolean} True if content is a URL
@@ -371,6 +418,8 @@ async function resizeImage(file, maxDimension = 2048) {
 
 // Export for browser (window)
 if (typeof window !== 'undefined') {
+    window.getBasePath = getBasePath;
+    window.apiUrl = apiUrl;
     window.isUrlContent = isUrlContent;
     window.extractUrlFromReferenceNode = extractUrlFromReferenceNode;
     window.formatUserError = formatUserError;
@@ -387,6 +436,8 @@ if (typeof window !== 'undefined') {
 // CommonJS export for Node.js/testing
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+        getBasePath,
+        apiUrl,
         isUrlContent,
         extractUrlFromReferenceNode,
         formatUserError,

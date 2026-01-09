@@ -125,7 +125,7 @@ class MatrixFeature {
             context
         });
 
-        const response = await fetch('/api/parse-two-lists', {
+        const response = await fetch(apiUrl('/api/parse-two-lists'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
@@ -367,7 +367,7 @@ class MatrixFeature {
             }
 
             // Start streaming fill
-            const response = await fetch('/api/matrix/fill', fetchOptions);
+            const response = await fetch(apiUrl('/api/matrix/fill'), fetchOptions);
 
             if (!response.ok) {
                 throw new Error(`Failed to fill cell: ${response.statusText}`);

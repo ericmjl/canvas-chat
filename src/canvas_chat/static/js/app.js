@@ -509,7 +509,7 @@ class App {
      */
     async loadConfig() {
         try {
-            const response = await fetch('/api/config');
+            const response = await fetch(apiUrl('/api/config'));
             if (response.ok) {
                 const config = await response.json();
                 this.adminMode = config.adminMode || false;
@@ -1844,7 +1844,7 @@ class App {
 
         try {
             // Fetch URL content via backend
-            const response = await fetch('/api/fetch-url', {
+            const response = await fetch(apiUrl('/api/fetch-url'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
@@ -1922,7 +1922,7 @@ class App {
 
         try {
             // Fetch PDF content via backend
-            const response = await fetch('/api/fetch-pdf', {
+            const response = await fetch(apiUrl('/api/fetch-pdf'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
@@ -1998,7 +1998,7 @@ class App {
             const formData = new FormData();
             formData.append('file', file);
 
-            const response = await fetch('/api/upload-pdf', {
+            const response = await fetch(apiUrl('/api/upload-pdf'), {
                 method: 'POST',
                 body: formData
             });
@@ -3014,7 +3014,7 @@ df.head()
             }
 
             // Stream code generation
-            const response = await fetch('/api/generate-code', {
+            const response = await fetch(apiUrl('/api/generate-code'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody),
@@ -3572,7 +3572,7 @@ df.head()
             let contentData;
             if (hasExa) {
                 // Use Exa's content extraction API
-                const response = await fetch('/api/exa/get-contents', {
+                const response = await fetch(apiUrl('/api/exa/get-contents'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3594,7 +3594,7 @@ df.head()
                 };
             } else {
                 // Use free Jina/direct fetch fallback
-                const response = await fetch('/api/fetch-url', {
+                const response = await fetch(apiUrl('/api/fetch-url'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url: url })
@@ -4096,7 +4096,7 @@ df.head()
                 temperature: 0.7
             });
 
-            const response = await fetch('/api/chat', {
+            const response = await fetch(apiUrl('/api/chat'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody),
@@ -4772,7 +4772,7 @@ df.head()
                 content
             });
 
-            const response = await fetch('/api/generate-title', {
+            const response = await fetch(apiUrl('/api/generate-title'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody)
@@ -4833,7 +4833,7 @@ df.head()
                 content: contentForSummary
             });
 
-            const response = await fetch('/api/generate-summary', {
+            const response = await fetch(apiUrl('/api/generate-summary'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody)

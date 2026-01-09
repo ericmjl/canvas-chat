@@ -79,7 +79,7 @@ class FactcheckFeature {
                 console.log('[Factcheck] Refining vague input with context');
                 this.canvas.updateNodeContent(loadingNode.id, '🔄 **Refining query...**', true);
 
-                const refineResponse = await fetch('/api/refine-query', {
+                const refineResponse = await fetch(apiUrl('/api/refine-query'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(this.buildLLMRequest({
@@ -436,7 +436,7 @@ class FactcheckFeature {
                 try {
                     let response;
                     if (hasExa) {
-                        response = await fetch('/api/exa/search', {
+                        response = await fetch(apiUrl('/api/exa/search'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -446,7 +446,7 @@ class FactcheckFeature {
                             })
                         });
                     } else {
-                        response = await fetch('/api/ddg/search', {
+                        response = await fetch(apiUrl('/api/ddg/search'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({

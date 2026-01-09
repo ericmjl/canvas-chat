@@ -96,7 +96,7 @@ class ResearchFeature {
             if (context && context.trim()) {
                 this.canvas.updateNodeContent(searchNode.id, `Refining search query...`, true);
 
-                const refineResponse = await fetch('/api/refine-query', {
+                const refineResponse = await fetch(apiUrl('/api/refine-query'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(this.buildLLMRequest({
@@ -117,7 +117,7 @@ class ResearchFeature {
             // Call appropriate search API based on provider
             let response;
             if (hasExa) {
-                response = await fetch('/api/exa/search', {
+                response = await fetch(apiUrl('/api/exa/search'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -127,7 +127,7 @@ class ResearchFeature {
                     })
                 });
             } else {
-                response = await fetch('/api/ddg/search', {
+                response = await fetch(apiUrl('/api/ddg/search'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -286,7 +286,7 @@ class ResearchFeature {
             if (context && context.trim()) {
                 this.canvas.updateNodeContent(nodeId, `**Research${providerLabel}:** ${instructions}\n\n*Refining research instructions...*`, true);
 
-                const refineResponse = await fetch('/api/refine-query', {
+                const refineResponse = await fetch(apiUrl('/api/refine-query'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(this.buildLLMRequest({
@@ -307,7 +307,7 @@ class ResearchFeature {
             // Call research API (SSE stream): Exa if configured, otherwise DDG fallback
             let response;
             if (hasExa) {
-                response = await fetch('/api/exa/research', {
+                response = await fetch(apiUrl('/api/exa/research'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -318,7 +318,7 @@ class ResearchFeature {
                     signal: abortController.signal
                 });
             } else {
-                response = await fetch('/api/ddg/research', {
+                response = await fetch(apiUrl('/api/ddg/research'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(this.buildLLMRequest({

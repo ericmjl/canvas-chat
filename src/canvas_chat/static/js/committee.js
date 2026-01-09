@@ -320,7 +320,7 @@ class CommitteeFeature {
         };
 
         try {
-            const response = await fetch('/api/committee', {
+            const response = await fetch(apiUrl('/api/committee'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
