@@ -1,0 +1,122 @@
+#!/usr/bin/env node
+/**
+ * Automatic test discovery and runner for JavaScript tests.
+ * Similar to pytest - automatically discovers and runs all test_*.js files.
+ *
+ * Usage: node tests/run_tests.js
+ *        node tests/run_tests.js tests/test_utils.js  (run specific file)
+ */
+
+import { spawn } from 'child_process';
+import { readdir } from 'fs/promises';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const testsDir = __dirname;
+
+/**
+ * Find all test files matching test_*.js pattern
+ */
+async function discoverTestFiles(specificFile = null) {
+    if (specificFile) {
+        // If a specific file is provided, use it
+        return [specificFile];
+    }
+
+    // Auto-discover all test_*.js files (exclude setup/helper files)
+    const files = await readdir(testsDir);
+    const testFiles = files
+        .filter(file => file.startsWith('test_') && file.endsWith('.js') && file !== 'test_setup.js')
+        .map(file => join(testsDir, file))
+        .sort(); // Sort for consistent execution order
+
+    return testFiles;
+}
+
+/**
+ * Run a single test file
+ */
+function runTestFile(filePath) {
+    return new Promise((resolve, reject) => {
+        const child = spawn('node', [filePath], {
+            stdio: 'inherit',
+            shell: false
+        });
+
+        child.on('close', (code) => {
+            if (code === 0) {
+                resolve({ file: filePath, passed: true });
+            } else {
+                resolve({ file: filePath, passed: false, code });
+            }
+        });
+
+        child.on('error', (err) => {
+            reject({ file: filePath, error: err });
+        });
+    });
+}
+
+/**
+ * Main test runner
+ */
+async function main() {
+    const specificFile = process.argv[2] || null;
+
+    console.log('🔍 Discovering test files...\n');
+    const testFiles = await discoverTestFiles(specificFile);
+
+    if (testFiles.length === 0) {
+        console.log('❌ No test files found!');
+        process.exit(1);
+    }
+
+    console.log(`Found ${testFiles.length} test file(s):`);
+    testFiles.forEach(file => {
+        const fileName = file.split('/').pop();
+        console.log(`  - ${fileName}`);
+    });
+    console.log('');
+
+    const results = [];
+    for (const file of testFiles) {
+        const fileName = file.split('/').pop();
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`Running: ${fileName}`);
+        console.log('='.repeat(60));
+
+        try {
+            const result = await runTestFile(file);
+            results.push(result);
+        } catch (err) {
+            results.push({ file, passed: false, error: err });
+        }
+    }
+
+    // Summary
+    console.log('\n' + '='.repeat(60));
+    console.log('Test Summary');
+    console.log('='.repeat(60));
+
+    const passed = results.filter(r => r.passed).length;
+    const failed = results.filter(r => !r.passed).length;
+
+    results.forEach(result => {
+        const fileName = result.file.split('/').pop();
+        const status = result.passed ? '✓' : '✗';
+        console.log(`${status} ${fileName}`);
+    });
+
+    console.log(`\nTotal: ${results.length} file(s) | Passed: ${passed} | Failed: ${failed}`);
+
+    if (failed > 0) {
+        process.exit(1);
+    }
+}
+
+main().catch(err => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+});
