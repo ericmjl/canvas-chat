@@ -363,7 +363,18 @@ Write unit tests for logic that does not require API calls:
 
 **JavaScript test files:**
 
-- `tests/test_utils.js` - Pure function tests (error formatting, node creation, graph operations, etc.)
+- `tests/test_setup.js` - Shared test environment setup and module loading
+- `tests/run_tests.js` - Automatic test discovery runner (similar to pytest)
+- `tests/test_utils.js` - Concurrent state management tests
+- `tests/test_utils_basic.js` - Basic utility functions (extractUrlFromReferenceNode, formatMatrixAsText, formatUserError, etc.)
+- `tests/test_utils_messages.js` - buildMessagesForApi edge cases
+- `tests/test_layout.js` - Layout and overlap resolution functions
+- `tests/test_graph_types.js` - Node creation functions and default node sizes
+- `tests/test_crdt_graph.js` - Graph traversal and visibility functions
+- `tests/test_matrix.js` - Matrix rendering and concurrent cell updates
+- `tests/test_flashcards.js` - SM-2 algorithm and flashcard logic
+- `tests/test_storage.js` - localStorage functions
+- `tests/test_canvas_helpers.js` - Zoom class and popover selection logic
 - `tests/test_search.js` - BM25 search algorithm tests
 - `tests/test_ui.js` - DOM manipulation tests using jsdom simulation
 
