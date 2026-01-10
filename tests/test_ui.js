@@ -8,7 +8,8 @@
 import { JSDOM } from 'jsdom';
 
 // Import ES modules
-const { highlightTextInHtml, extractExcerptText } = await import('../src/canvas_chat/static/js/highlight-utils.js');
+const { highlightTextInHtml, extractExcerptText, normalizeKatexDuplication, alignStart, alignEnd, findMatchRegion } =
+    await import('../src/canvas_chat/static/js/highlight-utils.js');
 
 // Simple test runner
 let passed = 0;
