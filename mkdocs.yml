@@ -1,0 +1,124 @@
+site_name: Canvas Chat
+site_description: A visual, non-linear chat interface where conversations are nodes on an infinite canvas
+site_url: https://ericmjl.github.io/canvas-chat/
+repo_url: https://github.com/ericmjl/canvas-chat
+repo_name: ericmjl/canvas-chat
+
+theme:
+    name: material
+    palette:
+        # Light mode
+        - media: '(prefers-color-scheme: light)'
+          scheme: default
+          primary: indigo
+          accent: indigo
+          toggle:
+              icon: material/brightness-7
+              name: Switch to dark mode
+        # Dark mode
+        - media: '(prefers-color-scheme: dark)'
+          scheme: slate
+          primary: indigo
+          accent: indigo
+          toggle:
+              icon: material/brightness-4
+              name: Switch to light mode
+    features:
+        - navigation.tabs
+        - navigation.sections
+        - navigation.expand
+        - navigation.top
+        - search.suggest
+        - search.highlight
+        - content.code.copy
+        - content.code.annotate
+
+markdown_extensions:
+    - admonition
+    - pymdownx.details
+    - pymdownx.superfences
+    - pymdownx.tabbed:
+          alternate_style: true
+    - pymdownx.highlight:
+          anchor_linenums: true
+    - pymdownx.inlinehilite
+    - pymdownx.snippets
+    - attr_list
+    - md_in_html
+    - toc:
+          permalink: true
+
+nav:
+    - Home: index.md
+    - Contributing to docs: CONTRIBUTING.md
+    - How-to guides:
+          - Admin mode: how-to/admin-mode.md
+          - Deep research: how-to/deep-research.md
+          - Highlight and branch: how-to/highlight-and-branch.md
+          - Import PDFs: how-to/import-pdfs.md
+          - LLM committee: how-to/llm-committee.md
+          - Matrix evaluation: how-to/use-matrix-evaluation.md
+          - Navigate nodes: how-to/navigate-nodes.md
+          - Use images: how-to/use-images.md
+          - Web search: how-to/web-search.md
+    - Explanation:
+          - Admin mode security: explanation/admin-mode-security.md
+          - Auto-layout: explanation/auto-layout.md
+          - Committee architecture: explanation/committee-architecture.md
+          - Matrix evaluation: explanation/matrix-evaluation.md
+          - Matrix resize behavior: explanation/matrix-resize-behavior.md
+          - Node protocols: explanation/node-protocols.md
+          - Streaming architecture: explanation/streaming-architecture.md
+          - URL fetching: explanation/url-fetching.md
+          - WebRTC signaling: explanation/webrtc-signaling.md
+    - Reference:
+          - Keyboard shortcuts: reference/keyboard-shortcuts.md
+          - Search API: reference/search-api.md
+    - Releases:
+          - v0.1.43: releases/v0.1.43.md
+          - v0.1.42: releases/v0.1.42.md
+          - v0.1.41: releases/v0.1.41.md
+          - v0.1.40: releases/v0.1.40.md
+          - v0.1.39: releases/v0.1.39.md
+          - v0.1.38: releases/v0.1.38.md
+          - v0.1.37: releases/v0.1.37.md
+          - v0.1.36: releases/v0.1.36.md
+          - v0.1.35: releases/v0.1.35.md
+          - v0.1.34: releases/v0.1.34.md
+          - v0.1.33: releases/v0.1.33.md
+          - v0.1.32: releases/v0.1.32.md
+          - v0.1.31: releases/v0.1.31.md
+          - v0.1.30: releases/v0.1.30.md
+          - v0.1.29: releases/v0.1.29.md
+          - v0.1.28: releases/v0.1.28.md
+          - v0.1.27: releases/v0.1.27.md
+          - v0.1.26: releases/v0.1.26.md
+          - v0.1.25: releases/v0.1.25.md
+          - v0.1.24: releases/v0.1.24.md
+          - v0.1.23: releases/v0.1.23.md
+          - v0.1.22: releases/v0.1.22.md
+          - v0.1.21: releases/v0.1.21.md
+          - v0.1.20: releases/v0.1.20.md
+          - v0.1.19: releases/v0.1.19.md
+          - v0.1.18: releases/v0.1.18.md
+          - v0.1.17: releases/v0.1.17.md
+          - v0.1.16: releases/v0.1.16.md
+          - v0.1.15: releases/v0.1.15.md
+          - v0.1.14: releases/v0.1.14.md
+          - v0.1.13: releases/v0.1.13.md
+          - v0.1.12: releases/v0.1.12.md
+          - v0.1.11: releases/v0.1.11.md
+          - v0.1.10: releases/v0.1.10.md
+          - v0.1.9: releases/v0.1.9.md
+          - v0.1.8: releases/v0.1.8.md
+          - v0.1.7: releases/v0.1.7.md
+          - v0.1.6: releases/v0.1.6.md
+          - v0.1.5: releases/v0.1.5.md
+          - v0.1.4: releases/v0.1.4.md
+          - v0.1.3: releases/v0.1.3.md
+          - v0.1.2: releases/v0.1.2.md
+          - v0.1.1: releases/v0.1.1.md
+          - v0.1.0: releases/v0.1.0.md
+
+plugins:
+    - search

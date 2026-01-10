@@ -59,6 +59,18 @@ platforms = ["osx-arm64", "linux-64", "osx-64"]
 [tool.pixi.pypi-dependencies]
 canvas-chat = { path = ".", editable = true }
 
+[tool.pixi.feature.docs.dependencies]
+mkdocs = "*"
+mkdocs-material = "*"
+
+[tool.pixi.feature.docs.tasks]
+docs-serve = "mkdocs serve"
+docs-build = "mkdocs build"
+docs-deploy = "mkdocs gh-deploy"
+
+[tool.pixi.environments]
+docs = ["docs"]
+
 [tool.pixi.tasks]
 dev = "uvicorn canvas_chat.app:app --reload --port 7865"
 modal-serve = "modal serve modal_app.py"
