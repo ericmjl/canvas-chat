@@ -1,0 +1,10 @@
+# Test configuration for plugin system manual testing
+
+models:
+    - id: 'anthropic/claude-3-5-sonnet-20241022'
+      name: 'Claude 3.5 Sonnet'
+      apiKeyEnvVar: 'ANTHROPIC_API_KEY'
+      contextWindow: 200000
+
+plugins:
+    - path: ./src/canvas_chat/static/js/plugins/example-poll-node.js

@@ -36,6 +36,7 @@ Your browser will open automatically to the local server.
 - **Image Analysis**: Upload, paste, or drag-and-drop images for multimodal AI analysis
 - **Markdown & Math Rendering**: Full markdown support with LaTeX math rendering (KaTeX) for inline `\(...\)` and display `\[...\]` math
 - **Multiple LLM Providers**: Support for OpenAI, Anthropic, Google, Groq, GitHub Models, and local models via Ollama
+- **Plugin System**: Extend Canvas Chat with custom node types via JavaScript plugins
 - **Local-First**: All data stored in your browser (IndexedDB)
 - **Export/Import**: Save sessions as `.canvaschat` files
 
@@ -57,12 +58,35 @@ Keys are stored locally in your browser's localStorage.
 For enterprise deployments where administrators control API keys server-side:
 
 ```bash
-uvx canvas-chat --admin-mode
+uvx canvas-chat main --admin-mode --config config.yaml
 ```
 
 This reads model configuration from `config.yaml` and API keys from environment variables. Users don't need to configure anything - models are pre-configured and credentials are injected server-side.
 
 See [Admin Mode Setup](docs/how-to/admin-mode.md) for details.
+
+### Plugin system (extensibility)
+
+Canvas Chat supports custom node types via a plugin system. Plugins are JavaScript modules that register new node types with custom rendering and behavior.
+
+```yaml
+# config.yaml
+plugins:
+    - path: ./plugins/my-custom-node.js
+```
+
+```bash
+uvx canvas-chat main --admin-mode --config config.yaml
+```
+
+Plugins can define:
+
+- Custom node rendering (HTML/CSS)
+- Node-specific actions (buttons, interactions)
+- Custom data models and validation
+- Integration with external APIs
+
+See [Plugin Development Guide](docs/how-to/create-custom-node-plugins.md) for details.
 
 ## Usage
 

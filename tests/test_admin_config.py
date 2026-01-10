@@ -383,3 +383,193 @@ models:
     frontend_models = config.get_frontend_models()
 
     assert frontend_models[0]["provider"] == "Unknown"
+
+
+# --- AdminConfig.plugins tests ---
+
+
+def test_admin_config_load_no_plugins(tmp_path):
+    """Test loading config without plugins section."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+models:
+  - id: "openai/gpt-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+""")
+
+    config = AdminConfig.load(config_file)
+
+    assert config.plugins == []
+
+
+def test_admin_config_load_empty_plugins_list(tmp_path):
+    """Test loading config with empty plugins list."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+models:
+  - id: "openai/gpt-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+plugins: []
+""")
+
+    config = AdminConfig.load(config_file)
+
+    assert config.plugins == []
+
+
+def test_admin_config_load_single_plugin_relative_path(tmp_path):
+    """Test loading config with single plugin (relative path)."""
+    config_file = tmp_path / "config.yaml"
+    plugin_file = tmp_path / "my-plugin.js"
+    plugin_file.write_text("// plugin code")
+
+    config_file.write_text("""
+models:
+  - id: "openai/gpt-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+plugins:
+  - path: ./my-plugin.js
+""")
+
+    config = AdminConfig.load(config_file)
+
+    assert len(config.plugins) == 1
+    assert config.plugins[0] == tmp_path / "my-plugin.js"
+    assert config.plugins[0].exists()
+
+
+def test_admin_config_load_multiple_plugins(tmp_path):
+    """Test loading config with multiple plugins."""
+    config_file = tmp_path / "config.yaml"
+    plugin1 = tmp_path / "plugin1.js"
+    plugin2 = tmp_path / "plugin2.js"
+    plugin1.write_text("// plugin 1")
+    plugin2.write_text("// plugin 2")
+
+    config_file.write_text("""
+models:
+  - id: "openai/gpt-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+plugins:
+  - path: ./plugin1.js
+  - path: ./plugin2.js
+""")
+
+    config = AdminConfig.load(config_file)
+
+    assert len(config.plugins) == 2
+    assert config.plugins[0] == tmp_path / "plugin1.js"
+    assert config.plugins[1] == tmp_path / "plugin2.js"
+
+
+def test_admin_config_load_plugin_absolute_path(tmp_path):
+    """Test loading config with plugin using absolute path."""
+    config_file = tmp_path / "config.yaml"
+    plugin_file = tmp_path / "absolute-plugin.js"
+    plugin_file.write_text("// plugin code")
+
+    config_file.write_text(f"""
+models:
+  - id: "openai/gpt-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+plugins:
+  - path: {plugin_file}
+""")
+
+    config = AdminConfig.load(config_file)
+
+    assert len(config.plugins) == 1
+    assert config.plugins[0] == plugin_file
+    assert config.plugins[0].is_absolute()
+
+
+def test_admin_config_load_plugin_nested_path(tmp_path):
+    """Test loading config with plugin in nested directory."""
+    config_file = tmp_path / "config.yaml"
+    plugins_dir = tmp_path / "plugins"
+    plugins_dir.mkdir()
+    plugin_file = plugins_dir / "nested-plugin.js"
+    plugin_file.write_text("// plugin code")
+
+    config_file.write_text("""
+models:
+  - id: "openai/gpt-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+plugins:
+  - path: ./plugins/nested-plugin.js
+""")
+
+    config = AdminConfig.load(config_file)
+
+    assert len(config.plugins) == 1
+    assert config.plugins[0] == plugin_file
+    assert config.plugins[0].exists()
+
+
+def test_admin_config_load_plugin_missing_file_warns(tmp_path, caplog):
+    """Test loading config with missing plugin file logs warning and skips plugin."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+models:
+  - id: "openai/gpt-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+plugins:
+  - path: ./nonexistent-plugin.js
+""")
+
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        config = AdminConfig.load(config_file)
+
+    # Plugin is NOT included because file doesn't exist
+    assert len(config.plugins) == 0
+
+    # Warning was logged
+    assert "Plugin file not found" in caplog.text
+    assert "nonexistent-plugin.js" in caplog.text
+
+
+def test_admin_config_load_plugin_missing_path_field(tmp_path, caplog):
+    """Test loading config with plugin entry missing 'path' field logs warning."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+models:
+  - id: "openai/gpt-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+plugins:
+  - name: invalid-entry
+""")
+
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        config = AdminConfig.load(config_file)
+
+    # Plugin is skipped because entry is invalid
+    assert len(config.plugins) == 0
+
+    # Warning was logged
+    assert "Invalid plugin entry" in caplog.text
+
+
+def test_admin_config_load_plugins_not_list(tmp_path, caplog):
+    """Test loading config where plugins is a string (treated as iterable of chars)."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+models:
+  - id: "openai/gpt-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+plugins: "not-a-list"
+""")
+
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        config = AdminConfig.load(config_file)
+
+    # String is iterated as characters, each treated as path, all fail to exist
+    assert len(config.plugins) == 0
+
+    # Warnings logged for each character path
+    assert "Plugin file not found" in caplog.text
