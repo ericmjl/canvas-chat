@@ -33,12 +33,10 @@
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
     <!-- Pyodide for Python execution in browser -->
     <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
-    <!-- CodeMirror 5 for code editing -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/monokai.css">
-    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/python/python.js"></script>
-    <script src="static/js/codemirror-setup.js"></script>
+    <!-- highlight.js for Python syntax highlighting -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/monokai.min.css">
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/python.min.js"></script>
 </head>
 <body>
     <!-- Top Toolbar -->
@@ -654,6 +652,30 @@
             <div class="modal-actions">
                 <button class="secondary-btn" id="edit-title-cancel">Cancel</button>
                 <button class="primary-btn" id="edit-title-save">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Code Editor Modal -->
+    <div id="code-editor-modal" class="modal" style="display: none;">
+        <div class="modal-content modal-extra-wide">
+            <div class="modal-header">
+                <h2>Edit Code</h2>
+                <button class="modal-close" id="code-editor-close">&times;</button>
+            </div>
+            <div class="modal-body code-editor-body">
+                <div class="code-editor-pane edit-pane">
+                    <div class="pane-header">Python Code</div>
+                    <textarea id="code-editor-textarea" spellcheck="false" placeholder="# Write your Python code here..."></textarea>
+                </div>
+                <div class="code-editor-pane preview-pane">
+                    <div class="pane-header">Preview</div>
+                    <pre id="code-editor-preview"><code class="language-python"></code></pre>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary-btn" id="code-editor-cancel">Cancel</button>
+                <button class="primary-btn" id="code-editor-save">Save</button>
             </div>
         </div>
     </div>

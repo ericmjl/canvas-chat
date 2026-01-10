@@ -1283,7 +1283,14 @@
 .code-node-content {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    /* Use flex: 1 instead of height: 100% to work properly in flexbox parent */
+    flex: 1;
+    min-height: 0;  /* Allow shrinking in flexbox */
+}
+
+/* Remove padding from node-content for code nodes - CodeMirror has its own */
+.node.code .node-content {
+    padding: 0;
 }
 
 .code-data-hint {
@@ -1356,109 +1363,42 @@
     background: var(--color-bg-hover, #d0d0d0);
 }
 
-.code-editor-container {
+/* =============================================================================
+   Code Display (Read-only syntax-highlighted code)
+   Uses highlight.js for syntax coloring, click Edit button to open modal
+   ============================================================================= */
+
+.code-display {
     flex: 1;
-    min-height: 150px;
-    overflow: hidden;
-    position: relative;
-    border-radius: 0 0 var(--radius-sm, 4px) var(--radius-sm, 4px);
-}
-
-/* CodeMirror editor takes full height */
-.code-editor-container .CodeMirror {
-    height: 100%;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 0.9em;
-}
-
-/* Ensure gutters don't overlap with code */
-.code-editor-container .CodeMirror-gutters {
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.code-editor-container .CodeMirror-linenumber {
-    padding: 0 8px;
-    min-width: 30px;
-}
-
-/* Ensure code content has proper left padding */
-.code-editor-container .CodeMirror-lines {
-    padding: 4px 0;
-}
-
-.code-state-indicator {
-    padding: 6px 12px;
-    background: var(--color-accent, #4a9eff);
-    color: white;
-    font-size: 0.8em;
-    text-align: center;
-}
-
-.code-node-content.code-running .code-editor-container {
-    opacity: 0.7;
-}
-
-.code-node-content.code-error .code-editor-container {
-    border: 2px solid var(--error, #ff6b6b);
-}
-
-/* Syntax-highlighted code layer (behind textarea) */
-.code-highlight-layer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    margin: 0;
-    padding: 12px;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 0.9em;
-    line-height: 1.5;
-    white-space: pre-wrap;
-    word-wrap: break-word;
+    min-height: 100px;
+    max-height: 400px;
     overflow: auto;
-    pointer-events: none;
+    background: #272822;  /* Monokai background */
     border-radius: 0 0 var(--radius-sm, 4px) var(--radius-sm, 4px);
+    cursor: default;
 }
 
-.code-highlight-layer code {
-    font-family: inherit;
-    font-size: inherit;
-    line-height: inherit;
-    background: none !important;
-    padding: 0 !important;
+.code-display pre {
+    margin: 0;
+    padding: 0;
+    background: none;
 }
 
-/* Textarea overlay (transparent text, visible caret) */
-.code-editor-textarea {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    min-height: 150px;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 0.9em;
-    line-height: 1.5;
+.code-display code {
+    display: block;
     padding: 12px;
-    border: none;
-    background: transparent;
-    color: transparent;
-    caret-color: #fff;
-    resize: none;
-    outline: none;
-    border-radius: 0 0 var(--radius-sm, 4px) var(--radius-sm, 4px);
-    z-index: 1;
-    overflow-y: auto;
-    overflow-x: auto;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre;
+    color: #f8f8f2;  /* Monokai foreground */
+    background: none !important;
 }
 
-.code-editor-textarea::selection {
-    background: rgba(100, 150, 255, 0.3);
-}
-
-.code-editor-textarea:focus {
-    background: transparent;
+/* Override hljs styles for consistent appearance */
+.code-display code.hljs {
+    padding: 12px !important;
+    background: none !important;
 }
 
 .code-state-indicator {
@@ -1469,12 +1409,12 @@
     text-align: center;
 }
 
-.code-node-content.code-running .code-editor-textarea {
+.code-node-content.code-running .code-display {
     opacity: 0.7;
 }
 
-.code-node-content.code-error .code-editor-textarea {
-    border: 2px solid var(--color-error, #e74c3c);
+.code-node-content.code-error .code-display {
+    border: 2px solid var(--error, #ff6b6b);
 }
 
 .code-error-output {
@@ -1495,11 +1435,6 @@
     .code-data-hint {
         color: var(--text-muted);
         background: var(--bg-secondary);
-    }
-}
-
-    .code-editor-textarea:focus {
-        background: #fff;
     }
 }
 

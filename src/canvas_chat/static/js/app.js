@@ -367,6 +367,9 @@ class App {
         // Edit content modal state
         this.editingNodeId = null;
 
+        // Code editor modal state
+        this.editingCodeNodeId = null;
+
         // Tag highlighting state
         this.highlightedTagColor = null;  // Currently highlighted tag color, or null if none
 
@@ -460,6 +463,7 @@ class App {
             .on('nodeAnalyze', this.handleNodeAnalyze.bind(this))
             .on('nodeRunCode', this.handleNodeRunCode.bind(this))
             .on('nodeCodeChange', this.handleNodeCodeChange.bind(this))
+            .on('nodeEditCode', this.handleNodeEditCode.bind(this))
             .on('nodeGenerate', this.handleNodeGenerate.bind(this))
             .on('nodeGenerateSubmit', this.handleNodeGenerateSubmit.bind(this))
             .on('nodeOutputToggle', this.handleNodeOutputToggle.bind(this))
@@ -1035,6 +1039,16 @@ class App {
         document.getElementById('edit-content-save').addEventListener('click', () => {
             this.handleEditContentSave();
         });
+        // Handle keyboard shortcuts in edit content textarea
+        document.getElementById('edit-content-textarea').addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                // Cmd/Ctrl+Enter to save
+                e.preventDefault();
+                this.handleEditContentSave();
+            } else if (e.key === 'Escape') {
+                this.hideEditContentModal();
+            }
+        });
 
         // Edit title modal
         document.getElementById('edit-title-close').addEventListener('click', () => {
@@ -1054,6 +1068,45 @@ class App {
                 this.hideEditTitleModal();
             }
         });
+
+        // Code editor modal
+        document.getElementById('code-editor-close').addEventListener('click', () => {
+            this.hideCodeEditorModal();
+        });
+        document.getElementById('code-editor-cancel').addEventListener('click', () => {
+            this.hideCodeEditorModal();
+        });
+        document.getElementById('code-editor-save').addEventListener('click', () => {
+            this.handleCodeEditorSave();
+        });
+        document.getElementById('code-editor-textarea').addEventListener('input', () => {
+            this.updateCodeEditorPreview();
+        });
+        // Handle Tab for indentation and Escape to close
+        document.getElementById('code-editor-textarea').addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const textarea = e.target;
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                // Insert 4 spaces at cursor
+                textarea.value = textarea.value.substring(0, start) + '    ' + textarea.value.substring(end);
+                textarea.selectionStart = textarea.selectionEnd = start + 4;
+                this.updateCodeEditorPreview();
+            } else if (e.key === 'Escape') {
+                this.hideCodeEditorModal();
+            } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                // Cmd/Ctrl+Enter to save
+                e.preventDefault();
+                this.handleCodeEditorSave();
+            }
+        });
+
+        // Update modal button labels based on platform
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const modKey = isMac ? '⌘' : 'Ctrl';
+        document.getElementById('edit-content-save').textContent = `Save (${modKey}↵)`;
+        document.getElementById('code-editor-save').textContent = `Save (${modKey}↵)`;
 
         // Undo/Redo buttons
         this.undoBtn = document.getElementById('undo-btn');
@@ -1349,6 +1402,60 @@ class App {
                 if (selectedNodeIds.length === 1) {
                     e.preventDefault();
                     this.copyNodeContent(selectedNodeIds[0]);
+                }
+            }
+
+            // 'e' to edit selected node (code or content)
+            if (e.key === 'e' && !e.target.matches('input, textarea')) {
+                const selectedNodeIds = this.canvas.getSelectedNodeIds();
+                if (selectedNodeIds.length === 1) {
+                    const node = this.graph.getNode(selectedNodeIds[0]);
+                    if (node) {
+                        const wrapped = wrapNode(node);
+                        const actions = wrapped.getActions();
+
+                        // Check if node has edit actions
+                        if (actions.some(a => a.id === 'edit-code')) {
+                            e.preventDefault();
+                            this.handleNodeEditCode(selectedNodeIds[0]);
+                        } else if (actions.some(a => a.id === 'edit-content')) {
+                            e.preventDefault();
+                            this.handleNodeEditContent(selectedNodeIds[0]);
+                        }
+                    }
+                }
+            }
+
+            // Cmd/Ctrl+Enter to run code in selected code node
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !e.target.matches('input, textarea')) {
+                const selectedNodeIds = this.canvas.getSelectedNodeIds();
+                if (selectedNodeIds.length === 1) {
+                    const node = this.graph.getNode(selectedNodeIds[0]);
+                    if (node && node.type === NodeType.CODE) {
+                        e.preventDefault();
+                        this.handleNodeRunCode(selectedNodeIds[0]);
+                    }
+                }
+            }
+
+            // Shift+A to trigger AI actions (Generate for Code nodes, Analyze for CSV nodes)
+            if (e.shiftKey && e.key === 'A' && !e.target.matches('input, textarea')) {
+                const selectedNodeIds = this.canvas.getSelectedNodeIds();
+                if (selectedNodeIds.length === 1) {
+                    const node = this.graph.getNode(selectedNodeIds[0]);
+                    if (node) {
+                        const wrapped = wrapNode(node);
+                        const actions = wrapped.getActions();
+
+                        // Check for AI-related actions
+                        if (actions.some(a => a.id === 'generate')) {
+                            e.preventDefault();
+                            this.canvas.showGenerateInput(selectedNodeIds[0]);
+                        } else if (actions.some(a => a.id === 'analyze')) {
+                            e.preventDefault();
+                            this.handleNodeAnalyze(selectedNodeIds[0]);
+                        }
+                    }
                 }
             }
 
@@ -2683,9 +2790,9 @@ class App {
             return node && node.type === NodeType.CSV;
         });
 
-        // Determine position
-        const position = csvNodeIds.length > 0
-            ? this.graph.autoPosition(csvNodeIds)
+        // Determine position based on all selected nodes
+        const position = selectedIds.length > 0
+            ? this.graph.autoPosition(selectedIds)
             : this.graph.autoPosition([]);
 
         // Create code node with placeholder if we're generating, or template if not
@@ -2724,9 +2831,9 @@ print("Hello from Pyodide!")
 
         this.graph.addNode(codeNode);
 
-        // Create edges from CSV nodes to code node (if any)
-        for (const csvId of csvNodeIds) {
-            const edge = createEdge(csvId, codeNode.id, EdgeType.GENERATES);
+        // Create edges from all selected nodes to code node
+        for (const nodeId of selectedIds) {
+            const edge = createEdge(nodeId, codeNode.id, EdgeType.REPLY);
             this.graph.addEdge(edge);
         }
 
@@ -2794,16 +2901,10 @@ df.head()
         const codeNode = this.graph.getNode(nodeId);
         if (!codeNode || codeNode.type !== NodeType.CODE) return;
 
-        // IMPORTANT: Get the code BEFORE re-rendering (which destroys the editor)
-        const editor = this.canvas.codeEditors.get(nodeId);
-        const code = editor && window.CodeMirrorUtils
-            ? window.CodeMirrorUtils.getEditorContent(editor)
-            : (codeNode.content || '');
+        // Get code from node (stored via modal editor or AI generation)
+        const code = codeNode.code || codeNode.content || '';
 
         console.log('🏃 Running code, length:', code.length, 'chars');
-
-        // Save the current code to the graph before running
-        this.graph.updateNode(nodeId, { content: code });
 
         const csvNodeIds = codeNode.csvNodeIds || [];
 
@@ -3130,11 +3231,11 @@ df.head()
         const currentExpanded = node.outputExpanded !== false;
         const newExpanded = !currentExpanded;
 
-        // Animate the panel before updating state
+        // Animate the panel
         this.canvas.animateOutputPanel(nodeId, newExpanded, () => {
-            // After animation completes, update state and re-render
+            // After animation completes, update state and toggle button (no full re-render)
             this.graph.updateNode(nodeId, { outputExpanded: newExpanded });
-            this.canvas.renderNode(this.graph.getNode(nodeId));
+            this.canvas.updateOutputToggleButton(nodeId, newExpanded);
             this.saveSession();
         });
     }
@@ -4395,6 +4496,105 @@ df.head()
 
         // Close modal and save
         this.hideEditContentModal();
+        this.saveSession();
+    }
+
+    // ========================================
+    // CODE EDITOR MODAL METHODS
+    // ========================================
+
+    /**
+     * Handle clicking edit on a code node - opens the code editor modal
+     * @param {string} nodeId - The code node ID
+     */
+    handleNodeEditCode(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node || node.type !== NodeType.CODE) return;
+        this.showCodeEditorModal(nodeId);
+    }
+
+    /**
+     * Show the code editor modal for a code node
+     * @param {string} nodeId - The code node ID
+     */
+    showCodeEditorModal(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        this.editingCodeNodeId = nodeId;
+        const textarea = document.getElementById('code-editor-textarea');
+
+        // Get code from node (try code first, then content for legacy nodes)
+        const code = node.code || node.content || '';
+        textarea.value = code;
+
+        // Render initial preview
+        this.updateCodeEditorPreview();
+
+        document.getElementById('code-editor-modal').style.display = 'flex';
+
+        // Focus the textarea
+        setTimeout(() => {
+            textarea.focus();
+        }, 100);
+    }
+
+    /**
+     * Update the live preview in the code editor modal using highlight.js
+     */
+    updateCodeEditorPreview() {
+        const textarea = document.getElementById('code-editor-textarea');
+        const preview = document.getElementById('code-editor-preview');
+        const code = textarea.value || '';
+
+        // Get the code element inside the pre
+        const codeEl = preview.querySelector('code');
+        if (codeEl && window.hljs) {
+            codeEl.textContent = code;
+            codeEl.className = 'language-python';
+            // Re-highlight
+            delete codeEl.dataset.highlighted;
+            window.hljs.highlightElement(codeEl);
+        }
+    }
+
+    /**
+     * Hide the code editor modal
+     */
+    hideCodeEditorModal() {
+        document.getElementById('code-editor-modal').style.display = 'none';
+        this.editingCodeNodeId = null;
+    }
+
+    /**
+     * Save code from the modal to the node
+     */
+    handleCodeEditorSave() {
+        if (!this.editingCodeNodeId) return;
+
+        const node = this.graph.getNode(this.editingCodeNodeId);
+        if (!node) {
+            this.hideCodeEditorModal();
+            return;
+        }
+
+        const newCode = document.getElementById('code-editor-textarea').value;
+
+        // Don't save if code hasn't changed
+        const oldCode = node.code || node.content || '';
+        if (newCode === oldCode) {
+            this.hideCodeEditorModal();
+            return;
+        }
+
+        // Update code via graph
+        this.graph.updateNode(this.editingCodeNodeId, { code: newCode, content: newCode });
+
+        // Update the code display in the node (uses highlight.js)
+        this.canvas.updateCodeContent(this.editingCodeNodeId, newCode, false);
+
+        // Close modal and save
+        this.hideCodeEditorModal();
         this.saveSession();
     }
 

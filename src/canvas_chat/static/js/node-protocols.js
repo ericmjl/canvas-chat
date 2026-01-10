@@ -9,20 +9,26 @@
 /**
  * Action button definitions for node action bars
  */
+// Detect platform for keyboard shortcuts
+const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+const modKey = isMac ? '⌘' : 'Ctrl';
+const modKeyLong = isMac ? 'Cmd' : 'Ctrl';  // For longer tooltips
+
 const Actions = {
     REPLY: { id: 'reply', label: '↩️ Reply (r)', title: 'Reply (r)' },
     BRANCH: { id: 'branch', label: '🌿 Branch', title: 'Branch from selection' },
     SUMMARIZE: { id: 'summarize', label: '📝 Summarize', title: 'Summarize' },
     FETCH_SUMMARIZE: { id: 'fetch-summarize', label: '📄 Fetch & Summarize', title: 'Fetch full content and summarize' },
-    EDIT_CONTENT: { id: 'edit-content', label: '✏️ Edit', title: 'Edit content' },
+    EDIT_CONTENT: { id: 'edit-content', label: '✏️ Edit (e)', title: `Edit content (e, save with ${modKeyLong}+Enter)` },
     RESUMMARIZE: { id: 'resummarize', label: '📝 Re-summarize', title: 'Create new summary from edited content' },
     COPY: { id: 'copy', label: '📋 Copy (c)', title: 'Copy (c)' },
     FLIP_CARD: { id: 'flip-card', label: '🔄 Flip', title: 'Flip card to see answer' },
     CREATE_FLASHCARDS: { id: 'create-flashcards', label: '🎴 Flashcards', title: 'Generate flashcards from content' },
     REVIEW_CARD: { id: 'review-card', label: '📖 Review', title: 'Start review session for this card' },
-    ANALYZE: { id: 'analyze', label: '🔬 Analyze', title: 'Generate code to analyze this data' },
-    GENERATE: { id: 'generate', label: '✨ AI', title: 'Generate code with AI' },
-    RUN_CODE: { id: 'run-code', label: '▶️ Run', title: 'Execute code (Cmd+Enter)' }
+    ANALYZE: { id: 'analyze', label: '🔬 Analyze (⇧A)', title: 'Generate code to analyze this data (Shift+A)' },
+    EDIT_CODE: { id: 'edit-code', label: '✏️ Edit (e)', title: `Edit code (e, save with ${modKeyLong}+Enter)` },
+    GENERATE: { id: 'generate', label: '✨ AI (⇧A)', title: 'Generate code with AI (Shift+A)' },
+    RUN_CODE: { id: 'run-code', label: `▶️ Run (${modKey}↵)`, title: `Execute code (${modKeyLong}+Enter)` }
 };
 
 /**
@@ -526,10 +532,15 @@ class CodeNode extends BaseNode {
             stateClass = 'code-error';
         }
 
-        // Code editor container - CodeMirror will be initialized in setupNodeEvents
+        // Syntax-highlighted read-only code display (click to edit opens modal)
+        // Escape HTML to prevent XSS, highlight.js will handle the rest
+        const escapedCode = canvas.escapeHtml(code) || '# Click Edit to add code...';
+
         let html = `<div class="code-node-content ${stateClass}">`;
         html += dataHint;
-        html += `<div class="code-editor-container" data-node-id="${this.node.id}"></div>`;
+        html += `<div class="code-display" data-node-id="${this.node.id}">`;
+        html += `<pre><code class="language-python">${escapedCode}</code></pre>`;
+        html += `</div>`;
         html += stateIndicator;
 
         // Show inline error if present
@@ -590,7 +601,7 @@ class CodeNode extends BaseNode {
     }
 
     getActions() {
-        return [Actions.GENERATE, Actions.RUN_CODE, Actions.COPY];
+        return [Actions.EDIT_CODE, Actions.GENERATE, Actions.RUN_CODE, Actions.COPY];
     }
 
     getHeaderButtons() {
@@ -966,6 +977,8 @@ function validateNodeProtocol(NodeClass) {
     else if (className.includes('Review')) nodeType = NodeType.REVIEW;
     else if (className.includes('Factcheck')) nodeType = NodeType.FACTCHECK;
     else if (className.includes('Flashcard')) nodeType = NodeType.FLASHCARD;
+    else if (className.includes('Csv')) nodeType = NodeType.CSV;
+    else if (className.includes('Code')) nodeType = NodeType.CODE;
 
     // Create a type-appropriate mock node
     const mockNode = createMockNodeForType(nodeType);
@@ -1008,6 +1021,8 @@ window.ReviewNode = ReviewNode;
 window.FactcheckNode = FactcheckNode;
 window.ImageNode = ImageNode;
 window.FlashcardNode = FlashcardNode;
+window.CsvNode = CsvNode;
+window.CodeNode = CodeNode;
 
 // CommonJS export for Node.js/testing
 if (typeof module !== 'undefined' && module.exports) {
@@ -1036,6 +1051,8 @@ if (typeof module !== 'undefined' && module.exports) {
         ReviewNode,
         FactcheckNode,
         ImageNode,
-        FlashcardNode
+        FlashcardNode,
+        CsvNode,
+        CodeNode
     };
 }

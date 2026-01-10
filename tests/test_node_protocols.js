@@ -5,14 +5,22 @@
  * Tests protocol compliance, factory dispatch, and method return values.
  */
 
-// Load required modules (simulate browser environment)
-global.window = global;
+import { createRequire } from 'module';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-// Load graph-types.js to get NodeType and factory functions
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
+// Load required modules (simulate browser environment)
+global.window = global;
+
+// Load graph-types.js to get NodeType and factory functions
 const graphTypesPath = path.join(__dirname, '../src/canvas_chat/static/js/graph-types.js');
 const graphTypesCode = fs.readFileSync(graphTypesPath, 'utf8');
 vm.runInThisContext(graphTypesCode, { filename: graphTypesPath });
@@ -45,7 +53,9 @@ const {
     OpinionNode,
     SynthesisNode,
     ReviewNode,
-    ImageNode
+    ImageNode,
+    CodeNode,
+    CsvNode
 } = global.window;
 
 // Simple test runner
@@ -481,6 +491,171 @@ test('renderContent: MatrixNode returns full HTML structure', () => {
     const html = wrapped.renderContent(mockCanvas);
     assertTrue(html.includes('matrix-table'));
     assertTrue(html.includes('Test'));
+});
+
+// ============================================================
+// CodeNode Tests (Modal-based editing)
+// ============================================================
+
+test('validateNodeProtocol: CodeNode implements all methods', () => {
+    assertTrue(validateNodeProtocol(CodeNode));
+});
+
+test('wrapNode: returns CodeNode for CODE type', () => {
+    const node = { type: NodeType.CODE, code: 'print("hello")' };
+    const wrapped = wrapNode(node);
+    assertTrue(wrapped instanceof CodeNode);
+});
+
+test('getTypeLabel: CodeNode returns "Code"', () => {
+    const node = { type: NodeType.CODE, code: 'print("hello")' };
+    const wrapped = wrapNode(node);
+    assertEqual(wrapped.getTypeLabel(), 'Code');
+});
+
+test('getTypeIcon: CodeNode returns code icon', () => {
+    const node = { type: NodeType.CODE, code: 'print("hello")' };
+    const wrapped = wrapNode(node);
+    assertEqual(wrapped.getTypeIcon(), '🐍');
+});
+
+test('getActions: CodeNode includes EDIT_CODE action', () => {
+    const node = { type: NodeType.CODE, code: 'print("hello")' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertIncludes(actions, Actions.EDIT_CODE);
+});
+
+test('getActions: CodeNode includes GENERATE action', () => {
+    const node = { type: NodeType.CODE, code: 'print("hello")' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertIncludes(actions, Actions.GENERATE);
+});
+
+test('getActions: CodeNode includes RUN_CODE action', () => {
+    const node = { type: NodeType.CODE, code: 'print("hello")' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertIncludes(actions, Actions.RUN_CODE);
+});
+
+test('getActions: CodeNode includes COPY action', () => {
+    const node = { type: NodeType.CODE, code: 'print("hello")' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertIncludes(actions, Actions.COPY);
+});
+
+test('getActions: CodeNode action order is EDIT_CODE, GENERATE, RUN_CODE, COPY', () => {
+    const node = { type: NodeType.CODE, code: 'print("hello")' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertEqual(actions.length, 4);
+    assertEqual(actions[0], Actions.EDIT_CODE);
+    assertEqual(actions[1], Actions.GENERATE);
+    assertEqual(actions[2], Actions.RUN_CODE);
+    assertEqual(actions[3], Actions.COPY);
+});
+
+test('renderContent: CodeNode renders code-display with code block', () => {
+    const node = { type: NodeType.CODE, code: 'print("hello")' };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('code-display'));
+    assertTrue(html.includes('language-python'));
+    assertTrue(html.includes('print'));
+});
+
+test('renderContent: CodeNode shows placeholder when no code', () => {
+    const node = { type: NodeType.CODE, code: '' };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('Click Edit to add code'));
+});
+
+test('renderContent: CodeNode shows data hint for single CSV', () => {
+    const node = { type: NodeType.CODE, code: '', csvNodeIds: ['csv1'] };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('code-data-hint'));
+    assertTrue(html.includes('df'));
+});
+
+test('renderContent: CodeNode shows data hint for multiple CSVs', () => {
+    const node = { type: NodeType.CODE, code: '', csvNodeIds: ['csv1', 'csv2', 'csv3'] };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('df1, df2, df3'));
+});
+
+test('renderContent: CodeNode shows running indicator', () => {
+    const node = { type: NodeType.CODE, code: 'x = 1', executionState: 'running' };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('code-running'));
+    assertTrue(html.includes('Running...'));
+});
+
+test('renderContent: CodeNode shows error state', () => {
+    const node = { type: NodeType.CODE, code: 'x = 1', executionState: 'error', lastError: 'SyntaxError' };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+    assertTrue(html.includes('code-error'));
+    assertTrue(html.includes('SyntaxError'));
+});
+
+test('getSummaryText: CodeNode shows first non-comment line', () => {
+    const node = { type: NodeType.CODE, code: '# Comment\nprint("hello world")' };
+    const wrapped = wrapNode(node);
+    const summary = wrapped.getSummaryText(mockCanvas);
+    assertTrue(summary.includes('print'));
+});
+
+test('getHeaderButtons: CodeNode includes STOP and CONTINUE buttons', () => {
+    const node = { type: NodeType.CODE, code: 'x = 1' };
+    const wrapped = wrapNode(node);
+    const buttons = wrapped.getHeaderButtons();
+    const buttonIds = buttons.map(b => b.id);
+    assertIncludes(buttonIds, 'stop');
+    assertIncludes(buttonIds, 'continue');
+});
+
+// ============================================================
+// Actions definitions tests
+// ============================================================
+
+test('Actions.EDIT_CODE: has correct id and label', () => {
+    assertEqual(Actions.EDIT_CODE.id, 'edit-code');
+    assertTrue(Actions.EDIT_CODE.label.includes('Edit'));
+});
+
+test('Actions: all code-related actions are defined', () => {
+    assertTrue(Actions.EDIT_CODE !== undefined, 'EDIT_CODE should be defined');
+    assertTrue(Actions.GENERATE !== undefined, 'GENERATE should be defined');
+    assertTrue(Actions.RUN_CODE !== undefined, 'RUN_CODE should be defined');
+    assertTrue(Actions.ANALYZE !== undefined, 'ANALYZE should be defined');
+});
+
+// ============================================================
+// CsvNode Tests
+// ============================================================
+
+test('validateNodeProtocol: CsvNode implements all methods', () => {
+    assertTrue(validateNodeProtocol(CsvNode));
+});
+
+test('wrapNode: returns CsvNode for CSV type', () => {
+    const node = { type: NodeType.CSV, content: 'a,b\n1,2' };
+    const wrapped = wrapNode(node);
+    assertTrue(wrapped instanceof CsvNode);
+});
+
+test('getActions: CsvNode includes ANALYZE action', () => {
+    const node = { type: NodeType.CSV, content: 'a,b\n1,2' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+    assertIncludes(actions, Actions.ANALYZE);
 });
 
 // ============================================================
