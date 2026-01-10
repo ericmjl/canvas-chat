@@ -107,7 +107,7 @@ class App {
             .on('nodeFetchSummarize', this.handleNodeFetchSummarize.bind(this))
             .on('nodeDelete', this.handleNodeDelete.bind(this))
             .on('nodeCopy', this.copyNodeContent.bind(this))
-            .on('nodeTitleEdit', this.handleNodeTitleEdit.bind(this))
+            .on('nodeTitleEdit', (nodeId) => this.modalManager.handleNodeTitleEdit(nodeId))
             // Matrix-specific events
             .on('matrixCellFill', this.handleMatrixCellFill.bind(this))
             .on('matrixCellView', this.handleMatrixCellView.bind(this))
@@ -126,7 +126,7 @@ class App {
             .on('nodeFitToViewport', this.handleNodeFitToViewport.bind(this))
             .on('nodeResetSize', this.handleNodeResetSize.bind(this))
             // Content editing events (for FETCH_RESULT nodes)
-            .on('nodeEditContent', this.handleNodeEditContent.bind(this))
+            .on('nodeEditContent', (nodeId) => this.modalManager.handleNodeEditContent(nodeId))
             .on('nodeResummarize', this.handleNodeResummarize.bind(this))
             // Flashcard events
             .on('createFlashcards', this.handleCreateFlashcards.bind(this))
@@ -149,7 +149,7 @@ class App {
             .on('nodeAnalyze', this.handleNodeAnalyze.bind(this))
             .on('nodeRunCode', this.handleNodeRunCode.bind(this))
             .on('nodeCodeChange', this.handleNodeCodeChange.bind(this))
-            .on('nodeEditCode', this.handleNodeEditCode.bind(this))
+            .on('nodeEditCode', (nodeId) => this.modalManager.handleNodeEditCode(nodeId))
             .on('nodeGenerate', this.handleNodeGenerate.bind(this))
             .on('nodeGenerateSubmit', this.handleNodeGenerateSubmit.bind(this))
             .on('nodeOutputToggle', this.handleNodeOutputToggle.bind(this))
