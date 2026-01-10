@@ -9,344 +9,24 @@
  * - resizeImage
  */
 
-/* global FlashcardFeature, CommitteeFeature, MatrixFeature, FactcheckFeature, ResearchFeature, resizeImage, Papa, pyodideRunner */
-
-// Slash command definitions
-const SLASH_COMMANDS = [
-    { command: '/note', description: 'Add a note or fetch URL content', placeholder: 'markdown or https://...' },
-    { command: '/search', description: 'Search the web', placeholder: 'query' },
-    { command: '/research', description: 'Deep research', placeholder: 'topic' },
-    { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
-    { command: '/committee', description: 'Consult multiple LLMs and synthesize', placeholder: 'question' },
-    { command: '/factcheck', description: 'Verify claims with web search', placeholder: 'claim(s) to verify', requiresContext: true },
-    { command: '/code', description: 'Create Python code node (optionally linked to selected CSVs)', placeholder: 'optional description' },
-];
+/* global FlashcardFeature, CommitteeFeature, MatrixFeature, FactcheckFeature, ResearchFeature, pyodideRunner, UndoManager, SlashCommandMenu, ModalManager, FileUploadHandler */
 
 /**
- * Undo/Redo manager for tracking user actions
+ * Main application - ties together all modules
+ *
+ * Utility functions are in utils.js (loaded before this file):
+ * - isUrlContent, extractUrlFromReferenceNode
+ * - formatUserError, truncateText, escapeHtmlText
+ * - formatMatrixAsText, buildMessagesForApi
+ * - applySM2, isFlashcardDue, getDueFlashcards
+ * - resizeImage
+ *
+ * Extracted modules:
+ * - UndoManager: undo-manager.js
+ * - SlashCommandMenu: slash-command-menu.js
+ * - ModalManager: modal-manager.js
+ * - FileUploadHandler: file-upload-handler.js
  */
-class UndoManager {
-    constructor(maxHistory = 50) {
-        this.undoStack = [];
-        this.redoStack = [];
-        this.maxHistory = maxHistory;
-        this.onStateChange = null;  // Callback when undo/redo state changes
-    }
-
-    /**
-     * Push an action onto the undo stack
-     */
-    push(action) {
-        this.undoStack.push(action);
-
-        // Limit history size
-        if (this.undoStack.length > this.maxHistory) {
-            this.undoStack.shift();
-        }
-
-        // Clear redo stack on new action
-        this.redoStack = [];
-
-        if (this.onStateChange) this.onStateChange();
-    }
-
-    /**
-     * Undo the last action
-     * @returns {Object|null} The action to undo, or null if nothing to undo
-     */
-    undo() {
-        if (!this.canUndo()) return null;
-
-        const action = this.undoStack.pop();
-        this.redoStack.push(action);
-
-        if (this.onStateChange) this.onStateChange();
-        return action;
-    }
-
-    /**
-     * Redo the last undone action
-     * @returns {Object|null} The action to redo, or null if nothing to redo
-     */
-    redo() {
-        if (!this.canRedo()) return null;
-
-        const action = this.redoStack.pop();
-        this.undoStack.push(action);
-
-        if (this.onStateChange) this.onStateChange();
-        return action;
-    }
-
-    canUndo() {
-        return this.undoStack.length > 0;
-    }
-
-    canRedo() {
-        return this.redoStack.length > 0;
-    }
-
-    /**
-     * Clear all history
-     */
-    clear() {
-        this.undoStack = [];
-        this.redoStack = [];
-        if (this.onStateChange) this.onStateChange();
-    }
-}
-
-/**
- * Slash command autocomplete menu
- */
-class SlashCommandMenu {
-    constructor() {
-        this.menu = null;
-        this.activeInput = null;
-        this.selectedIndex = 0;
-        this.visible = false;
-        this.filteredCommands = [];
-        this.onSelect = null; // Callback when command is selected
-        this.justSelected = false; // Flag to prevent immediate send after selection
-        this.getHasContext = null; // Callback to check if context is available (selected nodes)
-        this.getHasSelectedCsv = null; // Callback to check if a CSV node is selected
-
-        this.createMenu();
-    }
-
-    createMenu() {
-        this.menu = document.createElement('div');
-        this.menu.className = 'slash-command-menu';
-        this.menu.style.display = 'none';
-        document.body.appendChild(this.menu);
-
-        // Prevent clicks inside menu from blurring input
-        this.menu.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-        });
-    }
-
-    /**
-     * Attach to an input element
-     */
-    attach(input, onSelect) {
-        this.onSelect = onSelect;
-
-        // Store original placeholder for later reset
-        input.dataset.originalPlaceholder = input.placeholder;
-
-        input.addEventListener('input', (e) => this.handleInput(e, input));
-        input.addEventListener('keydown', (e) => this.handleKeydown(e, input));
-        input.addEventListener('blur', () => {
-            // Delay hide to allow click on menu item
-            setTimeout(() => this.hide(), 150);
-        });
-    }
-
-    handleInput(e, input) {
-        const value = input.value;
-
-        // Clear the justSelected flag only on real user input (not programmatic)
-        if (!e._programmatic) {
-            this.justSelected = false;
-        }
-
-        // Reset placeholder if input is empty or doesn't start with /
-        if (!value || !value.startsWith('/')) {
-            input.placeholder = input.dataset.originalPlaceholder || 'Type a message...';
-        }
-
-        // Check if typing a slash command
-        if (value.startsWith('/')) {
-            const typed = value.split(' ')[0].toLowerCase(); // Just the command part
-
-            // Filter commands that match
-            this.filteredCommands = SLASH_COMMANDS.filter(cmd =>
-                cmd.command.toLowerCase().startsWith(typed)
-            );
-
-            if (this.filteredCommands.length > 0 && !value.includes(' ')) {
-                // Show menu only if still typing command (no space yet)
-                this.show(input);
-            } else {
-                this.hide();
-            }
-        } else {
-            this.hide();
-        }
-    }
-
-    handleKeydown(e, input) {
-        // If we just selected a command, block the next Enter from sending
-        if (this.justSelected && e.key === 'Enter') {
-            e.preventDefault();
-            e.stopPropagation();
-            this.justSelected = false;
-            return true;
-        }
-
-        if (!this.visible) return false;
-
-        switch (e.key) {
-            case 'ArrowDown':
-                e.preventDefault();
-                e.stopPropagation();
-                this.selectedIndex = Math.min(this.selectedIndex + 1, this.filteredCommands.length - 1);
-                this.render();
-                return true;
-            case 'ArrowUp':
-                e.preventDefault();
-                e.stopPropagation();
-                this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
-                this.render();
-                return true;
-            case 'Tab':
-            case 'Enter':
-                if (this.filteredCommands.length > 0) {
-                    const cmd = this.filteredCommands[this.selectedIndex];
-                    if (!this.isCommandDisabled(cmd)) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.selectCommand(input, cmd);
-                        return true;
-                    }
-                }
-                break;
-            case 'Escape':
-                e.preventDefault();
-                e.stopPropagation();
-                this.hide();
-                return true;
-        }
-        return false;
-    }
-
-    selectCommand(input, cmd) {
-        // Insert the command with a trailing space
-        input.value = cmd.command + ' ';
-
-        // Update placeholder to hint at expected input
-        if (cmd.placeholder) {
-            input.placeholder = cmd.placeholder + '...';
-        }
-
-        input.focus();
-
-        // Trigger input event for any listeners (but mark it as programmatic)
-        const event = new Event('input', { bubbles: true });
-        event._programmatic = true;
-        input.dispatchEvent(event);
-
-        // Set flag AFTER dispatching event to prevent immediate send
-        this.justSelected = true;
-
-        this.hide();
-
-        if (this.onSelect) {
-            this.onSelect(cmd);
-        }
-    }
-
-    show(input) {
-        this.activeInput = input;
-        this.visible = true;
-        this.selectedIndex = 0;
-
-        // Position menu above the input
-        const rect = input.getBoundingClientRect();
-        this.menu.style.display = 'block';
-        this.menu.style.left = `${rect.left}px`;
-        this.menu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-        this.menu.style.minWidth = `${Math.min(rect.width, 300)}px`;
-
-        this.render();
-    }
-
-    hide() {
-        this.visible = false;
-        this.menu.style.display = 'none';
-        this.activeInput = null;
-    }
-
-    /**
-     * Check if a command is currently disabled
-     */
-    isCommandDisabled(cmd) {
-        const hasExa = storage.hasExaApiKey();
-        const inputText = this.activeInput ? this.activeInput.value : '';
-        const hasInputText = inputText.includes(' ') && inputText.split(' ').slice(1).join(' ').trim().length > 0;
-        const hasSelectedNodes = this.getHasContext ? this.getHasContext() : false;
-        const hasContext = hasInputText || hasSelectedNodes;
-        const hasSelectedCsv = this.getHasSelectedCsv ? this.getHasSelectedCsv() : false;
-
-        const isExaDisabled = cmd.requiresExa && !hasExa;
-        const isContextDisabled = cmd.requiresContext && !hasContext;
-        const isCsvDisabled = cmd.requiresCsv && !hasSelectedCsv;
-        return isExaDisabled || isContextDisabled || isCsvDisabled;
-    }
-
-    render() {
-        const hasExa = storage.hasExaApiKey();
-        // Check if context is available (selected nodes or text after command)
-        const inputText = this.activeInput ? this.activeInput.value : '';
-        const hasInputText = inputText.includes(' ') && inputText.split(' ').slice(1).join(' ').trim().length > 0;
-        const hasSelectedNodes = this.getHasContext ? this.getHasContext() : false;
-        const hasContext = hasInputText || hasSelectedNodes;
-        const hasSelectedCsv = this.getHasSelectedCsv ? this.getHasSelectedCsv() : false;
-
-        const commandsHtml = this.filteredCommands.map((cmd, index) => {
-            const isExaDisabled = cmd.requiresExa && !hasExa;
-            const isContextDisabled = cmd.requiresContext && !hasContext;
-            const isCsvDisabled = cmd.requiresCsv && !hasSelectedCsv;
-            const isDisabled = isExaDisabled || isContextDisabled || isCsvDisabled;
-            const disabledClass = isDisabled ? 'disabled' : '';
-            let disabledSuffix = '';
-            if (isExaDisabled) {
-                disabledSuffix = ' <span class="requires-exa">(requires Exa)</span>';
-            } else if (isContextDisabled) {
-                disabledSuffix = ' <span class="requires-context">(requires text or selected node)</span>';
-            } else if (isCsvDisabled) {
-                disabledSuffix = ' <span class="requires-csv">(requires selected CSV node)</span>';
-            }
-
-            // Show which provider will be used for search/research commands
-            let description = cmd.description;
-            if (cmd.command === '/search') {
-                const provider = hasExa ? 'Exa' : 'DuckDuckGo';
-                description = `Search the web (${provider})`;
-            } else if (cmd.command === '/research') {
-                const provider = hasExa ? 'Exa' : 'DuckDuckGo';
-                description = `Deep research (${provider})`;
-            }
-
-            return `
-            <div class="slash-command-item ${index === this.selectedIndex ? 'selected' : ''} ${disabledClass}"
-                 data-index="${index}">
-                <span class="slash-command-name">${cmd.command}</span>
-                <span class="slash-command-desc">${description}${disabledSuffix}</span>
-            </div>
-        `;
-        }).join('');
-
-        this.menu.innerHTML = `
-            ${commandsHtml}
-            <div class="slash-command-hint">
-                <kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>Tab</kbd> select · <kbd>Esc</kbd> dismiss
-            </div>
-        `;
-
-        // Add click handlers
-        this.menu.querySelectorAll('.slash-command-item').forEach((item, index) => {
-            item.addEventListener('click', () => {
-                const cmd = this.filteredCommands[index];
-                if (!this.isCommandDisabled(cmd)) {
-                    this.selectedIndex = index;
-                    this.selectCommand(this.activeInput, cmd);
-                }
-            });
-        });
-    }
-}
 
 class App {
     constructor() {
@@ -386,6 +66,12 @@ class App {
 
         // Undo/Redo manager
         this.undoManager = new UndoManager();
+
+        // Modal manager
+        this.modalManager = new ModalManager(this);
+
+        // File upload handler
+        this.fileUploadHandler = new FileUploadHandler(this);
 
         // UI elements
         this.chatInput = document.getElementById('chat-input');
@@ -447,9 +133,9 @@ class App {
             .on('reviewCard', this.reviewSingleCard.bind(this))
             .on('flipCard', this.handleFlipCard.bind(this))
             // File drop events
-            .on('pdfDrop', this.handlePdfDrop.bind(this))
-            .on('imageDrop', this.handleImageDrop.bind(this))
-            .on('csvDrop', this.handleCsvDrop.bind(this))
+            .on('pdfDrop', (file, position) => this.fileUploadHandler.handlePdfDrop(file, position))
+            .on('imageDrop', (file, position) => this.fileUploadHandler.handleImageDrop(file, position))
+            .on('csvDrop', (file, position) => this.fileUploadHandler.handleCsvDrop(file, position))
             // Image and tag click events
             .on('imageClick', this.handleImageClick.bind(this))
             .on('tagChipClick', this.handleTagChipClick.bind(this))
@@ -646,7 +332,7 @@ class App {
                 updateEmptyState: () => this.updateEmptyState(),
                 buildLLMRequest: (params) => this.buildLLMRequest(params),
                 generateNodeSummary: (nodeId) => this.generateNodeSummary(nodeId),
-                showSettingsModal: () => this.showSettingsModal(),
+                showSettingsModal: () => this.modalManager.showSettingsModal(),
                 getModelPicker: () => this.modelPicker,
                 registerStreaming: (nodeId, abortController, context = null) => {
                     // Register research streaming state for stop button support
@@ -1007,10 +693,10 @@ class App {
 
         // Settings modal
         document.getElementById('settings-btn').addEventListener('click', () => {
-            this.showSettingsModal();
+            this.modalManager.showSettingsModal();
         });
         document.getElementById('settings-close').addEventListener('click', () => {
-            this.hideSettingsModal();
+            this.modalManager.hideSettingsModal();
         });
         document.getElementById('save-settings-btn').addEventListener('click', () => {
             this.saveSettings();
@@ -1018,69 +704,69 @@ class App {
 
         // Custom models in settings
         document.getElementById('add-custom-model-btn').addEventListener('click', () => {
-            this.handleAddCustomModel();
+            this.modalManager.handleAddCustomModel();
         });
 
         // Help modal
         document.getElementById('help-btn').addEventListener('click', () => {
-            this.showHelpModal();
+            this.modalManager.showHelpModal();
         });
         document.getElementById('help-close').addEventListener('click', () => {
-            this.hideHelpModal();
+            this.modalManager.hideHelpModal();
         });
 
         // Edit content modal
         document.getElementById('edit-content-close').addEventListener('click', () => {
-            this.hideEditContentModal();
+            this.modalManager.hideEditContentModal();
         });
         document.getElementById('edit-content-cancel').addEventListener('click', () => {
-            this.hideEditContentModal();
+            this.modalManager.hideEditContentModal();
         });
         document.getElementById('edit-content-save').addEventListener('click', () => {
-            this.handleEditContentSave();
+            this.modalManager.handleEditContentSave();
         });
         // Handle keyboard shortcuts in edit content textarea
         document.getElementById('edit-content-textarea').addEventListener('keydown', (e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 // Cmd/Ctrl+Enter to save
                 e.preventDefault();
-                this.handleEditContentSave();
+                this.modalManager.handleEditContentSave();
             } else if (e.key === 'Escape') {
-                this.hideEditContentModal();
+                this.modalManager.hideEditContentModal();
             }
         });
 
         // Edit title modal
         document.getElementById('edit-title-close').addEventListener('click', () => {
-            this.hideEditTitleModal();
+            this.modalManager.hideEditTitleModal();
         });
         document.getElementById('edit-title-cancel').addEventListener('click', () => {
-            this.hideEditTitleModal();
+            this.modalManager.hideEditTitleModal();
         });
         document.getElementById('edit-title-save').addEventListener('click', () => {
-            this.saveNodeTitle();
+            this.modalManager.saveNodeTitle();
         });
         document.getElementById('edit-title-input').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                this.saveNodeTitle();
+                this.modalManager.saveNodeTitle();
             } else if (e.key === 'Escape') {
-                this.hideEditTitleModal();
+                this.modalManager.hideEditTitleModal();
             }
         });
 
         // Code editor modal
         document.getElementById('code-editor-close').addEventListener('click', () => {
-            this.hideCodeEditorModal();
+            this.modalManager.hideCodeEditorModal();
         });
         document.getElementById('code-editor-cancel').addEventListener('click', () => {
-            this.hideCodeEditorModal();
+            this.modalManager.hideCodeEditorModal();
         });
         document.getElementById('code-editor-save').addEventListener('click', () => {
-            this.handleCodeEditorSave();
+            this.modalManager.handleCodeEditorSave();
         });
         document.getElementById('code-editor-textarea').addEventListener('input', () => {
-            this.updateCodeEditorPreview();
+            this.modalManager.updateCodeEditorPreview();
         });
         // Handle Tab for indentation and Escape to close
         document.getElementById('code-editor-textarea').addEventListener('keydown', (e) => {
@@ -1092,13 +778,13 @@ class App {
                 // Insert 4 spaces at cursor
                 textarea.value = textarea.value.substring(0, start) + '    ' + textarea.value.substring(end);
                 textarea.selectionStart = textarea.selectionEnd = start + 4;
-                this.updateCodeEditorPreview();
+                this.modalManager.updateCodeEditorPreview();
             } else if (e.key === 'Escape') {
-                this.hideCodeEditorModal();
+                this.modalManager.hideCodeEditorModal();
             } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 // Cmd/Ctrl+Enter to save
                 e.preventDefault();
-                this.handleCodeEditorSave();
+                this.modalManager.handleCodeEditorSave();
             }
         });
 
@@ -1148,9 +834,9 @@ class App {
 
                 // Route to appropriate handler based on file type
                 if (file.type === 'application/pdf') {
-                    await this.handlePdfUpload(file);
+                    await this.fileUploadHandler.handlePdfUpload(file);
                 } else if (file.type.startsWith('image/')) {
-                    await this.handleImageUpload(file);
+                    await this.fileUploadHandler.handleImageUpload(file);
                 } else {
                     alert('Please select a PDF or image file.');
                 }
@@ -1172,13 +858,13 @@ class App {
 
         // Sessions modal
         document.getElementById('sessions-btn').addEventListener('click', () => {
-            this.showSessionsModal();
+            this.modalManager.showSessionsModal();
         });
         document.getElementById('session-close').addEventListener('click', () => {
-            this.hideSessionsModal();
+            this.modalManager.hideSessionsModal();
         });
         document.getElementById('new-session-btn').addEventListener('click', async () => {
-            this.hideSessionsModal();
+            this.modalManager.hideSessionsModal();
             await this.createNewSession();
         });
 
@@ -1327,7 +1013,7 @@ class App {
                     this.canvas.hideNavPopover();
                 } else if (this.isSearchOpen()) {
                     this.closeSearch();
-                } else if (this.closeAnyOpenModal()) {
+                } else if (this.modalManager.closeAnyOpenModal()) {
                     // Modal was closed, nothing more to do
                 } else {
                     this.canvas.clearSelection();
@@ -1367,7 +1053,7 @@ class App {
             // ? to show help (when not in input)
             if (e.key === '?' && !e.target.matches('input, textarea')) {
                 e.preventDefault();
-                this.showHelpModal();
+                this.modalManager.showHelpModal();
             }
 
             // Cmd/Ctrl+Z for undo, Cmd/Ctrl+Shift+Z for redo
@@ -1417,10 +1103,10 @@ class App {
                         // Check if node has edit actions
                         if (actions.some(a => a.id === 'edit-code')) {
                             e.preventDefault();
-                            this.handleNodeEditCode(selectedNodeIds[0]);
+                            this.modalManager.handleNodeEditCode(selectedNodeIds[0]);
                         } else if (actions.some(a => a.id === 'edit-content')) {
                             e.preventDefault();
-                            this.handleNodeEditContent(selectedNodeIds[0]);
+                            this.modalManager.handleNodeEditContent(selectedNodeIds[0]);
                         }
                     }
                 }
@@ -1527,7 +1213,7 @@ class App {
                     e.preventDefault();
                     const file = item.getAsFile();
                     if (file) {
-                        await this.handleImageUpload(file, null, true);  // showHint=true
+                        await this.fileUploadHandler.handleImageUpload(file, null, true);  // showHint=true
                     }
                     return;
                 }
@@ -2060,255 +1746,7 @@ class App {
         }
     }
 
-    /**
-     * Handle PDF file upload (from paperclip button or drag & drop).
-     *
-     * @param {File} file - The PDF file to upload
-     * @param {Object} position - Optional position for the node (for drag & drop)
-     */
-    async handlePdfUpload(file, position = null) {
-        // Validate file type
-        if (file.type !== 'application/pdf') {
-            alert('Please select a PDF file.');
-            return;
-        }
-
-        // Validate file size (25 MB limit)
-        const MAX_SIZE = 25 * 1024 * 1024;
-        if (file.size > MAX_SIZE) {
-            alert(`PDF file is too large. Maximum size is 25 MB.`);
-            return;
-        }
-
-        // Create a placeholder node while processing
-        const nodePosition = position || this.graph.autoPosition([]);
-        const pdfNode = createNode(NodeType.PDF, `Processing PDF: ${file.name}...`, {
-            position: nodePosition
-        });
-
-        this.graph.addNode(pdfNode);
-        this.canvas.renderNode(pdfNode);
-
-        this.canvas.clearSelection();
-        this.saveSession();
-        this.updateEmptyState();
-
-        // Pan to the new node
-        this.canvas.centerOnAnimated(
-            pdfNode.position.x + 160,
-            pdfNode.position.y + 100,
-            300
-        );
-
-        try {
-            // Upload PDF via FormData
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const response = await fetch(apiUrl('/api/upload-pdf'), {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to process PDF');
-            }
-
-            const data = await response.json();
-
-            // Update the node with the extracted content
-            this.canvas.updateNodeContent(pdfNode.id, data.content, false);
-            this.graph.updateNode(pdfNode.id, {
-                content: data.content,
-                title: data.title,
-                page_count: data.page_count
-            });
-            this.saveSession();
-
-        } catch (err) {
-            // Update node with error message
-            const errorContent = `**Failed to process PDF**\n\n${file.name}\n\n*Error: ${err.message}*`;
-            this.canvas.updateNodeContent(pdfNode.id, errorContent, false);
-            this.graph.updateNode(pdfNode.id, { content: errorContent });
-            this.saveSession();
-        }
-    }
-
-    /**
-     * Handle PDF drop on canvas (from drag & drop).
-     *
-     * @param {File} file - The PDF file that was dropped
-     * @param {Object} position - The drop position in canvas coordinates
-     */
-    async handlePdfDrop(file, position) {
-        await this.handlePdfUpload(file, position);
-    }
-
-    /**
-     * Handle image file upload (from paperclip button, drag & drop, or paste).
-     *
-     * @param {File} file - The image file to upload
-     * @param {Object} position - Optional position for the node (for drag & drop)
-     * @param {boolean} showHint - Whether to show a canvas hint after upload
-     */
-    async handleImageUpload(file, position = null, showHint = false) {
-        // Validate image type
-        if (!file.type.startsWith('image/')) {
-            alert('Please select an image file.');
-            return;
-        }
-
-        // Validate size (20 MB raw limit)
-        const MAX_SIZE = 20 * 1024 * 1024;
-        if (file.size > MAX_SIZE) {
-            alert('Image is too large. Maximum size is 20 MB.');
-            return;
-        }
-
-        try {
-            // Resize and convert to base64
-            const dataUrl = await resizeImage(file);
-            const [header, base64Data] = dataUrl.split(',');
-            const mimeMatch = header.match(/data:(.*);base64/);
-            const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
-
-            // Create IMAGE node
-            const nodePosition = position || this.graph.autoPosition([]);
-            const imageNode = createNode(NodeType.IMAGE, '', {
-                position: nodePosition,
-                imageData: base64Data,
-                mimeType: mimeType
-            });
-
-            this.graph.addNode(imageNode);
-            this.canvas.renderNode(imageNode);
-
-            this.canvas.clearSelection();
-            this.canvas.selectNode(imageNode.id);  // Select the new image
-            this.saveSession();
-            this.updateEmptyState();
-
-            // Pan to the new node
-            this.canvas.centerOnAnimated(
-                imageNode.position.x + 160,
-                imageNode.position.y + 100,
-                300
-            );
-
-            // Show hint if requested (e.g., from paste)
-            if (showHint) {
-                this.showCanvasHint('Image added! Select it and type a message to ask about it.');
-            }
-
-        } catch (err) {
-            alert(`Failed to process image: ${err.message}`);
-        }
-    }
-
-    /**
-     * Handle image drop on canvas (from drag & drop).
-     *
-     * @param {File} file - The image file that was dropped
-     * @param {Object} position - The drop position in canvas coordinates
-     */
-    async handleImageDrop(file, position) {
-        await this.handleImageUpload(file, position);
-    }
-
-    /**
-     * Handle CSV file upload (from drag & drop or file picker).
-     *
-     * @param {File} file - The CSV file to upload
-     * @param {Object} position - Optional position for the node (for drag & drop)
-     */
-    async handleCsvUpload(file, position = null) {
-        // Validate CSV type
-        if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
-            alert('Please select a CSV file.');
-            return;
-        }
-
-        // Validate size (10 MB limit for browser-friendly parsing)
-        const MAX_SIZE = 10 * 1024 * 1024;
-        if (file.size > MAX_SIZE) {
-            alert('CSV is too large. Maximum size is 10 MB.');
-            return;
-        }
-
-        try {
-            // Read file contents
-            const text = await file.text();
-
-            // Parse CSV with Papa Parse
-            const parseResult = Papa.parse(text, {
-                header: true,
-                skipEmptyLines: true,
-                dynamicTyping: true
-            });
-
-            if (parseResult.errors && parseResult.errors.length > 0) {
-                console.warn('CSV parse warnings:', parseResult.errors);
-            }
-
-            const data = parseResult.data;
-            const columns = parseResult.meta.fields || [];
-
-            // Create preview content (first 5 rows as markdown table)
-            const previewRows = data.slice(0, 5);
-            let previewContent = `**${file.name}** (${data.length} rows, ${columns.length} columns)\n\n`;
-            if (columns.length > 0) {
-                previewContent += '| ' + columns.join(' | ') + ' |\n';
-                previewContent += '| ' + columns.map(() => '---').join(' | ') + ' |\n';
-                for (const row of previewRows) {
-                    previewContent += '| ' + columns.map(col => String(row[col] ?? '')).join(' | ') + ' |\n';
-                }
-                if (data.length > 5) {
-                    previewContent += `\n*...and ${data.length - 5} more rows*`;
-                }
-            }
-
-            // Create CSV node
-            const nodePosition = position || this.graph.autoPosition([]);
-            const csvNode = createNode(NodeType.CSV, previewContent, {
-                position: nodePosition,
-                title: file.name,
-                filename: file.name,
-                csvData: text,  // Store raw CSV string for code execution
-                columns: columns
-            });
-
-            this.graph.addNode(csvNode);
-            this.canvas.renderNode(csvNode);
-
-            this.canvas.clearSelection();
-            this.canvas.selectNode(csvNode.id);
-            this.saveSession();
-            this.updateEmptyState();
-
-            // Pan to the new node
-            this.canvas.centerOnAnimated(
-                csvNode.position.x + 200,
-                csvNode.position.y + 150,
-                300
-            );
-
-            this.showCanvasHint('CSV loaded! Click "Analyze" to write Python code.');
-
-        } catch (err) {
-            alert(`Failed to process CSV: ${err.message}`);
-        }
-    }
-
-    /**
-     * Handle CSV drop on canvas (from drag & drop).
-     *
-     * @param {File} file - The CSV file that was dropped
-     * @param {Object} position - The drop position in canvas coordinates
-     */
-    async handleCsvDrop(file, position) {
-        await this.handleCsvUpload(file, position);
-    }
+    // File upload handlers moved to file-upload-handler.js
 
     /**
      * Handle click on an image in node content.
@@ -3932,81 +3370,7 @@ df.head()
         this.updateEmptyState();
     }
 
-    handleNodeTitleEdit(nodeId) {
-        const node = this.graph.getNode(nodeId);
-        if (!node) return;
-
-        // Check if node is locked by another user in multiplayer
-        if (this.graph.isNodeLockedByOther?.(nodeId)) {
-            this.showToast('This node is being edited by another user');
-            return;
-        }
-
-        // Try to acquire lock
-        if (this.graph.lockNode?.(nodeId) === false) {
-            this.showToast('Could not lock node for editing');
-            return;
-        }
-
-        // Store the node ID for the save handler
-        this._editTitleNodeId = nodeId;
-
-        // Populate and show the modal
-        const input = document.getElementById('edit-title-input');
-        input.value = node.title || node.summary || '';
-        document.getElementById('edit-title-modal').style.display = 'flex';
-
-        // Focus and select the input
-        input.focus();
-        input.select();
-    }
-
-    hideEditTitleModal() {
-        // Release lock when closing modal
-        if (this._editTitleNodeId) {
-            this.graph.unlockNode?.(this._editTitleNodeId);
-        }
-        document.getElementById('edit-title-modal').style.display = 'none';
-        this._editTitleNodeId = null;
-    }
-
-    saveNodeTitle() {
-        const nodeId = this._editTitleNodeId;
-        if (!nodeId) return;
-
-        const node = this.graph.getNode(nodeId);
-        if (!node) {
-            this.hideEditTitleModal();
-            return;
-        }
-
-        const oldTitle = node.title;
-        const newTitle = document.getElementById('edit-title-input').value.trim() || null;
-
-        // Only push undo if title actually changed
-        if (oldTitle !== newTitle) {
-            this.undoManager.push({
-                type: 'EDIT_TITLE',
-                nodeId,
-                oldTitle,
-                newTitle
-            });
-        }
-
-        this.graph.updateNode(nodeId, { title: newTitle });
-
-        // Update the DOM
-        const wrapper = this.canvas.nodeElements.get(nodeId);
-        if (wrapper) {
-            const summaryText = wrapper.querySelector('.summary-text');
-            if (summaryText) {
-                summaryText.textContent = newTitle || node.summary || this.canvas.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
-            }
-        }
-
-        this.saveSession();
-        this.hideEditTitleModal();
-    }
+    // Edit Title Modal methods moved to modal-manager.js
 
     /**
      * Handle stopping generation for a streaming node (AI nodes or Matrix fill)
@@ -4383,220 +3747,7 @@ df.head()
         this.saveSession();
     }
 
-    /**
-     * Handle opening the edit content modal for a node
-     */
-    handleNodeEditContent(nodeId) {
-        const node = this.graph.getNode(nodeId);
-        if (!node) return;
-
-        // Check if node is locked by another user in multiplayer
-        if (this.graph.isNodeLockedByOther?.(nodeId)) {
-            this.showToast('This node is being edited by another user');
-            return;
-        }
-
-        // Try to acquire lock
-        if (this.graph.lockNode?.(nodeId) === false) {
-            this.showToast('Could not lock node for editing');
-            return;
-        }
-
-        this.editingNodeId = nodeId;
-        const textarea = document.getElementById('edit-content-textarea');
-        const preview = document.getElementById('edit-content-preview');
-
-        textarea.value = node.content || '';
-
-        // Render initial preview
-        this.updateEditContentPreview();
-
-        // Set up live preview on input
-        textarea.oninput = () => this.updateEditContentPreview();
-
-        document.getElementById('edit-content-modal').style.display = 'flex';
-
-        // Focus the textarea
-        setTimeout(() => {
-            textarea.focus();
-        }, 100);
-    }
-
-    /**
-     * Update the live preview in the edit content modal
-     */
-    updateEditContentPreview() {
-        const textarea = document.getElementById('edit-content-textarea');
-        const preview = document.getElementById('edit-content-preview');
-        const content = textarea.value || '';
-
-        // Use the canvas's renderMarkdown method for consistent styling
-        preview.innerHTML = this.canvas.renderMarkdown(content);
-    }
-
-    /**
-     * Hide the edit content modal
-     */
-    hideEditContentModal() {
-        // Release lock when closing modal
-        if (this.editingNodeId) {
-            this.graph.unlockNode?.(this.editingNodeId);
-        }
-        document.getElementById('edit-content-modal').style.display = 'none';
-        document.getElementById('edit-content-textarea').oninput = null;
-        this.editingNodeId = null;
-    }
-
-    /**
-     * Save edited content with versioning
-     */
-    handleEditContentSave() {
-        if (!this.editingNodeId) return;
-
-        const node = this.graph.getNode(this.editingNodeId);
-        if (!node) {
-            this.hideEditContentModal();
-            return;
-        }
-
-        const newContent = document.getElementById('edit-content-textarea').value;
-
-        // Don't save if content hasn't changed
-        if (newContent === node.content) {
-            this.hideEditContentModal();
-            return;
-        }
-
-        // Build new versions array (immutable pattern - don't mutate node directly)
-        const existingVersions = node.versions || [];
-        const newVersions = [
-            ...existingVersions,
-            // Add initial version if this is the first edit
-            ...(existingVersions.length === 0 ? [{
-                content: node.content,
-                timestamp: node.createdAt || Date.now(),
-                reason: 'initial'
-            }] : []),
-            // Add current content as version before the edit
-            {
-                content: node.content,
-                timestamp: Date.now(),
-                reason: 'before edit'
-            }
-        ];
-
-        // Update content via graph (triggers CRDT sync for multiplayer)
-        this.graph.updateNode(this.editingNodeId, {
-            content: newContent,
-            versions: newVersions
-        });
-
-        // Re-render node
-        this.canvas.updateNodeContent(this.editingNodeId, newContent, false);
-
-        // Close modal and save
-        this.hideEditContentModal();
-        this.saveSession();
-    }
-
-    // ========================================
-    // CODE EDITOR MODAL METHODS
-    // ========================================
-
-    /**
-     * Handle clicking edit on a code node - opens the code editor modal
-     * @param {string} nodeId - The code node ID
-     */
-    handleNodeEditCode(nodeId) {
-        const node = this.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
-        this.showCodeEditorModal(nodeId);
-    }
-
-    /**
-     * Show the code editor modal for a code node
-     * @param {string} nodeId - The code node ID
-     */
-    showCodeEditorModal(nodeId) {
-        const node = this.graph.getNode(nodeId);
-        if (!node) return;
-
-        this.editingCodeNodeId = nodeId;
-        const textarea = document.getElementById('code-editor-textarea');
-
-        // Get code from node (try code first, then content for legacy nodes)
-        const code = node.code || node.content || '';
-        textarea.value = code;
-
-        // Render initial preview
-        this.updateCodeEditorPreview();
-
-        document.getElementById('code-editor-modal').style.display = 'flex';
-
-        // Focus the textarea
-        setTimeout(() => {
-            textarea.focus();
-        }, 100);
-    }
-
-    /**
-     * Update the live preview in the code editor modal using highlight.js
-     */
-    updateCodeEditorPreview() {
-        const textarea = document.getElementById('code-editor-textarea');
-        const preview = document.getElementById('code-editor-preview');
-        const code = textarea.value || '';
-
-        // Get the code element inside the pre
-        const codeEl = preview.querySelector('code');
-        if (codeEl && window.hljs) {
-            codeEl.textContent = code;
-            codeEl.className = 'language-python';
-            // Re-highlight
-            delete codeEl.dataset.highlighted;
-            window.hljs.highlightElement(codeEl);
-        }
-    }
-
-    /**
-     * Hide the code editor modal
-     */
-    hideCodeEditorModal() {
-        document.getElementById('code-editor-modal').style.display = 'none';
-        this.editingCodeNodeId = null;
-    }
-
-    /**
-     * Save code from the modal to the node
-     */
-    handleCodeEditorSave() {
-        if (!this.editingCodeNodeId) return;
-
-        const node = this.graph.getNode(this.editingCodeNodeId);
-        if (!node) {
-            this.hideCodeEditorModal();
-            return;
-        }
-
-        const newCode = document.getElementById('code-editor-textarea').value;
-
-        // Don't save if code hasn't changed
-        const oldCode = node.code || node.content || '';
-        if (newCode === oldCode) {
-            this.hideCodeEditorModal();
-            return;
-        }
-
-        // Update code via graph
-        this.graph.updateNode(this.editingCodeNodeId, { code: newCode, content: newCode });
-
-        // Update the code display in the node (uses highlight.js)
-        this.canvas.updateCodeContent(this.editingCodeNodeId, newCode, false);
-
-        // Close modal and save
-        this.hideCodeEditorModal();
-        this.saveSession();
-    }
+    // Edit Content and Code Editor Modal methods moved to modal-manager.js
 
     /**
      * Handle re-summarizing a FETCH_RESULT node (creates new SUMMARY node)
@@ -5129,7 +4280,7 @@ df.head()
                 if (settingsLink) {
                     settingsLink.addEventListener('click', (e) => {
                         e.preventDefault();
-                        this.showSettingsModal();
+                        this.modalManager.showSettingsModal();
                     });
                 }
             }
@@ -5173,182 +4324,7 @@ df.head()
         }, duration);
     }
 
-    // --- Settings Modal ---
-
-    showSettingsModal() {
-        const modal = document.getElementById('settings-modal');
-        modal.style.display = 'flex';
-
-        // Load saved keys
-        const keys = storage.getApiKeys();
-        document.getElementById('openai-key').value = keys.openai || '';
-        document.getElementById('anthropic-key').value = keys.anthropic || '';
-        document.getElementById('google-key').value = keys.google || '';
-        document.getElementById('groq-key').value = keys.groq || '';
-        document.getElementById('github-key').value = keys.github || '';
-        document.getElementById('exa-key').value = keys.exa || '';
-
-        // Load base URL
-        document.getElementById('base-url').value = storage.getBaseUrl() || '';
-
-        // Load flashcard strictness
-        document.getElementById('flashcard-strictness').value = storage.getFlashcardStrictness();
-
-        // Render custom models list
-        this.renderCustomModelsList();
-    }
-
-    hideSettingsModal() {
-        document.getElementById('settings-modal').style.display = 'none';
-    }
-
-    /**
-     * Render the custom models list in the settings modal
-     */
-    renderCustomModelsList() {
-        const container = document.getElementById('custom-models-list');
-        const models = storage.getCustomModels();
-
-        if (models.length === 0) {
-            container.innerHTML = '';
-            return;
-        }
-
-        container.innerHTML = models.map(model => {
-            const meta = [];
-            if (model.context_window) {
-                meta.push(`${(model.context_window / 1000).toFixed(0)}k context`);
-            }
-            if (model.base_url) {
-                meta.push('custom endpoint');
-            }
-
-            return `
-                <div class="custom-model-item" data-model-id="${escapeHtmlText(model.id)}">
-                    <div class="custom-model-info">
-                        <div class="custom-model-name">${escapeHtmlText(model.name)}</div>
-                        <div class="custom-model-id">${escapeHtmlText(model.id)}</div>
-                        ${meta.length > 0 ? `<div class="custom-model-meta">${meta.join(' · ')}</div>` : ''}
-                    </div>
-                    <button class="custom-model-delete" title="Delete model">&times;</button>
-                </div>
-            `;
-        }).join('');
-
-        // Add delete handlers
-        container.querySelectorAll('.custom-model-delete').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const item = e.target.closest('.custom-model-item');
-                const modelId = item.dataset.modelId;
-                this.handleDeleteCustomModel(modelId);
-            });
-        });
-    }
-
-    /**
-     * Handle adding a custom model from the settings form
-     */
-    handleAddCustomModel() {
-        const idInput = document.getElementById('custom-model-id');
-        const nameInput = document.getElementById('custom-model-name');
-        const contextInput = document.getElementById('custom-model-context');
-        const baseUrlInput = document.getElementById('custom-model-baseurl');
-
-        const modelId = idInput.value.trim();
-        const name = nameInput.value.trim();
-        const contextWindow = parseInt(contextInput.value, 10) || 128000;
-        const baseUrl = baseUrlInput.value.trim();
-
-        if (!modelId) {
-            idInput.focus();
-            return;
-        }
-
-        try {
-            storage.saveCustomModel({
-                id: modelId,
-                name: name || undefined,
-                context_window: contextWindow,
-                base_url: baseUrl || undefined
-            });
-
-            // Clear form
-            idInput.value = '';
-            nameInput.value = '';
-            contextInput.value = '';
-            baseUrlInput.value = '';
-
-            // Re-render list
-            this.renderCustomModelsList();
-
-            // Also reload models so the new model appears in the picker
-            this.loadModels();
-        } catch (err) {
-            // Show validation error
-            alert(err.message);
-            idInput.focus();
-        }
-    }
-
-    /**
-     * Handle deleting a custom model
-     * @param {string} modelId - The model ID to delete
-     */
-    handleDeleteCustomModel(modelId) {
-        storage.deleteCustomModel(modelId);
-        this.renderCustomModelsList();
-
-        // Also reload models to remove from picker
-        this.loadModels();
-    }
-
-    // --- Help Modal ---
-
-    showHelpModal() {
-        document.getElementById('help-modal').style.display = 'flex';
-    }
-
-    hideHelpModal() {
-        document.getElementById('help-modal').style.display = 'none';
-    }
-
-    isHelpOpen() {
-        return document.getElementById('help-modal').style.display === 'flex';
-    }
-
-    /**
-     * Close any open modal. Returns true if a modal was closed.
-     * Modals are checked in a priority order (most specific first).
-     * @returns {boolean}
-     */
-    closeAnyOpenModal() {
-        // List of all modal IDs in priority order
-        const modalIds = [
-            'edit-title-modal',
-            'edit-content-modal',
-            'cell-modal',
-            'slice-modal',
-            'edit-matrix-modal',
-            'matrix-modal',
-            'committee-modal',
-            'session-modal',
-            'settings-modal',
-            'help-modal'
-        ];
-
-        for (const id of modalIds) {
-            const modal = document.getElementById(id);
-            if (modal && modal.style.display === 'flex') {
-                modal.style.display = 'none';
-                // Release any edit locks if closing edit modals
-                if (id === 'edit-title-modal' || id === 'edit-content-modal') {
-                    this._editingNodeId = null;
-                }
-                return true;
-            }
-        }
-        return false;
-    }
+    // Settings, Help, and Sessions Modal methods moved to modal-manager.js
 
     // --- Undo/Redo ---
 
@@ -5990,66 +4966,10 @@ df.head()
         // Update empty state in case API key status changed
         this.updateEmptyState();
 
-        this.hideSettingsModal();
+        this.modalManager.hideSettingsModal();
     }
 
-    // --- Sessions Modal ---
-
-    async showSessionsModal() {
-        const modal = document.getElementById('session-modal');
-        modal.style.display = 'flex';
-
-        // Load sessions list
-        const sessions = await storage.listSessions();
-        const listEl = document.getElementById('session-list');
-
-        if (sessions.length === 0) {
-            listEl.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No saved sessions</p>';
-            return;
-        }
-
-        listEl.innerHTML = sessions.map(session => `
-            <div class="session-item" data-session-id="${session.id}">
-                <div>
-                    <div class="session-item-name">${session.name || 'Untitled Session'}</div>
-                    <div class="session-item-date">${new Date(session.updated_at).toLocaleDateString()}</div>
-                </div>
-                <button class="session-item-delete" data-delete-id="${session.id}" title="Delete">🗑️</button>
-            </div>
-        `).join('');
-
-        // Add click handlers for session items
-        listEl.querySelectorAll('.session-item').forEach(item => {
-            item.addEventListener('click', async (e) => {
-                if (e.target.closest('.session-item-delete')) return;
-                const sessionId = item.dataset.sessionId;
-                const session = await storage.getSession(sessionId);
-                if (session) {
-                    await this.loadSessionData(session);
-                    this.hideSessionsModal();
-                }
-            });
-        });
-
-        // Add delete handlers
-        listEl.querySelectorAll('.session-item-delete').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const sessionId = btn.dataset.deleteId;
-                // No confirmation - user can create new sessions easily
-                await storage.deleteSession(sessionId);
-                // If deleting current session, create new one
-                if (this.session.id === sessionId) {
-                    await this.createNewSession();
-                }
-                this.showSessionsModal(); // Refresh list
-            });
-        });
-    }
-
-    hideSessionsModal() {
-        document.getElementById('session-modal').style.display = 'none';
-    }
+    // Sessions Modal methods moved to modal-manager.js
 
     // --- Tag Management ---
 
@@ -6506,7 +5426,6 @@ window.App = App;
 // CommonJS export for Node.js/testing
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        SlashCommandMenu,
         App
     };
 }
