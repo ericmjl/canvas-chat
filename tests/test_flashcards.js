@@ -4,15 +4,15 @@
  */
 
 import {
-    test,
+    applySM2,
     assertEqual,
-    assertTrue,
     assertFalse,
     assertNull,
-    NodeType,
-    applySM2,
-    isFlashcardDue,
+    assertTrue,
     getDueFlashcards,
+    isFlashcardDue,
+    NodeType,
+    test,
     wrapNode
 } from './test_setup.js';
 
