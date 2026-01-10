@@ -8,30 +8,19 @@
  * not copies. This ensures tests catch bugs in production code.
  */
 
-import { createRequire } from 'module';
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-const require = createRequire(import.meta.url);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-
-// Load search.js using vm.runInThisContext so exports are available globally
-// This pattern is used because the source files use conditional CommonJS exports
-// that don't work well with require() in this Node.js/ESM environment
-const searchPath = path.join(__dirname, '../src/canvas_chat/static/js/search.js');
-const searchCode = fs.readFileSync(searchPath, 'utf8');
-
 // Set up minimal browser-like environment for source file
 global.window = global;
+global.localStorage = {
+    getItem: () => null,
+    setItem: () => {},
+};
+global.indexedDB = {
+    open: () => ({ onsuccess: null, onerror: null }),
+};
 
-vm.runInThisContext(searchCode, { filename: searchPath });
-
-// Functions are now in global scope: tokenize, calculateIDF, SearchIndex, etc.
+// Import ES modules
+const { SearchIndex, tokenize, calculateIDF, getNodeTypeIcon, NODE_TYPE_ICONS, BM25_K1, BM25_B } =
+    await import('../src/canvas_chat/static/js/search.js');
 
 // Simple test runner
 let passed = 0;
@@ -215,7 +204,8 @@ test('SearchIndex: calculates average document length', () => {
 
 test('SearchIndex: generates snippets with context', () => {
     const index = new SearchIndex();
-    const longContent = 'This is a very long document that contains the word machine learning multiple times and discusses various algorithms.';
+    const longContent =
+        'This is a very long document that contains the word machine learning multiple times and discusses various algorithms.';
     index.addDocument('1', longContent);
     const results = index.search('machine');
     assertTrue(results[0].snippet.includes('machine'));
@@ -250,7 +240,7 @@ test('SearchIndex: multiple query terms', () => {
     // But doc1 should rank highest because it has both terms
     assertTrue(results.length >= 1);
     assertEqual(results[0].nodeId, '1'); // Should rank highest
-    assertGreaterThan(results[0].score, results.find(r => r.nodeId === '2')?.score || 0);
+    assertGreaterThan(results[0].score, results.find((r) => r.nodeId === '2')?.score || 0);
 });
 
 test('SearchIndex: stores metadata', () => {

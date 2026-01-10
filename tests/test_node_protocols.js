@@ -5,31 +5,22 @@
  * Tests protocol compliance, factory dispatch, and method return values.
  */
 
-import { createRequire } from 'module';
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-const require = createRequire(import.meta.url);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-
 // Mock browser globals before importing modules
 global.window = global;
 global.document = {
     createElement: () => ({ textContent: '', innerHTML: '', id: '' }),
     head: { appendChild: () => {} },
 };
+global.localStorage = {
+    getItem: () => null,
+    setItem: () => {},
+};
+global.indexedDB = {
+    open: () => ({ onsuccess: null, onerror: null }),
+};
 
-// Load graph-types.js with vm (not yet converted to ES module)
-const graphTypesPath = path.join(__dirname, '../src/canvas_chat/static/js/graph-types.js');
-const graphTypesCode = fs.readFileSync(graphTypesPath, 'utf8');
-vm.runInThisContext(graphTypesCode, { filename: graphTypesPath });
-
-// Import ES modules - NodeRegistry and node-protocols
+// Import ES modules
+const { NodeType, createNode } = await import('../src/canvas_chat/static/js/graph-types.js');
 const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
 const {
     Actions,
