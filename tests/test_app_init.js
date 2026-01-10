@@ -157,7 +157,7 @@ test('App event listener methods exist', () => {
     const requiredMethods = [
         'handleNodeSelect',
         'handleNodeDelete',
-        'handleNodeContinue',
+        'handleNodeContinueGeneration',
         'handleNodeStop',
         'handleNodeExpand',
         'handleNodeCreateFlashcards',
