@@ -1450,7 +1450,7 @@ class App {
                         // Check for AI-related actions
                         if (actions.some(a => a.id === 'generate')) {
                             e.preventDefault();
-                            this.canvas.showGenerateInput(selectedNodeIds[0]);
+                            this.handleNodeGenerate(selectedNodeIds[0]);
                         } else if (actions.some(a => a.id === 'analyze')) {
                             e.preventDefault();
                             this.handleNodeAnalyze(selectedNodeIds[0]);
