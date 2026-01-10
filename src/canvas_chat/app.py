@@ -42,7 +42,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from canvas_chat import __version__
-from canvas_chat.admin_config import AdminConfig
+from canvas_chat.config import AppConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -53,32 +53,49 @@ litellm.drop_params = True  # Drop unsupported params gracefully
 
 app = FastAPI(title="Canvas Chat", version=__version__)
 
-# --- Admin Mode Configuration ---
-# This is initialized at module load time based on environment variable
-# set by the CLI (--admin-mode flag)
-_admin_config: AdminConfig | None = None
+# --- Configuration Management ---
+# This is initialized at module load time based on environment variables
+# set by the CLI (--config and --admin-mode flags)
+_app_config: AppConfig | None = None
 
 
-def get_admin_config() -> AdminConfig:
-    """Get the admin configuration, initializing if needed."""
-    global _admin_config
-    if _admin_config is None:
-        if os.environ.get("CANVAS_CHAT_ADMIN_MODE") == "true":
+def get_admin_config() -> AppConfig:
+    """Get the application configuration, initializing if needed.
+
+    Returns configuration in one of three modes:
+    1. Admin mode: Server-side API keys from config file
+    2. Normal mode with config: Pre-populated models, users provide keys
+    3. No config: Empty config, users provide everything
+    """
+    global _app_config
+    if _app_config is None:
+        config_path_str = os.environ.get("CANVAS_CHAT_CONFIG_PATH")
+        admin_mode = os.environ.get("CANVAS_CHAT_ADMIN_MODE") == "true"
+
+        if config_path_str:
             try:
-                config_path_str = os.environ.get("CANVAS_CHAT_CONFIG_PATH")
-                config_path = Path(config_path_str) if config_path_str else None
-                _admin_config = AdminConfig.load(config_path)
-                logger.info(
-                    f"Admin mode: {len(_admin_config.models)} models configured"
-                )
-                if _admin_config.plugins:
-                    logger.info(f"Loaded {len(_admin_config.plugins)} plugin(s)")
+                config_path = Path(config_path_str)
+                _app_config = AppConfig.load(config_path, admin_mode=admin_mode)
+
+                if admin_mode:
+                    logger.info(
+                        f"Admin mode: {len(_app_config.models)} models configured "
+                        f"(server-side keys)"
+                    )
+                else:
+                    logger.info(
+                        f"Config loaded: {len(_app_config.models)} models configured "
+                        f"(users provide keys via UI)"
+                    )
+
+                if _app_config.plugins:
+                    logger.info(f"Loaded {len(_app_config.plugins)} plugin(s)")
             except Exception as e:
-                logger.error(f"Failed to load admin config: {e}")
-                _admin_config = AdminConfig.disabled()
+                logger.error(f"Failed to load config: {e}")
+                _app_config = AppConfig.empty()
         else:
-            _admin_config = AdminConfig.disabled()
-    return _admin_config
+            _app_config = AppConfig.empty()
+    return _app_config
 
 
 # Mount static files
@@ -744,9 +761,9 @@ async def root():
     index_path = STATIC_DIR / "index.html"
     html = index_path.read_text()
 
-    # Inject plugin script tags if in admin mode
+    # Inject plugin script tags if plugins are configured
     config = get_admin_config()
-    if config.enabled and config.plugins:
+    if config.plugins:
         plugin_scripts = []
         for plugin_path in config.plugins:
             plugin_url = f"/api/plugins/{plugin_path.name}"
@@ -773,8 +790,8 @@ async def get_config():
     """
     config = get_admin_config()
     return {
-        "adminMode": config.enabled,
-        "models": config.get_frontend_models() if config.enabled else [],
+        "adminMode": config.admin_mode,
+        "models": config.get_frontend_models() if config.admin_mode else [],
     }
 
 
@@ -785,7 +802,7 @@ async def list_plugins():
     Returns plugin information for plugins configured in config.yaml.
     """
     config = get_admin_config()
-    if not config.enabled or not config.plugins:
+    if not config.plugins:
         return {"plugins": []}
 
     plugins_info = []
@@ -812,10 +829,8 @@ async def serve_plugin(plugin_name: str):
     """
     config = get_admin_config()
 
-    if not config.enabled:
-        raise HTTPException(
-            status_code=404, detail="Plugins only available in admin mode"
-        )
+    if not config.plugins:
+        raise HTTPException(status_code=404, detail="Plugins not configured")
 
     # Find the plugin by name
     plugin_path = None
@@ -864,7 +879,7 @@ def inject_admin_credentials(request: T) -> T:
     """
     config = get_admin_config()
 
-    if not config.enabled:
+    if not config.admin_mode:
         return request
 
     model_id = getattr(request, "model", None)
@@ -908,7 +923,7 @@ def inject_admin_credentials_committee(request: CommitteeRequest) -> CommitteeRe
     """
     config = get_admin_config()
 
-    if not config.enabled:
+    if not config.admin_mode:
         return request
 
     # Collect all models that need credentials

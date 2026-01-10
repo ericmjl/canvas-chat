@@ -15,9 +15,10 @@ Plugins are JavaScript ES modules that import from Canvas-Chat's core APIs.
 
 ## Prerequisites
 
-- Canvas-Chat running in admin mode (`--admin-mode` flag)
-- A `config.yaml` file with plugin paths
+- Canvas-Chat with a `config.yaml` file
 - Basic knowledge of JavaScript and HTML/CSS
+
+Note: Plugins work with or without `--admin-mode`. Use whichever mode fits your deployment.
 
 ## Step 1: Create a Plugin File
 
@@ -129,16 +130,20 @@ plugins:
 
 ## Step 3: Run Canvas-Chat
 
-Start canvas-chat with admin mode:
+Start canvas-chat with your config file:
 
 ```bash
-uvx canvas-chat launch --admin-mode --config config.yaml
+# Normal mode (users provide their own API keys)
+uvx canvas-chat launch --config config.yaml
+
+# OR admin mode (server-side keys)
+uvx canvas-chat launch --config config.yaml --admin-mode
 ```
 
 You should see in the logs:
 
 ```console
-Admin mode enabled with 1 models from config.yaml
+Config loaded: 1 models (users provide their own keys via UI)
 Loaded 1 plugin(s)
 ```
 

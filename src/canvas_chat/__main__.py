@@ -11,7 +11,7 @@ import typer
 import uvicorn
 
 from canvas_chat import __version__
-from canvas_chat.admin_config import AdminConfig
+from canvas_chat.config import AppConfig
 
 app = typer.Typer(
     name="canvas-chat",
@@ -55,31 +55,47 @@ def launch(
     no_browser: bool = typer.Option(
         False, "--no-browser", help="Don't open browser automatically"
     ),
+    config_path: str | None = typer.Option(
+        None,
+        "--config",
+        help="Path to configuration file (models and plugins)",
+    ),
     admin_mode: bool = typer.Option(
         False,
         "--admin-mode/--no-admin-mode",
-        help="Enable admin mode with server-side API keys",
-    ),
-    config_path: str = typer.Option(
-        "config.yaml",
-        "--config",
-        help="Path to configuration file (used with --admin-mode)",
+        help="Enable admin mode (server-side API keys, hide user settings)",
     ),
 ) -> None:
     """Launch the Canvas Chat server."""
-    # Handle admin mode initialization
-    if admin_mode:
+    # Load configuration if provided
+    if config_path is not None:
         try:
-            # Load and validate config
-            config = AdminConfig.load(Path(config_path))
-            config.validate_environment()
-            typer.echo(
-                f"Admin mode enabled with {len(config.models)} models "
-                f"from {config._config_path}"
-            )
+            # Load config with or without admin mode
+            config = AppConfig.load(Path(config_path), admin_mode=admin_mode)
+
+            # Only validate environment in admin mode
+            if admin_mode:
+                config.validate_environment()
+                typer.echo(
+                    f"Admin mode enabled: {len(config.models)} models "
+                    f"(server-side keys from {config._config_path})"
+                )
+            else:
+                typer.echo(
+                    f"Config loaded: {len(config.models)} models "
+                    f"(users provide their own keys via UI)"
+                )
+
+            if config.plugins:
+                typer.echo(f"Loaded {len(config.plugins)} plugin(s)")
+
             # Set environment variables for the FastAPI app to read
-            os.environ["CANVAS_CHAT_ADMIN_MODE"] = "true"
             os.environ["CANVAS_CHAT_CONFIG_PATH"] = str(config._config_path)
+            if admin_mode:
+                os.environ["CANVAS_CHAT_ADMIN_MODE"] = "true"
+            else:
+                os.environ.pop("CANVAS_CHAT_ADMIN_MODE", None)
+
         except FileNotFoundError as e:
             typer.echo(f"Error: {e}", err=True)
             raise typer.Exit(1) from e
@@ -87,9 +103,9 @@ def launch(
             typer.echo(f"Configuration error: {e}", err=True)
             raise typer.Exit(1) from e
     else:
-        # Explicitly clear admin mode
-        os.environ.pop("CANVAS_CHAT_ADMIN_MODE", None)
+        # No config provided - clear any env vars
         os.environ.pop("CANVAS_CHAT_CONFIG_PATH", None)
+        os.environ.pop("CANVAS_CHAT_ADMIN_MODE", None)
 
     url = f"http://{host}:{port}"
     typer.echo(f"Starting Canvas Chat at {url}")
@@ -129,7 +145,7 @@ def main(
 ) -> None:
     """Deprecated alias for 'launch' command."""
     typer.echo("⚠️  'main' command is deprecated, use 'launch' instead", err=True)
-    launch(port, host, no_browser, admin_mode, config_path)
+    launch(port, host, no_browser, config_path, admin_mode)
 
 
 if __name__ == "__main__":

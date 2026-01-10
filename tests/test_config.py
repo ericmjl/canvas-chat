@@ -1,8 +1,8 @@
-"""Unit tests for AdminConfig - no API calls required."""
+"""Unit tests for AppConfig - no API calls required."""
 
 import pytest
 
-from canvas_chat.admin_config import AdminConfig, ModelConfig
+from canvas_chat.config import AppConfig, ModelConfig
 
 # --- ModelConfig.from_dict tests ---
 
@@ -16,7 +16,7 @@ def test_model_config_from_dict_valid():
         "contextWindow": 128000,
         "endpointEnvVar": "OPENAI_ENDPOINT",
     }
-    model = ModelConfig.from_dict(data, 0)
+    model = ModelConfig.from_dict(data, 0, admin_mode=True)
 
     assert model.id == "openai/gpt-4o"
     assert model.name == "GPT-4o"
@@ -31,7 +31,7 @@ def test_model_config_from_dict_defaults():
         "id": "openai/gpt-4o",
         "apiKeyEnvVar": "OPENAI_API_KEY",
     }
-    model = ModelConfig.from_dict(data, 0)
+    model = ModelConfig.from_dict(data, 0, admin_mode=True)
 
     assert model.id == "openai/gpt-4o"
     assert model.name == "openai/gpt-4o"  # defaults to id
@@ -46,20 +46,31 @@ def test_model_config_from_dict_missing_id():
         "apiKeyEnvVar": "OPENAI_API_KEY",
     }
     with pytest.raises(ValueError, match="Model at index 0 missing 'id' field"):
-        ModelConfig.from_dict(data, 0)
+        ModelConfig.from_dict(data, 0, admin_mode=True)
 
 
-def test_model_config_from_dict_missing_api_key_env_var():
-    """Test ModelConfig raises error when apiKeyEnvVar is missing."""
+def test_model_config_from_dict_missing_api_key_env_var_admin_mode():
+    """Test ModelConfig raises error when apiKeyEnvVar is missing in admin mode."""
     data = {
         "id": "openai/gpt-4o",
         "name": "GPT-4o",
     }
     with pytest.raises(ValueError, match="openai/gpt-4o missing 'apiKeyEnvVar' field"):
-        ModelConfig.from_dict(data, 0)
+        ModelConfig.from_dict(data, 0, admin_mode=True)
 
 
-# --- AdminConfig.load tests ---
+def test_model_config_from_dict_missing_api_key_env_var_normal_mode():
+    """Test ModelConfig allows missing apiKeyEnvVar in normal mode."""
+    data = {
+        "id": "openai/gpt-4o",
+        "name": "GPT-4o",
+    }
+    model = ModelConfig.from_dict(data, 0, admin_mode=False)
+    assert model.id == "openai/gpt-4o"
+    assert model.api_key_env_var is None
+
+
+# --- AppConfig.load tests ---
 
 
 def test_admin_config_load_valid(tmp_path):
@@ -77,9 +88,9 @@ models:
     apiKeyEnvVar: "ANTHROPIC_API_KEY"
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
 
-    assert config.enabled is True
+    assert config.admin_mode is True
     assert len(config.models) == 2
     assert config.models[0].id == "openai/gpt-4o"
     assert config.models[0].name == "GPT-4o"
@@ -87,52 +98,52 @@ models:
 
 
 def test_admin_config_load_file_not_found(tmp_path):
-    """Test AdminConfig.load raises error when config file doesn't exist."""
+    """Test AppConfig.load raises error when config file doesn't exist."""
     config_file = tmp_path / "nonexistent.yaml"
 
-    with pytest.raises(FileNotFoundError, match="Admin mode requires config.yaml"):
-        AdminConfig.load(config_file)
+    with pytest.raises(FileNotFoundError, match="Config file not found"):
+        AppConfig.load(config_file, admin_mode=True)
 
 
 def test_admin_config_load_empty_file(tmp_path):
-    """Test AdminConfig.load raises error for empty config file."""
+    """Test AppConfig.load raises error for empty config file."""
     config_file = tmp_path / "config.yaml"
     config_file.write_text("")
 
     with pytest.raises(ValueError, match="is empty or invalid YAML"):
-        AdminConfig.load(config_file)
+        AppConfig.load(config_file, admin_mode=True)
 
 
 def test_admin_config_load_no_models(tmp_path):
-    """Test AdminConfig.load raises error when no models are defined."""
+    """Test AppConfig.load raises error when no models are defined."""
     config_file = tmp_path / "config.yaml"
     config_file.write_text("someKey: someValue\n")
 
     with pytest.raises(ValueError, match="requires at least one model"):
-        AdminConfig.load(config_file)
+        AppConfig.load(config_file, admin_mode=True)
 
 
 def test_admin_config_load_empty_models_list(tmp_path):
-    """Test AdminConfig.load raises error when models list is empty."""
+    """Test AppConfig.load raises error when models list is empty."""
     config_file = tmp_path / "config.yaml"
     config_file.write_text("models: []\n")
 
     with pytest.raises(ValueError, match="requires at least one model"):
-        AdminConfig.load(config_file)
+        AppConfig.load(config_file, admin_mode=True)
 
 
-# --- AdminConfig.disabled tests ---
+# --- AppConfig.disabled tests ---
 
 
 def test_admin_config_disabled():
     """Test creating a disabled admin config."""
-    config = AdminConfig.disabled()
+    config = AppConfig.empty()
 
-    assert config.enabled is False
+    assert config.admin_mode is False
     assert config.models == []
 
 
-# --- AdminConfig.validate_environment tests ---
+# --- AppConfig.validate_environment tests ---
 
 
 def test_admin_config_validate_environment_all_set(tmp_path, monkeypatch):
@@ -149,7 +160,7 @@ models:
     monkeypatch.setenv("TEST_OPENAI_KEY", "sk-test-openai")
     monkeypatch.setenv("TEST_ANTHROPIC_KEY", "sk-test-anthropic")
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
     # Should not raise
     config.validate_environment()
 
@@ -169,7 +180,7 @@ models:
     monkeypatch.delenv("TEST_MISSING_KEY_1", raising=False)
     monkeypatch.delenv("TEST_MISSING_KEY_2", raising=False)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
 
     with pytest.raises(ValueError, match="Missing environment variables"):
         config.validate_environment()
@@ -189,13 +200,13 @@ models:
     monkeypatch.setenv("TEST_KEY_SET", "sk-test")
     monkeypatch.delenv("TEST_KEY_MISSING", raising=False)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
 
     with pytest.raises(ValueError, match="TEST_KEY_MISSING not set"):
         config.validate_environment()
 
 
-# --- AdminConfig.get_model_config tests ---
+# --- AppConfig.get_model_config tests ---
 
 
 def test_admin_config_get_model_config_found(tmp_path):
@@ -211,7 +222,7 @@ models:
     apiKeyEnvVar: "ANTHROPIC_API_KEY"
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
     model = config.get_model_config("anthropic/claude-sonnet-4-20250514")
 
     assert model is not None
@@ -228,13 +239,13 @@ models:
     apiKeyEnvVar: "OPENAI_API_KEY"
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
     model = config.get_model_config("nonexistent/model")
 
     assert model is None
 
 
-# --- AdminConfig.resolve_credentials tests ---
+# --- AppConfig.resolve_credentials tests ---
 
 
 def test_admin_config_resolve_credentials_found(tmp_path, monkeypatch):
@@ -250,7 +261,7 @@ models:
     monkeypatch.setenv("TEST_CUSTOM_KEY", "sk-custom-secret")
     monkeypatch.setenv("TEST_CUSTOM_ENDPOINT", "https://internal.example.com/v1")
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
     api_key, base_url = config.resolve_credentials("custom/internal-llm")
 
     assert api_key == "sk-custom-secret"
@@ -268,7 +279,7 @@ models:
 
     monkeypatch.setenv("TEST_OPENAI_KEY", "sk-test-key")
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
     api_key, base_url = config.resolve_credentials("openai/gpt-4o")
 
     assert api_key == "sk-test-key"
@@ -288,7 +299,7 @@ models:
     monkeypatch.setenv("TEST_CUSTOM_KEY", "sk-custom-secret")
     monkeypatch.delenv("TEST_CUSTOM_ENDPOINT", raising=False)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
     api_key, base_url = config.resolve_credentials("custom/internal-llm")
 
     assert api_key == "sk-custom-secret"
@@ -304,7 +315,7 @@ models:
     apiKeyEnvVar: "OPENAI_API_KEY"
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
     api_key, base_url = config.resolve_credentials("nonexistent/model")
 
     assert api_key is None
@@ -322,14 +333,14 @@ models:
 
     monkeypatch.delenv("TEST_UNSET_KEY", raising=False)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
     api_key, base_url = config.resolve_credentials("openai/gpt-4o")
 
     assert api_key is None
     assert base_url is None
 
 
-# --- AdminConfig.get_frontend_models tests ---
+# --- AppConfig.get_frontend_models tests ---
 
 
 def test_admin_config_get_frontend_models(tmp_path):
@@ -347,7 +358,7 @@ models:
     contextWindow: 200000
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
     frontend_models = config.get_frontend_models()
 
     assert len(frontend_models) == 2
@@ -379,13 +390,13 @@ models:
     apiKeyEnvVar: "OPENAI_API_KEY"
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
     frontend_models = config.get_frontend_models()
 
     assert frontend_models[0]["provider"] == "Unknown"
 
 
-# --- AdminConfig.plugins tests ---
+# --- AppConfig.plugins tests ---
 
 
 def test_admin_config_load_no_plugins(tmp_path):
@@ -397,7 +408,7 @@ models:
     apiKeyEnvVar: "OPENAI_API_KEY"
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
 
     assert config.plugins == []
 
@@ -412,7 +423,7 @@ models:
 plugins: []
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
 
     assert config.plugins == []
 
@@ -431,7 +442,7 @@ plugins:
   - path: ./my-plugin.js
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
 
     assert len(config.plugins) == 1
     assert config.plugins[0] == tmp_path / "my-plugin.js"
@@ -455,7 +466,7 @@ plugins:
   - path: ./plugin2.js
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
 
     assert len(config.plugins) == 2
     assert config.plugins[0] == tmp_path / "plugin1.js"
@@ -476,7 +487,7 @@ plugins:
   - path: {plugin_file}
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
 
     assert len(config.plugins) == 1
     assert config.plugins[0] == plugin_file
@@ -499,7 +510,7 @@ plugins:
   - path: ./plugins/nested-plugin.js
 """)
 
-    config = AdminConfig.load(config_file)
+    config = AppConfig.load(config_file, admin_mode=True)
 
     assert len(config.plugins) == 1
     assert config.plugins[0] == plugin_file
@@ -520,7 +531,7 @@ plugins:
     import logging
 
     with caplog.at_level(logging.WARNING):
-        config = AdminConfig.load(config_file)
+        config = AppConfig.load(config_file, admin_mode=True)
 
     # Plugin is NOT included because file doesn't exist
     assert len(config.plugins) == 0
@@ -544,7 +555,7 @@ plugins:
     import logging
 
     with caplog.at_level(logging.WARNING):
-        config = AdminConfig.load(config_file)
+        config = AppConfig.load(config_file, admin_mode=True)
 
     # Plugin is skipped because entry is invalid
     assert len(config.plugins) == 0
@@ -566,7 +577,7 @@ plugins: "not-a-list"
     import logging
 
     with caplog.at_level(logging.WARNING):
-        config = AdminConfig.load(config_file)
+        config = AppConfig.load(config_file, admin_mode=True)
 
     # String is iterated as characters, each treated as path, all fail to exist
     assert len(config.plugins) == 0

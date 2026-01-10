@@ -61,7 +61,15 @@ For enterprise deployments where administrators control API keys server-side:
 uvx canvas-chat launch --admin-mode --config config.yaml
 ```
 
-This reads model configuration from `config.yaml` and API keys from environment variables. Users don't need to configure anything - models are pre-configured and credentials are injected server-side.
+This reads model configuration from `config.yaml` and API keys from environment variables. Users don't need to configure anything - models are pre-configured, credentials are injected server-side, and the settings UI is hidden.
+
+For development or teams that want pre-populated models but allow individual API keys:
+
+```bash
+uvx canvas-chat launch --config config.yaml
+```
+
+This loads models and plugins from config but users provide their own API keys via the UI.
 
 See [Admin Mode Setup](docs/how-to/admin-mode.md) for details.
 
@@ -76,6 +84,9 @@ plugins:
 ```
 
 ```bash
+# Plugins work with or without admin mode
+uvx canvas-chat launch --config config.yaml
+# OR
 uvx canvas-chat launch --admin-mode --config config.yaml
 ```
 
@@ -133,11 +144,11 @@ Open your browser to the URL shown (usually `http://127.0.0.1:7865`).
 To test the plugin system with the example poll node:
 
 ```bash
-# 1. Set an API key (required for admin mode)
+# 1. Set an API key (for testing LLM features)
 export ANTHROPIC_API_KEY=sk-ant-...
 
-# 2. Start dev server with admin mode and example config
-pixi run python -m canvas_chat launch --admin-mode --config config.example.yaml --port 7865
+# 2. Start dev server with example config (plugins work without admin mode)
+pixi run python -m canvas_chat launch --config config.example.yaml --port 7865
 
 # 3. Open browser to http://127.0.0.1:7865
 

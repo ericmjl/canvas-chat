@@ -1,15 +1,23 @@
 # Canvas Chat Configuration Example
 #
-# This file demonstrates the configuration schema for canvas-chat admin mode.
+# This file demonstrates the configuration schema for canvas-chat.
 # Copy this file to `config.yaml` and customize it for your deployment.
 #
-# Usage:
-#   uvx canvas-chat launch --admin-mode --config config.yaml
+# Two modes of operation:
 #
-# Admin mode enables:
-# - Server-side API key management (users don't provide their own keys)
-# - Custom plugin loading for extending node types
-# - Centralized model configuration for enterprise deployments
+# 1. Normal mode (users provide their own API keys via UI):
+#    uvx canvas-chat launch --config config.yaml
+#    - Pre-populates model list (users don't need to add models manually)
+#    - Plugins work
+#    - Users provide their own API keys in the settings UI
+#    - apiKeyEnvVar is optional (can be omitted)
+#
+# 2. Admin mode (server-side API keys, locked down):
+#    uvx canvas-chat launch --config config.yaml --admin-mode
+#    - Server-side API key management (users don't provide their own keys)
+#    - Settings UI is hidden
+#    - apiKeyEnvVar is required for each model
+#    - Plugins work
 #
 # IMPORTANT: This file should be committed to version control.
 # API keys and endpoints should be set via environment variables, NOT in this file.
@@ -19,8 +27,10 @@
 # MODELS - Define LLM providers and models available to users
 # ============================================================================
 #
-# Required for admin mode. At least one model must be configured.
-# API keys and endpoints are loaded from environment variables (not stored in config).
+# At least one model must be configured.
+#
+# In admin mode: apiKeyEnvVar is required (server-side keys)
+# In normal mode: apiKeyEnvVar is optional (users provide keys via UI)
 
 models:
     # OpenAI models
@@ -82,11 +92,13 @@ models:
 #
 # Optional. Plugins are JavaScript files that register custom node types.
 # Paths can be absolute or relative to this config file.
+# Plugins work in both normal and admin mode.
 #
 # To test the plugin system with the example poll node:
 # 1. Uncomment the plugins section below
 # 2. Set an API key: export ANTHROPIC_API_KEY=sk-ant-...
-# 3. Run: pixi run python -m canvas_chat launch --admin-mode --config config.example.yaml --port 7865
+# 3. Normal mode: pixi run python -m canvas_chat launch --config config.example.yaml --port 7865
+#    OR Admin mode: pixi run python -m canvas_chat launch --config config.example.yaml --admin-mode --port 7865
 # 4. In browser console: createNode('poll', '', {data: {question: 'Favorite?', options: ['A', 'B']}})
 
 plugins:
@@ -108,8 +120,10 @@ plugins:
 #
 #   - name (required, string): Display name shown in UI
 #
-#   - apiKeyEnvVar (required, string): Environment variable name containing API key
-#       The actual key value is read from the environment at runtime
+#   - apiKeyEnvVar (optional in normal mode, required in admin mode, string):
+#       Environment variable name containing API key
+#       In admin mode: The actual key value is read from the environment at runtime
+#       In normal mode: Can be omitted; users provide keys via UI
 #
 #   - contextWindow (optional, integer): Token limit for context building
 #       Default: 128000
@@ -126,9 +140,9 @@ plugins:
 # ENVIRONMENT VARIABLES
 # ============================================================================
 #
-# Set these environment variables before starting canvas-chat:
+# Set these environment variables before starting canvas-chat in admin mode:
 #
-# # Required for each model
+# # Required for each model (admin mode only)
 # export OPENAI_API_KEY="sk-..."
 # export ANTHROPIC_API_KEY="sk-ant-..."
 # export GEMINI_API_KEY="..."
@@ -142,7 +156,11 @@ plugins:
 # export EXA_API_KEY="your-exa-api-key"
 #
 # Then run:
-#   uvx canvas-chat launch --admin-mode --config config.yaml
+#   # Normal mode (users provide keys):
+#   uvx canvas-chat launch --config config.yaml
+#
+#   # Admin mode (server-side keys):
+#   uvx canvas-chat launch --config config.yaml --admin-mode
 #
 # ============================================================================
 # SECURITY NOTES
