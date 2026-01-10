@@ -1,3 +1,3 @@
 """Canvas Chat - A visual, non-linear chat interface."""
 
-__version__ = "0.1.43"
+__version__ = "0.1.44"
