@@ -2,16 +2,14 @@
 
 A visual, non-linear chat interface where conversations are nodes on an infinite canvas. Explore topics by branching, merging, and navigating your discussions as a directed acyclic graph (DAG).
 
-📚 **[Documentation](https://ericmjl.github.io/canvas-chat/)**
-
-## Try It Online
+## Try it online
 
 No installation required! Try Canvas Chat at
 **[ericmjl--canvas-chat-fastapi-app.modal.run](https://ericmjl--canvas-chat-fastapi-app.modal.run/)**.
 
 Bring your own API keys (configured in Settings).
 
-## Quick Start
+## Quick start
 
 Run Canvas Chat instantly with no installation:
 
@@ -62,7 +60,7 @@ uvx canvas-chat --admin-mode
 
 This reads model configuration from `config.yaml` and API keys from environment variables. Users don't need to configure anything - models are pre-configured and credentials are injected server-side.
 
-See [Admin Mode Setup](docs/how-to/admin-mode.md) for details.
+See [Admin Mode Setup](how-to/admin-mode.md) for details.
 
 ## Usage
 
@@ -104,7 +102,7 @@ pixi run dev
 
 Open your browser to the URL shown (usually `http://127.0.0.1:7865`).
 
-## Tech Stack
+## Tech stack
 
 - **Backend**: FastAPI
 - **Frontend**: HTMX + vanilla JavaScript + CSS
