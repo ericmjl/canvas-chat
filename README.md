@@ -58,7 +58,7 @@ Keys are stored locally in your browser's localStorage.
 For enterprise deployments where administrators control API keys server-side:
 
 ```bash
-uvx canvas-chat main --admin-mode --config config.yaml
+uvx canvas-chat launch --admin-mode --config config.yaml
 ```
 
 This reads model configuration from `config.yaml` and API keys from environment variables. Users don't need to configure anything - models are pre-configured and credentials are injected server-side.
@@ -76,7 +76,7 @@ plugins:
 ```
 
 ```bash
-uvx canvas-chat main --admin-mode --config config.yaml
+uvx canvas-chat launch --admin-mode --config config.yaml
 ```
 
 Plugins can define:
@@ -137,7 +137,7 @@ To test the plugin system with the example poll node:
 export ANTHROPIC_API_KEY=sk-ant-...
 
 # 2. Start dev server with admin mode and example config
-pixi run python -m canvas_chat main --admin-mode --config config.example.yaml --port 7865
+pixi run python -m canvas_chat launch --admin-mode --config config.example.yaml --port 7865
 
 # 3. Open browser to http://127.0.0.1:7865
 

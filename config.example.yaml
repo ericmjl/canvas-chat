@@ -4,7 +4,7 @@
 # Copy this file to `config.yaml` and customize it for your deployment.
 #
 # Usage:
-#   uvx canvas-chat main --admin-mode --config config.yaml
+#   uvx canvas-chat launch --admin-mode --config config.yaml
 #
 # Admin mode enables:
 # - Server-side API key management (users don't provide their own keys)
@@ -86,7 +86,7 @@ models:
 # To test the plugin system with the example poll node:
 # 1. Uncomment the plugins section below
 # 2. Set an API key: export ANTHROPIC_API_KEY=sk-ant-...
-# 3. Run: pixi run python -m canvas_chat main --admin-mode --config config.example.yaml --port 7865
+# 3. Run: pixi run python -m canvas_chat launch --admin-mode --config config.example.yaml --port 7865
 # 4. In browser console: createNode('poll', '', {data: {question: 'Favorite?', options: ['A', 'B']}})
 
 plugins:
@@ -142,7 +142,7 @@ plugins:
 # export EXA_API_KEY="your-exa-api-key"
 #
 # Then run:
-#   uvx canvas-chat main --admin-mode --config config.yaml
+#   uvx canvas-chat launch --admin-mode --config config.yaml
 #
 # ============================================================================
 # SECURITY NOTES
