@@ -83,18 +83,19 @@ models:
 # Optional. Plugins are JavaScript files that register custom node types.
 # Paths can be absolute or relative to this config file.
 #
-# Example plugins:
+# To test the plugin system with the example poll node:
+# 1. Uncomment the plugins section below
+# 2. Set an API key: export ANTHROPIC_API_KEY=sk-ant-...
+# 3. Run: pixi run python -m canvas_chat main --admin-mode --config config.example.yaml --port 7865
+# 4. In browser console: createNode('poll', '', {data: {question: 'Favorite?', options: ['A', 'B']}})
 
-# plugins:
-#   # Example: Poll node plugin (relative path)
-#   - path: ./plugins/my-poll-node.js
-#
-#   # Example: Absolute path
-#   - path: /absolute/path/to/custom-node.js
-#
-#   # Example: Multiple plugins
-#   - path: ../shared-plugins/diagram-node.js
-#   - path: ../shared-plugins/kanban-node.js
+plugins:
+    # Built-in example: Interactive poll node
+    - path: ./src/canvas_chat/static/js/plugins/example-poll-node.js
+
+    # Add your custom plugins here:
+    # - path: ./plugins/my-custom-node.js
+    # - path: /absolute/path/to/plugin.js
 
 # ============================================================================
 # FIELD REFERENCE

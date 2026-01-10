@@ -128,6 +128,40 @@ pixi run dev
 
 Open your browser to the URL shown (usually `http://127.0.0.1:7865`).
 
+### Testing plugin system
+
+To test the plugin system with the example poll node:
+
+```bash
+# 1. Set an API key (required for admin mode)
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# 2. Start dev server with admin mode and example config
+pixi run python -m canvas_chat main --admin-mode --config config.example.yaml --port 7865
+
+# 3. Open browser to http://127.0.0.1:7865
+
+# 4. In browser console, create a poll node:
+createNode('poll', '', {
+  data: {
+    question: 'What is your favorite color?',
+    options: ['Red', 'Blue', 'Green', 'Yellow']
+  }
+})
+
+# 5. The poll node should render with interactive voting buttons
+```
+
+This validates that:
+
+- ✅ Config loading works (plugins section parsed correctly)
+- ✅ Plugin files are served via `/api/plugins/*` endpoint
+- ✅ Plugin script tags are injected into HTML
+- ✅ Custom node types register successfully
+- ✅ Custom rendering and interactions work
+
+See [Plugin Development Guide](docs/how-to/create-custom-node-plugins.md) for creating your own plugins.
+
 ## Tech Stack
 
 - **Backend**: FastAPI
