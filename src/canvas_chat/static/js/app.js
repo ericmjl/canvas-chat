@@ -94,67 +94,7 @@ class App {
         this.canvas = new Canvas('canvas-container', 'canvas');
 
         // Setup canvas event listeners (using EventEmitter pattern)
-        this.canvas
-            .on('nodeSelect', this.handleNodeSelect.bind(this))
-            .on('nodeDeselect', this.handleNodeDeselect.bind(this))
-            .on('nodeMove', this.handleNodeMove.bind(this))
-            .on('nodeDrag', this.handleNodeDrag.bind(this))  // Real-time drag for multiplayer
-            .on('nodeResize', this.handleNodeResize.bind(this))
-            .on('nodeResizing', this.handleNodeResizing.bind(this))  // Real-time resize for multiplayer
-            .on('nodeReply', this.handleNodeReply.bind(this))
-            .on('nodeBranch', this.handleNodeBranch.bind(this))
-            .on('nodeSummarize', this.handleNodeSummarize.bind(this))
-            .on('nodeFetchSummarize', this.handleNodeFetchSummarize.bind(this))
-            .on('nodeDelete', this.handleNodeDelete.bind(this))
-            .on('nodeCopy', this.copyNodeContent.bind(this))
-            .on('nodeTitleEdit', (nodeId) => this.modalManager.handleNodeTitleEdit(nodeId))
-            // Matrix-specific events
-            .on('matrixCellFill', this.handleMatrixCellFill.bind(this))
-            .on('matrixCellView', this.handleMatrixCellView.bind(this))
-            .on('matrixFillAll', this.handleMatrixFillAll.bind(this))
-            .on('matrixRowExtract', this.handleMatrixRowExtract.bind(this))
-            .on('matrixColExtract', this.handleMatrixColExtract.bind(this))
-            .on('matrixEdit', this.handleMatrixEdit.bind(this))
-            .on('matrixIndexColResize', this.handleMatrixIndexColResize.bind(this))
-            // Streaming control events
-            .on('nodeStopGeneration', this.handleNodeStopGeneration.bind(this))
-            .on('nodeContinueGeneration', this.handleNodeContinueGeneration.bind(this))
-            // Error handling events
-            .on('nodeRetry', this.handleNodeRetry.bind(this))
-            .on('nodeDismissError', this.handleNodeDismissError.bind(this))
-            // Node resize to viewport events
-            .on('nodeFitToViewport', this.handleNodeFitToViewport.bind(this))
-            .on('nodeResetSize', this.handleNodeResetSize.bind(this))
-            // Content editing events (for FETCH_RESULT nodes)
-            .on('nodeEditContent', (nodeId) => this.modalManager.handleNodeEditContent(nodeId))
-            .on('nodeResummarize', this.handleNodeResummarize.bind(this))
-            // Flashcard events
-            .on('createFlashcards', this.handleCreateFlashcards.bind(this))
-            .on('reviewCard', this.reviewSingleCard.bind(this))
-            .on('flipCard', this.handleFlipCard.bind(this))
-            // File drop events
-            .on('pdfDrop', (file, position) => this.fileUploadHandler.handlePdfDrop(file, position))
-            .on('imageDrop', (file, position) => this.fileUploadHandler.handleImageDrop(file, position))
-            .on('csvDrop', (file, position) => this.fileUploadHandler.handleCsvDrop(file, position))
-            // Image and tag click events
-            .on('imageClick', this.handleImageClick.bind(this))
-            .on('tagChipClick', this.handleTagChipClick.bind(this))
-            // Navigation events for parent/child traversal
-            .on('navParentClick', this.handleNavParentClick.bind(this))
-            .on('navChildClick', this.handleNavChildClick.bind(this))
-            .on('nodeNavigate', this.handleNodeNavigate.bind(this))
-            // Collapse/expand event for hiding/showing descendants
-            .on('nodeCollapse', this.handleNodeCollapse.bind(this))
-            // CSV/Code execution events
-            .on('nodeAnalyze', this.handleNodeAnalyze.bind(this))
-            .on('nodeRunCode', this.handleNodeRunCode.bind(this))
-            .on('nodeCodeChange', this.handleNodeCodeChange.bind(this))
-            .on('nodeEditCode', (nodeId) => this.modalManager.handleNodeEditCode(nodeId))
-            .on('nodeGenerate', this.handleNodeGenerate.bind(this))
-            .on('nodeGenerateSubmit', this.handleNodeGenerateSubmit.bind(this))
-            .on('nodeOutputToggle', this.handleNodeOutputToggle.bind(this))
-            .on('nodeOutputClear', this.handleNodeOutputClear.bind(this))
-            .on('nodeOutputResize', this.handleNodeOutputResize.bind(this));
+        this.setupCanvasEventListeners();
 
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
@@ -632,6 +572,75 @@ class App {
 
         this.saveSession();
         this.updateEmptyState();
+    }
+
+    /**
+     * Setup canvas event listeners (using EventEmitter pattern).
+     * This method is called from init() and can be tested independently.
+     * If any method doesn't exist, .bind(this) will throw an error.
+     */
+    setupCanvasEventListeners() {
+        this.canvas
+            .on('nodeSelect', this.handleNodeSelect.bind(this))
+            .on('nodeDeselect', this.handleNodeDeselect.bind(this))
+            .on('nodeMove', this.handleNodeMove.bind(this))
+            .on('nodeDrag', this.handleNodeDrag.bind(this))  // Real-time drag for multiplayer
+            .on('nodeResize', this.handleNodeResize.bind(this))
+            .on('nodeResizing', this.handleNodeResizing.bind(this))  // Real-time resize for multiplayer
+            .on('nodeReply', this.handleNodeReply.bind(this))
+            .on('nodeBranch', this.handleNodeBranch.bind(this))
+            .on('nodeSummarize', this.handleNodeSummarize.bind(this))
+            .on('nodeFetchSummarize', this.handleNodeFetchSummarize.bind(this))
+            .on('nodeDelete', this.handleNodeDelete.bind(this))
+            .on('nodeCopy', this.copyNodeContent.bind(this))
+            .on('nodeTitleEdit', (nodeId) => this.modalManager.handleNodeTitleEdit(nodeId))
+            // Matrix-specific events
+            .on('matrixCellFill', this.handleMatrixCellFill.bind(this))
+            .on('matrixCellView', this.handleMatrixCellView.bind(this))
+            .on('matrixFillAll', this.handleMatrixFillAll.bind(this))
+            .on('matrixRowExtract', this.handleMatrixRowExtract.bind(this))
+            .on('matrixColExtract', this.handleMatrixColExtract.bind(this))
+            .on('matrixEdit', this.handleMatrixEdit.bind(this))
+            .on('matrixIndexColResize', this.handleMatrixIndexColResize.bind(this))
+            // Streaming control events
+            .on('nodeStopGeneration', this.handleNodeStopGeneration.bind(this))
+            .on('nodeContinueGeneration', this.handleNodeContinueGeneration.bind(this))
+            // Error handling events
+            .on('nodeRetry', this.handleNodeRetry.bind(this))
+            .on('nodeDismissError', this.handleNodeDismissError.bind(this))
+            // Node resize to viewport events
+            .on('nodeFitToViewport', this.handleNodeFitToViewport.bind(this))
+            .on('nodeResetSize', this.handleNodeResetSize.bind(this))
+            // Content editing events (for FETCH_RESULT nodes)
+            .on('nodeEditContent', (nodeId) => this.modalManager.handleNodeEditContent(nodeId))
+            .on('nodeResummarize', this.handleNodeResummarize.bind(this))
+            // Flashcard events
+            .on('createFlashcards', this.handleCreateFlashcards.bind(this))
+            .on('reviewCard', this.reviewSingleCard.bind(this))
+            .on('flipCard', this.handleFlipCard.bind(this))
+            // File drop events
+            .on('pdfDrop', (file, position) => this.fileUploadHandler.handlePdfDrop(file, position))
+            .on('imageDrop', (file, position) => this.fileUploadHandler.handleImageDrop(file, position))
+            .on('csvDrop', (file, position) => this.fileUploadHandler.handleCsvDrop(file, position))
+            // Image and tag click events
+            .on('imageClick', this.handleImageClick.bind(this))
+            .on('tagChipClick', this.handleTagChipClick.bind(this))
+            // Navigation events for parent/child traversal
+            .on('navParentClick', this.handleNavParentClick.bind(this))
+            .on('navChildClick', this.handleNavChildClick.bind(this))
+            .on('nodeNavigate', this.handleNodeNavigate.bind(this))
+            // Collapse/expand event for hiding/showing descendants
+            .on('nodeCollapse', this.handleNodeCollapse.bind(this))
+            // CSV/Code execution events
+            .on('nodeAnalyze', this.handleNodeAnalyze.bind(this))
+            .on('nodeRunCode', this.handleNodeRunCode.bind(this))
+            .on('nodeCodeChange', this.handleNodeCodeChange.bind(this))
+            .on('nodeEditCode', (nodeId) => this.modalManager.handleNodeEditCode(nodeId))
+            .on('nodeGenerate', this.handleNodeGenerate.bind(this))
+            .on('nodeGenerateSubmit', this.handleNodeGenerateSubmit.bind(this))
+            .on('nodeOutputToggle', this.handleNodeOutputToggle.bind(this))
+            .on('nodeOutputClear', this.handleNodeOutputClear.bind(this))
+            .on('nodeOutputResize', this.handleNodeOutputResize.bind(this));
     }
 
     setupEventListeners() {
