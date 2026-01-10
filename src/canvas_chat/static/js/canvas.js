@@ -30,7 +30,6 @@ class Canvas {
         this.nodeElements = new Map();
         this.edgeElements = new Map();
         this.outputPanels = new Map();  // Track code output panels separately
-        this.codeEditors = new Map();  // Track CodeMirror editor instances for code nodes
 
         // Track nodes where user has manually scrolled (to pause auto-scroll)
         this.userScrolledNodes = new Set();
@@ -980,8 +979,8 @@ class Canvas {
             // Regular two-finger scroll (pan) - check if we should scroll node content instead
             // Check for any scrollable container within nodes or output panels
             // Note: .code-output-panel-body handles all scrolling for output panels
-            // Note: .CodeMirror-scroll is CodeMirror's internal scrollable container
-            const scrollableContent = e.target.closest('.node-content, .code-output-panel-body, .csv-preview, .code-error-output, .CodeMirror-scroll');
+            // Note: .code-editor-area is the scrollable area for code editor
+            const scrollableContent = e.target.closest('.node-content, .code-output-panel-body, .csv-preview, .code-error-output, .code-editor-area');
             if (scrollableContent) {
                 // Check if this content element is actually scrollable (has overflow: auto/scroll)
                 const style = window.getComputedStyle(scrollableContent);
@@ -1666,6 +1665,9 @@ class Canvas {
      * Render a node to the canvas
      */
     renderNode(node) {
+        // Preserve selection state (removeNode will clear it)
+        const wasSelected = this.selectedNodes.has(node.id);
+
         // Remove existing if present
         this.removeNode(node.id);
 
@@ -1716,6 +1718,7 @@ class Canvas {
                               action.id === 'flip-card' ? 'flip-card-btn' :
                               action.id === 'review-card' ? 'review-card-btn' :
                               action.id === 'analyze' ? 'analyze-btn' :
+                              action.id === 'edit-code' ? 'edit-code-btn' :
                               action.id === 'generate' ? 'generate-btn' :
                               action.id === 'run-code' ? 'run-code-btn' : '';
             return `<button class="node-action ${actionClass}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
@@ -1779,6 +1782,12 @@ class Canvas {
         // Render output panel for code nodes (if they have output)
         if (node.type === NodeType.CODE) {
             this.renderOutputPanel(node, wrapper);
+        }
+
+        // Restore selection state if node was previously selected
+        if (wasSelected) {
+            this.selectedNodes.add(node.id);
+            div.classList.add('selected');
         }
 
         return wrapper;
@@ -2005,6 +2014,73 @@ class Canvas {
     }
 
     /**
+     * Update output panel toggle button state
+     * @param {string} nodeId - The node ID
+     * @param {boolean} expanded - Whether panel is expanded
+     */
+    updateOutputToggleButton(nodeId, expanded) {
+        const panelWrapper = this.outputPanels.get(nodeId);
+        if (!panelWrapper) return;
+
+        const toggleBtn = panelWrapper.querySelector('.code-output-toggle');
+        const footer = panelWrapper.querySelector('.code-output-panel-footer');
+
+        if (toggleBtn) {
+            toggleBtn.textContent = expanded ? '▲' : '▼';
+            toggleBtn.title = expanded ? 'Collapse output' : 'Expand output';
+        }
+
+        // Add/remove resize handle based on expanded state
+        if (footer) {
+            const existingHandle = footer.querySelector('.code-output-resize-handle');
+            if (expanded && !existingHandle) {
+                const handle = document.createElement('div');
+                handle.className = 'code-output-resize-handle';
+                handle.title = 'Drag to resize';
+                footer.appendChild(handle);
+
+                // Setup resize event listener on the new handle
+                this.setupResizeHandle(handle, panelWrapper, this.graph.getNode(nodeId));
+            } else if (!expanded && existingHandle) {
+                existingHandle.remove();
+            }
+        }
+    }
+
+    /**
+     * Setup resize handle event listener (extracted for reuse)
+     */
+    setupResizeHandle(resizeHandle, panelWrapper, node) {
+        resizeHandle.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+
+            const startY = e.clientY;
+            const startHeight = parseFloat(panelWrapper.getAttribute('height'));
+            const panelOverlap = 10;
+
+            const onMouseMove = (moveEvent) => {
+                const deltaY = (moveEvent.clientY - startY) / this.scale;
+                const newHeight = Math.max(100, Math.min(500, startHeight + deltaY)); // Min 100, max 500
+                panelWrapper.setAttribute('height', newHeight);
+                panelWrapper.setAttribute('data-panel-height', newHeight - panelOverlap);
+            };
+
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+
+                // Save the new height
+                const finalHeight = parseFloat(panelWrapper.getAttribute('data-panel-height'));
+                this.emit('nodeOutputResize', node.id, finalHeight);
+            };
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
+
+    /**
      * Setup event listeners for output panel
      */
     setupOutputPanelEvents(panelWrapper, node, nodeWrapper) {
@@ -2019,33 +2095,7 @@ class Canvas {
         // Resize handle for adjusting panel height
         const resizeHandle = panelWrapper.querySelector('.code-output-resize-handle');
         if (resizeHandle) {
-            resizeHandle.addEventListener('mousedown', (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-
-                const startY = e.clientY;
-                const startHeight = parseFloat(panelWrapper.getAttribute('height'));
-                const panelOverlap = 10;
-
-                const onMouseMove = (moveEvent) => {
-                    const deltaY = (moveEvent.clientY - startY) / this.scale;
-                    const newHeight = Math.max(100, Math.min(500, startHeight + deltaY)); // Min 100, max 500
-                    panelWrapper.setAttribute('height', newHeight);
-                    panelWrapper.setAttribute('data-panel-height', newHeight - panelOverlap);
-                };
-
-                const onMouseUp = () => {
-                    document.removeEventListener('mousemove', onMouseMove);
-                    document.removeEventListener('mouseup', onMouseUp);
-
-                    // Save the new height
-                    const finalHeight = parseFloat(panelWrapper.getAttribute('data-panel-height'));
-                    this.emit('nodeOutputResize', node.id, finalHeight);
-                };
-
-                document.addEventListener('mousemove', onMouseMove);
-                document.addEventListener('mouseup', onMouseUp);
-            });
+            this.setupResizeHandle(resizeHandle, panelWrapper, node);
         }
     }
 
@@ -2428,28 +2478,21 @@ class Canvas {
             });
         }
 
-        // Initialize CodeMirror editor for Code nodes
-        const codeEditorContainer = div.querySelector('.code-editor-container');
-        if (codeEditorContainer) {
-            // Get code from node (not from HTML attribute to avoid escaping issues)
-            const initialCode = node.code || node.content || '';
+        // Edit code button (Code nodes) - opens modal editor
+        const editCodeBtn = div.querySelector('.edit-code-btn');
+        if (editCodeBtn) {
+            editCodeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.emit('nodeEditCode', node.id);
+            });
+        }
 
-            console.log('🎨 Initializing editor for node', node.id, 'with', initialCode.length, 'chars');
-
-            // Create CodeMirror editor (if utils are loaded)
-            if (window.CodeMirrorUtils) {
-                this.initializeCodeEditor(codeEditorContainer, node.id, initialCode);
-            } else {
-                // Wait for CodeMirror to load
-                console.log('Waiting for CodeMirror to load...');
-                const initWhenReady = () => {
-                    if (window.CodeMirrorUtils) {
-                        this.initializeCodeEditor(codeEditorContainer, node.id, initialCode);
-                    } else {
-                        setTimeout(initWhenReady, 50);
-                    }
-                };
-                initWhenReady();
+        // Initialize syntax highlighting for Code nodes (read-only display)
+        const codeDisplay = div.querySelector('.code-display');
+        if (codeDisplay && window.hljs) {
+            const codeEl = codeDisplay.querySelector('code');
+            if (codeEl) {
+                window.hljs.highlightElement(codeEl);
             }
         }
 
@@ -2945,51 +2988,23 @@ class Canvas {
     }
 
     /**
-     * Initialize CodeMirror editor for a code node container
-     * @param {HTMLElement} container - The code editor container element
-     * @param {string} nodeId - The node ID
-     * @param {string} initialCode - Initial code content
-     */
-    initializeCodeEditor(container, nodeId, initialCode) {
-        if (!window.CodeMirrorUtils || this.codeEditors.has(nodeId)) {
-            return; // Already initialized or utils not ready
-        }
-
-        const editor = window.CodeMirrorUtils.createPythonEditor(
-            container,
-            initialCode,
-            (newCode) => {
-                // Debounced save to graph
-                clearTimeout(this.codeEditorDebounce);
-                this.codeEditorDebounce = setTimeout(() => {
-                    this.emit('nodeCodeChange', nodeId, newCode);
-                }, 300);
-            }
-        );
-
-        // Store editor instance
-        this.codeEditors.set(nodeId, editor);
-
-        // Handle Cmd/Ctrl+Enter to run code
-        editor.setOption("extraKeys", {
-            ...editor.getOption("extraKeys"),
-            "Cmd-Enter": () => this.emit('nodeRunCode', nodeId),
-            "Ctrl-Enter": () => this.emit('nodeRunCode', nodeId)
-        });
-
-        console.log('✓ CodeMirror editor initialized for node', nodeId);
-    }
-
-    /**
      * Update code content in a code node (for AI generation streaming)
+     * Re-renders the node to show updated syntax-highlighted code
      * @param {string} nodeId - The code node ID
      * @param {string} code - The code content
-     * @param {boolean} isStreaming - Whether still streaming (unused for CodeMirror)
+     * @param {boolean} isStreaming - Whether still streaming
      */
     updateCodeContent(nodeId, code, isStreaming) {
-        const editor = this.codeEditors.get(nodeId);
-        if (editor && window.CodeMirrorUtils) {
-            window.CodeMirrorUtils.updateEditorContent(editor, code);
+        // Update the code display in-place
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) return;
+
+        const codeEl = wrapper.querySelector('.code-display code');
+        if (codeEl && window.hljs) {
+            codeEl.textContent = code;
+            codeEl.className = 'language-python';
+            delete codeEl.dataset.highlighted;
+            window.hljs.highlightElement(codeEl);
         }
     }
 
@@ -3178,13 +3193,6 @@ class Canvas {
      * Remove a node from the canvas
      */
     removeNode(nodeId) {
-        // Clean up CodeMirror editor if exists
-        const editor = this.codeEditors.get(nodeId);
-        if (editor && window.CodeMirrorUtils) {
-            window.CodeMirrorUtils.destroyEditor(editor);
-            this.codeEditors.delete(nodeId);
-        }
-
         const wrapper = this.nodeElements.get(nodeId);
         if (wrapper) {
             wrapper.remove();
