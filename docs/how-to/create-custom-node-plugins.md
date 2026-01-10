@@ -132,7 +132,7 @@ plugins:
 Start canvas-chat with admin mode:
 
 ```bash
-uvx canvas-chat main --admin-mode --config config.yaml
+uvx canvas-chat launch --admin-mode --config config.yaml
 ```
 
 You should see in the logs:

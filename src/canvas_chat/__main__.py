@@ -49,7 +49,7 @@ def version() -> None:
 
 
 @app.command()
-def main(
+def launch(
     port: int = typer.Option(7865, "--port", help="Port to run the server on"),
     host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to"),
     no_browser: bool = typer.Option(
@@ -66,7 +66,7 @@ def main(
         help="Path to configuration file (used with --admin-mode)",
     ),
 ) -> None:
-    """Run the Canvas Chat server."""
+    """Launch the Canvas Chat server."""
     # Handle admin mode initialization
     if admin_mode:
         try:
@@ -107,6 +107,29 @@ def main(
         host=host,
         port=port,
     )
+
+
+@app.command(hidden=True)
+def main(
+    port: int = typer.Option(7865, "--port", help="Port to run the server on"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to"),
+    no_browser: bool = typer.Option(
+        False, "--no-browser", help="Don't open browser automatically"
+    ),
+    admin_mode: bool = typer.Option(
+        False,
+        "--admin-mode/--no-admin-mode",
+        help="Enable admin mode with server-side API keys",
+    ),
+    config_path: str = typer.Option(
+        "config.yaml",
+        "--config",
+        help="Path to configuration file (used with --admin-mode)",
+    ),
+) -> None:
+    """Deprecated alias for 'launch' command."""
+    typer.echo("⚠️  'main' command is deprecated, use 'launch' instead", err=True)
+    launch(port, host, no_browser, admin_mode, config_path)
 
 
 if __name__ == "__main__":
