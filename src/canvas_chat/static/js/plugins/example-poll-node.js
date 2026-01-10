@@ -7,9 +7,15 @@
  * To use this plugin:
  * 1. Add plugin path to config.yaml:
  *      plugins:
- *        - path: /path/to/example-poll-node.js
- * 2. Run with: uvx canvas-chat launch --admin-mode --config config.yaml
- * 3. Create poll nodes via: createNode('poll', '', { question: '...', options: [...] })
+ *        - path: ./src/canvas_chat/static/js/plugins/example-poll-node.js
+ * 2. Run with: uvx canvas-chat launch --config config.yaml
+ * 3. Open browser console and create a poll:
+ *      app.createAndAddNode('poll', '', {
+ *          data: {
+ *              question: 'What is your favorite color?',
+ *              options: ['Red', 'Blue', 'Green']
+ *          }
+ *      });
  */
 
 import { BaseNode, Actions } from '/static/js/node-protocols.js';

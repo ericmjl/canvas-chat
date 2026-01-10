@@ -5409,6 +5409,19 @@ df.head()
     }
 
     /**
+     * Create and add a node to the canvas (for console/plugin use)
+     * @param {string} type - Node type (e.g., 'poll', 'note', 'human')
+     * @param {string} content - Node content text
+     * @param {Object} options - Additional node options (position, data, etc.)
+     * @returns {Object} The created node
+     */
+    createAndAddNode(type, content = '', options = {}) {
+        const node = createNode(type, content, options);
+        this.graph.addNode(node);
+        return node;
+    }
+
+    /**
      * Escape special regex characters
      */
     escapeRegex(str) {

@@ -99,7 +99,7 @@ models:
 # 2. Set an API key: export ANTHROPIC_API_KEY=sk-ant-...
 # 3. Normal mode: pixi run python -m canvas_chat launch --config config.example.yaml --port 7865
 #    OR Admin mode: pixi run python -m canvas_chat launch --config config.example.yaml --admin-mode --port 7865
-# 4. In browser console: createNode('poll', '', {data: {question: 'Favorite?', options: ['A', 'B']}})
+# 4. In browser console: app.createAndAddNode('poll', '', {data: {question: 'Favorite?', options: ['A', 'B']}})
 
 plugins:
     # Built-in example: Interactive poll node

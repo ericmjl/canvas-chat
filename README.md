@@ -153,7 +153,7 @@ pixi run python -m canvas_chat launch --config config.example.yaml --port 7865
 # 3. Open browser to http://127.0.0.1:7865
 
 # 4. In browser console, create a poll node:
-createNode('poll', '', {
+app.createAndAddNode('poll', '', {
   data: {
     question: 'What is your favorite color?',
     options: ['Red', 'Blue', 'Green', 'Yellow']
