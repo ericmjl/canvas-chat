@@ -32,6 +32,7 @@ image = (
         "ruamel.yaml>=0.18.0",
     )
     .add_local_dir("src/canvas_chat", remote_path="/app/canvas_chat")
+    .add_local_file("pyproject.toml", remote_path="/app/pyproject.toml")
 )
 
 
