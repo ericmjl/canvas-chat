@@ -12,6 +12,28 @@ const __dirname = dirname(__filename);
 // Set up minimal browser-like environment for source files
 global.window = global;
 global.window.addEventListener = () => {}; // Mock window.addEventListener
+global.localStorage = {
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+    clear: () => {},
+};
+global.indexedDB = {
+    open: () => ({
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+        result: {
+            transaction: () => ({
+                objectStore: () => ({
+                    get: () => ({ onsuccess: null, onerror: null }),
+                    put: () => ({ onsuccess: null, onerror: null }),
+                    delete: () => ({ onsuccess: null, onerror: null }),
+                }),
+            }),
+        },
+    }),
+};
 global.document = {
     createElement: (tagName) => {
         const element = { textContent: '', innerHTML: '', id: '' };
@@ -111,9 +133,57 @@ const {
     CodeNode,
 } = await import('../src/canvas_chat/static/js/node-protocols.js');
 
+// Import CRDTGraph for test utilities
+const { CRDTGraph } = await import('../src/canvas_chat/static/js/crdt-graph.js');
+
 // Create mock function for createMockNodeForType (if tests need it)
 function createMockNodeForType(type) {
     return createNode(type, 'Test content', { position: { x: 0, y: 0 } });
+}
+
+// Test utilities for graph tests
+class TestGraph extends CRDTGraph {
+    constructor() {
+        super();
+        // Disable persistence for tests
+        this.enablePersistence = () => Promise.resolve();
+    }
+}
+
+function createTestNode(id, type = NodeType.NOTE, content = 'Test content') {
+    return createNode(type, content, {
+        id: id,
+        position: { x: 0, y: 0 },
+    });
+}
+
+function createTestEdge(fromId, toId, type = 'reference') {
+    return createEdge(fromId, toId, type);
+}
+
+// Add assertion aliases
+function assertTrue(condition, message) {
+    if (!condition) {
+        throw new Error(message || 'Expected true but got false');
+    }
+}
+
+function assertFalse(condition, message) {
+    if (condition) {
+        throw new Error(message || 'Expected false but got true');
+    }
+}
+
+function assertNull(value, message) {
+    if (value !== null) {
+        throw new Error(message || `Expected null but got ${value}`);
+    }
+}
+
+function assertNotNull(value, message) {
+    if (value === null) {
+        throw new Error(message || 'Expected non-null value but got null');
+    }
 }
 
 // Test assertion helpers
@@ -164,6 +234,13 @@ export {
     assertEqual,
     assertDeepEqual,
     assertThrows,
+    assertTrue,
+    assertFalse,
+    assertNull,
+    assertNotNull,
+    TestGraph,
+    createTestNode,
+    createTestEdge,
     NodeType,
     EdgeType,
     TAG_COLORS,
@@ -176,6 +253,10 @@ export {
     createRowNode,
     createColumnNode,
     createFlashcardNode,
+    createNode as createNodeReal,
+    createMatrixNode as createMatrixNodeReal,
+    createRowNode as createRowNodeReal,
+    createColumnNode as createColumnNodeReal,
     wouldOverlapNodes,
     getOverlap,
     hasAnyOverlap,

@@ -2,18 +2,6 @@
  * Tests for NodeRegistry plugin system
  */
 
-import { createRequire } from 'module';
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-const require = createRequire(import.meta.url);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-
 // Set up minimal browser-like environment for source files
 global.window = global;
 global.document = {
@@ -21,18 +9,18 @@ global.document = {
     head: { appendChild: () => {} },
 };
 global.console = console;
-
-// Load graph-types first (NodeType, DEFAULT_NODE_SIZES) via vm
-const graphTypesPath = path.join(__dirname, '../src/canvas_chat/static/js/graph-types.js');
-const graphTypesCode = fs.readFileSync(graphTypesPath, 'utf8');
-vm.runInThisContext(graphTypesCode, { filename: graphTypesPath });
+global.localStorage = {
+    getItem: () => null,
+    setItem: () => {},
+};
+global.indexedDB = {
+    open: () => ({ onsuccess: null, onerror: null }),
+};
 
 // Import ES modules
+const { NodeType, DEFAULT_NODE_SIZES } = await import('../src/canvas_chat/static/js/graph-types.js');
 const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
 const { BaseNode, Actions, HeaderButtons } = await import('../src/canvas_chat/static/js/node-protocols.js');
-
-// Extract NodeType and DEFAULT_NODE_SIZES from global (from graph-types.js)
-const { NodeType, DEFAULT_NODE_SIZES } = global.window;
 
 // Simple test runner
 let passed = 0;

@@ -3,8 +3,8 @@
  */
 
 import { EventEmitter } from './event-emitter.js';
-import { wrapNode, getDefaultNodeSize } from './node-protocols.js';
-import { NodeType } from './graph-types.js';
+import { wrapNode } from './node-protocols.js';
+import { NodeType, getDefaultNodeSize } from './graph-types.js';
 import { highlightTextInHtml } from './highlight-utils.js';
 import { escapeHtmlText, truncateText } from './utils.js';
 
