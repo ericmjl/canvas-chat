@@ -1,3 +1,5 @@
 """Canvas Chat - A visual, non-linear chat interface."""
 
-__version__ = "0.1.44"
+from importlib.metadata import version
+
+__version__ = version("canvas-chat")

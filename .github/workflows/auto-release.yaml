@@ -83,21 +83,21 @@ jobs:
         if: steps.check_release.outputs.already_released == 'false'
         uses: astral-sh/setup-uv@v7
 
-      - name: Set up Python tools
-        if: steps.check_release.outputs.already_released == 'false'
-        run: uv tool install bump2version
-
       - name: Set version name
         if: steps.check_release.outputs.already_released == 'false'
         run: echo "VERSION_NAME=${{ github.event.inputs.version_name || env.DEFAULT_VERSION_NAME }}" >> $GITHUB_ENV
 
-      - name: Dry run bump2version
+      - name: Store current version number
         if: steps.check_release.outputs.already_released == 'false'
-        run: bump2version --dry-run ${{ env.VERSION_NAME }} --allow-dirty --verbose
+        run: echo "current_version=$(uv version --short)" >> $GITHUB_ENV
+
+      - name: Dry run uv version bump
+        if: steps.check_release.outputs.already_released == 'false'
+        run: uv version --bump ${{ env.VERSION_NAME }} --dry-run --verbose
 
       - name: Store new version number
         if: steps.check_release.outputs.already_released == 'false'
-        run: echo "version_number=$(bump2version --dry-run --list ${{ env.VERSION_NAME }} | grep new_version | sed -r 's/^.*=//')" >> $GITHUB_ENV
+        run: echo "version_number=$(uv version --bump ${{ env.VERSION_NAME }} --dry-run --short)" >> $GITHUB_ENV
 
       - name: Display new version number
         if: steps.check_release.outputs.already_released == 'false'
@@ -115,9 +115,19 @@ jobs:
           git config user.name github-actions
           git config user.email github-actions@github.com
 
-      - name: Run bump2version
+      - name: Run uv version bump
         if: steps.check_release.outputs.already_released == 'false'
-        run: bump2version ${{ env.VERSION_NAME }} --verbose
+        run: uv version --bump ${{ env.VERSION_NAME }} --verbose
+
+      - name: Commit version bump
+        if: steps.check_release.outputs.already_released == 'false'
+        run: |
+          git add pyproject.toml
+          git commit -m "Bump version: ${{ env.current_version }} → ${{ env.version_number }}"
+
+      - name: Create version tag
+        if: steps.check_release.outputs.already_released == 'false'
+        run: git tag -a "v${{ env.version_number }}" -m "Release v${{ env.version_number }}"
 
       - name: Setup pixi
         if: steps.check_release.outputs.already_released == 'false'
@@ -125,9 +135,9 @@ jobs:
         with:
           run-install: false
 
-      - name: Ensure tag creation
+      - name: Verify tag creation
         if: steps.check_release.outputs.already_released == 'false'
-        run: git tag | grep ${{ env.version_number }}
+        run: git tag | grep "v${{ env.version_number }}"
 
       - name: Install llamabot
         if: steps.check_release.outputs.already_released == 'false'

@@ -41,6 +41,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from canvas_chat import __version__
 from canvas_chat.admin_config import AdminConfig
 
 # Configure logging
@@ -50,7 +51,7 @@ logger = logging.getLogger(__name__)
 # Configure litellm
 litellm.drop_params = True  # Drop unsupported params gracefully
 
-app = FastAPI(title="Canvas Chat", version="0.1.0")
+app = FastAPI(title="Canvas Chat", version=__version__)
 
 # --- Admin Mode Configuration ---
 # This is initialized at module load time based on environment variable

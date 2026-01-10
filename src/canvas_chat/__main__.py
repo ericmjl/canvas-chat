@@ -9,6 +9,7 @@ import webbrowser
 import typer
 import uvicorn
 
+from canvas_chat import __version__
 from canvas_chat.admin_config import AdminConfig
 
 app = typer.Typer(
@@ -38,6 +39,12 @@ def open_browser_when_ready(host: str, port: int) -> None:
     if wait_for_server(host, port):
         url = f"http://{host}:{port}"
         webbrowser.open(url)
+
+
+@app.command()
+def version() -> None:
+    """Show the version of canvas-chat."""
+    typer.echo(__version__)
 
 
 @app.command()
