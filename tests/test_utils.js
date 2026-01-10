@@ -77,8 +77,25 @@ const flashcardsPath = path.join(__dirname, '../src/canvas_chat/static/js/flashc
 const flashcardsCode = fs.readFileSync(flashcardsPath, 'utf8');
 vm.runInThisContext(flashcardsCode, { filename: flashcardsPath });
 
-// Load app.js (defines SlashCommandMenu, App class)
+// Load extracted modules and app.js (defines SlashCommandMenu, App class, etc.)
 // Note: app.js has DOM dependencies, but some functions and the App class can be tested with mocks
+// Load extracted modules first (they're dependencies of app.js)
+const undoManagerPath = path.join(__dirname, '../src/canvas_chat/static/js/undo-manager.js');
+const undoManagerCode = fs.readFileSync(undoManagerPath, 'utf8');
+vm.runInThisContext(undoManagerCode, { filename: undoManagerPath });
+
+const slashCommandMenuPath = path.join(__dirname, '../src/canvas_chat/static/js/slash-command-menu.js');
+const slashCommandMenuCode = fs.readFileSync(slashCommandMenuPath, 'utf8');
+vm.runInThisContext(slashCommandMenuCode, { filename: slashCommandMenuPath });
+
+const modalManagerPath = path.join(__dirname, '../src/canvas_chat/static/js/modal-manager.js');
+const modalManagerCode = fs.readFileSync(modalManagerPath, 'utf8');
+vm.runInThisContext(modalManagerCode, { filename: modalManagerPath });
+
+const fileUploadHandlerPath = path.join(__dirname, '../src/canvas_chat/static/js/file-upload-handler.js');
+const fileUploadHandlerCode = fs.readFileSync(fileUploadHandlerPath, 'utf8');
+vm.runInThisContext(fileUploadHandlerCode, { filename: fileUploadHandlerPath });
+
 const appPath = path.join(__dirname, '../src/canvas_chat/static/js/app.js');
 const appCode = fs.readFileSync(appPath, 'utf8');
 vm.runInThisContext(appCode, { filename: appPath });
