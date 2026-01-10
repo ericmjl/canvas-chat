@@ -549,6 +549,68 @@ kbd {
     padding: 12px 20px 20px;
 }
 
+/* Code Editor Modal */
+.code-editor-body {
+    flex-direction: row !important;
+    gap: 16px;
+}
+
+.code-editor-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+#code-editor-textarea {
+    flex: 1;
+    width: 100%;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 12px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    background: #272822;  /* Monokai background */
+    color: #f8f8f2;  /* Monokai foreground */
+    resize: none;
+    outline: none;
+    tab-size: 4;
+    white-space: pre;
+    overflow: auto;
+}
+
+#code-editor-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--selection-bg);
+}
+
+#code-editor-textarea::placeholder {
+    color: #75715e;
+}
+
+#code-editor-preview {
+    flex: 1;
+    overflow: auto;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    background: #272822;
+}
+
+#code-editor-preview code {
+    display: block;
+    padding: 12px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    background: none !important;
+    white-space: pre;
+    overflow: visible;
+}
+
 /* Help Modal */
 .help-content {
     max-height: 70vh;
