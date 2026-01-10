@@ -6,7 +6,7 @@ class UndoManager {
         this.undoStack = [];
         this.redoStack = [];
         this.maxHistory = maxHistory;
-        this.onStateChange = null;  // Callback when undo/redo state changes
+        this.onStateChange = null; // Callback when undo/redo state changes
     }
 
     /**
@@ -73,9 +73,4 @@ class UndoManager {
 }
 
 // Export for browser
-window.UndoManager = UndoManager;
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { UndoManager };
-}
+export { UndoManager };

@@ -1,32 +1,44 @@
 /**
  * Main application - ties together all modules
- *
- * Utility functions are in utils.js (loaded before this file):
- * - isUrlContent, extractUrlFromReferenceNode
- * - formatUserError, truncateText, escapeHtmlText
- * - formatMatrixAsText, buildMessagesForApi
- * - applySM2, isFlashcardDue, getDueFlashcards
- * - resizeImage
  */
 
-/* global FlashcardFeature, CommitteeFeature, MatrixFeature, FactcheckFeature, ResearchFeature, pyodideRunner, UndoManager, SlashCommandMenu, ModalManager, FileUploadHandler */
+// Import dependencies
+import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
+import { CRDTGraph } from './crdt-graph.js';
+import { Canvas } from './canvas.js';
+import { Chat, chat } from './chat.js';
+import { Storage, storage } from './storage.js';
+import { EventEmitter } from './event-emitter.js';
+import { UndoManager } from './undo-manager.js';
+import { SlashCommandMenu, SLASH_COMMANDS } from './slash-command-menu.js';
+import { ModalManager } from './modal-manager.js';
+import { FileUploadHandler } from './file-upload-handler.js';
+import { FlashcardFeature } from './flashcards.js';
+import { CommitteeFeature } from './committee.js';
+import { MatrixFeature } from './matrix.js';
+import { FactcheckFeature } from './factcheck.js';
+import { ResearchFeature } from './research.js';
+import { SearchIndex } from './search.js';
+import { NodeRegistry } from './node-registry.js';
+import { wrapNode } from './node-protocols.js';
+import {
+    isUrlContent,
+    extractUrlFromReferenceNode,
+    formatUserError,
+    truncateText,
+    escapeHtmlText,
+    formatMatrixAsText,
+    buildMessagesForApi,
+    applySM2,
+    isFlashcardDue,
+    getDueFlashcards,
+    resizeImage,
+    apiUrl,
+} from './utils.js';
+import { highlightTextInHtml, extractExcerptText } from './highlight-utils.js';
+import { streamSSEContent } from './sse.js';
 
-/**
- * Main application - ties together all modules
- *
- * Utility functions are in utils.js (loaded before this file):
- * - isUrlContent, extractUrlFromReferenceNode
- * - formatUserError, truncateText, escapeHtmlText
- * - formatMatrixAsText, buildMessagesForApi
- * - applySM2, isFlashcardDue, getDueFlashcards
- * - resizeImage
- *
- * Extracted modules:
- * - UndoManager: undo-manager.js
- * - SlashCommandMenu: slash-command-menu.js
- * - ModalManager: modal-manager.js
- * - FileUploadHandler: file-upload-handler.js
- */
+/* global pyodideRunner */
 
 class App {
     constructor() {
@@ -42,7 +54,7 @@ class App {
         this.streamingNodes = new Map();
 
         // Retry contexts for error recovery
-        this.retryContexts = new Map();  // nodeId -> { type, ...context }
+        this.retryContexts = new Map(); // nodeId -> { type, ...context }
 
         // Edit content modal state
         this.editingNodeId = null;
@@ -51,11 +63,11 @@ class App {
         this.editingCodeNodeId = null;
 
         // Tag highlighting state
-        this.highlightedTagColor = null;  // Currently highlighted tag color, or null if none
+        this.highlightedTagColor = null; // Currently highlighted tag color, or null if none
 
         // Admin mode state (set by loadConfig)
         this.adminMode = false;
-        this.adminModels = [];  // Models configured by admin (only in admin mode)
+        this.adminModels = []; // Models configured by admin (only in admin mode)
 
         // Feature modules (initialized lazily)
         this._flashcardFeature = null;
@@ -147,7 +159,10 @@ class App {
 
                 if (this.adminMode) {
                     console.log('%c[App] Admin mode enabled', 'color: #FF9800; font-weight: bold');
-                    console.log('[App] Available models:', this.adminModels.map(m => m.id));
+                    console.log(
+                        '[App] Available models:',
+                        this.adminModels.map((m) => m.id)
+                    );
                 }
             }
         } catch (error) {
@@ -197,7 +212,7 @@ class App {
                 updateEmptyState: () => this.updateEmptyState(),
                 showToast: (msg, type) => this.showToast(msg, type),
                 updateCollapseButtonForNode: (nodeId) => this.updateCollapseButtonForNode(nodeId),
-                buildLLMRequest: (params) => this.buildLLMRequest(params)
+                buildLLMRequest: (params) => this.buildLLMRequest(params),
             });
         }
         return this._flashcardFeature;
@@ -216,7 +231,7 @@ class App {
                 chatInput: this.chatInput,
                 saveSession: () => this.saveSession(),
                 updateEmptyState: () => this.updateEmptyState(),
-                buildLLMRequest: (params) => this.buildLLMRequest(params)
+                buildLLMRequest: (params) => this.buildLLMRequest(params),
             });
         }
         return this._committeeFeature;
@@ -236,7 +251,7 @@ class App {
                 updateEmptyState: () => this.updateEmptyState(),
                 generateNodeSummary: (nodeId) => this.generateNodeSummary(nodeId),
                 pushUndo: (action) => this.undoManager.push(action),
-                buildLLMRequest: (params) => this.buildLLMRequest(params)
+                buildLLMRequest: (params) => this.buildLLMRequest(params),
             });
         }
         return this._matrixFeature;
@@ -253,7 +268,7 @@ class App {
                 canvas: this.canvas,
                 getModelPicker: () => this.modelPicker,
                 saveSession: () => this.saveSession(),
-                buildLLMRequest: (params) => this.buildLLMRequest(params)
+                buildLLMRequest: (params) => this.buildLLMRequest(params),
             });
         }
         return this._factcheckFeature;
@@ -278,12 +293,12 @@ class App {
                     // Register research streaming state for stop button support
                     this.streamingNodes.set(nodeId, {
                         abortController: abortController,
-                        context: context || { type: 'research' }
+                        context: context || { type: 'research' },
                     });
                 },
                 unregisterStreaming: (nodeId) => {
                     this.streamingNodes.delete(nodeId);
-                }
+                },
             });
         }
         return this._researchFeature;
@@ -311,17 +326,13 @@ class App {
 
         // Fetch models from all providers in parallel
         const fetchPromises = providers
-            .filter(p => p.key) // Only providers with keys
-            .map(p => chat.fetchProviderModels(p.name, p.key));
+            .filter((p) => p.key) // Only providers with keys
+            .map((p) => chat.fetchProviderModels(p.name, p.key));
 
         // Also fetch Ollama models if on localhost
         if (storage.isLocalhost()) {
             // Ollama models come from the static /api/models endpoint
-            fetchPromises.push(
-                chat.fetchModels().then(models =>
-                    models.filter(m => m.provider === 'Ollama')
-                )
-            );
+            fetchPromises.push(chat.fetchModels().then((models) => models.filter((m) => m.provider === 'Ollama')));
         }
 
         // Wait for all fetches to complete
@@ -359,7 +370,7 @@ class App {
 
             // Restore last selected model (if still available)
             const savedModel = storage.getCurrentModel();
-            if (savedModel && allModels.find(m => m.id === savedModel)) {
+            if (savedModel && allModels.find((m) => m.id === savedModel)) {
                 this.modelPicker.value = savedModel;
             }
         }
@@ -399,7 +410,7 @@ class App {
 
             // Restore last selected model (if still available)
             const savedModel = storage.getCurrentModel();
-            if (savedModel && allModels.find(m => m.id === savedModel)) {
+            if (savedModel && allModels.find((m) => m.id === savedModel)) {
                 this.modelPicker.value = savedModel;
             }
         }
@@ -442,7 +453,7 @@ class App {
         // Create CRDTGraph with automatic persistence
         console.log('%c[App] Using CRDT Graph mode', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(session.id, session);
-        this._flashcardFeature = null;  // Reset feature modules for new graph
+        this._flashcardFeature = null; // Reset feature modules for new graph
         this._committeeFeature = null;
         this._matrixFeature = null;
         this._factcheckFeature = null;
@@ -512,12 +523,12 @@ class App {
                 nodes: [],
                 edges: [],
                 tags: {},
-                viewport: { x: 0, y: 0, scale: 1 }
+                viewport: { x: 0, y: 0, scale: 1 },
             };
 
             console.log('%c[App] Creating empty CRDT Graph for shared session', 'color: #2196F3; font-weight: bold');
             this.graph = new CRDTGraph(sessionId);
-            this._flashcardFeature = null;  // Reset feature modules for new graph
+            this._flashcardFeature = null; // Reset feature modules for new graph
             this._committeeFeature = null;
             this._matrixFeature = null;
             this._factcheckFeature = null;
@@ -552,13 +563,13 @@ class App {
             nodes: [],
             edges: [],
             tags: {},
-            viewport: { x: 0, y: 0, scale: 1 }
+            viewport: { x: 0, y: 0, scale: 1 },
         };
 
         // Create new CRDT Graph
         console.log('%c[App] Creating new session with CRDT Graph', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(sessionId);
-        this._flashcardFeature = null;  // Reset feature modules for new graph
+        this._flashcardFeature = null; // Reset feature modules for new graph
         this._committeeFeature = null;
         this._matrixFeature = null;
         this._factcheckFeature = null;
@@ -584,9 +595,9 @@ class App {
             .on('nodeSelect', this.handleNodeSelect.bind(this))
             .on('nodeDeselect', this.handleNodeDeselect.bind(this))
             .on('nodeMove', this.handleNodeMove.bind(this))
-            .on('nodeDrag', this.handleNodeDrag.bind(this))  // Real-time drag for multiplayer
+            .on('nodeDrag', this.handleNodeDrag.bind(this)) // Real-time drag for multiplayer
             .on('nodeResize', this.handleNodeResize.bind(this))
-            .on('nodeResizing', this.handleNodeResizing.bind(this))  // Real-time resize for multiplayer
+            .on('nodeResizing', this.handleNodeResizing.bind(this)) // Real-time resize for multiplayer
             .on('nodeReply', this.handleNodeReply.bind(this))
             .on('nodeBranch', this.handleNodeBranch.bind(this))
             .on('nodeSummarize', this.handleNodeSummarize.bind(this))
@@ -651,7 +662,7 @@ class App {
         // Provide CSV checker for commands that require selected CSV nodes
         this.slashCommandMenu.getHasSelectedCsv = () => {
             const selectedIds = this.canvas.getSelectedNodeIds();
-            return selectedIds.some(id => {
+            return selectedIds.some((id) => {
                 const node = this.graph.getNode(id);
                 return node && node.type === NodeType.CSV;
             });
@@ -1041,7 +1052,7 @@ class App {
                 // If popover is open, navigate within it
                 if (this.canvas.isNavPopoverOpen()) {
                     e.preventDefault();
-                    this.canvas.navigatePopoverSelection((e.key === 'ArrowUp' || e.key === 'j') ? -1 : 1);
+                    this.canvas.navigatePopoverSelection(e.key === 'ArrowUp' || e.key === 'j' ? -1 : 1);
                     return;
                 }
 
@@ -1077,8 +1088,7 @@ class App {
             }
 
             // Delete to remove selected nodes
-            if ((e.key === 'Delete' || e.key === 'Backspace') &&
-                !e.target.matches('input, textarea')) {
+            if ((e.key === 'Delete' || e.key === 'Backspace') && !e.target.matches('input, textarea')) {
                 this.deleteSelectedNodes();
             }
 
@@ -1110,10 +1120,10 @@ class App {
                         const actions = wrapped.getActions();
 
                         // Check if node has edit actions
-                        if (actions.some(a => a.id === 'edit-code')) {
+                        if (actions.some((a) => a.id === 'edit-code')) {
                             e.preventDefault();
                             this.modalManager.handleNodeEditCode(selectedNodeIds[0]);
-                        } else if (actions.some(a => a.id === 'edit-content')) {
+                        } else if (actions.some((a) => a.id === 'edit-content')) {
                             e.preventDefault();
                             this.modalManager.handleNodeEditContent(selectedNodeIds[0]);
                         }
@@ -1143,10 +1153,10 @@ class App {
                         const actions = wrapped.getActions();
 
                         // Check for AI-related actions
-                        if (actions.some(a => a.id === 'generate')) {
+                        if (actions.some((a) => a.id === 'generate')) {
                             e.preventDefault();
                             this.handleNodeGenerate(selectedNodeIds[0]);
-                        } else if (actions.some(a => a.id === 'analyze')) {
+                        } else if (actions.some((a) => a.id === 'analyze')) {
                             e.preventDefault();
                             this.handleNodeAnalyze(selectedNodeIds[0]);
                         }
@@ -1222,7 +1232,7 @@ class App {
                     e.preventDefault();
                     const file = item.getAsFile();
                     if (file) {
-                        await this.fileUploadHandler.handleImageUpload(file, null, true);  // showHint=true
+                        await this.fileUploadHandler.handleImageUpload(file, null, true); // showHint=true
                     }
                     return;
                 }
@@ -1345,7 +1355,7 @@ class App {
         if (this.adminMode) {
             return {
                 model: model,
-                ...additionalParams
+                ...additionalParams,
             };
         }
 
@@ -1357,7 +1367,7 @@ class App {
             model: model,
             api_key: apiKey,
             base_url: baseUrl,
-            ...additionalParams
+            ...additionalParams,
         };
     }
 
@@ -1383,10 +1393,12 @@ class App {
             slashContext = selectedText;
         } else if (selectedIds.length > 0) {
             // Gather content from selected nodes as context
-            const contextParts = selectedIds.map(id => {
-                const node = this.graph.getNode(id);
-                return node ? node.content : '';
-            }).filter(c => c);
+            const contextParts = selectedIds
+                .map((id) => {
+                    const node = this.graph.getNode(id);
+                    return node ? node.content : '';
+                })
+                .filter((c) => c);
             slashContext = contextParts.join('\n\n');
         }
 
@@ -1415,7 +1427,7 @@ class App {
 
         // Create human node
         const humanNode = createNode(NodeType.HUMAN, content, {
-            position: this.graph.autoPosition(parentIds)
+            position: this.graph.autoPosition(parentIds),
         });
 
         this.graph.addNode(humanNode);
@@ -1423,8 +1435,7 @@ class App {
 
         // Create edges from parents
         for (const parentId of parentIds) {
-            const edge = createEdge(parentId, humanNode.id,
-                parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
+            const edge = createEdge(parentId, humanNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
             this.graph.addEdge(edge);
 
             const parentNode = this.graph.getNode(parentId);
@@ -1447,7 +1458,7 @@ class App {
         const model = this.modelPicker.value;
         const aiNode = createNode(NodeType.AI, '', {
             position: this.graph.autoPosition([humanNode.id]),
-            model: model.split('/').pop() // Just the model name
+            model: model.split('/').pop(), // Just the model name
         });
 
         this.graph.addNode(aiNode);
@@ -1462,11 +1473,7 @@ class App {
         this.updateCollapseButtonForNode(humanNode.id);
 
         // Smoothly pan to the new AI node
-        this.canvas.centerOnAnimated(
-            aiNode.position.x + 160,
-            aiNode.position.y + 100,
-            300
-        );
+        this.canvas.centerOnAnimated(aiNode.position.x + 160, aiNode.position.y + 100, 300);
 
         // Build context and send to LLM
         const context = this.graph.resolveContext([humanNode.id]);
@@ -1478,7 +1485,7 @@ class App {
         // Track streaming state for stop/continue functionality
         this.streamingNodes.set(aiNode.id, {
             abortController,
-            context: { messages, model, humanNodeId: humanNode.id }
+            context: { messages, model, humanNodeId: humanNode.id },
         });
         this.canvas.showStopButton(aiNode.id);
 
@@ -1515,7 +1522,7 @@ class App {
                     type: 'chat',
                     messages,
                     model,
-                    humanNodeId: humanNode.id
+                    humanNodeId: humanNode.id,
                 });
             }
         );
@@ -1563,7 +1570,7 @@ class App {
 
             // Create NOTE node with the provided content
             const noteNode = createNode(NodeType.NOTE, content, {
-                position: this.graph.autoPosition(parentIds)
+                position: this.graph.autoPosition(parentIds),
             });
 
             this.graph.addNode(noteNode);
@@ -1571,8 +1578,7 @@ class App {
 
             // Create edges from parents (if replying to selected nodes)
             for (const parentId of parentIds) {
-                const edge = createEdge(parentId, noteNode.id,
-                    parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
+                const edge = createEdge(parentId, noteNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
                 this.graph.addEdge(edge);
 
                 const parentNode = this.graph.getNode(parentId);
@@ -1587,11 +1593,7 @@ class App {
             this.updateEmptyState();
 
             // Pan to the new note
-            this.canvas.centerOnAnimated(
-                noteNode.position.x + 160,
-                noteNode.position.y + 100,
-                300
-            );
+            this.canvas.centerOnAnimated(noteNode.position.x + 160, noteNode.position.y + 100, 300);
         }
     }
 
@@ -1614,7 +1616,7 @@ class App {
 
         // Create a placeholder node while fetching
         const fetchNode = createNode(NodeType.FETCH_RESULT, `Fetching content from:\n${url}...`, {
-            position: this.graph.autoPosition(parentIds)
+            position: this.graph.autoPosition(parentIds),
         });
 
         this.graph.addNode(fetchNode);
@@ -1622,8 +1624,7 @@ class App {
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
-            const edge = createEdge(parentId, fetchNode.id,
-                parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
+            const edge = createEdge(parentId, fetchNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
             this.graph.addEdge(edge);
 
             const parentNode = this.graph.getNode(parentId);
@@ -1638,18 +1639,14 @@ class App {
         this.updateEmptyState();
 
         // Pan to the new node
-        this.canvas.centerOnAnimated(
-            fetchNode.position.x + 160,
-            fetchNode.position.y + 100,
-            300
-        );
+        this.canvas.centerOnAnimated(fetchNode.position.x + 160, fetchNode.position.y + 100, 300);
 
         try {
             // Fetch URL content via backend
             const response = await fetch(apiUrl('/api/fetch-url'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
+                body: JSON.stringify({ url }),
             });
 
             if (!response.ok) {
@@ -1664,14 +1661,15 @@ class App {
             this.canvas.updateNodeContent(fetchNode.id, fetchedContent, false);
             this.graph.updateNode(fetchNode.id, {
                 content: fetchedContent,
-                versions: [{
-                    content: fetchedContent,
-                    timestamp: Date.now(),
-                    reason: 'fetched'
-                }]
+                versions: [
+                    {
+                        content: fetchedContent,
+                        timestamp: Date.now(),
+                        reason: 'fetched',
+                    },
+                ],
             });
             this.saveSession();
-
         } catch (err) {
             // Update node with error message
             const errorContent = `**Failed to fetch URL**\n\n${url}\n\n*Error: ${err.message}*`;
@@ -1692,7 +1690,7 @@ class App {
 
         // Create a placeholder node while fetching
         const pdfNode = createNode(NodeType.PDF, `Fetching PDF from:\n${url}...`, {
-            position: this.graph.autoPosition(parentIds)
+            position: this.graph.autoPosition(parentIds),
         });
 
         this.graph.addNode(pdfNode);
@@ -1700,8 +1698,7 @@ class App {
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
-            const edge = createEdge(parentId, pdfNode.id,
-                parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
+            const edge = createEdge(parentId, pdfNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
             this.graph.addEdge(edge);
 
             const parentNode = this.graph.getNode(parentId);
@@ -1716,18 +1713,14 @@ class App {
         this.updateEmptyState();
 
         // Pan to the new node
-        this.canvas.centerOnAnimated(
-            pdfNode.position.x + 160,
-            pdfNode.position.y + 100,
-            300
-        );
+        this.canvas.centerOnAnimated(pdfNode.position.x + 160, pdfNode.position.y + 100, 300);
 
         try {
             // Fetch PDF content via backend
             const response = await fetch(apiUrl('/api/fetch-pdf'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
+                body: JSON.stringify({ url }),
             });
 
             if (!response.ok) {
@@ -1742,10 +1735,9 @@ class App {
             this.graph.updateNode(pdfNode.id, {
                 content: data.content,
                 title: data.title,
-                page_count: data.page_count
+                page_count: data.page_count,
             });
             this.saveSession();
-
         } catch (err) {
             // Update node with error message
             const errorContent = `**Failed to fetch PDF**\n\n${url}\n\n*Error: ${err.message}*`;
@@ -1813,14 +1805,14 @@ class App {
     handleNavParentClick(nodeId, button) {
         const parents = this.graph.getParents(nodeId);
         // Get direct visible parents
-        const directVisibleParents = parents.filter(parent => this.graph.isNodeVisible(parent.id));
+        const directVisibleParents = parents.filter((parent) => this.graph.isNodeVisible(parent.id));
         // Also get visible ancestors through hidden paths (e.g., collapsed nodes that connect through hidden children)
         const ancestorsThroughHidden = this.graph.getVisibleAncestorsThroughHidden(nodeId);
 
         // Combine and deduplicate
         const allNavigableParents = [...directVisibleParents];
         for (const ancestor of ancestorsThroughHidden) {
-            if (!allNavigableParents.some(p => p.id === ancestor.id)) {
+            if (!allNavigableParents.some((p) => p.id === ancestor.id)) {
                 allNavigableParents.push(ancestor);
             }
         }
@@ -1848,7 +1840,7 @@ class App {
         } else {
             // Node is not collapsed - get direct visible children
             const children = this.graph.getChildren(nodeId);
-            navigableChildren = children.filter(child => this.graph.isNodeVisible(child.id));
+            navigableChildren = children.filter((child) => this.graph.isNodeVisible(child.id));
         }
 
         this.canvas.handleNavButtonClick(nodeId, 'child', navigableChildren, button);
@@ -1863,14 +1855,14 @@ class App {
     navigateToParentKeyboard(nodeId) {
         const parents = this.graph.getParents(nodeId);
         // Get direct visible parents
-        const directVisibleParents = parents.filter(parent => this.graph.isNodeVisible(parent.id));
+        const directVisibleParents = parents.filter((parent) => this.graph.isNodeVisible(parent.id));
         // Also get visible ancestors through hidden paths (e.g., collapsed nodes that connect through hidden children)
         const ancestorsThroughHidden = this.graph.getVisibleAncestorsThroughHidden(nodeId);
 
         // Combine and deduplicate
         const allNavigableParents = [...directVisibleParents];
         for (const ancestor of ancestorsThroughHidden) {
-            if (!allNavigableParents.some(p => p.id === ancestor.id)) {
+            if (!allNavigableParents.some((p) => p.id === ancestor.id)) {
                 allNavigableParents.push(ancestor);
             }
         }
@@ -1905,7 +1897,7 @@ class App {
         } else {
             // Node is not collapsed - get direct visible children
             const children = this.graph.getChildren(nodeId);
-            navigableChildren = children.filter(child => this.graph.isNodeVisible(child.id));
+            navigableChildren = children.filter((child) => this.graph.isNodeVisible(child.id));
         }
 
         if (navigableChildren.length === 0) {
@@ -1937,11 +1929,7 @@ class App {
         // Center on the node with animation
         const width = node.width || 420;
         const height = node.height || 200;
-        this.canvas.centerOnAnimated(
-            node.position.x + width / 2,
-            node.position.y + height / 2,
-            300
-        );
+        this.canvas.centerOnAnimated(node.position.x + width / 2, node.position.y + height / 2, 300);
     }
 
     /**
@@ -2030,12 +2018,7 @@ class App {
 
                 for (const descendant of visibleDescendants) {
                     // Render a virtual edge from this collapsed node to the visible descendant
-                    this.canvas.renderCollapsedPathEdge(
-                        node.id,
-                        descendant.id,
-                        node.position,
-                        descendant.position
-                    );
+                    this.canvas.renderCollapsedPathEdge(node.id, descendant.id, node.position, descendant.position);
                 }
             }
         }
@@ -2114,7 +2097,7 @@ class App {
             const imageNode = createNode(NodeType.IMAGE, '', {
                 position: this.graph.autoPosition([parentNodeId]),
                 imageData: base64Data,
-                mimeType: mimeType
+                mimeType: mimeType,
             });
 
             this.graph.addNode(imageNode);
@@ -2130,14 +2113,9 @@ class App {
             this.canvas.selectNode(imageNode.id);
 
             // Pan to the new node
-            this.canvas.centerOnAnimated(
-                imageNode.position.x + 160,
-                imageNode.position.y + 100,
-                300
-            );
+            this.canvas.centerOnAnimated(imageNode.position.x + 160, imageNode.position.y + 100, 300);
 
             this.saveSession();
-
         } catch (err) {
             console.error('Failed to extract image:', err);
             alert('Failed to extract image: ' + err.message);
@@ -2153,7 +2131,7 @@ class App {
     async fetchImageAsDataUrl(url) {
         return new Promise((resolve, reject) => {
             const img = new Image();
-            img.crossOrigin = 'anonymous';  // Try to avoid CORS issues
+            img.crossOrigin = 'anonymous'; // Try to avoid CORS issues
 
             img.onload = () => {
                 const canvas = document.createElement('canvas');
@@ -2232,15 +2210,13 @@ class App {
      */
     async handleCode(description) {
         const selectedIds = this.canvas.getSelectedNodeIds();
-        const csvNodeIds = selectedIds.filter(id => {
+        const csvNodeIds = selectedIds.filter((id) => {
             const node = this.graph.getNode(id);
             return node && node.type === NodeType.CSV;
         });
 
         // Determine position based on all selected nodes
-        const position = selectedIds.length > 0
-            ? this.graph.autoPosition(selectedIds)
-            : this.graph.autoPosition([]);
+        const position = selectedIds.length > 0 ? this.graph.autoPosition(selectedIds) : this.graph.autoPosition([]);
 
         // Create code node with placeholder if we're generating, or template if not
         let initialCode;
@@ -2251,7 +2227,7 @@ class App {
             initialCode = '# Generating code...\n';
         } else if (csvNodeIds.length > 0) {
             // Template with CSV context
-            const csvNames = csvNodeIds.map((_id, i) => csvNodeIds.length === 1 ? 'df' : `df${i + 1}`);
+            const csvNames = csvNodeIds.map((_id, i) => (csvNodeIds.length === 1 ? 'df' : `df${i + 1}`));
             initialCode = `# Available DataFrames: ${csvNames.join(', ')}
 # Analyze the data
 
@@ -2273,7 +2249,7 @@ print("Hello from Pyodide!")
 
         const codeNode = createNode(NodeType.CODE, initialCode, {
             position,
-            csvNodeIds: csvNodeIds,  // Empty array if no CSVs
+            csvNodeIds: csvNodeIds, // Empty array if no CSVs
         });
 
         this.graph.addNode(codeNode);
@@ -2321,7 +2297,7 @@ df.head()
 
         const codeNode = createNode(NodeType.CODE, starterCode, {
             position,
-            csvNodeIds: [nodeId],  // Link to source CSV node
+            csvNodeIds: [nodeId], // Link to source CSV node
         });
 
         this.graph.addNode(codeNode);
@@ -2370,8 +2346,8 @@ df.head()
         this.graph.updateNode(nodeId, {
             executionState: 'running',
             lastError: null,
-            installProgress: [],  // Track installation messages
-            outputExpanded: false  // Start collapsed
+            installProgress: [], // Track installation messages
+            outputExpanded: false, // Start collapsed
         });
         this.canvas.renderNode(this.graph.getNode(nodeId));
 
@@ -2386,7 +2362,7 @@ df.head()
             if (!drawerOpenedForInstall) {
                 this.graph.updateNode(nodeId, {
                     installProgress: [...installMessages],
-                    outputExpanded: true  // Expand it
+                    outputExpanded: true, // Expand it
                 });
                 // Re-render to create drawer in expanded state (will animate automatically)
                 this.canvas.renderNode(this.graph.getNode(nodeId));
@@ -2394,7 +2370,7 @@ df.head()
             } else {
                 // For subsequent messages, just update the content without re-rendering
                 this.graph.updateNode(nodeId, {
-                    installProgress: [...installMessages]
+                    installProgress: [...installMessages],
                 });
                 const node = this.graph.getNode(nodeId);
                 this.canvas.updateOutputPanelContent(nodeId, node);
@@ -2410,11 +2386,11 @@ df.head()
                 this.graph.updateNode(nodeId, {
                     executionState: 'error',
                     lastError: result.error,
-                    outputStdout: result.stdout?.trim() || null,  // May have partial stdout before error
+                    outputStdout: result.stdout?.trim() || null, // May have partial stdout before error
                     outputHtml: null,
                     outputText: null,
                     outputExpanded: true,
-                    installProgress: null  // Clear installation progress
+                    installProgress: null, // Clear installation progress
                 });
                 this.canvas.renderNode(this.graph.getNode(nodeId));
                 this.saveSession();
@@ -2438,9 +2414,9 @@ df.head()
                 outputStdout: stdout,
                 outputHtml: resultHtml,
                 outputText: resultText,
-                outputExpanded: drawerOpenedForInstall || hasOutput,  // Keep open if installation opened it, or if there's output
-                installProgress: drawerOpenedForInstall ? installMessages : null,  // Keep messages if drawer was opened
-                installComplete: drawerOpenedForInstall  // Mark installation as complete
+                outputExpanded: drawerOpenedForInstall || hasOutput, // Keep open if installation opened it, or if there's output
+                installProgress: drawerOpenedForInstall ? installMessages : null, // Keep messages if drawer was opened
+                installComplete: drawerOpenedForInstall, // Mark installation as complete
             });
 
             // Create child nodes only for figures (they need visual space)
@@ -2456,7 +2432,7 @@ df.head()
                             position,
                             title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`,
                             imageData: base64Match[2],
-                            mimeType: base64Match[1]
+                            mimeType: base64Match[1],
                         });
 
                         this.graph.addNode(outputNode);
@@ -2472,7 +2448,6 @@ df.head()
             this.canvas.updateAllEdges(this.graph);
             this.canvas.updateAllNavButtonStates(this.graph);
             this.saveSession();
-
         } catch (error) {
             // Show error in the inline drawer (not as child node)
             this.graph.updateNode(nodeId, {
@@ -2482,7 +2457,7 @@ df.head()
                 outputHtml: null,
                 outputText: null,
                 outputExpanded: true,
-                installProgress: null  // Clear installation progress
+                installProgress: null, // Clear installation progress
             });
             this.canvas.renderNode(this.graph.getNode(nodeId));
             this.saveSession();
@@ -2545,7 +2520,7 @@ df.head()
             const abortController = new AbortController();
             this.streamingNodes.set(nodeId, {
                 abortController,
-                context: { prompt, model, nodeContext: context }
+                context: { prompt, model, nodeContext: context },
             });
 
             // Build request body using centralized helper
@@ -2553,7 +2528,7 @@ df.head()
                 prompt,
                 existing_code: context.existingCode,
                 dataframe_info: context.dataframeInfo,
-                context: context.ancestorContext
+                context: context.ancestorContext,
             });
 
             // Log DataFrame info for debugging
@@ -2566,7 +2541,7 @@ df.head()
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody),
-                signal: abortController.signal
+                signal: abortController.signal,
             });
 
             if (!response.ok) {
@@ -2593,9 +2568,8 @@ df.head()
                 },
                 onError: (err) => {
                     throw err;
-                }
+                },
             });
-
         } catch (error) {
             // Clean up on error
             this.streamingNodes.delete(nodeId);
@@ -2626,9 +2600,7 @@ df.head()
         if (!node) return { dataframeInfo: [], ancestorContext: [], existingCode: '' };
 
         // Get existing code (if any, and not the placeholder)
-        const existingCode = node.content && !node.content.includes('# Generating')
-            ? node.content
-            : '';
+        const existingCode = node.content && !node.content.includes('# Generating') ? node.content : '';
 
         // Get DataFrame metadata (cached on node, or introspect now)
         let dataframeInfo = node.dataframeMetadata || [];
@@ -2658,10 +2630,10 @@ df.head()
         // Get ancestor context (conversation history)
         const ancestors = this.graph.getAncestors(nodeId);
         const ancestorContext = ancestors
-            .filter(n => [NodeType.HUMAN, NodeType.AI, NodeType.NOTE].includes(n.type))
-            .map(n => ({
+            .filter((n) => [NodeType.HUMAN, NodeType.AI, NodeType.NOTE].includes(n.type))
+            .map((n) => ({
                 role: n.type === NodeType.HUMAN ? 'user' : 'assistant',
-                content: n.content
+                content: n.content,
             }));
 
         return { dataframeInfo, ancestorContext, existingCode };
@@ -2700,7 +2672,7 @@ df.head()
             outputHtml: null,
             outputText: null,
             lastError: null,
-            executionState: 'idle'
+            executionState: 'idle',
         });
         this.canvas.renderNode(this.graph.getNode(nodeId));
         this.saveSession();
@@ -2784,7 +2756,7 @@ df.head()
         this.canvas.animateToLayout(this.graph, {
             duration: 500,
             keepViewport: true,
-            onEdgeUpdate: () => this.updateEdgesWithCollapseState()
+            onEdgeUpdate: () => this.updateEdgesWithCollapseState(),
         });
 
         // Save the new positions
@@ -2811,11 +2783,11 @@ df.head()
             if (sourceWrapper && targetWrapper) {
                 const sourcePos = {
                     x: parseFloat(sourceWrapper.getAttribute('x')),
-                    y: parseFloat(sourceWrapper.getAttribute('y'))
+                    y: parseFloat(sourceWrapper.getAttribute('y')),
                 };
                 const targetPos = {
                     x: parseFloat(targetWrapper.getAttribute('x')),
-                    y: parseFloat(targetWrapper.getAttribute('y'))
+                    y: parseFloat(targetWrapper.getAttribute('y')),
                 };
                 this.canvas.renderEdge(edge, sourcePos, targetPos);
             }
@@ -2844,11 +2816,11 @@ df.head()
                     if (sourceWrapper && targetWrapper) {
                         const sourcePos = {
                             x: parseFloat(sourceWrapper.getAttribute('x')),
-                            y: parseFloat(sourceWrapper.getAttribute('y'))
+                            y: parseFloat(sourceWrapper.getAttribute('y')),
                         };
                         const targetPos = {
                             x: parseFloat(targetWrapper.getAttribute('x')),
-                            y: parseFloat(targetWrapper.getAttribute('y'))
+                            y: parseFloat(targetWrapper.getAttribute('y')),
                         };
                         this.canvas.renderCollapsedPathEdge(node.id, descendant.id, sourcePos, targetPos);
                     }
@@ -2877,9 +2849,9 @@ df.head()
             // Create highlight node with the selected text, positioned in view
             const highlightNode = createNode(NodeType.HIGHLIGHT, `> ${selectedText}`, {
                 position: {
-                    x: viewportCenter.x + 50,  // Slight offset from center
-                    y: viewportCenter.y - 100  // Above center for visibility
-                }
+                    x: viewportCenter.x + 50, // Slight offset from center
+                    y: viewportCenter.y - 100, // Above center for visibility
+                },
             });
 
             this.graph.addNode(highlightNode);
@@ -2911,7 +2883,7 @@ df.head()
 
                 // Regular reply - create user node as reply to highlight
                 const humanNode = createNode(NodeType.HUMAN, content, {
-                    position: this.graph.autoPosition([highlightNode.id])
+                    position: this.graph.autoPosition([highlightNode.id]),
                 });
 
                 this.graph.addNode(humanNode);
@@ -2931,7 +2903,7 @@ df.head()
                 const model = this.modelPicker.value;
                 const aiNode = createNode(NodeType.AI, '', {
                     position: this.graph.autoPosition([humanNode.id]),
-                    model: model.split('/').pop()
+                    model: model.split('/').pop(),
                 });
 
                 this.graph.addNode(aiNode);
@@ -2945,11 +2917,7 @@ df.head()
                 this.updateCollapseButtonForNode(humanNode.id);
 
                 // Smoothly pan to the AI node
-                this.canvas.centerOnAnimated(
-                    aiNode.position.x + 160,
-                    aiNode.position.y + 100,
-                    300
-                );
+                this.canvas.centerOnAnimated(aiNode.position.x + 160, aiNode.position.y + 100, 300);
 
                 // Build context and stream LLM response
                 const context = this.graph.resolveContext([humanNode.id]);
@@ -2961,7 +2929,7 @@ df.head()
                 // Track streaming state for stop/continue functionality
                 this.streamingNodes.set(aiNode.id, {
                     abortController,
-                    context: { messages, model, humanNodeId: humanNode.id }
+                    context: { messages, model, humanNodeId: humanNode.id },
                 });
                 this.canvas.showStopButton(aiNode.id);
 
@@ -2996,7 +2964,7 @@ df.head()
                             type: 'chat',
                             messages,
                             model,
-                            humanNodeId: humanNode.id
+                            humanNodeId: humanNode.id,
                         });
                     }
                 );
@@ -3032,8 +3000,8 @@ df.head()
         const summaryNode = createNode(NodeType.SUMMARY, 'Generating summary...', {
             position: {
                 x: parentNode.position.x + 400,
-                y: parentNode.position.y
-            }
+                y: parentNode.position.y,
+            },
         });
 
         this.graph.addNode(summaryNode);
@@ -3059,7 +3027,7 @@ df.head()
     }
 
     /**
-      * Handle fetching full content from a Reference node URL and summarizing it.
+     * Handle fetching full content from a Reference node URL and summarizing it.
      * Creates two nodes: FETCH_RESULT (raw content) → SUMMARY (AI summary)
      *
      * This uses Exa API (/api/exa/get-contents) which requires an API key but
@@ -3092,8 +3060,8 @@ df.head()
         const fetchResultNode = createNode(NodeType.FETCH_RESULT, 'Fetching content...', {
             position: {
                 x: node.position.x + 450,
-                y: node.position.y
-            }
+                y: node.position.y,
+            },
         });
 
         this.graph.addNode(fetchResultNode);
@@ -3107,11 +3075,7 @@ df.head()
         this.updateCollapseButtonForNode(nodeId);
 
         // Smoothly pan to the fetch result node
-        this.canvas.centerOnAnimated(
-            fetchResultNode.position.x + 200,
-            fetchResultNode.position.y + 100,
-            300
-        );
+        this.canvas.centerOnAnimated(fetchResultNode.position.x + 200, fetchResultNode.position.y + 100, 300);
 
         try {
             // Fetch content from URL via Exa or fallback to direct fetch
@@ -3125,8 +3089,8 @@ df.head()
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         url: url,
-                        api_key: exaKey
-                    })
+                        api_key: exaKey,
+                    }),
                 });
 
                 if (!response.ok) {
@@ -3138,14 +3102,14 @@ df.head()
                 // Normalize response format
                 contentData = {
                     title: contentData.title,
-                    content: contentData.text
+                    content: contentData.text,
                 };
             } else {
                 // Use free Jina/direct fetch fallback
                 const response = await fetch(apiUrl('/api/fetch-url'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: url })
+                    body: JSON.stringify({ url: url }),
                 });
 
                 if (!response.ok) {
@@ -3166,19 +3130,21 @@ df.head()
             this.canvas.updateNodeContent(fetchResultNode.id, fetchedContent, false);
             this.graph.updateNode(fetchResultNode.id, {
                 content: fetchedContent,
-                versions: [{
-                    content: fetchedContent,
-                    timestamp: Date.now(),
-                    reason: 'fetched'
-                }]
+                versions: [
+                    {
+                        content: fetchedContent,
+                        timestamp: Date.now(),
+                        reason: 'fetched',
+                    },
+                ],
             });
 
             // Create SUMMARY node for the AI summary
             const summaryNode = createNode(NodeType.SUMMARY, 'Summarizing content...', {
                 position: {
                     x: fetchResultNode.position.x + 450,
-                    y: fetchResultNode.position.y
-                }
+                    y: fetchResultNode.position.y,
+                },
             });
 
             this.graph.addNode(summaryNode);
@@ -3192,15 +3158,14 @@ df.head()
             this.updateCollapseButtonForNode(fetchResultNode.id);
 
             // Smoothly pan to the summary node
-            this.canvas.centerOnAnimated(
-                summaryNode.position.x + 200,
-                summaryNode.position.y + 100,
-                300
-            );
+            this.canvas.centerOnAnimated(summaryNode.position.x + 200, summaryNode.position.y + 100, 300);
 
             // Now summarize the content with LLM
             const messages = [
-                { role: 'user', content: `Please provide a comprehensive summary of the following article:\n\n**${contentData.title}**\n\n${contentData.content}` }
+                {
+                    role: 'user',
+                    content: `Please provide a comprehensive summary of the following article:\n\n**${contentData.title}**\n\n${contentData.content}`,
+                },
             ];
 
             const summary = await chat.summarize(messages, model);
@@ -3211,7 +3176,6 @@ df.head()
             this.canvas.updateNodeContent(summaryNode.id, fullSummary, false);
             this.graph.updateNode(summaryNode.id, { content: fullSummary });
             this.saveSession();
-
         } catch (err) {
             this.canvas.updateNodeContent(fetchResultNode.id, `Error: ${err.message}`, false);
             this.graph.updateNode(fetchResultNode.id, { content: `Error: ${err.message}` });
@@ -3284,7 +3248,7 @@ df.head()
         if (oldPos && (oldPos.x !== newPos.x || oldPos.y !== newPos.y)) {
             this.undoManager.push({
                 type: 'MOVE_NODES',
-                moves: [{ nodeId, from: oldPos, to: newPos }]
+                moves: [{ nodeId, from: oldPos, to: newPos }],
             });
         }
 
@@ -3306,7 +3270,7 @@ df.head()
         if (!this._lastDragSync) this._lastDragSync = {};
 
         if (this._lastDragSync[nodeId] && now - this._lastDragSync[nodeId] < 16) {
-            return;  // Skip this update, too soon
+            return; // Skip this update, too soon
         }
         this._lastDragSync[nodeId] = now;
 
@@ -3333,7 +3297,7 @@ df.head()
         if (!this._lastResizeSync) this._lastResizeSync = {};
 
         if (this._lastResizeSync[nodeId] && now - this._lastResizeSync[nodeId] < 16) {
-            return;  // Skip this update, too soon
+            return; // Skip this update, too soon
         }
         this._lastResizeSync[nodeId] = now;
 
@@ -3349,15 +3313,15 @@ df.head()
         if (!node) return;
 
         const deletedNodes = [{ ...node }];
-        const deletedEdges = this.graph.edges.filter(e =>
-            e.source === nodeId || e.target === nodeId
-        ).map(e => ({ ...e }));
+        const deletedEdges = this.graph.edges
+            .filter((e) => e.source === nodeId || e.target === nodeId)
+            .map((e) => ({ ...e }));
 
         // Push undo action
         this.undoManager.push({
             type: 'DELETE_NODES',
             nodes: deletedNodes,
-            edges: deletedEdges
+            edges: deletedEdges,
         });
 
         // Remove from graph (this also removes edges)
@@ -3419,7 +3383,7 @@ df.head()
         this.streamingNodes.set(nodeId, {
             ...streamingState,
             abortController: null,
-            stopped: true
+            stopped: true,
         });
 
         this.saveSession();
@@ -3454,7 +3418,9 @@ df.head()
                 this.canvas.showStopButton(nodeId);
 
                 // Clear the stopped indicator and restart
-                const cleanedContent = node.content.replace(/\n\n\*\[Research stopped\]\*$/, '').replace(/\n\n\*\[Generation stopped\]\*$/, '');
+                const cleanedContent = node.content
+                    .replace(/\n\n\*\[Research stopped\]\*$/, '')
+                    .replace(/\n\n\*\[Generation stopped\]\*$/, '');
                 this.canvas.updateNodeContent(nodeId, cleanedContent, false);
 
                 // Restart research with extracted instructions (no context) on existing node
@@ -3475,7 +3441,9 @@ df.head()
             this.canvas.showStopButton(nodeId);
 
             // Clear the stopped indicator from content
-            const cleanedContent = node.content.replace(/\n\n\*\[Research stopped\]\*$/, '').replace(/\n\n\*\[Generation stopped\]\*$/, '');
+            const cleanedContent = node.content
+                .replace(/\n\n\*\[Research stopped\]\*$/, '')
+                .replace(/\n\n\*\[Generation stopped\]\*$/, '');
             this.canvas.updateNodeContent(nodeId, cleanedContent, false);
 
             // Restart research with same instructions and context on existing node
@@ -3505,14 +3473,14 @@ df.head()
         const messages = [
             ...streamingState.context.messages,
             { role: 'assistant', content: currentContent },
-            { role: 'user', content: 'Please continue your response from where you left off.' }
+            { role: 'user', content: 'Please continue your response from where you left off.' },
         ];
 
         // Create new AbortController for the continuation
         const abortController = new AbortController();
         this.streamingNodes.set(nodeId, {
             abortController,
-            context: streamingState.context
+            context: streamingState.context,
         });
 
         // Continue streaming
@@ -3567,7 +3535,7 @@ df.head()
         try {
             const requestBody = this.buildLLMRequest({
                 messages,
-                temperature: 0.7
+                temperature: 0.7,
             });
 
             const response = await fetch(apiUrl('/api/chat'), {
@@ -3595,9 +3563,8 @@ df.head()
                 },
                 onError: (err) => {
                     throw err;
-                }
+                },
             });
-
         } catch (err) {
             if (err.name === 'AbortError') {
                 console.log(`Stream aborted for node ${nodeId}`);
@@ -3650,7 +3617,7 @@ df.head()
             // Track streaming state with new pattern
             this.streamingNodes.set(nodeId, {
                 abortController,
-                context: { messages: retryContext.messages, model: retryContext.model }
+                context: { messages: retryContext.messages, model: retryContext.model },
             });
             this.canvas.showStopButton(nodeId);
 
@@ -3751,7 +3718,7 @@ df.head()
         // Persist dimensions
         this.graph.updateNode(nodeId, {
             width: defaultWidth,
-            height: defaultHeight
+            height: defaultHeight,
         });
         this.saveSession();
     }
@@ -3767,7 +3734,7 @@ df.head()
 
         // Get parent reference node for URL context
         const parents = this.graph.getParents(nodeId);
-        const refNode = parents.find(p => p.type === NodeType.REFERENCE);
+        const refNode = parents.find((p) => p.type === NodeType.REFERENCE);
         const url = refNode?.url || 'the fetched content';
 
         const model = this.modelPicker.value;
@@ -3783,9 +3750,9 @@ df.head()
         const summaryNode = createNode(NodeType.SUMMARY, '', {
             position: {
                 x: fetchNode.position.x + 50,
-                y: fetchNode.position.y + (fetchNode.height || 200) + 50
+                y: fetchNode.position.y + (fetchNode.height || 200) + 50,
             },
-            model: model.split('/').pop()
+            model: model.split('/').pop(),
         });
 
         this.graph.addNode(summaryNode);
@@ -3796,11 +3763,7 @@ df.head()
         this.canvas.renderEdge(edge, fetchNode.position, summaryNode.position);
 
         // Pan to new node
-        this.canvas.centerOnAnimated(
-            summaryNode.position.x + 200,
-            summaryNode.position.y + 100,
-            300
-        );
+        this.canvas.centerOnAnimated(summaryNode.position.x + 200, summaryNode.position.y + 100, 300);
 
         // Select the new node
         this.canvas.clearSelection();
@@ -3808,7 +3771,7 @@ df.head()
 
         // Build messages for summarization
         const messages = [
-            { role: 'user', content: `Please summarize the following content from ${url}:\n\n${fetchNode.content}` }
+            { role: 'user', content: `Please summarize the following content from ${url}:\n\n${fetchNode.content}` },
         ];
 
         // Create AbortController for this stream
@@ -3817,7 +3780,7 @@ df.head()
         // Track streaming state
         this.streamingNodes.set(summaryNode.id, {
             abortController,
-            context: { messages, model }
+            context: { messages, model },
         });
         this.canvas.showStopButton(summaryNode.id);
 
@@ -3974,7 +3937,7 @@ df.head()
         this.undoManager.push({
             type: 'DELETE_NODES',
             nodes: deletedNodes,
-            edges: deletedEdges
+            edges: deletedEdges,
         });
 
         // Now perform the deletions
@@ -4047,7 +4010,7 @@ df.head()
         }
 
         // Format numbers
-        const formatK = (n) => n >= 1000 ? `${(n/1000).toFixed(0)}k` : n;
+        const formatK = (n) => (n >= 1000 ? `${(n / 1000).toFixed(0)}k` : n);
         this.budgetText.textContent = `${formatK(tokens)} / ${formatK(contextWindow)}`;
     }
 
@@ -4075,7 +4038,7 @@ df.head()
                 // if CRDT persistence fails or IndexedDB is cleared
                 nodes: graphData.nodes,
                 edges: graphData.edges,
-                tags: graphData.tags
+                tags: graphData.tags,
             };
             await storage.saveSession(sessionData);
         }, 500);
@@ -4110,8 +4073,8 @@ df.head()
             const contentParts = [];
 
             // Get first few nodes (prioritize human messages)
-            const humanNodes = nodes.filter(n => n.type === NodeType.HUMAN);
-            const aiNodes = nodes.filter(n => n.type === NodeType.AI);
+            const humanNodes = nodes.filter((n) => n.type === NodeType.HUMAN);
+            const aiNodes = nodes.filter((n) => n.type === NodeType.AI);
 
             // Take first 3 human messages and first 2 AI responses
             for (const node of humanNodes.slice(0, 3)) {
@@ -4129,13 +4092,13 @@ df.head()
             }
 
             const requestBody = this.buildLLMRequest({
-                content
+                content,
             });
 
             const response = await fetch(apiUrl('/api/generate-title'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
@@ -4148,7 +4111,6 @@ df.head()
             this.session.name = data.title;
             this.sessionName.textContent = data.title;
             this.saveSession();
-
         } catch (err) {
             console.error('Failed to generate title:', err);
             alert(`Failed to generate title: ${err.message}`);
@@ -4179,9 +4141,10 @@ df.head()
             let contentForSummary;
             if (node.type === NodeType.MATRIX) {
                 // For matrix, describe the structure
-                const filledCells = Object.values(node.cells || {}).filter(c => c.filled).length;
+                const filledCells = Object.values(node.cells || {}).filter((c) => c.filled).length;
                 const totalCells = (node.rowItems?.length || 0) * (node.colItems?.length || 0);
-                contentForSummary = `Matrix evaluation: "${node.context}"\n` +
+                contentForSummary =
+                    `Matrix evaluation: "${node.context}"\n` +
                     `Rows: ${node.rowItems?.join(', ')}\n` +
                     `Columns: ${node.colItems?.join(', ')}\n` +
                     `Progress: ${filledCells}/${totalCells} cells filled`;
@@ -4190,13 +4153,13 @@ df.head()
             }
 
             const requestBody = this.buildLLMRequest({
-                content: contentForSummary
+                content: contentForSummary,
             });
 
             const response = await fetch(apiUrl('/api/generate-summary'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
@@ -4224,7 +4187,6 @@ df.head()
             }
 
             this.saveSession();
-
         } catch (err) {
             // Fail silently - truncation fallback will be used
         }
@@ -4329,7 +4291,7 @@ df.head()
             hint.classList.remove('visible');
             setTimeout(() => {
                 hint.style.display = 'none';
-            }, 300);  // Match CSS transition
+            }, 300); // Match CSS transition
         }, duration);
     }
 
@@ -4524,7 +4486,7 @@ df.head()
 
         const currentNodeIds = new Set(this.canvas.nodeElements.keys());
         const newNodes = this.graph.getAllNodes();
-        const newNodeIds = new Set(newNodes.map(n => n.id));
+        const newNodeIds = new Set(newNodes.map((n) => n.id));
 
         // Track nodes that need position/size animation
         const transformChanges = [];
@@ -4543,9 +4505,10 @@ df.head()
                     const currentHeight = parseFloat(wrapper.getAttribute('height')) || node.height;
 
                     // Check if position or size changed
-                    const posChanged = Math.abs(currentX - node.position.x) > 0.5 ||
-                        Math.abs(currentY - node.position.y) > 0.5;
-                    const sizeChanged = (node.width && Math.abs(currentWidth - node.width) > 1) ||
+                    const posChanged =
+                        Math.abs(currentX - node.position.x) > 0.5 || Math.abs(currentY - node.position.y) > 0.5;
+                    const sizeChanged =
+                        (node.width && Math.abs(currentWidth - node.width) > 1) ||
                         (node.height && Math.abs(currentHeight - node.height) > 1);
 
                     if (posChanged || sizeChanged) {
@@ -4561,7 +4524,7 @@ df.head()
                             endWidth: node.width || currentWidth,
                             endHeight: node.height || currentHeight,
                             hasPositionChange: posChanged,
-                            hasSizeChange: sizeChanged
+                            hasSizeChange: sizeChanged,
                         });
                     }
 
@@ -4624,11 +4587,14 @@ df.head()
         }
 
         // Check if tag colors match
-        const currentTagColors = Array.from(tagEls).map(el => {
-            // Extract color from class like "tag-red" -> "red"
-            const match = el.className.match(/tag-(\w+)/);
-            return match ? match[1] : null;
-        }).filter(Boolean).sort();
+        const currentTagColors = Array.from(tagEls)
+            .map((el) => {
+                // Extract color from class like "tag-red" -> "red"
+                const match = el.className.match(/tag-(\w+)/);
+                return match ? match[1] : null;
+            })
+            .filter(Boolean)
+            .sort();
         const newTagColors = [...(node.tags || [])].sort();
         if (JSON.stringify(currentTagColors) !== JSON.stringify(newTagColors)) {
             return true;
@@ -4666,7 +4632,7 @@ df.head()
      * Uses smooth easing to match local layout animations.
      */
     animateRemoteTransforms(animations) {
-        const duration = 400;  // Slightly faster than local (500ms)
+        const duration = 400; // Slightly faster than local (500ms)
         const startTime = performance.now();
 
         const animate = (currentTime) => {
@@ -4833,7 +4799,10 @@ df.head()
                     const summaryText = wrapper.querySelector('.summary-text');
                     const node = this.graph.getNode(action.nodeId);
                     if (summaryText && node) {
-                        summaryText.textContent = action.oldTitle || node.summary || this.canvas.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
+                        summaryText.textContent =
+                            action.oldTitle ||
+                            node.summary ||
+                            this.canvas.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
                     }
                 }
                 break;
@@ -4855,8 +4824,13 @@ df.head()
                     const cellKey = `${action.row}-${action.col}`;
                     const updatedCells = { ...matrixNodeUndo.cells, [cellKey]: { ...action.oldCell } };
                     this.graph.updateNode(action.nodeId, { cells: updatedCells });
-                    this.canvas.updateMatrixCell(action.nodeId, action.row, action.col,
-                        action.oldCell.filled ? action.oldCell.content : null, false);
+                    this.canvas.updateMatrixCell(
+                        action.nodeId,
+                        action.row,
+                        action.col,
+                        action.oldCell.filled ? action.oldCell.content : null,
+                        false
+                    );
                 }
                 break;
         }
@@ -4920,7 +4894,10 @@ df.head()
                     const summaryText = wrapper.querySelector('.summary-text');
                     const node = this.graph.getNode(action.nodeId);
                     if (summaryText && node) {
-                        summaryText.textContent = action.newTitle || node.summary || this.canvas.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
+                        summaryText.textContent =
+                            action.newTitle ||
+                            node.summary ||
+                            this.canvas.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
                     }
                 }
                 break;
@@ -4942,8 +4919,7 @@ df.head()
                     const cellKey = `${action.row}-${action.col}`;
                     const updatedCells = { ...matrixNodeRedo.cells, [cellKey]: { ...action.newCell } };
                     this.graph.updateNode(action.nodeId, { cells: updatedCells });
-                    this.canvas.updateMatrixCell(action.nodeId, action.row, action.col,
-                        action.newCell.content, false);
+                    this.canvas.updateMatrixCell(action.nodeId, action.row, action.col, action.newCell.content, false);
                 }
                 break;
         }
@@ -5025,7 +5001,7 @@ df.head()
 
             // Check if selected nodes have this tag
             if (tag && selectedIds.length > 0) {
-                const nodesWithTag = selectedIds.filter(id => this.graph.nodeHasTag(id, color));
+                const nodesWithTag = selectedIds.filter((id) => this.graph.nodeHasTag(id, color));
                 if (nodesWithTag.length === selectedIds.length) {
                     slot.classList.add('active');
                 } else if (nodesWithTag.length > 0) {
@@ -5041,17 +5017,22 @@ df.head()
             slot.innerHTML = `
                 <div class="tag-color-dot" style="background: ${color}"></div>
                 <div class="tag-slot-content">
-                    ${tag
-                        ? `<span class="tag-slot-name">${this.escapeHtml(tag.name)}</span>`
-                        : `<span class="tag-slot-empty">+ Add tag</span>`
+                    ${
+                        tag
+                            ? `<span class="tag-slot-name">${this.escapeHtml(tag.name)}</span>`
+                            : `<span class="tag-slot-empty">+ Add tag</span>`
                     }
                 </div>
-                ${tag ? `
+                ${
+                    tag
+                        ? `
                     <div class="tag-slot-actions">
                         <button class="tag-slot-btn edit" title="Edit">✏️</button>
                         <button class="tag-slot-btn delete" title="Delete">✕</button>
                     </div>
-                ` : ''}
+                `
+                        : ''
+                }
             `;
 
             // Click to apply/create tag
@@ -5155,7 +5136,7 @@ df.head()
 
     toggleTagOnNodes(color, nodeIds) {
         // Check current state
-        const nodesWithTag = nodeIds.filter(id => this.graph.nodeHasTag(id, color));
+        const nodesWithTag = nodeIds.filter((id) => this.graph.nodeHasTag(id, color));
         const allHaveTag = nodesWithTag.length === nodeIds.length;
 
         // Store old tags for undo (for each affected node)
@@ -5166,7 +5147,7 @@ df.head()
                 tagChanges.push({
                     nodeId,
                     oldTags: [...(node.tags || [])],
-                    newTags: null  // Will be calculated after change
+                    newTags: null, // Will be calculated after change
                 });
             }
         }
@@ -5197,7 +5178,7 @@ df.head()
                 type: 'TAG_CHANGE',
                 nodeId: change.nodeId,
                 oldTags: change.oldTags,
-                newTags: change.newTags
+                newTags: change.newTags,
             });
         }
 
@@ -5358,20 +5339,24 @@ df.head()
         }
 
         // Escape HTML in query for highlighting
-        const queryTokens = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+        const queryTokens = query
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((t) => t.length > 0);
 
-        const html = results.map((result, idx) => {
-            const icon = getNodeTypeIcon(result.type);
-            const typeName = result.type.charAt(0).toUpperCase() + result.type.slice(1);
+        const html = results
+            .map((result, idx) => {
+                const icon = getNodeTypeIcon(result.type);
+                const typeName = result.type.charAt(0).toUpperCase() + result.type.slice(1);
 
-            // Highlight matching terms in snippet
-            let snippet = this.escapeHtml(result.snippet);
-            for (const token of queryTokens) {
-                const regex = new RegExp(`(${this.escapeRegex(token)})`, 'gi');
-                snippet = snippet.replace(regex, '<mark>$1</mark>');
-            }
+                // Highlight matching terms in snippet
+                let snippet = this.escapeHtml(result.snippet);
+                for (const token of queryTokens) {
+                    const regex = new RegExp(`(${this.escapeRegex(token)})`, 'gi');
+                    snippet = snippet.replace(regex, '<mark>$1</mark>');
+                }
 
-            return `
+                return `
                 <div class="search-result${idx === 0 ? ' selected' : ''}" data-node-id="${result.nodeId}">
                     <span class="search-result-icon">${icon}</span>
                     <div class="search-result-content">
@@ -5380,9 +5365,12 @@ df.head()
                     </div>
                 </div>
             `;
-        }).join('');
+            })
+            .join('');
 
-        container.innerHTML = html + `
+        container.innerHTML =
+            html +
+            `
             <div class="search-result-nav-hint">
                 <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
                 <span><kbd>Enter</kbd> to select</span>
@@ -5428,16 +5416,7 @@ df.head()
     }
 }
 
-// Export classes for browser
-window.SlashCommandMenu = SlashCommandMenu;
-window.App = App;
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        App
-    };
-}
+export { App };
 
 // Initialize app when DOM is ready
 // Wait for Yjs to load before initializing (Yjs loads as an ES module which is async)

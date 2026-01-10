@@ -193,7 +193,6 @@ ${nodeContent}`;
 
                 closeModal();
             });
-
         } catch (err) {
             statusEl.textContent = `Error: ${err.message}`;
             console.error('Flashcard generation error:', err);
@@ -222,15 +221,15 @@ ${nodeContent}`;
             const flashcardNode = createNode(NodeType.FLASHCARD, card.front, {
                 position: {
                     x: startX + idx * (cardWidth + cardGap),
-                    y: startY
+                    y: startY,
                 },
                 back: card.back,
                 srs: {
-                    easeFactor: 2.5,      // SM-2 default
-                    interval: 0,           // Days until next review
-                    repetitions: 0,        // Number of successful reviews
-                    nextReviewDate: null   // Will be set on first review
-                }
+                    easeFactor: 2.5, // SM-2 default
+                    interval: 0, // Days until next review
+                    repetitions: 0, // Number of successful reviews
+                    nextReviewDate: null, // Will be set on first review
+                },
             });
 
             this.graph.addNode(flashcardNode);
@@ -251,11 +250,7 @@ ${nodeContent}`;
 
         // Pan to first created flashcard
         if (createdNodes.length > 0) {
-            this.canvas.centerOnAnimated(
-                createdNodes[0].position.x + 200,
-                createdNodes[0].position.y + 100,
-                300
-            );
+            this.canvas.centerOnAnimated(createdNodes[0].position.x + 200, createdNodes[0].position.y + 100, 300);
         }
 
         this.saveSession();
@@ -276,8 +271,8 @@ ${nodeContent}`;
         this.reviewState = {
             cardIds: dueCardIds,
             currentIndex: 0,
-            currentQuality: null,   // Will be set by grading
-            hasSubmitted: false
+            currentQuality: null, // Will be set by grading
+            hasSubmitted: false,
         };
 
         // Set up event listeners (clone to remove previous)
@@ -453,7 +448,6 @@ ${nodeContent}`;
             } else {
                 nextBtn.textContent = 'Next Card';
             }
-
         } catch (err) {
             console.error('Grading error:', err);
             // Fallback: show result without grading
@@ -532,7 +526,9 @@ ${gradingRules}
             chat.sendMessage(
                 messages,
                 model,
-                (chunk) => { fullResponse += chunk; },
+                (chunk) => {
+                    fullResponse += chunk;
+                },
                 () => {
                     try {
                         // Extract JSON from response
@@ -542,7 +538,7 @@ ${gradingRules}
                             resolve({
                                 correct: result.correct === true,
                                 partial: result.partial === true && result.correct !== true,
-                                explanation: result.explanation || ''
+                                explanation: result.explanation || '',
                             });
                         } else {
                             reject(new Error('No JSON in response'));
@@ -551,7 +547,9 @@ ${gradingRules}
                         reject(e);
                     }
                 },
-                (err) => { reject(err); }
+                (err) => {
+                    reject(err);
+                }
             );
         });
     }
@@ -594,7 +592,7 @@ ${gradingRules}
                 easeFactor: 2.5,
                 repetitions: 0,
                 nextReviewDate: null,
-                lastReviewDate: null
+                lastReviewDate: null,
             };
 
             const newSrs = applySM2(currentSrs, quality);
@@ -647,9 +645,7 @@ ${gradingRules}
      */
     startFlashcardReview() {
         // Find all due flashcards
-        const dueCardIds = this.graph.nodes
-            .filter(node => isFlashcardDue(node))
-            .map(node => node.id);
+        const dueCardIds = this.graph.nodes.filter((node) => isFlashcardDue(node)).map((node) => node.id);
 
         if (dueCardIds.length === 0) {
             this.showToast('No flashcards due for review', 'info');
@@ -696,7 +692,7 @@ ${gradingRules}
         const dueCards = getDueFlashcards(this.graph.getAllNodes());
 
         if (dueCards.length > 0) {
-            const cardIds = dueCards.map(c => c.id);
+            const cardIds = dueCards.map((c) => c.id);
             this.showDueCardsToast(dueCards.length, cardIds);
         }
     }
@@ -767,14 +763,4 @@ ${gradingRules}
 // Exports
 // =============================================================================
 
-// Export for browser (window)
-if (typeof window !== 'undefined') {
-    window.FlashcardFeature = FlashcardFeature;
-}
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        FlashcardFeature
-    };
-}
+export { FlashcardFeature };

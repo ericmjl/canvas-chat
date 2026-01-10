@@ -97,7 +97,7 @@ class Chat {
             const response = await fetch(apiUrl('/api/provider-models'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider, api_key: apiKey })
+                body: JSON.stringify({ provider, api_key: apiKey }),
             });
             if (response.ok) {
                 return await response.json();
@@ -137,7 +137,7 @@ class Chat {
      * Get context window size for a model
      */
     getContextWindow(modelId) {
-        const model = this.models.find(m => m.id === modelId);
+        const model = this.models.find((m) => m.id === modelId);
         return model?.context_window || 128000; // Default to 128k
     }
 
@@ -195,9 +195,8 @@ class Chat {
                 },
                 onError: (err) => {
                     throw err;
-                }
+                },
             });
-
         } catch (err) {
             if (err.name === 'AbortError') {
                 console.log('Request aborted');
@@ -259,7 +258,7 @@ class Chat {
             onDone: () => {},
             onError: (err) => {
                 throw err;
-            }
+            },
         });
 
         return SSE.normalizeText(fullContent);
@@ -298,7 +297,6 @@ class Chat {
 
             const data = await response.json();
             return data.summary;
-
         } catch (err) {
             console.error('Summarize error:', err);
             throw err;
@@ -310,7 +308,9 @@ class Chat {
      */
     async estimateTokens(text, model) {
         try {
-            const response = await fetch(`/api/token-count?text=${encodeURIComponent(text)}&model=${encodeURIComponent(model)}`);
+            const response = await fetch(
+                `/api/token-count?text=${encodeURIComponent(text)}&model=${encodeURIComponent(model)}`
+            );
             if (response.ok) {
                 const data = await response.json();
                 return data.tokens;
@@ -323,10 +323,7 @@ class Chat {
     }
 }
 
-// Export singleton
+// Export class and singleton instance
 const chat = new Chat();
 
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Chat, chat };
-}
+export { Chat, chat };

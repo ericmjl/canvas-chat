@@ -10,60 +10,60 @@ Quick reference for which files to edit for common tasks:
 
 #### Core modules
 
-| File | Purpose | Edit for... |
-| ---- | ------- | ----------- |
-| `src/canvas_chat/static/js/app.js` | Main application, orchestrates everything | Slash commands, keyboard shortcuts, App class methods |
-| `src/canvas_chat/static/js/canvas.js` | SVG canvas, pan/zoom, node rendering | Node appearance, drag behavior, viewport logic, node event handlers |
-| `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions | Node types, edge types, createNode/createEdge utilities |
-| `src/canvas_chat/static/js/crdt-graph.js` | CRDT-backed graph (Yjs), graph traversal | Graph data model, node positioning, graph traversal |
-| `src/canvas_chat/static/js/layout.js` | Pure layout functions for overlap detection | Overlap detection, overlap resolution, node positioning algorithms |
-| `src/canvas_chat/static/js/chat.js` | LLM API calls, streaming | API integration, message formatting, token estimation |
-| `src/canvas_chat/static/js/storage.js` | localStorage persistence | Session storage, API key storage, settings |
-| `src/canvas_chat/static/js/search.js` | Node search functionality | Search UI, filtering logic |
-| `src/canvas_chat/static/js/sse.js` | Server-sent events utilities | Streaming connection handling |
-| `src/canvas_chat/static/js/utils.js` | Pure utility functions | Image resizing, error formatting, text processing |
+| File                                       | Purpose                                     | Edit for...                                                         |
+| ------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------- |
+| `src/canvas_chat/static/js/app.js`         | Main application, orchestrates everything   | Slash commands, keyboard shortcuts, App class methods               |
+| `src/canvas_chat/static/js/canvas.js`      | SVG canvas, pan/zoom, node rendering        | Node appearance, drag behavior, viewport logic, node event handlers |
+| `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions          | Node types, edge types, createNode/createEdge utilities             |
+| `src/canvas_chat/static/js/crdt-graph.js`  | CRDT-backed graph (Yjs), graph traversal    | Graph data model, node positioning, graph traversal                 |
+| `src/canvas_chat/static/js/layout.js`      | Pure layout functions for overlap detection | Overlap detection, overlap resolution, node positioning algorithms  |
+| `src/canvas_chat/static/js/chat.js`        | LLM API calls, streaming                    | API integration, message formatting, token estimation               |
+| `src/canvas_chat/static/js/storage.js`     | localStorage persistence                    | Session storage, API key storage, settings                          |
+| `src/canvas_chat/static/js/search.js`      | Node search functionality                   | Search UI, filtering logic                                          |
+| `src/canvas_chat/static/js/sse.js`         | Server-sent events utilities                | Streaming connection handling                                       |
+| `src/canvas_chat/static/js/utils.js`       | Pure utility functions                      | Image resizing, error formatting, text processing                   |
 
 #### Feature modules
 
-| File | Purpose | Edit for... |
-| ---- | ------- | ----------- |
+| File                                      | Purpose                | Edit for...                                |
+| ----------------------------------------- | ---------------------- | ------------------------------------------ |
 | `src/canvas_chat/static/js/flashcards.js` | FlashcardFeature class | Flashcard generation, spaced repetition UI |
-| `src/canvas_chat/static/js/committee.js` | CommitteeFeature class | Multi-LLM consultation, synthesis |
-| `src/canvas_chat/static/js/matrix.js` | MatrixFeature class | Comparison matrix creation, cell filling |
-| `src/canvas_chat/static/js/factcheck.js` | FactcheckFeature class | Claim verification, web search integration |
-| `src/canvas_chat/static/js/research.js` | ResearchFeature class | Deep research with Exa API |
+| `src/canvas_chat/static/js/committee.js`  | CommitteeFeature class | Multi-LLM consultation, synthesis          |
+| `src/canvas_chat/static/js/matrix.js`     | MatrixFeature class    | Comparison matrix creation, cell filling   |
+| `src/canvas_chat/static/js/factcheck.js`  | FactcheckFeature class | Claim verification, web search integration |
+| `src/canvas_chat/static/js/research.js`   | ResearchFeature class  | Deep research with Exa API                 |
 
 ### Frontend (HTML/CSS)
 
-| File | Purpose | Edit for... |
-| ---- | ------- | ----------- |
-| `src/canvas_chat/static/index.html` | Main HTML, modals, templates | New modals, toolbar buttons, HTML structure |
-| `src/canvas_chat/static/css/style.css` | All styles | Colors, layout, node styling, animations |
+| File                                   | Purpose                      | Edit for...                                 |
+| -------------------------------------- | ---------------------------- | ------------------------------------------- |
+| `src/canvas_chat/static/index.html`    | Main HTML, modals, templates | New modals, toolbar buttons, HTML structure |
+| `src/canvas_chat/static/css/style.css` | All styles                   | Colors, layout, node styling, animations    |
 
 ### Backend (Python/FastAPI)
 
-| File | Purpose | Edit for... |
-| ---- | ------- | ----------- |
+| File                     | Purpose                   | Edit for...                  |
+| ------------------------ | ------------------------- | ---------------------------- |
 | `src/canvas_chat/app.py` | FastAPI routes, LLM proxy | API endpoints, backend logic |
-| `modal_app.py` | Modal deployment config | Deployment settings |
+| `modal_app.py`           | Modal deployment config   | Deployment settings          |
 
 ### Key constants and their locations
 
-| Constant | Location | Purpose |
-| -------- | -------- | ------- |
-| `NodeType` | `graph-types.js:11-32` | All node type definitions |
-| `EdgeType` | `graph-types.js:82-94` | All edge type definitions |
+| Constant             | Location               | Purpose                         |
+| -------------------- | ---------------------- | ------------------------------- |
+| `NodeType`           | `graph-types.js:11-32` | All node type definitions       |
+| `EdgeType`           | `graph-types.js:82-94` | All edge type definitions       |
 | `DEFAULT_NODE_SIZES` | `graph-types.js:40-68` | Default dimensions by node type |
-| `SLASH_COMMANDS` | `app.js:15-22` | Slash command definitions |
-| CSS variables | `style.css:10-75` | Colors, sizing, theming |
+| `SLASH_COMMANDS`     | `app.js:15-22`         | Slash command definitions       |
+| CSS variables        | `style.css:10-75`      | Colors, sizing, theming         |
 
 ### Zoom levels (semantic zoom)
 
-| Scale | Class | Behavior |
-| ----- | ----- | -------- |
-| > 0.6 | `zoom-full` | Full node content visible |
+| Scale      | Class          | Behavior                          |
+| ---------- | -------------- | --------------------------------- |
+| > 0.6      | `zoom-full`    | Full node content visible         |
 | 0.35 - 0.6 | `zoom-summary` | Summary text shown, drag anywhere |
-| <= 0.35 | `zoom-mini` | Minimal view, drag anywhere |
+| <= 0.35    | `zoom-mini`    | Minimal view, drag anywhere       |
 
 ## Documentation
 
@@ -156,6 +156,61 @@ git commit -m "message"
 
 ## Architecture patterns
 
+### Module system
+
+Canvas-Chat uses **ES modules** for new code and is gradually migrating existing code.
+
+**For new files:**
+
+- Use ES module `import`/`export` syntax
+- Load in HTML with `<script type="module" src="...">`
+- Tests import modules directly with `import` statements
+
+**For backwards compatibility:**
+
+- ES modules can expose to global scope for non-module scripts:
+
+    ```javascript
+    export { MyClass };
+
+    // Backwards compatibility for non-module scripts
+    if (typeof window !== 'undefined') {
+        window.MyClass = MyClass;
+    }
+    ```
+
+**Migration strategy:**
+
+- New plugin-system files (`node-registry.js`, `node-protocols.js`) use ES modules
+- Legacy files (`app.js`, `canvas.js`, `graph-types.js`) still use global scope
+- Tests for ES modules use `await import()` instead of `vm.runInThisContext()`
+
+**Example ES module:**
+
+```javascript
+// my-module.js
+export class MyClass {
+    doSomething() {}
+}
+
+// Backwards compatibility
+if (typeof window !== 'undefined') {
+    window.MyClass = MyClass;
+}
+```
+
+**Example test:**
+
+```javascript
+// tests/test_my_module.js
+import { MyClass } from '../src/canvas_chat/static/js/my-module.js';
+
+test('MyClass works', () => {
+    const instance = new MyClass();
+    // ...
+});
+```
+
 ### API key access
 
 Always use `chat.getApiKeyForModel(model)` to get API keys for LLM calls.
@@ -222,22 +277,22 @@ this.streamingNodeId = nodeId;
 this.abortController = new AbortController();
 
 // Later, when second operation starts, it overwrites the first:
-this.streamingNodeId = anotherNodeId;  // First operation's state is lost!
-this.abortController = new AbortController();  // Can't abort first operation anymore
+this.streamingNodeId = anotherNodeId; // First operation's state is lost!
+this.abortController = new AbortController(); // Can't abort first operation anymore
 
 // CORRECT: Per-instance state - many operations can run in parallel
-this.streamingNodes = new Map();  // In constructor
+this.streamingNodes = new Map(); // In constructor
 
 // Each operation gets isolated state:
 this.streamingNodes.set(nodeId, {
     abortController: new AbortController(),
-    context: { messages, model }
+    context: { messages, model },
 });
 
 // Second operation doesn't affect the first:
 this.streamingNodes.set(anotherNodeId, {
     abortController: new AbortController(),
-    context: { messages, model }
+    context: { messages, model },
 });
 
 // Each can be controlled independently:
@@ -401,15 +456,17 @@ When you copy an implementation:
 
 ```javascript
 // WRONG: Copying implementation into test file
-function resolveOverlaps(nodes) { /* copied from graph.js */ }
+function resolveOverlaps(nodes) {
+    /* copied from graph.js */
+}
 test('resolveOverlaps works', () => {
-    resolveOverlaps(testNodes);  // Tests the COPY, not the real code!
+    resolveOverlaps(testNodes); // Tests the COPY, not the real code!
 });
 
 // CORRECT: Import the actual implementation
 const { resolveOverlaps } = require('../src/canvas_chat/static/js/layout.js');
 test('resolveOverlaps works', () => {
-    resolveOverlaps(testNodes);  // Tests the REAL code
+    resolveOverlaps(testNodes); // Tests the REAL code
 });
 ```
 
@@ -423,19 +480,19 @@ Refactor to extract pure functions that can be imported and tested directly.
 **Don't write unit tests for:**
 
 1. **Complex instance methods** that require full class instantiation with many dependencies
-   - Example: `App.buildLLMRequest()` requires App constructor, modelPicker, storage, chat instances
-   - Why: Would require either duplicating logic (violates "never copy" rule) or brittle mocking
-   - Instead: Test through integration tests or manual QA with real configurations
+    - Example: `App.buildLLMRequest()` requires App constructor, modelPicker, storage, chat instances
+    - Why: Would require either duplicating logic (violates "never copy" rule) or brittle mocking
+    - Instead: Test through integration tests or manual QA with real configurations
 
 2. **Methods with runtime state dependencies**
-   - Methods that depend on DOM state, user interactions, or async operations in progress
-   - Why: Mocking the entire runtime environment is fragile and doesn't test real behavior
-   - Instead: Test the pure functions they call, verify behavior manually in the UI
+    - Methods that depend on DOM state, user interactions, or async operations in progress
+    - Why: Mocking the entire runtime environment is fragile and doesn't test real behavior
+    - Instead: Test the pure functions they call, verify behavior manually in the UI
 
 3. **Code already covered by structural guarantees**
-   - Example: Helper function that's the ONLY way to build requests (prevents bugs structurally)
-   - Why: The refactoring itself ensures correct usage
-   - Instead: Code review + manual testing of the happy path
+    - Example: Helper function that's the ONLY way to build requests (prevents bugs structurally)
+    - Why: The refactoring itself ensures correct usage
+    - Instead: Code review + manual testing of the happy path
 
 **When in doubt, ask:**
 
@@ -489,7 +546,7 @@ test('Delegated methods exist', () => {
 
     const delegated = {
         handleX: 'manager.handleX',
-        handleY: 'manager.handleY'
+        handleY: 'manager.handleY',
     };
 
     for (const [methodName, target] of Object.entries(delegated)) {
@@ -580,33 +637,45 @@ For now, inline the pattern as shown in `test_app_init.js`.
 For functions that require DOM APIs (document, TreeWalker, etc.), follow this pattern:
 
 1. **Extract to a utility module** (e.g., `highlight-utils.js`) that takes `document` as a parameter
-2. **Add CommonJS export** at the end for Node.js/test compatibility:
+2. **Use ES module exports** for modern module support:
 
-   ```javascript
-   // At end of file - export for tests (no-op in browser)
-   if (typeof module !== 'undefined' && module.exports) {
-       module.exports = { myFunction };
-   }
-   ```
+    ```javascript
+    // At end of file - ES module export
+    export { myFunction };
 
-3. **Add script tag** in `index.html` before the files that use it
-4. **In tests**, import with require and use jsdom's document:
+    // Also expose to global scope for backwards compatibility
+    if (typeof window !== 'undefined') {
+        window.myFunction = myFunction;
+    }
+    ```
 
-   ```javascript
-   const { myFunction } = require('../src/canvas_chat/static/js/my-utils.js');
-   const { JSDOM } = require('jsdom');
+3. **Add script tag** in `index.html` with `type="module"` if it's an ES module, or regular script tag if it uses global scope
+4. **In tests**, use ES module imports:
 
-   test('myFunction works', () => {
-       const dom = new JSDOM('<!DOCTYPE html><div></div>');
-       const result = myFunction(dom.window.document, '<p>test</p>', 'test');
-       // assertions...
-   });
-   ```
+    ```javascript
+    import { myFunction } from '../src/canvas_chat/static/js/my-utils.js';
+    import { JSDOM } from 'jsdom';
+
+    test('myFunction works', () => {
+        const dom = new JSDOM('<!DOCTYPE html><div></div>');
+        const result = myFunction(dom.window.document, '<p>test</p>', 'test');
+        // assertions...
+    });
+    ```
+
+    Or if the module exposes to global scope, import it for side effects then access via global:
+
+    ```javascript
+    await import('../src/canvas_chat/static/js/my-utils.js');
+    const { myFunction } = global.window;
+    ```
 
 **Existing utility modules:**
 
-- `layout.js` - Pure layout/positioning functions (no DOM needed)
-- `highlight-utils.js` - Text highlighting functions (DOM needed, takes document param)
+- `layout.js` - Pure layout/positioning functions (no DOM needed, global scope)
+- `highlight-utils.js` - Text highlighting functions (DOM needed, takes document param, global scope)
+- `node-registry.js` - Plugin system registry (ES module with global scope fallback)
+- `node-protocols.js` - Node protocol classes (ES module with global scope fallback)
 
 Run tests with:
 
@@ -654,21 +723,21 @@ that are hard to debug because they only appear when the code path is triggered.
 
 1. Search for the method definition in the source file:
 
-   ```bash
-   grep -n "methodName\s*(" static/js/chat.js
-   ```
+    ```bash
+    grep -n "methodName\s*(" static/js/chat.js
+    ```
 
 2. If the method doesn't exist, look for similar methods that do exist, or implement the functionality
    using methods that are documented below.
 
 **Common mistakes (do NOT use these - they don't exist):**
 
-| Wrong (doesn't exist) | Correct alternative |
-| --------------------- | ------------------- |
-| `chat.streamChat()` | Use `chat.sendMessage()` with callbacks |
+| Wrong (doesn't exist)       | Correct alternative                                       |
+| --------------------------- | --------------------------------------------------------- |
+| `chat.streamChat()`         | Use `chat.sendMessage()` with callbacks                   |
 | `canvas.setNodeStreaming()` | Use `canvas.showStopButton()` / `canvas.hideStopButton()` |
-| `canvas.getSelectedNodes()` | Use `canvas.getSelectedNodeIds()` |
-| `storage.getApiKey()` | Use `chat.getApiKeyForModel(model)` |
+| `canvas.getSelectedNodes()` | Use `canvas.getSelectedNodeIds()`                         |
+| `storage.getApiKey()`       | Use `chat.getApiKeyForModel(model)`                       |
 
 **Key methods that DO exist:**
 

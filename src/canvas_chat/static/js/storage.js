@@ -190,7 +190,7 @@ class Storage {
         const exportData = {
             version: 1,
             exported_at: new Date().toISOString(),
-            ...session
+            ...session,
         };
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -226,7 +226,7 @@ class Storage {
                         ...data,
                         id: crypto.randomUUID(),
                         imported_at: Date.now(),
-                        updated_at: Date.now()
+                        updated_at: Date.now(),
                     };
 
                     await this.saveSession(session);
@@ -266,14 +266,14 @@ class Storage {
      */
     _getStorageKeyForProvider(provider) {
         const providerMap = {
-            'openai': 'openai',
-            'anthropic': 'anthropic',
-            'gemini': 'google',
-            'google': 'google',
-            'groq': 'groq',
-            'github': 'github',
-            'github_copilot': 'github',  // Copilot uses the same GitHub token
-            'exa': 'exa'
+            openai: 'openai',
+            anthropic: 'anthropic',
+            gemini: 'google',
+            google: 'google',
+            groq: 'groq',
+            github: 'github',
+            github_copilot: 'github', // Copilot uses the same GitHub token
+            exa: 'exa',
         };
         return providerMap[provider.toLowerCase()] || provider.toLowerCase();
     }
@@ -296,7 +296,7 @@ class Storage {
     hasAnyLLMApiKey() {
         const keys = this.getApiKeys();
         const llmProviders = ['openai', 'anthropic', 'google', 'groq', 'github'];
-        return llmProviders.some(provider => keys[provider] && keys[provider].trim() !== '');
+        return llmProviders.some((provider) => keys[provider] && keys[provider].trim() !== '');
     }
 
     /**
@@ -343,10 +343,7 @@ class Storage {
      */
     isLocalhost() {
         const hostname = window.location.hostname;
-        return hostname === 'localhost' ||
-               hostname === '127.0.0.1' ||
-               hostname === '0.0.0.0' ||
-               hostname === '[::1]';
+        return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '[::1]';
     }
 
     /**
@@ -452,7 +449,7 @@ class Storage {
         const recent = this.getRecentModels();
 
         // Remove if already exists (will re-add at front)
-        const filtered = recent.filter(id => id !== modelId);
+        const filtered = recent.filter((id) => id !== modelId);
 
         // Add to front
         filtered.unshift(modelId);
@@ -516,14 +513,14 @@ class Storage {
         const models = this.getCustomModels();
 
         // Check if model already exists (update) or is new (add)
-        const existingIndex = models.findIndex(m => m.id === model.id);
+        const existingIndex = models.findIndex((m) => m.id === model.id);
 
         const customModel = {
             id: model.id,
-            name: model.name || model.id,  // Default to ID if no name
+            name: model.name || model.id, // Default to ID if no name
             provider: 'Custom',
             context_window: model.context_window || 128000,
-            base_url: model.base_url || null
+            base_url: model.base_url || null,
         };
 
         if (existingIndex >= 0) {
@@ -543,7 +540,7 @@ class Storage {
      */
     deleteCustomModel(modelId) {
         const models = this.getCustomModels();
-        const filtered = models.filter(m => m.id !== modelId);
+        const filtered = models.filter((m) => m.id !== modelId);
         localStorage.setItem('canvas-chat-custom-models', JSON.stringify(filtered));
         return filtered.length < models.length;
     }
@@ -557,7 +554,7 @@ class Storage {
     getBaseUrlForModel(modelId) {
         // Check if this is a custom model with per-model base_url
         const customModels = this.getCustomModels();
-        const customModel = customModels.find(m => m.id === modelId);
+        const customModel = customModels.find((m) => m.id === modelId);
 
         if (customModel && customModel.base_url) {
             return customModel.base_url;
@@ -568,10 +565,7 @@ class Storage {
     }
 }
 
-// Export singleton instance
+// Export class and singleton instance
 const storage = new Storage();
 
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Storage, storage };
-}
+export { Storage, storage };

@@ -78,10 +78,12 @@ class MatrixFeature {
 
         try {
             // Gather content from all selected nodes
-            const contents = selectedIds.map(id => {
-                const node = this.graph.getNode(id);
-                return node ? node.content : '';
-            }).filter(c => c);
+            const contents = selectedIds
+                .map((id) => {
+                    const node = this.graph.getNode(id);
+                    return node ? node.content : '';
+                })
+                .filter((c) => c);
 
             // Parse two lists from all context nodes
             const result = await this.parseTwoLists(contents, matrixContext, model);
@@ -102,7 +104,7 @@ class MatrixFeature {
                 context: matrixContext,
                 contextNodeIds: selectedIds,
                 rowItems: rowItems.slice(0, 10),
-                colItems: colItems.slice(0, 10)
+                colItems: colItems.slice(0, 10),
             };
 
             // Populate axis items in modal
@@ -111,7 +113,6 @@ class MatrixFeature {
 
             document.getElementById('row-count').textContent = `${this._matrixData.rowItems.length} items`;
             document.getElementById('col-count').textContent = `${this._matrixData.colItems.length} items`;
-
         } catch (err) {
             document.getElementById('matrix-loading').style.display = 'none';
             alert(`Failed to parse list items: ${err.message}`);
@@ -122,13 +123,13 @@ class MatrixFeature {
     async parseTwoLists(contents, context, model) {
         const requestBody = this.buildLLMRequest({
             contents,
-            context
+            context,
         });
 
         const response = await fetch(apiUrl('/api/parse-two-lists'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
@@ -146,9 +147,7 @@ class MatrixFeature {
         const isEdit = containerId.startsWith('edit-');
         const isRow = containerId.includes('row');
         const dataSource = isEdit ? this._editMatrixData : this._matrixData;
-        const countId = isEdit
-            ? (isRow ? 'edit-row-count' : 'edit-col-count')
-            : (isRow ? 'row-count' : 'col-count');
+        const countId = isEdit ? (isRow ? 'edit-row-count' : 'edit-col-count') : isRow ? 'row-count' : 'col-count';
         const items = dataSource ? (isRow ? dataSource.rowItems : dataSource.colItems) : null;
         return { dataSource, items, countId, isRow };
     }
@@ -226,7 +225,7 @@ class MatrixFeature {
         // Swap row and column data
         const temp = {
             nodeId: this._matrixData.rowNodeId,
-            items: this._matrixData.rowItems
+            items: this._matrixData.rowItems,
         };
 
         this._matrixData.rowNodeId = this._matrixData.colNodeId;
@@ -266,7 +265,7 @@ class MatrixFeature {
         }
 
         // Get context nodes for positioning
-        const contextNodes = contextNodeIds.map(id => this.graph.getNode(id)).filter(Boolean);
+        const contextNodes = contextNodeIds.map((id) => this.graph.getNode(id)).filter(Boolean);
 
         if (contextNodes.length === 0) {
             alert('No valid context nodes found');
@@ -274,11 +273,11 @@ class MatrixFeature {
         }
 
         // Position matrix to the right of all context nodes, centered vertically
-        const maxX = Math.max(...contextNodes.map(n => n.position.x));
+        const maxX = Math.max(...contextNodes.map((n) => n.position.x));
         const avgY = contextNodes.reduce((sum, n) => sum + n.position.y, 0) / contextNodes.length;
         const position = {
             x: maxX + 450,
-            y: avgY
+            y: avgY,
         };
 
         // Create matrix node
@@ -330,7 +329,7 @@ class MatrixFeature {
 
         // Track this cell fill for stop button support
         const cellKey = `${row}-${col}`;
-        const isStandaloneFill = !abortController;  // Not called from Fill All
+        const isStandaloneFill = !abortController; // Not called from Fill All
 
         if (isStandaloneFill) {
             abortController = new AbortController();
@@ -352,14 +351,14 @@ class MatrixFeature {
                 row_item: rowItem,
                 col_item: colItem,
                 context: context,
-                messages: buildMessagesForApi(messages)
+                messages: buildMessagesForApi(messages),
             });
 
             // Prepare fetch options with optional abort signal
             const fetchOptions = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify(requestBody),
             };
 
             if (abortController) {
@@ -377,7 +376,7 @@ class MatrixFeature {
             let cellContent = '';
             // Throttle state for streaming sync
             let lastStreamSync = 0;
-            const streamSyncInterval = 50;  // Sync every 50ms during streaming
+            const streamSyncInterval = 50; // Sync every 50ms during streaming
 
             await SSE.streamSSEContent(response, {
                 onContent: (chunk, fullContent) => {
@@ -401,7 +400,7 @@ class MatrixFeature {
                 },
                 onError: (err) => {
                     throw err;
-                }
+                },
             });
 
             // Update the graph data - re-read node to get current state
@@ -421,11 +420,10 @@ class MatrixFeature {
                 row,
                 col,
                 oldCell,
-                newCell
+                newCell,
             });
 
             this.saveSession();
-
         } catch (err) {
             // Don't log abort errors as failures
             if (err.name === 'AbortError') {
@@ -466,7 +464,7 @@ class MatrixFeature {
             col,
             rowItem,
             colItem,
-            content: cell.content
+            content: cell.content,
         };
 
         // Populate and show modal
@@ -501,7 +499,7 @@ class MatrixFeature {
 
         // Fill all cells in parallel - each cell handles its own tracking/cleanup
         const fillPromises = emptyCells.map(({ row, col }) => {
-            return this.handleMatrixCellFill(nodeId, row, col).catch(err => {
+            return this.handleMatrixCellFill(nodeId, row, col).catch((err) => {
                 if (err.name !== 'AbortError') {
                     console.error(`Failed to fill cell (${row}, ${col}):`, err);
                 }
@@ -522,7 +520,7 @@ class MatrixFeature {
         this._editMatrixData = {
             nodeId,
             rowItems: [...matrixNode.rowItems],
-            colItems: [...matrixNode.colItems]
+            colItems: [...matrixNode.colItems],
         };
 
         // Populate the edit modal (reuses unified populateAxisItems)
@@ -588,7 +586,7 @@ class MatrixFeature {
         this.graph.updateNode(nodeId, {
             rowItems,
             colItems,
-            cells: newCells
+            cells: newCells,
         });
 
         // Re-render the node
@@ -613,9 +611,9 @@ class MatrixFeature {
         const cellNode = createCellNode(matrixId, row, col, rowItem, colItem, content, {
             position: {
                 x: matrixNode.position.x + (matrixNode.width || 500) + 50,
-                y: matrixNode.position.y + (row * 60)
+                y: matrixNode.position.y + row * 60,
             },
-            title: cellTitle
+            title: cellTitle,
         });
 
         this.graph.addNode(cellNode);
@@ -673,7 +671,7 @@ class MatrixFeature {
             index: rowIndex,
             item: rowItem,
             otherAxisItems: colItems,
-            cellContents: cellContents
+            cellContents: cellContents,
         };
 
         // Populate and show modal
@@ -716,7 +714,7 @@ class MatrixFeature {
             index: colIndex,
             item: colItem,
             otherAxisItems: rowItems,
-            cellContents: cellContents
+            cellContents: cellContents,
         };
 
         // Populate and show modal
@@ -742,17 +740,17 @@ class MatrixFeature {
             sliceNode = createRowNode(matrixId, index, item, otherAxisItems, cellContents, {
                 position: {
                     x: matrixNode.position.x + (matrixNode.width || 500) + 50,
-                    y: matrixNode.position.y + (index * 60)
+                    y: matrixNode.position.y + index * 60,
                 },
-                title: item
+                title: item,
             });
         } else {
             sliceNode = createColumnNode(matrixId, index, item, otherAxisItems, cellContents, {
                 position: {
                     x: matrixNode.position.x + (matrixNode.width || 500) + 50,
-                    y: matrixNode.position.y + (index * 60)
+                    y: matrixNode.position.y + index * 60,
                 },
-                title: item
+                title: item,
             });
         }
 
@@ -824,5 +822,4 @@ class MatrixFeature {
     }
 }
 
-// Export for browser global access
-window.MatrixFeature = MatrixFeature;
+export { MatrixFeature };

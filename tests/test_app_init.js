@@ -26,7 +26,7 @@ const vm = require('vm');
 const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
     pretendToBeVisual: true,
-    resources: 'usable'
+    resources: 'usable',
 });
 
 global.window = dom.window;
@@ -38,7 +38,7 @@ global.window.Y = {
     Doc: class {},
     Map: class {},
     Text: class {},
-    Array: class {}
+    Array: class {},
 };
 global.window.IndexeddbPersistence = class {};
 global.window.WebrtcProvider = class {};
@@ -56,7 +56,7 @@ global.storage = {
     getSession: () => Promise.resolve(null),
     deleteSession: () => Promise.resolve(),
     hasAnyLLMApiKey: () => false,
-    isLocalhost: () => false
+    isLocalhost: () => false,
 };
 
 // Mock chat
@@ -65,7 +65,7 @@ global.chat = {
     getApiKeyForModel: () => null,
     getBaseUrlForModel: () => null,
     fetchModels: () => Promise.resolve([]),
-    fetchProviderModels: () => Promise.resolve([])
+    fetchProviderModels: () => Promise.resolve([]),
 };
 
 // Mock SearchIndex
@@ -75,7 +75,9 @@ global.SearchIndex = class {
     }
     addNode() {}
     removeNode() {}
-    search() { return []; }
+    search() {
+        return [];
+    }
 };
 
 // Mock Canvas
@@ -96,7 +98,9 @@ global.Canvas = class {
     hideStopButton() {}
     showContinueButton() {}
     hideContinueButton() {}
-    getSelectedNodeIds() { return []; }
+    getSelectedNodeIds() {
+        return [];
+    }
     clearSelection() {}
     selectNode() {}
     centerOnAnimated() {}
@@ -104,10 +108,16 @@ global.Canvas = class {
     highlightNodesByTag() {}
     updateAllNavButtonStates() {}
     updateAllEdges() {}
-    renderMarkdown() { return ''; }
-    truncate() { return ''; }
+    renderMarkdown() {
+        return '';
+    }
+    truncate() {
+        return '';
+    }
     emit() {}
-    on() { return this; }
+    on() {
+        return this;
+    }
     fitToContent() {}
     showCanvasHint() {}
     showNodeError() {}
@@ -124,28 +134,58 @@ global.CRDTGraph = class {
         this.nodes = new Map();
         this.edges = [];
     }
-    enablePersistence() { return Promise.resolve(); }
-    isEmpty() { return true; }
-    getAllNodes() { return []; }
-    getNode() { return null; }
+    enablePersistence() {
+        return Promise.resolve();
+    }
+    isEmpty() {
+        return true;
+    }
+    getAllNodes() {
+        return [];
+    }
+    getNode() {
+        return null;
+    }
     addNode() {}
     addEdge() {}
     updateNode() {}
     removeNode() {}
-    getParents() { return []; }
-    getChildren() { return []; }
-    getLeafNodes() { return []; }
-    resolveContext() { return []; }
-    autoPosition() { return { x: 0, y: 0 }; }
-    getMultiplayerStatus() { return { enabled: false }; }
+    getParents() {
+        return [];
+    }
+    getChildren() {
+        return [];
+    }
+    getLeafNodes() {
+        return [];
+    }
+    resolveContext() {
+        return [];
+    }
+    autoPosition() {
+        return { x: 0, y: 0 };
+    }
+    getMultiplayerStatus() {
+        return { enabled: false };
+    }
     disableMultiplayer() {}
-    isNodeLockedByOther() { return false; }
-    lockNode() { return true; }
+    isNodeLockedByOther() {
+        return false;
+    }
+    lockNode() {
+        return true;
+    }
     unlockNode() {}
     releaseAllLocks() {}
-    getAllTags() { return {}; }
-    getTag() { return null; }
-    nodeHasTag() { return false; }
+    getAllTags() {
+        return {};
+    }
+    getTag() {
+        return null;
+    }
+    nodeHasTag() {
+        return false;
+    }
     createTag() {}
     updateTag() {}
     deleteTag() {}
@@ -153,11 +193,28 @@ global.CRDTGraph = class {
 
 // Mock NodeType and createNode
 global.NodeType = {
-    HUMAN: 'human', AI: 'ai', NOTE: 'note', SUMMARY: 'summary', REFERENCE: 'reference',
-    SEARCH: 'search', RESEARCH: 'research', HIGHLIGHT: 'highlight', MATRIX: 'matrix',
-    CELL: 'cell', ROW: 'row', COLUMN: 'column', FETCH_RESULT: 'fetch_result',
-    PDF: 'pdf', OPINION: 'opinion', SYNTHESIS: 'synthesis', REVIEW: 'review', IMAGE: 'image',
-    FLASHCARD: 'flashcard', FACTCHECK: 'factcheck', CSV: 'csv', CODE: 'code'
+    HUMAN: 'human',
+    AI: 'ai',
+    NOTE: 'note',
+    SUMMARY: 'summary',
+    REFERENCE: 'reference',
+    SEARCH: 'search',
+    RESEARCH: 'research',
+    HIGHLIGHT: 'highlight',
+    MATRIX: 'matrix',
+    CELL: 'cell',
+    ROW: 'row',
+    COLUMN: 'column',
+    FETCH_RESULT: 'fetch_result',
+    PDF: 'pdf',
+    OPINION: 'opinion',
+    SYNTHESIS: 'synthesis',
+    REVIEW: 'review',
+    IMAGE: 'image',
+    FLASHCARD: 'flashcard',
+    FACTCHECK: 'factcheck',
+    CSV: 'csv',
+    CODE: 'code',
 };
 
 global.createNode = () => ({ id: 'test', type: NodeType.NOTE, content: '', position: { x: 0, y: 0 } });
@@ -222,7 +279,11 @@ loadSourceFile('highlight-utils.js');
 loadSourceFile('event-emitter.js');
 loadSourceFile('graph-types.js');
 loadSourceFile('crdt-graph.js');
-loadSourceFile('node-protocols.js');
+
+// Import ES modules (node-registry and node-protocols)
+await import('../src/canvas_chat/static/js/node-registry.js');
+await import('../src/canvas_chat/static/js/node-protocols.js');
+
 loadSourceFile('canvas.js');
 loadSourceFile('chat.js');
 loadSourceFile('utils.js');
@@ -307,7 +368,7 @@ test('App event listener methods exist', () => {
         handleNodeEditCode: 'modalManager.handleNodeEditCode',
         handlePdfDrop: 'fileUploadHandler.handlePdfDrop',
         handleImageDrop: 'fileUploadHandler.handleImageDrop',
-        handleCsvDrop: 'fileUploadHandler.handleCsvDrop'
+        handleCsvDrop: 'fileUploadHandler.handleCsvDrop',
     };
 
     // Methods that should exist directly on App class
@@ -355,13 +416,13 @@ test('App event listener methods exist', () => {
         'handleNodeGenerateSubmit',
         'handleNodeOutputToggle',
         'handleNodeOutputClear',
-        'handleNodeOutputResize'
+        'handleNodeOutputResize',
     ];
 
     // Override init() to only set up canvas event listeners (the part that would fail)
     // We call setupCanvasEventListeners() which is the actual method from app.js
     // This eliminates duplication - we're testing the real code!
-    window.App.prototype.init = async function() {
+    window.App.prototype.init = async function () {
         // Initialize canvas (will use our mock)
         this.canvas = new Canvas('canvas-container', 'canvas');
 
@@ -372,7 +433,9 @@ test('App event listener methods exist', () => {
             this.setupCanvasEventListeners();
         } catch (err) {
             // If .bind() fails, it means the method doesn't exist
-            throw new Error(`Failed to bind event listener: ${err.message}. This usually means a method was moved to another class but the event listener wasn't updated.`);
+            throw new Error(
+                `Failed to bind event listener: ${err.message}. This usually means a method was moved to another class but the event listener wasn't updated.`
+            );
         }
     };
 
@@ -382,7 +445,9 @@ test('App event listener methods exist', () => {
         // Test direct methods exist
         for (const methodName of DIRECT_METHODS) {
             if (typeof app[methodName] !== 'function') {
-                throw new Error(`Method ${methodName} is not a function (might have been moved to another class - check DELEGATED_METHODS)`);
+                throw new Error(
+                    `Method ${methodName} is not a function (might have been moved to another class - check DELEGATED_METHODS)`
+                );
             }
         }
 
@@ -396,7 +461,9 @@ test('App event listener methods exist', () => {
             }
 
             if (typeof targetObj[targetMethod] !== 'function') {
-                throw new Error(`Delegated method ${methodName} -> ${target} is not a function. Method might have been moved but reference wasn't updated.`);
+                throw new Error(
+                    `Delegated method ${methodName} -> ${target} is not a function. Method might have been moved but reference wasn't updated.`
+                );
             }
         }
     } finally {
@@ -416,19 +483,19 @@ test('ModalManager methods are accessible', () => {
     try {
         app = new window.App();
 
-    // Verify modal manager methods exist
-    if (typeof app.modalManager.showSettingsModal !== 'function') {
-        throw new Error('modalManager.showSettingsModal is not a function');
-    }
-    if (typeof app.modalManager.handleNodeTitleEdit !== 'function') {
-        throw new Error('modalManager.handleNodeTitleEdit is not a function');
-    }
-    if (typeof app.modalManager.handleNodeEditContent !== 'function') {
-        throw new Error('modalManager.handleNodeEditContent is not a function');
-    }
-    if (typeof app.modalManager.handleNodeEditCode !== 'function') {
-        throw new Error('modalManager.handleNodeEditCode is not a function');
-    }
+        // Verify modal manager methods exist
+        if (typeof app.modalManager.showSettingsModal !== 'function') {
+            throw new Error('modalManager.showSettingsModal is not a function');
+        }
+        if (typeof app.modalManager.handleNodeTitleEdit !== 'function') {
+            throw new Error('modalManager.handleNodeTitleEdit is not a function');
+        }
+        if (typeof app.modalManager.handleNodeEditContent !== 'function') {
+            throw new Error('modalManager.handleNodeEditContent is not a function');
+        }
+        if (typeof app.modalManager.handleNodeEditCode !== 'function') {
+            throw new Error('modalManager.handleNodeEditCode is not a function');
+        }
     } finally {
         // Restore original init
         window.App.prototype.init = originalInit;
@@ -445,15 +512,15 @@ test('FileUploadHandler methods are accessible', () => {
     try {
         app = new window.App();
 
-    if (typeof app.fileUploadHandler.handlePdfUpload !== 'function') {
-        throw new Error('fileUploadHandler.handlePdfUpload is not a function');
-    }
-    if (typeof app.fileUploadHandler.handleImageUpload !== 'function') {
-        throw new Error('fileUploadHandler.handleImageUpload is not a function');
-    }
-    if (typeof app.fileUploadHandler.handleCsvUpload !== 'function') {
-        throw new Error('fileUploadHandler.handleCsvUpload is not a function');
-    }
+        if (typeof app.fileUploadHandler.handlePdfUpload !== 'function') {
+            throw new Error('fileUploadHandler.handlePdfUpload is not a function');
+        }
+        if (typeof app.fileUploadHandler.handleImageUpload !== 'function') {
+            throw new Error('fileUploadHandler.handleImageUpload is not a function');
+        }
+        if (typeof app.fileUploadHandler.handleCsvUpload !== 'function') {
+            throw new Error('fileUploadHandler.handleCsvUpload is not a function');
+        }
     } finally {
         // Restore original init
         window.App.prototype.init = originalInit;

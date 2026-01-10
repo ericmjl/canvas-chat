@@ -1,3 +1,4 @@
+/* global NodeType, DEFAULT_NODE_SIZES */
 /**
  * Node Protocol Pattern
  *
@@ -6,20 +7,30 @@
  * scattered across canvas.js and app.js with if (node.type === ...) checks.
  */
 
+import { NodeRegistry } from './node-registry.js';
+
 /**
  * Action button definitions for node action bars
  */
 // Detect platform for keyboard shortcuts
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 const modKey = isMac ? '⌘' : 'Ctrl';
-const modKeyLong = isMac ? 'Cmd' : 'Ctrl';  // For longer tooltips
+const modKeyLong = isMac ? 'Cmd' : 'Ctrl'; // For longer tooltips
 
 const Actions = {
     REPLY: { id: 'reply', label: '↩️ Reply (r)', title: 'Reply (r)' },
     BRANCH: { id: 'branch', label: '🌿 Branch', title: 'Branch from selection' },
     SUMMARIZE: { id: 'summarize', label: '📝 Summarize', title: 'Summarize' },
-    FETCH_SUMMARIZE: { id: 'fetch-summarize', label: '📄 Fetch & Summarize', title: 'Fetch full content and summarize' },
-    EDIT_CONTENT: { id: 'edit-content', label: '✏️ Edit (e)', title: `Edit content (e, save with ${modKeyLong}+Enter)` },
+    FETCH_SUMMARIZE: {
+        id: 'fetch-summarize',
+        label: '📄 Fetch & Summarize',
+        title: 'Fetch full content and summarize',
+    },
+    EDIT_CONTENT: {
+        id: 'edit-content',
+        label: '✏️ Edit (e)',
+        title: `Edit content (e, save with ${modKeyLong}+Enter)`,
+    },
     RESUMMARIZE: { id: 'resummarize', label: '📝 Re-summarize', title: 'Create new summary from edited content' },
     COPY: { id: 'copy', label: '📋 Copy (c)', title: 'Copy (c)' },
     FLIP_CARD: { id: 'flip-card', label: '🔄 Flip', title: 'Flip card to see answer' },
@@ -28,7 +39,7 @@ const Actions = {
     ANALYZE: { id: 'analyze', label: '🔬 Analyze (⇧A)', title: 'Generate code to analyze this data (Shift+A)' },
     EDIT_CODE: { id: 'edit-code', label: '✏️ Edit (e)', title: `Edit code (e, save with ${modKeyLong}+Enter)` },
     GENERATE: { id: 'generate', label: '✨ AI (⇧A)', title: 'Generate code with AI (Shift+A)' },
-    RUN_CODE: { id: 'run-code', label: `▶️ Run (${modKey}↵)`, title: `Execute code (${modKeyLong}+Enter)` }
+    RUN_CODE: { id: 'run-code', label: `▶️ Run (${modKey}↵)`, title: `Execute code (${modKeyLong}+Enter)` },
 };
 
 /**
@@ -42,7 +53,7 @@ const HeaderButtons = {
     CONTINUE: { id: 'continue', label: '▶', title: 'Continue generating', hidden: true },
     RESET_SIZE: { id: 'reset-size', label: '↺', title: 'Reset to default size' },
     FIT_VIEWPORT: { id: 'fit-viewport', label: '⤢', title: 'Fit to viewport (f)' },
-    DELETE: { id: 'delete', label: '🗑️', title: 'Delete node' }
+    DELETE: { id: 'delete', label: '🗑️', title: 'Delete node' },
 };
 
 /**
@@ -114,7 +125,7 @@ class BaseNode {
             HeaderButtons.COLLAPSE,
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE
+            HeaderButtons.DELETE,
         ];
     }
 
@@ -148,22 +159,49 @@ class BaseNode {
     getContentClasses() {
         return '';
     }
+
+    /**
+     * Get custom event bindings for this node type.
+     * Override in subclasses that need type-specific event handlers.
+     *
+     * Return format: Array of binding objects with:
+     * - selector: CSS selector within the node
+     * - event: Event name (default: 'click')
+     * - handler: Function (nodeId, event, canvas) => void OR
+     *            string event name to emit (canvas.emit(eventName, nodeId, ...args))
+     * - multiple: If true, binds to all matching elements (default: false, first only)
+     * - getData: Optional function (element) => extraArgs to pass to handler/emit
+     *
+     * @returns {Array<{selector: string, event?: string, handler: Function|string, multiple?: boolean, getData?: Function}>}
+     */
+    getEventBindings() {
+        // Base class has no custom bindings - common bindings handled by canvas.js
+        return [];
+    }
 }
 
 /**
  * Human message node
  */
 class HumanNode extends BaseNode {
-    getTypeLabel() { return 'You'; }
-    getTypeIcon() { return '💬'; }
+    getTypeLabel() {
+        return 'You';
+    }
+    getTypeIcon() {
+        return '💬';
+    }
 }
 
 /**
  * AI response node
  */
 class AINode extends BaseNode {
-    getTypeLabel() { return 'AI'; }
-    getTypeIcon() { return '🤖'; }
+    getTypeLabel() {
+        return 'AI';
+    }
+    getTypeIcon() {
+        return '🤖';
+    }
 
     getActions() {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
@@ -178,7 +216,7 @@ class AINode extends BaseNode {
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE
+            HeaderButtons.DELETE,
         ];
     }
 }
@@ -187,8 +225,12 @@ class AINode extends BaseNode {
  * Note node
  */
 class NoteNode extends BaseNode {
-    getTypeLabel() { return 'Note'; }
-    getTypeIcon() { return '📝'; }
+    getTypeLabel() {
+        return 'Note';
+    }
+    getTypeIcon() {
+        return '📝';
+    }
 
     getActions() {
         return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.CREATE_FLASHCARDS, Actions.COPY];
@@ -199,8 +241,12 @@ class NoteNode extends BaseNode {
  * Summary node
  */
 class SummaryNode extends BaseNode {
-    getTypeLabel() { return 'Summary'; }
-    getTypeIcon() { return '📋'; }
+    getTypeLabel() {
+        return 'Summary';
+    }
+    getTypeIcon() {
+        return '📋';
+    }
 
     getActions() {
         return [Actions.REPLY, Actions.CREATE_FLASHCARDS, Actions.COPY];
@@ -211,8 +257,12 @@ class SummaryNode extends BaseNode {
  * Reference node (link to external content)
  */
 class ReferenceNode extends BaseNode {
-    getTypeLabel() { return 'Reference'; }
-    getTypeIcon() { return '🔗'; }
+    getTypeLabel() {
+        return 'Reference';
+    }
+    getTypeIcon() {
+        return '🔗';
+    }
 
     getActions() {
         return [Actions.REPLY, Actions.FETCH_SUMMARIZE, Actions.COPY];
@@ -223,27 +273,35 @@ class ReferenceNode extends BaseNode {
  * Search query node
  */
 class SearchNode extends BaseNode {
-    getTypeLabel() { return 'Search'; }
-    getTypeIcon() { return '🔍'; }
+    getTypeLabel() {
+        return 'Search';
+    }
+    getTypeIcon() {
+        return '🔍';
+    }
 }
 
 /**
  * Research node (deep research with multiple sources)
  */
 class ResearchNode extends BaseNode {
-    getTypeLabel() { return 'Research'; }
-    getTypeIcon() { return '📚'; }
+    getTypeLabel() {
+        return 'Research';
+    }
+    getTypeIcon() {
+        return '📚';
+    }
 
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,
             HeaderButtons.NAV_CHILD,
             HeaderButtons.COLLAPSE,
-            HeaderButtons.STOP,  // For stopping research generation
-            HeaderButtons.CONTINUE,  // For continuing stopped research
+            HeaderButtons.STOP, // For stopping research generation
+            HeaderButtons.CONTINUE, // For continuing stopped research
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE
+            HeaderButtons.DELETE,
         ];
     }
 
@@ -256,8 +314,12 @@ class ResearchNode extends BaseNode {
  * Highlight node (excerpted text or image from another node)
  */
 class HighlightNode extends BaseNode {
-    getTypeLabel() { return 'Highlight'; }
-    getTypeIcon() { return '✨'; }
+    getTypeLabel() {
+        return 'Highlight';
+    }
+    getTypeIcon() {
+        return '✨';
+    }
 
     renderContent(canvas) {
         // If has image data, render image; otherwise render markdown
@@ -273,18 +335,22 @@ class HighlightNode extends BaseNode {
  * Matrix node (cross-product evaluation table)
  */
 class MatrixNode extends BaseNode {
-    getTypeLabel() { return 'Matrix'; }
-    getTypeIcon() { return '📊'; }
+    getTypeLabel() {
+        return 'Matrix';
+    }
+    getTypeIcon() {
+        return '📊';
+    }
 
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,
             HeaderButtons.NAV_CHILD,
             HeaderButtons.COLLAPSE,
-            HeaderButtons.STOP,  // For stopping cell fills
+            HeaderButtons.STOP, // For stopping cell fills
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE
+            HeaderButtons.DELETE,
         ];
     }
 
@@ -398,6 +464,86 @@ class MatrixNode extends BaseNode {
         await navigator.clipboard.writeText(text);
         canvas.showCopyFeedback(this.node.id);
     }
+
+    /**
+     * Matrix-specific event bindings for cells, headers, and actions
+     */
+    getEventBindings() {
+        return [
+            // Matrix cells - view filled or fill empty
+            {
+                selector: '.matrix-cell',
+                multiple: true,
+                handler: (nodeId, e, canvas) => {
+                    const cell = e.currentTarget;
+                    const row = parseInt(cell.dataset.row);
+                    const col = parseInt(cell.dataset.col);
+                    if (cell.classList.contains('filled')) {
+                        canvas.emit('matrixCellView', nodeId, row, col);
+                    } else {
+                        canvas.emit('matrixCellFill', nodeId, row, col);
+                    }
+                },
+            },
+            // Edit button
+            {
+                selector: '.matrix-edit-btn',
+                handler: 'matrixEdit',
+            },
+            // Fill all button
+            {
+                selector: '.matrix-fill-all-btn',
+                handler: 'matrixFillAll',
+            },
+            // Copy context button
+            {
+                selector: '.matrix-context-copy',
+                handler: async (nodeId, e, canvas) => {
+                    const btn = e.currentTarget;
+                    try {
+                        const node = canvas.graph?.getNode(nodeId);
+                        if (node?.context) {
+                            await navigator.clipboard.writeText(node.context);
+                            const originalText = btn.textContent;
+                            btn.textContent = '✓';
+                            setTimeout(() => {
+                                btn.textContent = originalText;
+                            }, 1500);
+                        }
+                    } catch (err) {
+                        console.error('Failed to copy:', err);
+                    }
+                },
+            },
+            // Row headers - extract row
+            {
+                selector: '.row-header[data-row]',
+                multiple: true,
+                handler: (nodeId, e, canvas) => {
+                    const row = parseInt(e.currentTarget.dataset.row);
+                    canvas.emit('matrixRowExtract', nodeId, row);
+                },
+            },
+            // Column headers - extract column
+            {
+                selector: '.col-header[data-col]',
+                multiple: true,
+                handler: (nodeId, e, canvas) => {
+                    const col = parseInt(e.currentTarget.dataset.col);
+                    canvas.emit('matrixColExtract', nodeId, col);
+                },
+            },
+            // Index column resize handle
+            {
+                selector: '.index-col-resize-handle',
+                event: 'mousedown',
+                handler: (nodeId, e, canvas) => {
+                    const div = e.currentTarget.closest('.node');
+                    canvas.startIndexColResize(e, nodeId, div);
+                },
+            },
+        ];
+    }
 }
 
 /**
@@ -408,31 +554,45 @@ class CellNode extends BaseNode {
         // For contextual labels like "GPT-4 × Accuracy"
         return this.node.title || 'Cell';
     }
-    getTypeIcon() { return '📦'; }
+    getTypeIcon() {
+        return '📦';
+    }
 }
 
 /**
  * Row node (extracted row from a matrix)
  */
 class RowNode extends BaseNode {
-    getTypeLabel() { return 'Row'; }
-    getTypeIcon() { return '↔️'; }
+    getTypeLabel() {
+        return 'Row';
+    }
+    getTypeIcon() {
+        return '↔️';
+    }
 }
 
 /**
  * Column node (extracted column from a matrix)
  */
 class ColumnNode extends BaseNode {
-    getTypeLabel() { return 'Column'; }
-    getTypeIcon() { return '↕️'; }
+    getTypeLabel() {
+        return 'Column';
+    }
+    getTypeIcon() {
+        return '↕️';
+    }
 }
 
 /**
  * Fetch result node (fetched content from URL via Exa)
  */
 class FetchResultNode extends BaseNode {
-    getTypeLabel() { return 'Fetched Content'; }
-    getTypeIcon() { return '📄'; }
+    getTypeLabel() {
+        return 'Fetched Content';
+    }
+    getTypeIcon() {
+        return '📄';
+    }
 
     getActions() {
         return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.RESUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
@@ -443,8 +603,12 @@ class FetchResultNode extends BaseNode {
  * PDF node (imported PDF document)
  */
 class PdfNode extends BaseNode {
-    getTypeLabel() { return 'PDF'; }
-    getTypeIcon() { return '📑'; }
+    getTypeLabel() {
+        return 'PDF';
+    }
+    getTypeIcon() {
+        return '📑';
+    }
 
     getActions() {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
@@ -455,8 +619,12 @@ class PdfNode extends BaseNode {
  * CSV node (uploaded CSV data for analysis)
  */
 class CsvNode extends BaseNode {
-    getTypeLabel() { return 'CSV'; }
-    getTypeIcon() { return '📊'; }
+    getTypeLabel() {
+        return 'CSV';
+    }
+    getTypeIcon() {
+        return '📊';
+    }
 
     getSummaryText(canvas) {
         if (this.node.title) return this.node.title;
@@ -476,7 +644,7 @@ class CsvNode extends BaseNode {
         html += `<strong>${canvas.escapeHtml(filename)}</strong> — `;
         html += `${rowCount} rows × ${colCount} columns`;
         if (columns.length > 0) {
-            html += `<br><span class="csv-columns">Columns: ${columns.map(c => canvas.escapeHtml(c)).join(', ')}</span>`;
+            html += `<br><span class="csv-columns">Columns: ${columns.map((c) => canvas.escapeHtml(c)).join(', ')}</span>`;
         }
         html += `</div>`;
 
@@ -497,14 +665,18 @@ class CsvNode extends BaseNode {
  * Code node (Python code for execution with Pyodide)
  */
 class CodeNode extends BaseNode {
-    getTypeLabel() { return 'Code'; }
-    getTypeIcon() { return '🐍'; }
+    getTypeLabel() {
+        return 'Code';
+    }
+    getTypeIcon() {
+        return '🐍';
+    }
 
     getSummaryText(canvas) {
         if (this.node.title) return this.node.title;
         // Show first meaningful line of code
         const code = this.node.code || this.node.content || '';
-        const firstLine = code.split('\n').find(line => line.trim() && !line.trim().startsWith('#')) || 'Python code';
+        const firstLine = code.split('\n').find((line) => line.trim() && !line.trim().startsWith('#')) || 'Python code';
         return canvas.truncate(firstLine.trim(), 50);
     }
 
@@ -613,7 +785,28 @@ class CodeNode extends BaseNode {
             HeaderButtons.COLLAPSE,
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE
+            HeaderButtons.DELETE,
+        ];
+    }
+
+    /**
+     * Code-specific event bindings for syntax highlighting initialization
+     */
+    getEventBindings() {
+        return [
+            // Initialize syntax highlighting after render
+            {
+                selector: '.code-display',
+                event: 'init', // Special event: called after render, not a DOM event
+                handler: (nodeId, e, canvas) => {
+                    if (window.hljs) {
+                        const codeEl = e.currentTarget.querySelector('code');
+                        if (codeEl) {
+                            window.hljs.highlightElement(codeEl);
+                        }
+                    }
+                },
+            },
         ];
     }
 }
@@ -622,8 +815,12 @@ class CodeNode extends BaseNode {
  * Opinion node (committee member's opinion)
  */
 class OpinionNode extends BaseNode {
-    getTypeLabel() { return 'Opinion'; }
-    getTypeIcon() { return '🗣️'; }
+    getTypeLabel() {
+        return 'Opinion';
+    }
+    getTypeIcon() {
+        return '🗣️';
+    }
 
     getActions() {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
@@ -638,7 +835,7 @@ class OpinionNode extends BaseNode {
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE
+            HeaderButtons.DELETE,
         ];
     }
 }
@@ -647,8 +844,12 @@ class OpinionNode extends BaseNode {
  * Synthesis node (chairman's synthesized answer)
  */
 class SynthesisNode extends BaseNode {
-    getTypeLabel() { return 'Synthesis'; }
-    getTypeIcon() { return '⚖️'; }
+    getTypeLabel() {
+        return 'Synthesis';
+    }
+    getTypeIcon() {
+        return '⚖️';
+    }
 
     getActions() {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
@@ -663,7 +864,7 @@ class SynthesisNode extends BaseNode {
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE
+            HeaderButtons.DELETE,
         ];
     }
 }
@@ -672,8 +873,12 @@ class SynthesisNode extends BaseNode {
  * Review node (committee member's review of other opinions)
  */
 class ReviewNode extends BaseNode {
-    getTypeLabel() { return 'Review'; }
-    getTypeIcon() { return '🔍'; }
+    getTypeLabel() {
+        return 'Review';
+    }
+    getTypeIcon() {
+        return '🔍';
+    }
 
     getActions() {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
@@ -688,7 +893,7 @@ class ReviewNode extends BaseNode {
             HeaderButtons.CONTINUE,
             HeaderButtons.RESET_SIZE,
             HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE
+            HeaderButtons.DELETE,
         ];
     }
 }
@@ -697,8 +902,12 @@ class ReviewNode extends BaseNode {
  * Factcheck node (claim verification with verdicts)
  */
 class FactcheckNode extends BaseNode {
-    getTypeLabel() { return 'Factcheck'; }
-    getTypeIcon() { return '🔍'; }
+    getTypeLabel() {
+        return 'Factcheck';
+    }
+    getTypeIcon() {
+        return '🔍';
+    }
 
     getSummaryText(canvas) {
         const claims = this.node.claims || [];
@@ -714,26 +923,30 @@ class FactcheckNode extends BaseNode {
         }
 
         // Render accordion-style claims
-        const claimsHtml = claims.map((claim, index) => {
-            const badge = this.getVerdictBadge(claim.status);
-            const statusClass = claim.status || 'checking';
-            const isChecking = claim.status === 'checking';
+        const claimsHtml = claims
+            .map((claim, index) => {
+                const badge = this.getVerdictBadge(claim.status);
+                const statusClass = claim.status || 'checking';
+                const isChecking = claim.status === 'checking';
 
-            let detailsHtml = '';
-            if (!isChecking && claim.explanation) {
-                const sourcesHtml = (claim.sources || []).map(s =>
-                    `<a href="${canvas.escapeHtml(s.url)}" target="_blank" rel="noopener">${canvas.escapeHtml(s.title || s.url)}</a>`
-                ).join(', ');
+                let detailsHtml = '';
+                if (!isChecking && claim.explanation) {
+                    const sourcesHtml = (claim.sources || [])
+                        .map(
+                            (s) =>
+                                `<a href="${canvas.escapeHtml(s.url)}" target="_blank" rel="noopener">${canvas.escapeHtml(s.title || s.url)}</a>`
+                        )
+                        .join(', ');
 
-                detailsHtml = `
+                    detailsHtml = `
                     <div class="factcheck-details">
                         <p>${canvas.escapeHtml(claim.explanation)}</p>
                         ${sourcesHtml ? `<div class="factcheck-sources"><strong>Sources:</strong> ${sourcesHtml}</div>` : ''}
                     </div>
                 `;
-            }
+                }
 
-            return `
+                return `
                 <div class="factcheck-claim ${statusClass}" data-claim-index="${index}">
                     <div class="factcheck-claim-header">
                         <span class="factcheck-badge">${badge}</span>
@@ -743,20 +956,21 @@ class FactcheckNode extends BaseNode {
                     ${detailsHtml}
                 </div>
             `;
-        }).join('');
+            })
+            .join('');
 
         return `<div class="factcheck-claims">${claimsHtml}</div>`;
     }
 
     getVerdictBadge(status) {
         const badges = {
-            'checking': '🔄',
-            'verified': '✅',
-            'partially_true': '⚠️',
-            'misleading': '🔶',
-            'false': '❌',
-            'unverifiable': '❓',
-            'error': '⚠️'
+            checking: '🔄',
+            verified: '✅',
+            partially_true: '⚠️',
+            misleading: '🔶',
+            false: '❌',
+            unverifiable: '❓',
+            error: '⚠️',
         };
         return badges[status] || '❓';
     }
@@ -768,14 +982,37 @@ class FactcheckNode extends BaseNode {
     getContentClasses() {
         return 'factcheck-content';
     }
+
+    /**
+     * Factcheck-specific event bindings for claim accordion
+     */
+    getEventBindings() {
+        return [
+            {
+                selector: '.factcheck-claim-header',
+                multiple: true,
+                handler: (nodeId, e, canvas) => {
+                    const claimEl = e.currentTarget.closest('.factcheck-claim');
+                    if (claimEl && !claimEl.classList.contains('checking')) {
+                        // Toggle expanded state (multiple can be open)
+                        claimEl.classList.toggle('expanded');
+                    }
+                },
+            },
+        ];
+    }
 }
 
 /**
  * Image node (uploaded image for analysis)
  */
 class ImageNode extends BaseNode {
-    getTypeLabel() { return 'Image'; }
-    getTypeIcon() { return '🖼️'; }
+    getTypeLabel() {
+        return 'Image';
+    }
+    getTypeIcon() {
+        return '🖼️';
+    }
 
     getSummaryText(canvas) {
         return 'Image';
@@ -800,8 +1037,12 @@ class ImageNode extends BaseNode {
  * Flashcard node (spaced repetition Q/A card)
  */
 class FlashcardNode extends BaseNode {
-    getTypeLabel() { return 'Flashcard'; }
-    getTypeIcon() { return '🎴'; }
+    getTypeLabel() {
+        return 'Flashcard';
+    }
+    getTypeIcon() {
+        return '🎴';
+    }
 
     getSummaryText(canvas) {
         // Priority: user-set title > question content truncated
@@ -858,6 +1099,7 @@ class FlashcardNode extends BaseNode {
 
 /**
  * Factory function to wrap a node with its protocol class
+ * Uses NodeRegistry if available, falls back to hardcoded map for backwards compatibility.
  * Checks node.imageData first (for image highlights), then dispatches by node.type
  *
  * @param {Object} node - Node object from graph
@@ -869,7 +1111,13 @@ function wrapNode(node) {
         return new ImageNode(node);
     }
 
-    // Dispatch by node type
+    // Try registry first (for plugins)
+    if (typeof NodeRegistry !== 'undefined' && NodeRegistry.isRegistered(node.type)) {
+        const NodeClass = NodeRegistry.getProtocolClass(node.type);
+        return new NodeClass(node);
+    }
+
+    // Fallback: hardcoded map for built-in types (backwards compatibility)
     const classMap = {
         [NodeType.HUMAN]: HumanNode,
         [NodeType.AI]: AINode,
@@ -892,7 +1140,7 @@ function wrapNode(node) {
         [NodeType.IMAGE]: ImageNode,
         [NodeType.FLASHCARD]: FlashcardNode,
         [NodeType.CSV]: CsvNode,
-        [NodeType.CODE]: CodeNode
+        [NodeType.CODE]: CodeNode,
     };
 
     const NodeClass = classMap[node.type] || BaseNode;
@@ -917,7 +1165,7 @@ function createMockNodeForType(nodeType) {
             context: 'Test Context',
             rowItems: ['Row1'],
             colItems: ['Col1'],
-            cells: {}
+            cells: {},
         };
     }
     if (nodeType === NodeType.CELL) {
@@ -950,7 +1198,7 @@ function validateNodeProtocol(NodeClass) {
         'getActions',
         'getHeaderButtons',
         'copyToClipboard',
-        'isScrollable'
+        'isScrollable',
     ];
 
     // Try to determine the node type from the class name
@@ -1020,17 +1268,148 @@ window.SynthesisNode = SynthesisNode;
 window.ReviewNode = ReviewNode;
 window.FactcheckNode = FactcheckNode;
 window.ImageNode = ImageNode;
-window.FlashcardNode = FlashcardNode;
-window.CsvNode = CsvNode;
-window.CodeNode = CodeNode;
+// Export all node protocol classes and utilities
+export {
+    wrapNode,
+    validateNodeProtocol,
+    Actions,
+    HeaderButtons,
+    BaseNode,
+    HumanNode,
+    AINode,
+    NoteNode,
+    SummaryNode,
+    ReferenceNode,
+    SearchNode,
+    ResearchNode,
+    HighlightNode,
+    MatrixNode,
+    CellNode,
+    RowNode,
+    ColumnNode,
+    FetchResultNode,
+    PdfNode,
+    OpinionNode,
+    SynthesisNode,
+    ReviewNode,
+    FactcheckNode,
+    ImageNode,
+    FlashcardNode,
+    CsvNode,
+    CodeNode,
+};
 
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        wrapNode,
-        validateNodeProtocol,
+// =============================================================================
+// Register built-in node types with NodeRegistry
+// =============================================================================
+
+/**
+ * Register all built-in node types with the NodeRegistry.
+ * This allows the plugin system to treat built-in types the same as plugins.
+ */
+function registerBuiltinNodeTypes() {
+    if (typeof NodeRegistry === 'undefined') {
+        console.debug('NodeRegistry not available, skipping built-in registration');
+        return;
+    }
+
+    // Built-in type configurations
+    // Note: CSS is not included here because built-in styles are in nodes.css
+    const builtinTypes = [
+        { type: 'human', protocol: HumanNode },
+        { type: 'ai', protocol: AINode },
+        { type: 'note', protocol: NoteNode },
+        { type: 'summary', protocol: SummaryNode },
+        { type: 'reference', protocol: ReferenceNode },
+        { type: 'search', protocol: SearchNode },
+        { type: 'research', protocol: ResearchNode },
+        { type: 'highlight', protocol: HighlightNode },
+        { type: 'matrix', protocol: MatrixNode },
+        { type: 'cell', protocol: CellNode },
+        { type: 'row', protocol: RowNode },
+        { type: 'column', protocol: ColumnNode },
+        { type: 'fetch_result', protocol: FetchResultNode },
+        { type: 'pdf', protocol: PdfNode },
+        { type: 'opinion', protocol: OpinionNode },
+        { type: 'synthesis', protocol: SynthesisNode },
+        { type: 'review', protocol: ReviewNode },
+        { type: 'factcheck', protocol: FactcheckNode },
+        { type: 'image', protocol: ImageNode },
+        { type: 'flashcard', protocol: FlashcardNode },
+        { type: 'csv', protocol: CsvNode },
+        { type: 'code', protocol: CodeNode },
+    ];
+
+    // Get default sizes from graph-types.js if available
+    const getSize = (type) => {
+        if (typeof DEFAULT_NODE_SIZES !== 'undefined' && DEFAULT_NODE_SIZES[type]) {
+            return DEFAULT_NODE_SIZES[type];
+        }
+        return { width: 420, height: 200 };
+    };
+
+    for (const config of builtinTypes) {
+        NodeRegistry.register({
+            type: config.type,
+            protocol: config.protocol,
+            defaultSize: getSize(config.type),
+            // Built-in CSS is in nodes.css, not injected
+            css: '',
+            cssVariables: {},
+        });
+    }
+
+    console.debug(`NodeRegistry: Registered ${builtinTypes.length} built-in node types`);
+}
+
+// Auto-register built-in types when this script loads
+registerBuiltinNodeTypes();
+
+// ES Module exports
+export {
+    // Utilities
+    Actions,
+    HeaderButtons,
+    wrapNode,
+    createMockNodeForType,
+    validateNodeProtocol,
+    registerBuiltinNodeTypes,
+    // Base class
+    BaseNode,
+    // Node type classes
+    HumanNode,
+    AINode,
+    NoteNode,
+    SummaryNode,
+    ReferenceNode,
+    SearchNode,
+    ResearchNode,
+    HighlightNode,
+    MatrixNode,
+    CellNode,
+    RowNode,
+    ColumnNode,
+    FetchResultNode,
+    PdfNode,
+    CsvNode,
+    CodeNode,
+    OpinionNode,
+    SynthesisNode,
+    ReviewNode,
+    FactcheckNode,
+    ImageNode,
+    FlashcardNode,
+};
+
+// Also expose to global scope for backwards compatibility with non-module scripts
+if (typeof window !== 'undefined') {
+    Object.assign(window, {
         Actions,
         HeaderButtons,
+        wrapNode,
+        createMockNodeForType,
+        validateNodeProtocol,
+        registerBuiltinNodeTypes,
         BaseNode,
         HumanNode,
         AINode,
@@ -1046,13 +1425,13 @@ if (typeof module !== 'undefined' && module.exports) {
         ColumnNode,
         FetchResultNode,
         PdfNode,
+        CsvNode,
+        CodeNode,
         OpinionNode,
         SynthesisNode,
         ReviewNode,
         FactcheckNode,
         ImageNode,
         FlashcardNode,
-        CsvNode,
-        CodeNode
-    };
+    });
 }

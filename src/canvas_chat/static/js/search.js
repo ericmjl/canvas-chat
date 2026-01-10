@@ -8,8 +8,8 @@
 /**
  * BM25 parameters
  */
-const BM25_K1 = 1.2;  // Term frequency saturation parameter
-const BM25_B = 0.75;  // Length normalization parameter
+const BM25_K1 = 1.2; // Term frequency saturation parameter
+const BM25_B = 0.75; // Length normalization parameter
 
 /**
  * Tokenize text into lowercase words
@@ -20,9 +20,9 @@ function tokenize(text) {
     if (!text) return [];
     return text
         .toLowerCase()
-        .replace(/[^\w\s]/g, ' ')  // Replace punctuation with spaces
+        .replace(/[^\w\s]/g, ' ') // Replace punctuation with spaces
         .split(/\s+/)
-        .filter(token => token.length > 0);
+        .filter((token) => token.length > 0);
 }
 
 /**
@@ -41,9 +41,9 @@ function calculateIDF(N, df) {
  */
 class SearchIndex {
     constructor() {
-        this.documents = new Map();  // nodeId -> { tokens, length }
-        this.termFrequencies = new Map();  // nodeId -> Map(term -> count)
-        this.documentFrequencies = new Map();  // term -> count of documents containing term
+        this.documents = new Map(); // nodeId -> { tokens, length }
+        this.termFrequencies = new Map(); // nodeId -> Map(term -> count)
+        this.documentFrequencies = new Map(); // term -> count of documents containing term
         this.avgDocLength = 0;
         this.totalDocuments = 0;
     }
@@ -73,7 +73,7 @@ class SearchIndex {
             tokens,
             length: tokens.length,
             content,
-            ...metadata
+            ...metadata,
         });
 
         // Count term frequencies for this document
@@ -196,7 +196,7 @@ class SearchIndex {
                     content: doc.content,
                     snippet: this._generateSnippet(doc.content, queryTokens),
                     type: doc.type,
-                    metadata: doc
+                    metadata: doc,
                 });
             }
         }
@@ -267,20 +267,12 @@ class SearchIndex {
 
             // For matrix nodes, index the context and items
             if (node.type === 'matrix') {
-                textToIndex = [
-                    node.context || '',
-                    ...(node.rowItems || []),
-                    ...(node.colItems || [])
-                ].join(' ');
+                textToIndex = [node.context || '', ...(node.rowItems || []), ...(node.colItems || [])].join(' ');
             }
 
             // For cell nodes, include row/col items
             if (node.type === 'cell') {
-                textToIndex = [
-                    node.content || '',
-                    node.rowItem || '',
-                    node.colItem || ''
-                ].join(' ');
+                textToIndex = [node.content || '', node.rowItem || '', node.colItem || ''].join(' ');
             }
 
             // Include title and summary if present
@@ -307,7 +299,7 @@ const NODE_TYPE_ICONS = {
     research: '📚',
     highlight: '✨',
     matrix: '📊',
-    cell: '🔲'
+    cell: '🔲',
 };
 
 /**
@@ -319,21 +311,4 @@ function getNodeTypeIcon(type) {
     return NODE_TYPE_ICONS[type] || '📄';
 }
 
-// Export for use in other modules (browser)
-window.SearchIndex = SearchIndex;
-window.getNodeTypeIcon = getNodeTypeIcon;
-window.tokenize = tokenize;
-window.calculateIDF = calculateIDF;
-
-// Export for Node.js/tests (CommonJS)
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        SearchIndex,
-        tokenize,
-        calculateIDF,
-        getNodeTypeIcon,
-        NODE_TYPE_ICONS,
-        BM25_K1,
-        BM25_B
-    };
-}
+export { SearchIndex, tokenize, calculateIDF, getNodeTypeIcon, NODE_TYPE_ICONS, BM25_K1, BM25_B };

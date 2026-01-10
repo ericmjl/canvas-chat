@@ -167,23 +167,23 @@ const NodeType = {
     NOTE: 'note',
     SUMMARY: 'summary',
     REFERENCE: 'reference',
-    SEARCH: 'search',      // Web search query node
-    RESEARCH: 'research',  // Exa deep research node
+    SEARCH: 'search', // Web search query node
+    RESEARCH: 'research', // Exa deep research node
     HIGHLIGHT: 'highlight', // Excerpted text or image from another node
-    MATRIX: 'matrix',      // Cross-product evaluation table
-    CELL: 'cell',          // Pinned cell from a matrix
-    ROW: 'row',            // Extracted row from a matrix
-    COLUMN: 'column',      // Extracted column from a matrix
+    MATRIX: 'matrix', // Cross-product evaluation table
+    CELL: 'cell', // Pinned cell from a matrix
+    ROW: 'row', // Extracted row from a matrix
+    COLUMN: 'column', // Extracted column from a matrix
     FETCH_RESULT: 'fetch_result', // Fetched content from URL (via Exa)
-    PDF: 'pdf',            // Imported PDF document
-    OPINION: 'opinion',    // Committee member's opinion
+    PDF: 'pdf', // Imported PDF document
+    OPINION: 'opinion', // Committee member's opinion
     SYNTHESIS: 'synthesis', // Chairman's synthesized answer
-    REVIEW: 'review',      // Committee member's review of other opinions
-    IMAGE: 'image',        // Uploaded image for analysis
+    REVIEW: 'review', // Committee member's review of other opinions
+    IMAGE: 'image', // Uploaded image for analysis
     FLASHCARD: 'flashcard', // Spaced repetition flashcard
     FACTCHECK: 'factcheck', // Fact-checking verdict node
-    CSV: 'csv',            // Uploaded CSV data for analysis
-    CODE: 'code'           // Python code for execution
+    CSV: 'csv', // Uploaded CSV data for analysis
+    CODE: 'code', // Python code for execution
 };
 
 /**
@@ -213,7 +213,7 @@ const DEFAULT_NODE_SIZES = {
     [NodeType.HUMAN]: { width: 420, height: 200 },
     [NodeType.REFERENCE]: { width: 420, height: 200 },
     [NodeType.SEARCH]: { width: 420, height: 200 },
-    [NodeType.HIGHLIGHT]: { width: 420, height: 300 },  // Slightly taller for excerpts
+    [NodeType.HIGHLIGHT]: { width: 420, height: 300 }, // Slightly taller for excerpts
     [NodeType.CELL]: { width: 420, height: 300 },
     [NodeType.ROW]: { width: 500, height: 300 },
     [NodeType.COLUMN]: { width: 500, height: 300 },
@@ -222,7 +222,7 @@ const DEFAULT_NODE_SIZES = {
     [NodeType.MATRIX]: { width: 600, height: 400 },
 
     // Flashcard nodes - compact for Q/A display
-    [NodeType.FLASHCARD]: { width: 400, height: 280 }
+    [NodeType.FLASHCARD]: { width: 400, height: 280 },
 };
 
 /**
@@ -230,17 +230,17 @@ const DEFAULT_NODE_SIZES = {
  * @type {Object.<string, EdgeTypeValue>}
  */
 const EdgeType = {
-    REPLY: 'reply',           // Normal reply to a node
-    BRANCH: 'branch',         // Branch from text selection
-    MERGE: 'merge',           // Multi-select merge
-    REFERENCE: 'reference',   // Reference link
+    REPLY: 'reply', // Normal reply to a node
+    BRANCH: 'branch', // Branch from text selection
+    MERGE: 'merge', // Multi-select merge
+    REFERENCE: 'reference', // Reference link
     SEARCH_RESULT: 'search_result', // Link from search to results
-    HIGHLIGHT: 'highlight',   // Link from source to highlighted excerpt
+    HIGHLIGHT: 'highlight', // Link from source to highlighted excerpt
     MATRIX_CELL: 'matrix_cell', // Link from pinned cell to matrix
-    OPINION: 'opinion',       // Human → OPINION nodes (committee)
-    SYNTHESIS: 'synthesis',   // OPINION/REVIEW → SYNTHESIS node (committee)
-    REVIEW: 'review',         // OPINION → REVIEW nodes (committee)
-    GENERATES: 'generates'    // Source node → generated flashcards
+    OPINION: 'opinion', // Human → OPINION nodes (committee)
+    SYNTHESIS: 'synthesis', // OPINION/REVIEW → SYNTHESIS node (committee)
+    REVIEW: 'review', // OPINION → REVIEW nodes (committee)
+    GENERATES: 'generates', // Source node → generated flashcards
 };
 
 /**
@@ -248,14 +248,14 @@ const EdgeType = {
  * @type {string[]}
  */
 const TAG_COLORS = [
-    '#ffc9c9',  // light red
-    '#ffd8a8',  // light orange
-    '#fff3bf',  // light yellow
-    '#c0eb75',  // light green
-    '#a5d8ff',  // light blue
-    '#d0bfff',  // light purple
-    '#fcc2d7',  // light pink
-    '#e9ecef',  // light gray
+    '#ffc9c9', // light red
+    '#ffd8a8', // light orange
+    '#fff3bf', // light yellow
+    '#c0eb75', // light green
+    '#a5d8ff', // light blue
+    '#d0bfff', // light purple
+    '#fcc2d7', // light pink
+    '#e9ecef', // light gray
 ];
 
 // =============================================================================
@@ -292,10 +292,10 @@ function createNode(type, content, options = {}) {
         created_at: Date.now(),
         model: options.model || null,
         selection: options.selection || null, // For branch-from-selection
-        tags: options.tags || [],  // Array of color keys
-        title: options.title || null,  // User-editable short title (overrides summary)
-        summary: options.summary || null,  // Auto-generated summary for semantic zoom
-        ...options
+        tags: options.tags || [], // Array of color keys
+        title: options.title || null, // User-editable short title (overrides summary)
+        summary: options.summary || null, // Auto-generated summary for semantic zoom
+        ...options,
     };
 }
 
@@ -322,11 +322,11 @@ function createMatrixNode(context, contextNodeIds, rowItems, colItems, options =
         id: crypto.randomUUID(),
         type: NodeType.MATRIX,
         content: '', // Not used for display
-        context,     // User-provided context for the evaluation
+        context, // User-provided context for the evaluation
         contextNodeIds, // Array of source node IDs that provide context
-        rowItems,    // Array of row item strings
-        colItems,    // Array of column item strings
-        cells,       // Object keyed by "rowIdx-colIdx"
+        rowItems, // Array of row item strings
+        colItems, // Array of column item strings
+        cells, // Object keyed by "rowIdx-colIdx"
         position: options.position || { x: 0, y: 0 },
         width: options.width || DEFAULT_NODE_SIZES[NodeType.MATRIX].width,
         height: options.height || DEFAULT_NODE_SIZES[NodeType.MATRIX].height,
@@ -336,7 +336,7 @@ function createMatrixNode(context, contextNodeIds, rowItems, colItems, options =
         summary: null,
         model: null,
         selection: null,
-        ...options
+        ...options,
     };
 }
 
@@ -370,7 +370,7 @@ function createCellNode(matrixId, rowIndex, colIndex, rowItem, colItem, content,
         summary: null,
         model: null,
         selection: null,
-        ...options
+        ...options,
     };
 }
 
@@ -412,7 +412,7 @@ function createRowNode(matrixId, rowIndex, rowItem, colItems, cellContents, opti
         summary: null,
         model: null,
         selection: null,
-        ...options
+        ...options,
     };
 }
 
@@ -454,7 +454,7 @@ function createColumnNode(matrixId, colIndex, colItem, rowItems, cellContents, o
         summary: null,
         model: null,
         selection: null,
-        ...options
+        ...options,
     };
 }
 
@@ -486,9 +486,9 @@ function createFlashcardNode(question, answer, options = {}) {
             interval: 0,
             repetitions: 0,
             nextReviewDate: null,
-            lastReviewDate: null
+            lastReviewDate: null,
         },
-        ...options
+        ...options,
     };
 }
 
@@ -506,7 +506,7 @@ function createEdge(sourceId, targetId, type = EdgeType.REPLY, options = {}) {
         source: sourceId,
         target: targetId,
         type,
-        ...options
+        ...options,
     };
 }
 
@@ -514,36 +514,17 @@ function createEdge(sourceId, targetId, type = EdgeType.REPLY, options = {}) {
 // Exports
 // =============================================================================
 
-// Export for use in browser (window) and Node.js (module.exports)
-if (typeof window !== 'undefined') {
-    window.NodeType = NodeType;
-    window.EdgeType = EdgeType;
-    window.TAG_COLORS = TAG_COLORS;
-    window.DEFAULT_NODE_SIZES = DEFAULT_NODE_SIZES;
-    window.getDefaultNodeSize = getDefaultNodeSize;
-    window.createNode = createNode;
-    window.createEdge = createEdge;
-    window.createMatrixNode = createMatrixNode;
-    window.createCellNode = createCellNode;
-    window.createRowNode = createRowNode;
-    window.createColumnNode = createColumnNode;
-    window.createFlashcardNode = createFlashcardNode;
-}
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        NodeType,
-        EdgeType,
-        TAG_COLORS,
-        DEFAULT_NODE_SIZES,
-        getDefaultNodeSize,
-        createNode,
-        createEdge,
-        createMatrixNode,
-        createCellNode,
-        createRowNode,
-        createColumnNode,
-        createFlashcardNode
-    };
-}
+export {
+    NodeType,
+    EdgeType,
+    TAG_COLORS,
+    DEFAULT_NODE_SIZES,
+    getDefaultNodeSize,
+    createNode,
+    createEdge,
+    createMatrixNode,
+    createCellNode,
+    createRowNode,
+    createColumnNode,
+    createFlashcardNode,
+};

@@ -96,7 +96,7 @@ function formatUserError(error) {
         return {
             title: 'Request timed out',
             description: 'The server is taking too long to respond. This may be due to high load.',
-            canRetry: true
+            canRetry: true,
         };
     }
 
@@ -105,7 +105,7 @@ function formatUserError(error) {
         return {
             title: 'Authentication failed',
             description: 'Your API key may be invalid or expired. Please check your settings.',
-            canRetry: false
+            canRetry: false,
         };
     }
 
@@ -114,16 +114,21 @@ function formatUserError(error) {
         return {
             title: 'Rate limit reached',
             description: 'Too many requests. Please wait a moment before trying again.',
-            canRetry: true
+            canRetry: true,
         };
     }
 
     // Server errors
-    if (errLower.includes('500') || errLower.includes('502') || errLower.includes('503') || errLower.includes('server error')) {
+    if (
+        errLower.includes('500') ||
+        errLower.includes('502') ||
+        errLower.includes('503') ||
+        errLower.includes('server error')
+    ) {
         return {
             title: 'Server error',
             description: 'The server encountered an error. Please try again later.',
-            canRetry: true
+            canRetry: true,
         };
     }
 
@@ -132,7 +137,7 @@ function formatUserError(error) {
         return {
             title: 'Network error',
             description: 'Could not connect to the server. Please check your internet connection.',
-            canRetry: true
+            canRetry: true,
         };
     }
 
@@ -141,7 +146,7 @@ function formatUserError(error) {
         return {
             title: 'Message too long',
             description: 'The conversation is too long for this model. Try selecting fewer nodes.',
-            canRetry: false
+            canRetry: false,
         };
     }
 
@@ -149,7 +154,7 @@ function formatUserError(error) {
     return {
         title: 'Something went wrong',
         description: errMsg || 'An unexpected error occurred. Please try again.',
-        canRetry: true
+        canRetry: true,
     };
 }
 
@@ -240,7 +245,7 @@ function formatMatrixAsText(matrixNode) {
  */
 function buildMessagesForApi(contextMessages) {
     const result = [];
-    let pendingImages = [];  // Collect consecutive image messages
+    let pendingImages = []; // Collect consecutive image messages
 
     for (let i = 0; i < contextMessages.length; i++) {
         const msg = contextMessages[i];
@@ -250,8 +255,8 @@ function buildMessagesForApi(contextMessages) {
             pendingImages.push({
                 type: 'image_url',
                 image_url: {
-                    url: `data:${msg.mimeType};base64,${msg.imageData}`
-                }
+                    url: `data:${msg.mimeType};base64,${msg.imageData}`,
+                },
             });
         } else if (msg.content) {
             // Text message - check if we should merge with pending images
@@ -259,10 +264,7 @@ function buildMessagesForApi(contextMessages) {
                 // Merge images with this text message
                 result.push({
                     role: 'user',
-                    content: [
-                        ...pendingImages,
-                        { type: 'text', text: msg.content }
-                    ]
+                    content: [...pendingImages, { type: 'text', text: msg.content }],
                 });
                 pendingImages = [];
             } else {
@@ -270,7 +272,7 @@ function buildMessagesForApi(contextMessages) {
                 for (const imgPart of pendingImages) {
                     result.push({
                         role: 'user',
-                        content: [imgPart]
+                        content: [imgPart],
                     });
                 }
                 pendingImages = [];
@@ -278,7 +280,7 @@ function buildMessagesForApi(contextMessages) {
                 // Add text message
                 result.push({
                     role: msg.role,
-                    content: msg.content
+                    content: msg.content,
                 });
             }
         }
@@ -288,7 +290,7 @@ function buildMessagesForApi(contextMessages) {
     for (const imgPart of pendingImages) {
         result.push({
             role: 'user',
-            content: [imgPart]
+            content: [imgPart],
         });
     }
 
@@ -325,7 +327,7 @@ function applySM2(srs, quality) {
         }
 
         // Update ease factor based on quality
-        result.easeFactor += (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+        result.easeFactor += 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02);
         result.easeFactor = Math.max(1.3, result.easeFactor);
         result.repetitions++;
     }
@@ -362,8 +364,8 @@ function isFlashcardDue(card) {
 function getDueFlashcards(nodes) {
     const now = Date.now();
     return nodes
-        .filter(n => n.type === NodeType.FLASHCARD)
-        .filter(n => !n.srs?.nextReviewDate || new Date(n.srs.nextReviewDate) <= now);
+        .filter((n) => n.type === NodeType.FLASHCARD)
+        .filter((n) => !n.srs?.nextReviewDate || new Date(n.srs.nextReviewDate) <= now);
 }
 
 // =============================================================================
@@ -401,7 +403,7 @@ async function resizeImage(file, maxDimension = 2048) {
             const quality = outputType === 'image/jpeg' ? 0.85 : undefined;
             const dataUrl = canvas.toDataURL(outputType, quality);
 
-            URL.revokeObjectURL(img.src);  // Clean up
+            URL.revokeObjectURL(img.src); // Clean up
             resolve(dataUrl);
         };
         img.onerror = () => {
@@ -416,38 +418,18 @@ async function resizeImage(file, maxDimension = 2048) {
 // Exports
 // =============================================================================
 
-// Export for browser (window)
-if (typeof window !== 'undefined') {
-    window.getBasePath = getBasePath;
-    window.apiUrl = apiUrl;
-    window.isUrlContent = isUrlContent;
-    window.extractUrlFromReferenceNode = extractUrlFromReferenceNode;
-    window.formatUserError = formatUserError;
-    window.truncateText = truncateText;
-    window.escapeHtmlText = escapeHtmlText;
-    window.formatMatrixAsText = formatMatrixAsText;
-    window.buildMessagesForApi = buildMessagesForApi;
-    window.applySM2 = applySM2;
-    window.isFlashcardDue = isFlashcardDue;
-    window.getDueFlashcards = getDueFlashcards;
-    window.resizeImage = resizeImage;
-}
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        getBasePath,
-        apiUrl,
-        isUrlContent,
-        extractUrlFromReferenceNode,
-        formatUserError,
-        truncateText,
-        escapeHtmlText,
-        formatMatrixAsText,
-        buildMessagesForApi,
-        applySM2,
-        isFlashcardDue,
-        getDueFlashcards,
-        resizeImage
-    };
-}
+export {
+    getBasePath,
+    apiUrl,
+    isUrlContent,
+    extractUrlFromReferenceNode,
+    formatUserError,
+    truncateText,
+    escapeHtmlText,
+    formatMatrixAsText,
+    buildMessagesForApi,
+    applySM2,
+    isFlashcardDue,
+    getDueFlashcards,
+    resizeImage,
+};

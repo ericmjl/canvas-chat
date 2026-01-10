@@ -61,16 +61,17 @@ class ModalManager {
             return;
         }
 
-        container.innerHTML = models.map(model => {
-            const meta = [];
-            if (model.context_window) {
-                meta.push(`${(model.context_window / 1000).toFixed(0)}k context`);
-            }
-            if (model.base_url) {
-                meta.push('custom endpoint');
-            }
+        container.innerHTML = models
+            .map((model) => {
+                const meta = [];
+                if (model.context_window) {
+                    meta.push(`${(model.context_window / 1000).toFixed(0)}k context`);
+                }
+                if (model.base_url) {
+                    meta.push('custom endpoint');
+                }
 
-            return `
+                return `
                 <div class="custom-model-item" data-model-id="${escapeHtmlText(model.id)}">
                     <div class="custom-model-info">
                         <div class="custom-model-name">${escapeHtmlText(model.name)}</div>
@@ -80,10 +81,11 @@ class ModalManager {
                     <button class="custom-model-delete" title="Delete model">&times;</button>
                 </div>
             `;
-        }).join('');
+            })
+            .join('');
 
         // Add delete handlers
-        container.querySelectorAll('.custom-model-delete').forEach(btn => {
+        container.querySelectorAll('.custom-model-delete').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 const item = e.target.closest('.custom-model-item');
                 const modelId = item.dataset.modelId;
@@ -116,7 +118,7 @@ class ModalManager {
                 id: modelId,
                 name: name || undefined,
                 context_window: contextWindow,
-                base_url: baseUrl || undefined
+                base_url: baseUrl || undefined,
             });
 
             // Clear form
@@ -180,7 +182,7 @@ class ModalManager {
             'committee-modal',
             'session-modal',
             'settings-modal',
-            'help-modal'
+            'help-modal',
         ];
 
         for (const id of modalIds) {
@@ -212,7 +214,9 @@ class ModalManager {
             return;
         }
 
-        listEl.innerHTML = sessions.map(session => `
+        listEl.innerHTML = sessions
+            .map(
+                (session) => `
             <div class="session-item" data-session-id="${session.id}">
                 <div>
                     <div class="session-item-name">${session.name || 'Untitled Session'}</div>
@@ -220,10 +224,12 @@ class ModalManager {
                 </div>
                 <button class="session-item-delete" data-delete-id="${session.id}" title="Delete">🗑️</button>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
 
         // Add click handlers for session items
-        listEl.querySelectorAll('.session-item').forEach(item => {
+        listEl.querySelectorAll('.session-item').forEach((item) => {
             item.addEventListener('click', async (e) => {
                 if (e.target.closest('.session-item-delete')) return;
                 const sessionId = item.dataset.sessionId;
@@ -236,7 +242,7 @@ class ModalManager {
         });
 
         // Add delete handlers
-        listEl.querySelectorAll('.session-item-delete').forEach(btn => {
+        listEl.querySelectorAll('.session-item-delete').forEach((btn) => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const sessionId = btn.dataset.deleteId;
@@ -345,23 +351,27 @@ class ModalManager {
         const newVersions = [
             ...existingVersions,
             // Add initial version if this is the first edit
-            ...(existingVersions.length === 0 ? [{
-                content: node.content,
-                timestamp: node.createdAt || Date.now(),
-                reason: 'initial'
-            }] : []),
+            ...(existingVersions.length === 0
+                ? [
+                      {
+                          content: node.content,
+                          timestamp: node.createdAt || Date.now(),
+                          reason: 'initial',
+                      },
+                  ]
+                : []),
             // Add current content as version before the edit
             {
                 content: node.content,
                 timestamp: Date.now(),
-                reason: 'before edit'
-            }
+                reason: 'before edit',
+            },
         ];
 
         // Update content via graph (triggers CRDT sync for multiplayer)
         this.app.graph.updateNode(this.app.editingNodeId, {
             content: newContent,
-            versions: newVersions
+            versions: newVersions,
         });
 
         // Re-render node
@@ -537,7 +547,7 @@ class ModalManager {
                 type: 'EDIT_TITLE',
                 nodeId,
                 oldTitle,
-                newTitle
+                newTitle,
             });
         }
 
@@ -548,7 +558,10 @@ class ModalManager {
         if (wrapper) {
             const summaryText = wrapper.querySelector('.summary-text');
             if (summaryText) {
-                summaryText.textContent = newTitle || node.summary || this.app.canvas.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
+                summaryText.textContent =
+                    newTitle ||
+                    node.summary ||
+                    this.app.canvas.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
             }
         }
 
@@ -558,9 +571,4 @@ class ModalManager {
 }
 
 // Export for browser
-window.ModalManager = ModalManager;
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { ModalManager };
-}
+export { ModalManager };

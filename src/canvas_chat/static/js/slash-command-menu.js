@@ -9,8 +9,17 @@ const SLASH_COMMANDS = [
     { command: '/research', description: 'Deep research', placeholder: 'topic' },
     { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
     { command: '/committee', description: 'Consult multiple LLMs and synthesize', placeholder: 'question' },
-    { command: '/factcheck', description: 'Verify claims with web search', placeholder: 'claim(s) to verify', requiresContext: true },
-    { command: '/code', description: 'Create Python code node (optionally linked to selected CSVs)', placeholder: 'optional description' },
+    {
+        command: '/factcheck',
+        description: 'Verify claims with web search',
+        placeholder: 'claim(s) to verify',
+        requiresContext: true,
+    },
+    {
+        command: '/code',
+        description: 'Create Python code node (optionally linked to selected CSVs)',
+        placeholder: 'optional description',
+    },
 ];
 
 /**
@@ -78,9 +87,7 @@ class SlashCommandMenu {
             const typed = value.split(' ')[0].toLowerCase(); // Just the command part
 
             // Filter commands that match
-            this.filteredCommands = SLASH_COMMANDS.filter(cmd =>
-                cmd.command.toLowerCase().startsWith(typed)
-            );
+            this.filteredCommands = SLASH_COMMANDS.filter((cmd) => cmd.command.toLowerCase().startsWith(typed));
 
             if (this.filteredCommands.length > 0 && !value.includes(' ')) {
                 // Show menu only if still typing command (no space yet)
@@ -211,39 +218,41 @@ class SlashCommandMenu {
         const hasContext = hasInputText || hasSelectedNodes;
         const hasSelectedCsv = this.getHasSelectedCsv ? this.getHasSelectedCsv() : false;
 
-        const commandsHtml = this.filteredCommands.map((cmd, index) => {
-            const isExaDisabled = cmd.requiresExa && !hasExa;
-            const isContextDisabled = cmd.requiresContext && !hasContext;
-            const isCsvDisabled = cmd.requiresCsv && !hasSelectedCsv;
-            const isDisabled = isExaDisabled || isContextDisabled || isCsvDisabled;
-            const disabledClass = isDisabled ? 'disabled' : '';
-            let disabledSuffix = '';
-            if (isExaDisabled) {
-                disabledSuffix = ' <span class="requires-exa">(requires Exa)</span>';
-            } else if (isContextDisabled) {
-                disabledSuffix = ' <span class="requires-context">(requires text or selected node)</span>';
-            } else if (isCsvDisabled) {
-                disabledSuffix = ' <span class="requires-csv">(requires selected CSV node)</span>';
-            }
+        const commandsHtml = this.filteredCommands
+            .map((cmd, index) => {
+                const isExaDisabled = cmd.requiresExa && !hasExa;
+                const isContextDisabled = cmd.requiresContext && !hasContext;
+                const isCsvDisabled = cmd.requiresCsv && !hasSelectedCsv;
+                const isDisabled = isExaDisabled || isContextDisabled || isCsvDisabled;
+                const disabledClass = isDisabled ? 'disabled' : '';
+                let disabledSuffix = '';
+                if (isExaDisabled) {
+                    disabledSuffix = ' <span class="requires-exa">(requires Exa)</span>';
+                } else if (isContextDisabled) {
+                    disabledSuffix = ' <span class="requires-context">(requires text or selected node)</span>';
+                } else if (isCsvDisabled) {
+                    disabledSuffix = ' <span class="requires-csv">(requires selected CSV node)</span>';
+                }
 
-            // Show which provider will be used for search/research commands
-            let description = cmd.description;
-            if (cmd.command === '/search') {
-                const provider = hasExa ? 'Exa' : 'DuckDuckGo';
-                description = `Search the web (${provider})`;
-            } else if (cmd.command === '/research') {
-                const provider = hasExa ? 'Exa' : 'DuckDuckGo';
-                description = `Deep research (${provider})`;
-            }
+                // Show which provider will be used for search/research commands
+                let description = cmd.description;
+                if (cmd.command === '/search') {
+                    const provider = hasExa ? 'Exa' : 'DuckDuckGo';
+                    description = `Search the web (${provider})`;
+                } else if (cmd.command === '/research') {
+                    const provider = hasExa ? 'Exa' : 'DuckDuckGo';
+                    description = `Deep research (${provider})`;
+                }
 
-            return `
+                return `
             <div class="slash-command-item ${index === this.selectedIndex ? 'selected' : ''} ${disabledClass}"
                  data-index="${index}">
                 <span class="slash-command-name">${cmd.command}</span>
                 <span class="slash-command-desc">${description}${disabledSuffix}</span>
             </div>
         `;
-        }).join('');
+            })
+            .join('');
 
         this.menu.innerHTML = `
             ${commandsHtml}
@@ -269,7 +278,4 @@ class SlashCommandMenu {
 window.SlashCommandMenu = SlashCommandMenu;
 window.SLASH_COMMANDS = SLASH_COMMANDS;
 
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { SlashCommandMenu, SLASH_COMMANDS };
-}
+export { SlashCommandMenu, SLASH_COMMANDS };
