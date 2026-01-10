@@ -115,33 +115,19 @@ jobs:
           git config user.name github-actions
           git config user.email github-actions@github.com
 
-      - name: Run uv version bump
-        if: steps.check_release.outputs.already_released == 'false'
-        run: uv version --bump ${{ env.VERSION_NAME }} --verbose
-
-      - name: Commit version bump
-        if: steps.check_release.outputs.already_released == 'false'
-        run: |
-          git add pyproject.toml
-          git commit -m "Bump version: ${{ env.current_version }} → ${{ env.version_number }}"
-
-      - name: Create version tag
-        if: steps.check_release.outputs.already_released == 'false'
-        run: git tag -a "v${{ env.version_number }}" -m "Release v${{ env.version_number }}"
-
       - name: Setup pixi
         if: steps.check_release.outputs.already_released == 'false'
         uses: prefix-dev/setup-pixi@v0.9.3
         with:
           run-install: false
 
-      - name: Verify tag creation
-        if: steps.check_release.outputs.already_released == 'false'
-        run: git tag | grep "v${{ env.version_number }}"
-
       - name: Install llamabot
         if: steps.check_release.outputs.already_released == 'false'
         run: uv tool install llamabot[cli]
+
+      - name: Run uv version bump
+        if: steps.check_release.outputs.already_released == 'false'
+        run: uv version --bump ${{ env.VERSION_NAME }} --verbose
 
       - name: Write release notes
         if: steps.check_release.outputs.already_released == 'false'
@@ -161,11 +147,21 @@ jobs:
           # Second run verifies all checks pass
           uvx pre-commit run --all-files
 
-      - name: Commit release notes and lock file
+      - name: Commit version bump, release notes, and lock file
         if: steps.check_release.outputs.already_released == 'false'
         run: |
           # All files are already staged from the pre-commit step
-          git commit -m "Add release notes for v${{ env.version_number }}"
+          git commit -m "Bump version: ${{ env.current_version }} → ${{ env.version_number }}
+
+          Add release notes for v${{ env.version_number }}"
+
+      - name: Create version tag
+        if: steps.check_release.outputs.already_released == 'false'
+        run: git tag -a "v${{ env.version_number }}" -m "Release v${{ env.version_number }}"
+
+      - name: Verify tag creation
+        if: steps.check_release.outputs.already_released == 'false'
+        run: git tag | grep "v${{ env.version_number }}"
 
       - name: Build package
         if: steps.check_release.outputs.already_released == 'false'
