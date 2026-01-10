@@ -11,6 +11,10 @@
  * - escapeHtmlText: HTML escaping utility
  */
 
+import { storage } from './storage.js';
+import { escapeHtmlText } from './utils.js';
+import { NodeType } from './graph-types.js';
+
 class ModalManager {
     /**
      * Create a ModalManager instance.

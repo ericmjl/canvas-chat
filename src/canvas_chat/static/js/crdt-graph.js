@@ -11,6 +11,8 @@
  * @see ./graph-types.js for Node, Edge, and other type definitions
  */
 
+import { NodeType, TAG_COLORS } from './graph-types.js';
+
 // =============================================================================
 // Type Imports (JSDoc)
 // =============================================================================

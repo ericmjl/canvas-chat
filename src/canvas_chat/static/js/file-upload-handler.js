@@ -16,7 +16,10 @@
  * - apiUrl: API URL helper
  */
 
-/* global resizeImage, Papa */
+import { NodeType, createNode } from './graph-types.js';
+import { apiUrl, resizeImage } from './utils.js';
+
+/* global Papa */
 
 class FileUploadHandler {
     /**

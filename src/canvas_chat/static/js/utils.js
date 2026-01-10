@@ -3,6 +3,8 @@
  * Pure functions with no side effects, extracted from app.js.
  */
 
+import { NodeType } from './graph-types.js';
+
 // =============================================================================
 // URL Detection and Extraction
 // =============================================================================

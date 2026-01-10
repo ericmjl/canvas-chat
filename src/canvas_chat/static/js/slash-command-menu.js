@@ -2,6 +2,8 @@
  * Slash command autocomplete menu
  */
 
+import { storage } from './storage.js';
+
 // Slash command definitions
 const SLASH_COMMANDS = [
     { command: '/note', description: 'Add a note or fetch URL content', placeholder: 'markdown or https://...' },

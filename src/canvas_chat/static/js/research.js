@@ -2,26 +2,12 @@
  * Research Feature Module
  *
  * Handles the /search and /research commands.
- * Extracted from app.js for modularity.
- *
- * Dependencies (injected via constructor):
- * - graph: CRDTGraph instance
- * - canvas: Canvas instance
- * - saveSession: function to persist session
- * - updateEmptyState: function to update UI empty state
- * - buildLLMRequest: function to build LLM request with base_url
- * - generateNodeSummary: function to generate summary for a node
- * - showSettingsModal: function to show settings modal
- * - getModelPicker: function returning modelPicker element
- * - registerStreaming: function to register abort controller for stop button
- * - unregisterStreaming: function to unregister streaming state
- *
- * Global dependencies:
- * - storage: For Exa API key (hasExaApiKey, getExaApiKey)
- * - createNode, createEdge: Node/edge factory functions
- * - NodeType, EdgeType: Type constants
- * - SSE: Server-sent events utilities
  */
+
+import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
+import { storage } from './storage.js';
+import { readSSEStream, normalizeText } from './sse.js';
+import { apiUrl } from './utils.js';
 
 class ResearchFeature {
     /**
@@ -365,7 +351,7 @@ class ResearchFeature {
             let ddgSourceCount = 0;
             let ddgFinalReport = '';
 
-            await SSE.readSSEStream(response, {
+            await readSSEStream(response, {
                 onEvent: (eventType, data) => {
                     if (eventType === 'status') {
                         lastStatus = data.trim();
@@ -434,7 +420,7 @@ class ResearchFeature {
                     }
 
                     // Normalize the report content
-                    reportContent = SSE.normalizeText(reportContent);
+                    reportContent = normalizeText(reportContent);
 
                     // Add sources to the report if available
                     if (sources.length > 0) {
