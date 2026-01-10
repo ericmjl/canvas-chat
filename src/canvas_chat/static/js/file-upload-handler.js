@@ -50,7 +50,7 @@ class FileUploadHandler {
         // Create a placeholder node while processing
         const nodePosition = position || this.app.graph.autoPosition([]);
         const pdfNode = createNode(NodeType.PDF, `Processing PDF: ${file.name}...`, {
-            position: nodePosition
+            position: nodePosition,
         });
 
         this.app.graph.addNode(pdfNode);
@@ -61,11 +61,7 @@ class FileUploadHandler {
         this.app.updateEmptyState();
 
         // Pan to the new node
-        this.app.canvas.centerOnAnimated(
-            pdfNode.position.x + 160,
-            pdfNode.position.y + 100,
-            300
-        );
+        this.app.canvas.centerOnAnimated(pdfNode.position.x + 160, pdfNode.position.y + 100, 300);
 
         try {
             // Upload PDF via FormData
@@ -74,7 +70,7 @@ class FileUploadHandler {
 
             const response = await fetch(apiUrl('/api/upload-pdf'), {
                 method: 'POST',
-                body: formData
+                body: formData,
             });
 
             if (!response.ok) {
@@ -89,10 +85,9 @@ class FileUploadHandler {
             this.app.graph.updateNode(pdfNode.id, {
                 content: data.content,
                 title: data.title,
-                page_count: data.page_count
+                page_count: data.page_count,
             });
             this.app.saveSession();
-
         } catch (err) {
             // Update node with error message
             const errorContent = `**Failed to process PDF**\n\n${file.name}\n\n*Error: ${err.message}*`;
@@ -145,29 +140,24 @@ class FileUploadHandler {
             const imageNode = createNode(NodeType.IMAGE, '', {
                 position: nodePosition,
                 imageData: base64Data,
-                mimeType: mimeType
+                mimeType: mimeType,
             });
 
             this.app.graph.addNode(imageNode);
             this.app.canvas.renderNode(imageNode);
 
             this.app.canvas.clearSelection();
-            this.app.canvas.selectNode(imageNode.id);  // Select the new image
+            this.app.canvas.selectNode(imageNode.id); // Select the new image
             this.app.saveSession();
             this.app.updateEmptyState();
 
             // Pan to the new node
-            this.app.canvas.centerOnAnimated(
-                imageNode.position.x + 160,
-                imageNode.position.y + 100,
-                300
-            );
+            this.app.canvas.centerOnAnimated(imageNode.position.x + 160, imageNode.position.y + 100, 300);
 
             // Show hint if requested (e.g., from paste)
             if (showHint) {
                 this.app.showCanvasHint('Image added! Select it and type a message to ask about it.');
             }
-
         } catch (err) {
             alert(`Failed to process image: ${err.message}`);
         }
@@ -211,7 +201,7 @@ class FileUploadHandler {
             const parseResult = Papa.parse(text, {
                 header: true,
                 skipEmptyLines: true,
-                dynamicTyping: true
+                dynamicTyping: true,
             });
 
             if (parseResult.errors && parseResult.errors.length > 0) {
@@ -228,7 +218,7 @@ class FileUploadHandler {
                 previewContent += '| ' + columns.join(' | ') + ' |\n';
                 previewContent += '| ' + columns.map(() => '---').join(' | ') + ' |\n';
                 for (const row of previewRows) {
-                    previewContent += '| ' + columns.map(col => String(row[col] ?? '')).join(' | ') + ' |\n';
+                    previewContent += '| ' + columns.map((col) => String(row[col] ?? '')).join(' | ') + ' |\n';
                 }
                 if (data.length > 5) {
                     previewContent += `\n*...and ${data.length - 5} more rows*`;
@@ -241,8 +231,8 @@ class FileUploadHandler {
                 position: nodePosition,
                 title: file.name,
                 filename: file.name,
-                csvData: text,  // Store raw CSV string for code execution
-                columns: columns
+                csvData: text, // Store raw CSV string for code execution
+                columns: columns,
             });
 
             this.app.graph.addNode(csvNode);
@@ -254,14 +244,9 @@ class FileUploadHandler {
             this.app.updateEmptyState();
 
             // Pan to the new node
-            this.app.canvas.centerOnAnimated(
-                csvNode.position.x + 200,
-                csvNode.position.y + 150,
-                300
-            );
+            this.app.canvas.centerOnAnimated(csvNode.position.x + 200, csvNode.position.y + 150, 300);
 
             this.app.showCanvasHint('CSV loaded! Click "Analyze" to write Python code.');
-
         } catch (err) {
             alert(`Failed to process CSV: ${err.message}`);
         }
@@ -278,10 +263,4 @@ class FileUploadHandler {
     }
 }
 
-// Export for browser
-window.FileUploadHandler = FileUploadHandler;
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { FileUploadHandler };
-}
+export { FileUploadHandler };

@@ -23,9 +23,10 @@ const vm = require('vm');
 
 // Set up minimal browser-like environment for source files
 global.window = global;
+global.window.addEventListener = () => {}; // Mock for node-protocols.js
 global.document = {
     createElement: (tagName) => {
-        const element = { textContent: '', innerHTML: '' };
+        const element = { textContent: '', innerHTML: '', id: '' };
         // Mock textContent setter to update innerHTML (for escapeHtmlText)
         Object.defineProperty(element, 'textContent', {
             get: () => element._textContent || '',
@@ -38,18 +39,34 @@ global.document = {
                     .replace(/>/g, '&gt;')
                     .replace(/"/g, '&quot;')
                     .replace(/'/g, '&#039;');
-            }
+            },
         });
         return element;
     },
-    addEventListener: () => {} // Mock event listener (no-op for tests)
+    addEventListener: () => {}, // Mock event listener (no-op for tests)
+    head: { appendChild: () => {} }, // Mock for node-registry.js CSS injection
 };
 global.NodeType = {
-    HUMAN: 'human', AI: 'ai', NOTE: 'note', SUMMARY: 'summary', REFERENCE: 'reference',
-    SEARCH: 'search', RESEARCH: 'research', HIGHLIGHT: 'highlight', MATRIX: 'matrix',
-    CELL: 'cell', ROW: 'row', COLUMN: 'column', FETCH_RESULT: 'fetch_result',
-    PDF: 'pdf', OPINION: 'opinion', SYNTHESIS: 'synthesis', REVIEW: 'review', IMAGE: 'image',
-    FLASHCARD: 'flashcard', FACTCHECK: 'factcheck'
+    HUMAN: 'human',
+    AI: 'ai',
+    NOTE: 'note',
+    SUMMARY: 'summary',
+    REFERENCE: 'reference',
+    SEARCH: 'search',
+    RESEARCH: 'research',
+    HIGHLIGHT: 'highlight',
+    MATRIX: 'matrix',
+    CELL: 'cell',
+    ROW: 'row',
+    COLUMN: 'column',
+    FETCH_RESULT: 'fetch_result',
+    PDF: 'pdf',
+    OPINION: 'opinion',
+    SYNTHESIS: 'synthesis',
+    REVIEW: 'review',
+    IMAGE: 'image',
+    FLASHCARD: 'flashcard',
+    FACTCHECK: 'factcheck',
 };
 
 // Load graph.js first (defines NodeType, etc. and exports wouldOverlapNodes)
@@ -100,10 +117,9 @@ const appPath = path.join(__dirname, '../src/canvas_chat/static/js/app.js');
 const appCode = fs.readFileSync(appPath, 'utf8');
 vm.runInThisContext(appCode, { filename: appPath });
 
-// Load node-protocols.js (defines wrapNode, MatrixNode, etc.)
-const nodeProtocolsPath = path.join(__dirname, '../src/canvas_chat/static/js/node-protocols.js');
-const nodeProtocolsCode = fs.readFileSync(nodeProtocolsPath, 'utf8');
-vm.runInThisContext(nodeProtocolsCode, { filename: nodeProtocolsPath });
+// Import ES modules (node-registry and node-protocols)
+await import('../src/canvas_chat/static/js/node-registry.js');
+await import('../src/canvas_chat/static/js/node-protocols.js');
 
 // Extract functions and constants from window (actual implementations, not copies)
 const {
@@ -131,7 +147,7 @@ const {
     applySM2,
     isFlashcardDue,
     getDueFlashcards,
-    layoutUtils
+    layoutUtils,
 } = global.window;
 
 // Extract layout functions from layoutUtils (actual implementations from layout.js)

@@ -58,11 +58,13 @@
  * Check if value is a Y.Map-like object
  */
 function isYMap(value) {
-    return value !== null &&
-           typeof value === 'object' &&
-           typeof value.get === 'function' &&
-           typeof value.set === 'function' &&
-           typeof value.has === 'function';
+    return (
+        value !== null &&
+        typeof value === 'object' &&
+        typeof value.get === 'function' &&
+        typeof value.set === 'function' &&
+        typeof value.has === 'function'
+    );
 }
 
 /**
@@ -70,23 +72,27 @@ function isYMap(value) {
  * Note: Must check for toDelta to distinguish from Y.Array (both have insert/delete)
  */
 function isYText(value) {
-    return value !== null &&
-           typeof value === 'object' &&
-           typeof value.toString === 'function' &&
-           typeof value.insert === 'function' &&
-           typeof value.delete === 'function' &&
-           typeof value.toDelta === 'function';  // Y.Array doesn't have toDelta
+    return (
+        value !== null &&
+        typeof value === 'object' &&
+        typeof value.toString === 'function' &&
+        typeof value.insert === 'function' &&
+        typeof value.delete === 'function' &&
+        typeof value.toDelta === 'function'
+    ); // Y.Array doesn't have toDelta
 }
 
 /**
  * Check if value is a Y.Array-like object
  */
 function isYArray(value) {
-    return value !== null &&
-           typeof value === 'object' &&
-           typeof value.toArray === 'function' &&
-           typeof value.push === 'function' &&
-           typeof value.delete === 'function';
+    return (
+        value !== null &&
+        typeof value === 'object' &&
+        typeof value.toArray === 'function' &&
+        typeof value.push === 'function' &&
+        typeof value.delete === 'function'
+    );
 }
 
 // =============================================================================
@@ -104,8 +110,8 @@ class CRDTGraph {
         if (typeof Y === 'undefined') {
             throw new Error(
                 '[CRDTGraph] Yjs (Y) is not defined. ' +
-                'Ensure the Yjs ES module has loaded before instantiating CRDTGraph. ' +
-                'Wait for the "yjs-ready" event on window.'
+                    'Ensure the Yjs ES module has loaded before instantiating CRDTGraph. ' +
+                    'Wait for the "yjs-ready" event on window.'
             );
         }
 
@@ -116,9 +122,9 @@ class CRDTGraph {
         this.ydoc = new Y.Doc();
 
         // CRDT data structures
-        this.yNodes = this.ydoc.getMap('nodes');      // nodeId -> Y.Map (node properties)
-        this.yEdges = this.ydoc.getArray('edges');    // Array of edge objects
-        this.yTags = this.ydoc.getMap('tags');        // color -> Y.Map { name, color }
+        this.yNodes = this.ydoc.getMap('nodes'); // nodeId -> Y.Map (node properties)
+        this.yEdges = this.ydoc.getArray('edges'); // Array of edge objects
+        this.yTags = this.ydoc.getMap('tags'); // color -> Y.Map { name, color }
 
         // Local indexes (rebuilt from CRDT state, not synced)
         // These provide fast lookups for graph traversal
@@ -179,9 +185,11 @@ class CRDTGraph {
 
             // ALWAYS load from legacy data (source of truth)
             // This ensures toggle safety - legacy DB always wins
-            if (this._legacyData.nodes?.length > 0 ||
+            if (
+                this._legacyData.nodes?.length > 0 ||
                 this._legacyData.edges?.length > 0 ||
-                Object.keys(this._legacyData.tags || {}).length > 0) {
+                Object.keys(this._legacyData.tags || {}).length > 0
+            ) {
                 console.log('[CRDTGraph] Loading from legacy data (source of truth)');
                 this._clearAndLoadFromLegacy();
             }
@@ -190,7 +198,6 @@ class CRDTGraph {
             this._rebuildIndexes();
 
             console.log('[CRDTGraph] Persistence enabled, nodes:', this.yNodes.size);
-
         } catch (error) {
             console.error('[CRDTGraph] Failed to enable persistence:', error);
             // Continue without persistence - still usable in memory
@@ -240,7 +247,7 @@ class CRDTGraph {
                 maxConns: options.maxConns || 20 + Math.floor(Math.random() * 15),
                 // Filter browser tab connections (use BroadcastChannel instead)
                 filterBcConns: options.filterBcConns !== false,
-                ...options
+                ...options,
             });
 
             // Log connection events
@@ -253,13 +260,12 @@ class CRDTGraph {
                     added: added.length,
                     removed: removed.length,
                     webrtc: webrtcPeers.length,
-                    broadcast: bcPeers.length
+                    broadcast: bcPeers.length,
                 });
             });
 
             console.log('[CRDTGraph] Multiplayer enabled');
             return this.webrtcProvider;
-
         } catch (error) {
             console.error('[CRDTGraph] Failed to enable multiplayer:', error);
             return null;
@@ -300,7 +306,7 @@ class CRDTGraph {
             enabled: true,
             connected: this.webrtcProvider.connected,
             room: this.webrtcProvider.roomName,
-            peers: this.webrtcProvider.awareness?.getStates().size - 1 || 0
+            peers: this.webrtcProvider.awareness?.getStates().size - 1 || 0,
         };
     }
 
@@ -331,7 +337,7 @@ class CRDTGraph {
      */
     lockNode(nodeId) {
         const awareness = this.getAwareness();
-        if (!awareness) return true;  // No multiplayer, always allow
+        if (!awareness) return true; // No multiplayer, always allow
 
         // Check if already locked by another client
         const lockInfo = this.getNodeLock(nodeId);
@@ -345,12 +351,12 @@ class CRDTGraph {
         const lockedNodes = { ...(currentState.lockedNodes || {}) };
         lockedNodes[nodeId] = {
             clientId: awareness.clientID,
-            timestamp: Date.now()
+            timestamp: Date.now(),
         };
 
         awareness.setLocalState({
             ...currentState,
-            lockedNodes
+            lockedNodes,
         });
 
         console.log(`[CRDTGraph] Locked node ${nodeId}`);
@@ -374,7 +380,7 @@ class CRDTGraph {
 
             awareness.setLocalState({
                 ...currentState,
-                lockedNodes
+                lockedNodes,
             });
 
             console.log(`[CRDTGraph] Unlocked node ${nodeId}`);
@@ -396,7 +402,7 @@ class CRDTGraph {
                 return {
                     clientId,
                     timestamp: state.lockedNodes[nodeId].timestamp,
-                    isOurs: clientId === awareness.clientID
+                    isOurs: clientId === awareness.clientID,
                 };
             }
         }
@@ -428,7 +434,7 @@ class CRDTGraph {
                     locks.set(nodeId, {
                         clientId,
                         timestamp: lockInfo.timestamp,
-                        isOurs: clientId === awareness.clientID
+                        isOurs: clientId === awareness.clientID,
                     });
                 }
             }
@@ -448,7 +454,7 @@ class CRDTGraph {
         if (currentState.lockedNodes && Object.keys(currentState.lockedNodes).length > 0) {
             awareness.setLocalState({
                 ...currentState,
-                lockedNodes: {}
+                lockedNodes: {},
             });
             console.log('[CRDTGraph] Released all locks');
         }
@@ -504,12 +510,12 @@ class CRDTGraph {
                     this.yTags.set(color, yTag);
                 }
             }
-        }, 'local');  // Mark as local change
+        }, 'local'); // Mark as local change
 
         console.log('[CRDTGraph] Loaded from legacy:', {
             nodes: this.yNodes.size,
             edges: this.yEdges.length,
-            tags: this.yTags.size
+            tags: this.yTags.size,
         });
     }
 
@@ -660,7 +666,7 @@ class CRDTGraph {
         // Check Y.Array first (more specific check)
         if (isYArray(value)) {
             const arr = value.toArray();
-            return arr.map(v => this._extractValue(v));
+            return arr.map((v) => this._extractValue(v));
         }
 
         if (isYText(value)) {
@@ -730,7 +736,7 @@ class CRDTGraph {
     addNode(node) {
         this.ydoc.transact(() => {
             this._addNodeToCRDT(node);
-        }, 'local');  // Mark as local change
+        }, 'local'); // Mark as local change
         return node;
     }
 
@@ -804,7 +810,7 @@ class CRDTGraph {
                     yNode.set(key, value);
                 }
             }
-        }, 'local');  // Mark as local change
+        }, 'local'); // Mark as local change
 
         return this.getNode(id);
     }
@@ -824,7 +830,7 @@ class CRDTGraph {
 
             // Remove node
             this.yNodes.delete(id);
-        }, 'local');  // Mark as local change
+        }, 'local'); // Mark as local change
 
         // Clear from local indexes
         this.incomingEdges.delete(id);
@@ -853,7 +859,7 @@ class CRDTGraph {
     addEdge(edge) {
         this.ydoc.transact(() => {
             this._addEdgeToCRDT(edge);
-        }, 'local');  // Mark as local change
+        }, 'local'); // Mark as local change
 
         // Note: indexes are automatically rebuilt by the yEdges observer
         // after the transaction completes, so no manual update needed here
@@ -911,7 +917,7 @@ class CRDTGraph {
      */
     getParents(nodeId) {
         const incoming = this.incomingEdges.get(nodeId) || [];
-        return incoming.map(edge => this.getNode(edge.source)).filter(Boolean);
+        return incoming.map((edge) => this.getNode(edge.source)).filter(Boolean);
     }
 
     /**
@@ -919,7 +925,7 @@ class CRDTGraph {
      */
     getChildren(nodeId) {
         const outgoing = this.outgoingEdges.get(nodeId) || [];
-        return outgoing.map(edge => this.getNode(edge.target)).filter(Boolean);
+        return outgoing.map((edge) => this.getNode(edge.target)).filter(Boolean);
     }
 
     /**
@@ -980,7 +986,7 @@ class CRDTGraph {
     countHiddenDescendants(nodeId) {
         const descendants = this.getDescendants(nodeId, new Set([nodeId]));
         // Count only those that are not visible via another path
-        return descendants.filter(d => !this.isNodeVisible(d.id)).length;
+        return descendants.filter((d) => !this.isNodeVisible(d.id)).length;
     }
 
     /**
@@ -1154,16 +1160,15 @@ class CRDTGraph {
         }
 
         // Convert to array and sort by created_at
-        const sorted = Array.from(allAncestors.values())
-            .sort((a, b) => a.created_at - b.created_at);
+        const sorted = Array.from(allAncestors.values()).sort((a, b) => a.created_at - b.created_at);
 
         // Convert to message format for API
         const userTypes = [NodeType.HUMAN, NodeType.HIGHLIGHT, NodeType.NOTE, NodeType.IMAGE];
-        return sorted.map(node => {
+        return sorted.map((node) => {
             const msg = {
                 role: userTypes.includes(node.type) ? 'user' : 'assistant',
                 content: node.content,
-                nodeId: node.id
+                nodeId: node.id,
             };
             if (node.imageData) {
                 msg.imageData = node.imageData;
@@ -1199,7 +1204,7 @@ class CRDTGraph {
             yTag.set('name', name);
             yTag.set('color', color);
             this.yTags.set(color, yTag);
-        }, 'local');  // Mark as local change
+        }, 'local'); // Mark as local change
     }
 
     /**
@@ -1230,7 +1235,7 @@ class CRDTGraph {
                     }
                 }
             });
-        }, 'local');  // Mark as local change
+        }, 'local'); // Mark as local change
     }
 
     /**
@@ -1241,7 +1246,7 @@ class CRDTGraph {
         if (!yTag || !isYMap(yTag)) return null;
         return {
             name: yTag.get('name'),
-            color: yTag.get('color')
+            color: yTag.get('color'),
         };
     }
 
@@ -1254,7 +1259,7 @@ class CRDTGraph {
             if (isYMap(yTag)) {
                 tags[color] = {
                     name: yTag.get('name'),
-                    color: yTag.get('color')
+                    color: yTag.get('color'),
                 };
             }
         });
@@ -1287,7 +1292,7 @@ class CRDTGraph {
             if (!tags.includes(color)) {
                 yTags.push([color]);
             }
-        }, 'local');  // Mark as local change
+        }, 'local'); // Mark as local change
     }
 
     /**
@@ -1334,7 +1339,7 @@ class CRDTGraph {
             initialX = 100;
             initialY = 100;
         } else {
-            const parents = parentIds.map(id => this.getNode(id)).filter(Boolean);
+            const parents = parentIds.map((id) => this.getNode(id)).filter(Boolean);
 
             if (parents.length === 1) {
                 const parent = parents[0];
@@ -1360,7 +1365,10 @@ class CRDTGraph {
         let attempts = 0;
         const maxAttempts = 20;
 
-        while (attempts < maxAttempts && window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+        while (
+            attempts < maxAttempts &&
+            window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)
+        ) {
             candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
             attempts++;
         }
@@ -1370,7 +1378,10 @@ class CRDTGraph {
             candidatePos.y = initialY;
 
             attempts = 0;
-            while (attempts < maxAttempts && window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+            while (
+                attempts < maxAttempts &&
+                window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)
+            ) {
                 candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
                 attempts++;
             }
@@ -1393,14 +1404,14 @@ class CRDTGraph {
         const allNodes = this.getAllNodes();
         const inDegree = new Map();
         const result = [];
-        const resultIds = new Set();  // Track by ID to avoid duplicates
+        const resultIds = new Set(); // Track by ID to avoid duplicates
 
         for (const node of allNodes) {
             const incoming = this.incomingEdges.get(node.id) || [];
             inDegree.set(node.id, incoming.length);
         }
 
-        const queue = allNodes.filter(n => inDegree.get(n.id) === 0);
+        const queue = allNodes.filter((n) => inDegree.get(n.id) === 0);
         queue.sort((a, b) => a.created_at - b.created_at);
 
         while (queue.length > 0) {
@@ -1461,7 +1472,7 @@ class CRDTGraph {
             if (parents.length === 0) {
                 layers.set(node.id, 0);
             } else {
-                const maxParentLayer = Math.max(...parents.map(p => layers.get(p.id) || 0));
+                const maxParentLayer = Math.max(...parents.map((p) => layers.get(p.id) || 0));
                 layers.set(node.id, maxParentLayer + 1);
             }
         }
@@ -1484,7 +1495,7 @@ class CRDTGraph {
 
         // Track positioned nodes with their NEW positions (not stale graph positions)
         const positioned = [];
-        const newPositions = new Map();  // nodeId -> { x, y }
+        const newPositions = new Map(); // nodeId -> { x, y }
 
         for (const node of sorted) {
             const layer = layers.get(node.id);
@@ -1495,7 +1506,7 @@ class CRDTGraph {
             const parents = this.getParents(node.id);
             if (parents.length > 0) {
                 // Use NEW positions from this layout run, not stale graph positions
-                const parentYs = parents.map(p => {
+                const parentYs = parents.map((p) => {
                     const newPos = newPositions.get(p.id);
                     return newPos ? newPos.y : START_Y;
                 });
@@ -1517,7 +1528,9 @@ class CRDTGraph {
                 let hasOverlap = false;
                 for (const pos of positioned) {
                     const horizontalOverlap = !(x + nodeWidth + 20 < pos.x || x > pos.x + pos.width + 20);
-                    const verticalOverlap = !(testY + nodeHeight + VERTICAL_GAP < pos.y || testY > pos.y + pos.height + VERTICAL_GAP);
+                    const verticalOverlap = !(
+                        testY + nodeHeight + VERTICAL_GAP < pos.y || testY > pos.y + pos.height + VERTICAL_GAP
+                    );
 
                     if (horizontalOverlap && verticalOverlap) {
                         hasOverlap = true;
@@ -1578,7 +1591,7 @@ class CRDTGraph {
         }
 
         // Initialize unpositioned nodes in a grid
-        const unpositioned = allNodes.filter(n => {
+        const unpositioned = allNodes.filter((n) => {
             const pos = positions.get(n.id);
             return !pos || (pos.x === 0 && pos.y === 0);
         });
@@ -1589,7 +1602,7 @@ class CRDTGraph {
                 if (!pos || (pos.x === 0 && pos.y === 0)) {
                     positions.set(node.id, {
                         x: 200 + (i % cols) * 400,
-                        y: 200 + Math.floor(i / cols) * 300
+                        y: 200 + Math.floor(i / cols) * 300,
                     });
                 }
             });
@@ -1662,10 +1675,10 @@ class CRDTGraph {
             for (const node of allNodes) {
                 const children = this.getChildren(node.id);
                 const parents = this.getParents(node.id);
-                const connectedIds = [...children.map(c => c.id), ...parents.map(p => p.id)];
+                const connectedIds = [...children.map((c) => c.id), ...parents.map((p) => p.id)];
 
                 for (const otherId of connectedIds) {
-                    const otherNode = allNodes.find(n => n.id === otherId);
+                    const otherNode = allNodes.find((n) => n.id === otherId);
                     if (!otherNode) continue;
 
                     const sizeA = getNodeSize(node);
@@ -1719,7 +1732,8 @@ class CRDTGraph {
         }
 
         // Normalize to start at (100, 100)
-        let minX = Infinity, minY = Infinity;
+        let minX = Infinity,
+            minY = Infinity;
         for (const node of allNodes) {
             const pos = getPos(node.id);
             minX = Math.min(minX, pos.x);
@@ -1767,15 +1781,9 @@ class CRDTGraph {
         return {
             nodes: this.getAllNodes(),
             edges: this.getAllEdges(),
-            tags: this.getAllTags()
+            tags: this.getAllTags(),
         };
     }
 }
 
-// Export for use in other modules
-window.CRDTGraph = CRDTGraph;
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CRDTGraph };
-}
+export { CRDTGraph };

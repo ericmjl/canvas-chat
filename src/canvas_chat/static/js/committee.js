@@ -51,7 +51,7 @@ class CommitteeFeature {
             context: context,
             selectedModels: [],
             chairmanModel: this.modelPicker.value,
-            includeReview: false
+            includeReview: false,
         };
 
         // Get the question textarea and populate it
@@ -67,9 +67,9 @@ class CommitteeFeature {
         const currentModel = this.modelPicker.value;
 
         // Get all available models from the model picker
-        const availableModels = Array.from(this.modelPicker.options).map(opt => ({
+        const availableModels = Array.from(this.modelPicker.options).map((opt) => ({
             id: opt.value,
-            name: opt.textContent
+            name: opt.textContent,
         }));
 
         // Pre-select up to 3 models: current + 2 most recent (excluding current)
@@ -77,7 +77,7 @@ class CommitteeFeature {
         preSelected.add(currentModel);
         for (const modelId of recentModels) {
             if (preSelected.size >= 3) break;
-            if (availableModels.some(m => m.id === modelId)) {
+            if (availableModels.some((m) => m.id === modelId)) {
                 preSelected.add(modelId);
             }
         }
@@ -141,7 +141,7 @@ class CommitteeFeature {
         const checkboxes = document.querySelectorAll('#committee-models-grid input[type="checkbox"]');
         const selectedModels = [];
 
-        checkboxes.forEach(cb => {
+        checkboxes.forEach((cb) => {
             const item = cb.closest('.committee-model-item');
             if (cb.checked) {
                 selectedModels.push(cb.value);
@@ -216,7 +216,7 @@ class CommitteeFeature {
 
         // Create human node for the question
         const humanNode = createNode(NodeType.HUMAN, `/committee ${question}`, {
-            position: this.graph.autoPosition(selectedIds)
+            position: this.graph.autoPosition(selectedIds),
         });
         this.graph.addNode(humanNode);
         this.canvas.renderNode(humanNode);
@@ -247,9 +247,9 @@ class CommitteeFeature {
             const opinionNode = createNode(NodeType.OPINION, `*Waiting for ${modelName}...*`, {
                 position: {
                     x: startX + i * spacing,
-                    y: basePos.y + verticalOffset
+                    y: basePos.y + verticalOffset,
                 },
-                model: modelId
+                model: modelId,
             });
 
             this.graph.addNode(opinionNode);
@@ -268,7 +268,7 @@ class CommitteeFeature {
         const synthesisY = basePos.y + verticalOffset * (includeReview ? 3 : 2);
         const synthesisNode = createNode(NodeType.SYNTHESIS, '*Waiting for opinions...*', {
             position: { x: basePos.x, y: synthesisY },
-            model: chairmanModel
+            model: chairmanModel,
         });
         this.graph.addNode(synthesisNode);
         this.canvas.renderNode(synthesisNode);
@@ -289,14 +289,14 @@ class CommitteeFeature {
 
         // Build base request to check if we're in admin mode
         const baseRequest = this.buildLLMRequest({});
-        const isAdminMode = !baseRequest.api_key;  // Admin mode doesn't include api_key
+        const isAdminMode = !baseRequest.api_key; // Admin mode doesn't include api_key
 
         // Collect API keys by provider for all models (in normal mode)
         // In admin mode, backend handles credentials so we pass empty object
         const apiKeys = isAdminMode ? {} : storage.getApiKeysForModels([...selectedModels, chairmanModel]);
 
         // Get base URL if configured (only in normal mode)
-        const baseUrl = isAdminMode ? null : (storage.getBaseUrl() || null);
+        const baseUrl = isAdminMode ? null : storage.getBaseUrl() || null;
 
         // Track accumulated content for each opinion/review
         const opinionContents = {};
@@ -314,9 +314,9 @@ class CommitteeFeature {
         // Store streaming state for potential abort
         this._activeCommittee = {
             abortController,
-            opinionNodeIds: opinionNodes.map(n => n.id),
+            opinionNodeIds: opinionNodes.map((n) => n.id),
             reviewNodeIds: [],
-            synthesisNodeId: synthesisNode.id
+            synthesisNodeId: synthesisNode.id,
         };
 
         try {
@@ -330,9 +330,9 @@ class CommitteeFeature {
                     chairman_model: chairmanModel,
                     api_keys: apiKeys,
                     base_url: baseUrl,
-                    include_review: includeReview
+                    include_review: includeReview,
                 }),
-                signal: abortController.signal
+                signal: abortController.signal,
             });
 
             if (!response.ok) {
@@ -355,14 +355,16 @@ class CommitteeFeature {
                         opinionContents[parsed.index] = '';
                         this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n*Thinking...*`, true);
                         this.canvas.showStopButton(nodeId);
-
                     } else if (eventType === 'opinion_chunk') {
                         const nodeId = opinionNodeMap[parsed.index];
                         opinionContents[parsed.index] = (opinionContents[parsed.index] || '') + parsed.content;
                         const model = selectedModels[parsed.index];
                         const modelName = this.getModelDisplayName(model);
-                        this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${opinionContents[parsed.index]}`, true);
-
+                        this.canvas.updateNodeContent(
+                            nodeId,
+                            `**${modelName}**\n\n${opinionContents[parsed.index]}`,
+                            true
+                        );
                     } else if (eventType === 'opinion_done') {
                         const nodeId = opinionNodeMap[parsed.index];
                         const model = selectedModels[parsed.index];
@@ -371,7 +373,6 @@ class CommitteeFeature {
                         this.canvas.updateNodeContent(nodeId, finalContent, false);
                         this.canvas.hideStopButton(nodeId);
                         this.graph.updateNode(nodeId, { content: finalContent });
-
                     } else if (eventType === 'review_start') {
                         // Create review node for this reviewer
                         const reviewerIndex = parsed.reviewer_index;
@@ -379,13 +380,17 @@ class CommitteeFeature {
 
                         // Position review nodes between opinions and synthesis
                         const reviewY = basePos.y + verticalOffset * 2;
-                        const reviewNode = createNode(NodeType.REVIEW, `**${modelName} Review**\n\n*Reviewing other opinions...*`, {
-                            position: {
-                                x: startX + reviewerIndex * spacing,
-                                y: reviewY
-                            },
-                            model: parsed.model
-                        });
+                        const reviewNode = createNode(
+                            NodeType.REVIEW,
+                            `**${modelName} Review**\n\n*Reviewing other opinions...*`,
+                            {
+                                position: {
+                                    x: startX + reviewerIndex * spacing,
+                                    y: reviewY,
+                                },
+                                model: parsed.model,
+                            }
+                        );
 
                         this.graph.addNode(reviewNode);
                         this.canvas.renderNode(reviewNode);
@@ -405,16 +410,19 @@ class CommitteeFeature {
                         if (this._activeCommittee) {
                             this._activeCommittee.reviewNodeIds.push(reviewNode.id);
                         }
-
                     } else if (eventType === 'review_chunk') {
                         const nodeId = reviewNodeMap[parsed.reviewer_index];
                         if (nodeId) {
-                            reviewContents[parsed.reviewer_index] = (reviewContents[parsed.reviewer_index] || '') + parsed.content;
+                            reviewContents[parsed.reviewer_index] =
+                                (reviewContents[parsed.reviewer_index] || '') + parsed.content;
                             const model = selectedModels[parsed.reviewer_index];
                             const modelName = this.getModelDisplayName(model);
-                            this.canvas.updateNodeContent(nodeId, `**${modelName} Review**\n\n${reviewContents[parsed.reviewer_index]}`, true);
+                            this.canvas.updateNodeContent(
+                                nodeId,
+                                `**${modelName} Review**\n\n${reviewContents[parsed.reviewer_index]}`,
+                                true
+                            );
                         }
-
                     } else if (eventType === 'review_done') {
                         const nodeId = reviewNodeMap[parsed.reviewer_index];
                         if (nodeId) {
@@ -425,7 +433,6 @@ class CommitteeFeature {
                             this.canvas.hideStopButton(nodeId);
                             this.graph.updateNode(nodeId, { content: finalContent });
                         }
-
                     } else if (eventType === 'synthesis_start') {
                         // Connect all opinion/review nodes to synthesis
                         const sourceNodes = reviewNodes.length > 0 ? reviewNodes : opinionNodes;
@@ -437,21 +444,26 @@ class CommitteeFeature {
 
                         const chairmanName = this.getModelDisplayName(parsed.model);
                         synthesisContent = '';
-                        this.canvas.updateNodeContent(synthesisNode.id, `**Synthesis (${chairmanName})**\n\n*Synthesizing opinions...*`, true);
+                        this.canvas.updateNodeContent(
+                            synthesisNode.id,
+                            `**Synthesis (${chairmanName})**\n\n*Synthesizing opinions...*`,
+                            true
+                        );
                         this.canvas.showStopButton(synthesisNode.id);
-
                     } else if (eventType === 'synthesis_chunk') {
                         synthesisContent += parsed.content;
                         const chairmanName = this.getModelDisplayName(chairmanModel);
-                        this.canvas.updateNodeContent(synthesisNode.id, `**Synthesis (${chairmanName})**\n\n${synthesisContent}`, true);
-
+                        this.canvas.updateNodeContent(
+                            synthesisNode.id,
+                            `**Synthesis (${chairmanName})**\n\n${synthesisContent}`,
+                            true
+                        );
                     } else if (eventType === 'synthesis_done') {
                         const chairmanName = this.getModelDisplayName(chairmanModel);
                         const finalContent = `**Synthesis (${chairmanName})**\n\n${parsed.full_content}`;
                         this.canvas.updateNodeContent(synthesisNode.id, finalContent, false);
                         this.canvas.hideStopButton(synthesisNode.id);
                         this.graph.updateNode(synthesisNode.id, { content: finalContent });
-
                     } else if (eventType === 'error') {
                         console.error('Committee error:', parsed.message);
                     }
@@ -472,9 +484,8 @@ class CommitteeFeature {
                 onError: (err) => {
                     console.error('Committee stream error:', err);
                     this._activeCommittee = null;
-                }
+                },
             });
-
         } catch (err) {
             if (err.name === 'AbortError') {
                 console.log('Committee request aborted');
@@ -522,14 +533,4 @@ class CommitteeFeature {
 // Exports
 // =============================================================================
 
-// Export for browser (window)
-if (typeof window !== 'undefined') {
-    window.CommitteeFeature = CommitteeFeature;
-}
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        CommitteeFeature
-    };
-}
+export { CommitteeFeature };

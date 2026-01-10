@@ -24,12 +24,12 @@ class Canvas {
         this.isDraggingNode = false;
         this.draggedNode = null;
         this.dragOffset = { x: 0, y: 0 };
-        this.dragStartPos = null;  // Track start position for undo
+        this.dragStartPos = null; // Track start position for undo
 
         // Node elements map
         this.nodeElements = new Map();
         this.edgeElements = new Map();
-        this.outputPanels = new Map();  // Track code output panels separately
+        this.outputPanels = new Map(); // Track code output panels separately
 
         // Track nodes where user has manually scrolled (to pause auto-scroll)
         this.userScrolledNodes = new Set();
@@ -42,44 +42,44 @@ class Canvas {
         this.onNodeSelect = null;
         this.onNodeDeselect = null;
         this.onNodeMove = null;
-        this.onNodeDrag = null;  // For real-time position updates during drag (multiplayer sync)
+        this.onNodeDrag = null; // For real-time position updates during drag (multiplayer sync)
         this.onNodeResize = null;
-        this.onNodeResizing = null;  // For real-time size updates during resize (multiplayer sync)
+        this.onNodeResizing = null; // For real-time size updates during resize (multiplayer sync)
         this.onNodeReply = null;
         this.onNodeBranch = null;
         this.onNodeSummarize = null;
         this.onNodeFetchSummarize = null;
         this.onNodeDelete = null;
-        this.onNodeCopy = null;  // For copying node content
-        this.onNodeTitleEdit = null;  // For editing node title in semantic zoom
-        this.onNodeStopGeneration = null;  // For stopping LLM generation
-        this.onNodeContinueGeneration = null;  // For continuing stopped generation
-        this.onNodeRetry = null;  // For retrying failed operations
-        this.onNodeDismissError = null;  // For dismissing error nodes
-        this.onNodeFitToViewport = null;  // For resizing node to 80% of viewport
-        this.onNodeResetSize = null;  // For resetting node to default size
-        this.onNodeEditContent = null;  // For editing node content (FETCH_RESULT)
-        this.onNodeResummarize = null;  // For re-summarizing edited content
-        this.onNodeNavigate = null;  // For navigating to parent/child nodes
-        this.onNavParentClick = null;  // For handling parent navigation button click
-        this.onNavChildClick = null;  // For handling child navigation button click
-        this.onCreateFlashcards = null;  // For generating flashcards from content
-        this.onReviewCard = null;  // For reviewing a flashcard
-        this.onNodeCollapse = null;  // For collapsing/expanding node children
-        this.onNodeAnalyze = null;  // For analyzing CSV data with AI
-        this.onNodeRunCode = null;  // For executing code in Pyodide
+        this.onNodeCopy = null; // For copying node content
+        this.onNodeTitleEdit = null; // For editing node title in semantic zoom
+        this.onNodeStopGeneration = null; // For stopping LLM generation
+        this.onNodeContinueGeneration = null; // For continuing stopped generation
+        this.onNodeRetry = null; // For retrying failed operations
+        this.onNodeDismissError = null; // For dismissing error nodes
+        this.onNodeFitToViewport = null; // For resizing node to 80% of viewport
+        this.onNodeResetSize = null; // For resetting node to default size
+        this.onNodeEditContent = null; // For editing node content (FETCH_RESULT)
+        this.onNodeResummarize = null; // For re-summarizing edited content
+        this.onNodeNavigate = null; // For navigating to parent/child nodes
+        this.onNavParentClick = null; // For handling parent navigation button click
+        this.onNavChildClick = null; // For handling child navigation button click
+        this.onCreateFlashcards = null; // For generating flashcards from content
+        this.onReviewCard = null; // For reviewing a flashcard
+        this.onNodeCollapse = null; // For collapsing/expanding node children
+        this.onNodeAnalyze = null; // For analyzing CSV data with AI
+        this.onNodeRunCode = null; // For executing code in Pyodide
 
         // PDF drag & drop callback
-        this.onPdfDrop = null;  // For handling PDF file drops
+        this.onPdfDrop = null; // For handling PDF file drops
 
         // Image drag & drop callback
-        this.onImageDrop = null;  // For handling image file drops
+        this.onImageDrop = null; // For handling image file drops
 
         // Image click callback (for images in node content)
-        this.onImageClick = null;  // For handling clicks on images in node content
+        this.onImageClick = null; // For handling clicks on images in node content
 
         // Tag chip click callback (for highlighting nodes by tag)
-        this.onTagChipClick = null;  // For handling clicks on tag chips
+        this.onTagChipClick = null; // For handling clicks on tag chips
 
         // EventEmitter for new event-based API
         this.events = new EventEmitter();
@@ -87,12 +87,12 @@ class Canvas {
         // Reply tooltip state
         this.branchTooltip = null;
         this.activeSelectionNodeId = null;
-        this.pendingSelectedText = null;  // Store selected text when tooltip opens
+        this.pendingSelectedText = null; // Store selected text when tooltip opens
 
         // Navigation popover state
         this.navPopover = null;
         this.activeNavNodeId = null;
-        this.navPopoverSelectedIndex = 0;  // Currently selected item in popover
+        this.navPopoverSelectedIndex = 0; // Currently selected item in popover
 
         // No-nodes-visible hint
         this.noNodesHint = document.getElementById('no-nodes-hint');
@@ -204,9 +204,10 @@ class Canvas {
         if (selectionTextEl) {
             // Truncate if too long, but show full text on hover
             const maxLength = 100;
-            const displayText = this.pendingSelectedText.length > maxLength
-                ? this.pendingSelectedText.slice(0, maxLength) + '…'
-                : this.pendingSelectedText;
+            const displayText =
+                this.pendingSelectedText.length > maxLength
+                    ? this.pendingSelectedText.slice(0, maxLength) + '…'
+                    : this.pendingSelectedText;
             selectionTextEl.textContent = `"${displayText}"`;
             selectionTextEl.title = this.pendingSelectedText; // Full text on hover
         }
@@ -286,7 +287,7 @@ class Canvas {
         }
 
         this.imageTooltip.style.display = 'block';
-        this.imageTooltip.style.left = `${position.x - 100}px`;  // Center horizontally
+        this.imageTooltip.style.left = `${position.x - 100}px`; // Center horizontally
         this.imageTooltip.style.top = `${position.y - 10}px`;
     }
 
@@ -356,24 +357,26 @@ class Canvas {
         titleEl.textContent = direction === 'parent' ? 'Parents' : 'Children';
 
         // Build list items
-        listEl.innerHTML = nodes.map(node => {
-            const wrapped = wrapNode(node);
-            const icon = wrapped.getTypeIcon();
-            const label = wrapped.getTypeLabel();
-            const summary = wrapped.getSummaryText(this);
-            const truncatedSummary = summary.length > 40 ? summary.slice(0, 40) + '...' : summary;
+        listEl.innerHTML = nodes
+            .map((node) => {
+                const wrapped = wrapNode(node);
+                const icon = wrapped.getTypeIcon();
+                const label = wrapped.getTypeLabel();
+                const summary = wrapped.getSummaryText(this);
+                const truncatedSummary = summary.length > 40 ? summary.slice(0, 40) + '...' : summary;
 
-            return `
+                return `
                 <div class="nav-popover-item" data-node-id="${node.id}">
                     <span class="nav-popover-icon">${icon}</span>
                     <span class="nav-popover-label">${this.escapeHtml(label)}</span>
                     <span class="nav-popover-summary">${this.escapeHtml(truncatedSummary)}</span>
                 </div>
             `;
-        }).join('');
+            })
+            .join('');
 
         // Add click handlers to items
-        listEl.querySelectorAll('.nav-popover-item').forEach(item => {
+        listEl.querySelectorAll('.nav-popover-item').forEach((item) => {
             item.addEventListener('click', (e) => {
                 const nodeId = item.getAttribute('data-node-id');
                 this.hideNavPopover();
@@ -400,7 +403,7 @@ class Canvas {
     hideNavPopover() {
         this.navPopover.style.display = 'none';
         this.activeNavNodeId = null;
-        this.navPopoverSelectedIndex = 0;  // Reset selection
+        this.navPopoverSelectedIndex = 0; // Reset selection
     }
 
     /**
@@ -425,8 +428,7 @@ class Canvas {
         items[this.navPopoverSelectedIndex]?.classList.remove('selected');
 
         // Calculate new index with wrapping
-        this.navPopoverSelectedIndex =
-            (this.navPopoverSelectedIndex + direction + items.length) % items.length;
+        this.navPopoverSelectedIndex = (this.navPopoverSelectedIndex + direction + items.length) % items.length;
 
         // Add selection to new item and scroll into view
         const newSelected = items[this.navPopoverSelectedIndex];
@@ -511,7 +513,7 @@ class Canvas {
             const rect = button.getBoundingClientRect();
             const position = {
                 x: rect.left,
-                y: direction === 'parent' ? rect.top - 10 : rect.bottom + 10
+                y: direction === 'parent' ? rect.top - 10 : rect.bottom + 10,
             };
             this.activeNavNodeId = nodeId;
             this.showNavPopover(direction, nodes, position);
@@ -539,7 +541,8 @@ class Canvas {
                 navParentBtn.title = 'No parent nodes';
             } else {
                 navParentBtn.classList.remove('disabled');
-                navParentBtn.title = parentCount === 1 ? 'Go to parent node' : `Go to parent (${parentCount} available)`;
+                navParentBtn.title =
+                    parentCount === 1 ? 'Go to parent node' : `Go to parent (${parentCount} available)`;
             }
         }
 
@@ -573,7 +576,7 @@ class Canvas {
     getViewportCenter() {
         return {
             x: this.viewBox.x + this.viewBox.width / 2,
-            y: this.viewBox.y + this.viewBox.height / 2
+            y: this.viewBox.y + this.viewBox.height / 2,
         };
     }
 
@@ -613,7 +616,11 @@ class Canvas {
             if (!e.target.closest('.image-tooltip')) {
                 this.hideImageTooltip();
             }
-            if (!e.target.closest('.nav-popover') && !e.target.closest('.nav-parent-btn') && !e.target.closest('.nav-child-btn')) {
+            if (
+                !e.target.closest('.nav-popover') &&
+                !e.target.closest('.nav-parent-btn') &&
+                !e.target.closest('.nav-child-btn')
+            ) {
                 this.hideNavPopover();
             }
         });
@@ -628,11 +635,11 @@ class Canvas {
             touches: [],
             lastDistance: 0,
             lastCenter: { x: 0, y: 0 },
-            isPinching: false
+            isPinching: false,
         };
         this.gestureState = {
             startScale: 1,
-            isGesturing: false
+            isGesturing: false,
         };
     }
 
@@ -727,21 +734,21 @@ class Canvas {
         const position = this.clientToSvg(e.clientX, e.clientY);
 
         // Check for PDF file first
-        const pdfFile = Array.from(files).find(f => f.type === 'application/pdf');
+        const pdfFile = Array.from(files).find((f) => f.type === 'application/pdf');
         if (pdfFile) {
             this.emit('pdfDrop', pdfFile, position);
             return;
         }
 
         // Check for CSV file
-        const csvFile = Array.from(files).find(f => f.name.endsWith('.csv') || f.type === 'text/csv');
+        const csvFile = Array.from(files).find((f) => f.name.endsWith('.csv') || f.type === 'text/csv');
         if (csvFile) {
             this.emit('csvDrop', csvFile, position);
             return;
         }
 
         // Check for image file
-        const imageFile = Array.from(files).find(f => f.type.startsWith('image/'));
+        const imageFile = Array.from(files).find((f) => f.type.startsWith('image/'));
         if (imageFile) {
             this.emit('imageDrop', imageFile, position);
             return;
@@ -776,7 +783,8 @@ class Canvas {
     }
 
     updateViewBox() {
-        this.svg.setAttribute('viewBox',
+        this.svg.setAttribute(
+            'viewBox',
             `${this.viewBox.x} ${this.viewBox.y} ${this.viewBox.width} ${this.viewBox.height}`
         );
 
@@ -929,7 +937,7 @@ class Canvas {
             if (wrapper) {
                 const newPos = {
                     x: parseFloat(wrapper.getAttribute('x')),
-                    y: parseFloat(wrapper.getAttribute('y'))
+                    y: parseFloat(wrapper.getAttribute('y')),
                 };
 
                 // Remove dragging class
@@ -980,19 +988,28 @@ class Canvas {
             // Check for any scrollable container within nodes or output panels
             // Note: .code-output-panel-body handles all scrolling for output panels
             // Note: .code-editor-area is the scrollable area for code editor
-            const scrollableContent = e.target.closest('.node-content, .code-output-panel-body, .csv-preview, .code-error-output, .code-editor-area');
+            const scrollableContent = e.target.closest(
+                '.node-content, .code-output-panel-body, .csv-preview, .code-error-output, .code-editor-area'
+            );
             if (scrollableContent) {
                 // Check if this content element is actually scrollable (has overflow: auto/scroll)
                 const style = window.getComputedStyle(scrollableContent);
-                const isScrollable = style.overflowY === 'auto' || style.overflowY === 'scroll' ||
-                                     style.overflowX === 'auto' || style.overflowX === 'scroll';
+                const isScrollable =
+                    style.overflowY === 'auto' ||
+                    style.overflowY === 'scroll' ||
+                    style.overflowX === 'auto' ||
+                    style.overflowX === 'scroll';
 
                 if (isScrollable) {
                     // Check if content can scroll in the wheel direction
                     const canScrollUp = scrollableContent.scrollTop > 0;
-                    const canScrollDown = scrollableContent.scrollTop < (scrollableContent.scrollHeight - scrollableContent.clientHeight - 1);
+                    const canScrollDown =
+                        scrollableContent.scrollTop <
+                        scrollableContent.scrollHeight - scrollableContent.clientHeight - 1;
                     const canScrollLeft = scrollableContent.scrollLeft > 0;
-                    const canScrollRight = scrollableContent.scrollLeft < (scrollableContent.scrollWidth - scrollableContent.clientWidth - 1);
+                    const canScrollRight =
+                        scrollableContent.scrollLeft <
+                        scrollableContent.scrollWidth - scrollableContent.clientWidth - 1;
 
                     // Determine scroll direction from wheel delta
                     const scrollingDown = e.deltaY > 0;
@@ -1002,7 +1019,8 @@ class Canvas {
 
                     // If content can scroll in the requested direction, let it scroll naturally
                     const shouldScrollVertically = (scrollingDown && canScrollDown) || (scrollingUp && canScrollUp);
-                    const shouldScrollHorizontally = (scrollingRight && canScrollRight) || (scrollingLeft && canScrollLeft);
+                    const shouldScrollHorizontally =
+                        (scrollingRight && canScrollRight) || (scrollingLeft && canScrollLeft);
 
                     if (shouldScrollVertically || shouldScrollHorizontally) {
                         // Let the content scroll - prevent canvas from panning
@@ -1043,7 +1061,7 @@ class Canvas {
 
     handleTouchStart(e) {
         const touches = Array.from(e.touches);
-        this.touchState.touches = touches.map(t => ({ x: t.clientX, y: t.clientY }));
+        this.touchState.touches = touches.map((t) => ({ x: t.clientX, y: t.clientY }));
 
         if (touches.length === 2) {
             // Two fingers - prepare for pinch/pan
@@ -1097,7 +1115,6 @@ class Canvas {
             this.touchState.lastDistance = currentDistance;
             this.touchState.lastCenter = currentCenter;
             this.updateViewBox();
-
         } else if (touches.length === 1 && !this.touchState.isPinching) {
             // Single finger on a node - allow native behavior
             if (e.target.closest('.node')) return;
@@ -1118,7 +1135,7 @@ class Canvas {
 
     handleTouchEnd(e) {
         const touches = Array.from(e.touches);
-        this.touchState.touches = touches.map(t => ({ x: t.clientX, y: t.clientY }));
+        this.touchState.touches = touches.map((t) => ({ x: t.clientX, y: t.clientY }));
 
         if (touches.length < 2) {
             this.touchState.isPinching = false;
@@ -1137,7 +1154,7 @@ class Canvas {
     getTouchCenter(touches) {
         return {
             x: (touches[0].clientX + touches[1].clientX) / 2,
-            y: (touches[0].clientY + touches[1].clientY) / 2
+            y: (touches[0].clientY + touches[1].clientY) / 2,
         };
     }
 
@@ -1188,7 +1205,7 @@ class Canvas {
         const rect = this.container.getBoundingClientRect();
         return {
             x: this.viewBox.x + (clientX - rect.left) / this.scale,
-            y: this.viewBox.y + (clientY - rect.top) / this.scale
+            y: this.viewBox.y + (clientY - rect.top) / this.scale,
         };
     }
 
@@ -1199,8 +1216,10 @@ class Canvas {
         const nodes = Array.from(this.nodeElements.values());
         if (nodes.length === 0) return;
 
-        let minX = Infinity, minY = Infinity;
-        let maxX = -Infinity, maxY = -Infinity;
+        let minX = Infinity,
+            minY = Infinity;
+        let maxX = -Infinity,
+            maxY = -Infinity;
 
         for (const wrapper of nodes) {
             const x = parseFloat(wrapper.getAttribute('x'));
@@ -1235,8 +1254,8 @@ class Canvas {
      */
     centerOn(x, y) {
         const rect = this.container.getBoundingClientRect();
-        this.viewBox.x = x - (rect.width / this.scale) / 2;
-        this.viewBox.y = y - (rect.height / this.scale) / 2;
+        this.viewBox.x = x - rect.width / this.scale / 2;
+        this.viewBox.y = y - rect.height / this.scale / 2;
         this.updateViewBox();
     }
 
@@ -1245,8 +1264,8 @@ class Canvas {
      */
     centerOnAnimated(x, y, duration = 300) {
         const rect = this.container.getBoundingClientRect();
-        const endX = x - (rect.width / this.scale) / 2;
-        const endY = y - (rect.height / this.scale) / 2;
+        const endX = x - rect.width / this.scale / 2;
+        const endY = y - rect.height / this.scale / 2;
 
         const startX = this.viewBox.x;
         const startY = this.viewBox.y;
@@ -1340,7 +1359,7 @@ class Canvas {
                     startX,
                     startY,
                     endX,
-                    endY
+                    endY,
                 });
             }
         }
@@ -1393,8 +1412,10 @@ class Canvas {
             if (viewportAnim) {
                 this.viewBox.x = viewportAnim.startX + (viewportAnim.endX - viewportAnim.startX) * eased;
                 this.viewBox.y = viewportAnim.startY + (viewportAnim.endY - viewportAnim.startY) * eased;
-                this.viewBox.width = viewportAnim.startWidth + (viewportAnim.endWidth - viewportAnim.startWidth) * eased;
-                this.viewBox.height = viewportAnim.startHeight + (viewportAnim.endHeight - viewportAnim.startHeight) * eased;
+                this.viewBox.width =
+                    viewportAnim.startWidth + (viewportAnim.endWidth - viewportAnim.startWidth) * eased;
+                this.viewBox.height =
+                    viewportAnim.startHeight + (viewportAnim.endHeight - viewportAnim.startHeight) * eased;
                 this.scale = viewportAnim.startScale + (viewportAnim.endScale - viewportAnim.startScale) * eased;
                 this.updateViewBox();
             }
@@ -1417,8 +1438,10 @@ class Canvas {
         const nodes = graph.getAllNodes();
         if (nodes.length === 0) return null;
 
-        let minX = Infinity, minY = Infinity;
-        let maxX = -Infinity, maxY = -Infinity;
+        let minX = Infinity,
+            minY = Infinity;
+        let maxX = -Infinity,
+            maxY = -Infinity;
 
         for (const node of nodes) {
             const wrapper = this.nodeElements.get(node.id);
@@ -1450,7 +1473,7 @@ class Canvas {
             endY: minY - padding,
             endWidth: rect.width / endScale,
             endHeight: rect.height / endScale,
-            endScale
+            endScale,
         };
     }
 
@@ -1493,8 +1516,10 @@ class Canvas {
      * @returns {{x: number, y: number, width: number, height: number}} Bounding box
      */
     getNodesBoundingBox(nodeIds, padding = 50) {
-        let minX = Infinity, minY = Infinity;
-        let maxX = -Infinity, maxY = -Infinity;
+        let minX = Infinity,
+            minY = Infinity;
+        let maxX = -Infinity,
+            maxY = -Infinity;
 
         for (const nodeId of nodeIds) {
             const wrapper = this.nodeElements.get(nodeId);
@@ -1516,7 +1541,7 @@ class Canvas {
             x: minX - padding,
             y: minY - padding,
             width: maxX - minX + padding * 2,
-            height: maxY - minY + padding * 2
+            height: maxY - minY + padding * 2,
         };
     }
 
@@ -1542,9 +1567,7 @@ class Canvas {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
             // ease-in-out cubic: smoother for combined zoom + pan
-            const eased = progress < 0.5
-                ? 4 * progress * progress * progress
-                : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+            const eased = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
             this.viewBox.x = startX + (endX - startX) * eased;
             this.viewBox.y = startY + (endY - startY) * eased;
@@ -1609,8 +1632,8 @@ class Canvas {
 
         // Calculate 80% of viewport in canvas coordinates
         // We use screen pixels directly since we want consistent sizing regardless of zoom
-        const targetWidth = Math.round(viewport.width * 0.8 / this.scale);
-        const targetHeight = Math.round(viewport.height * 0.8 / this.scale);
+        const targetWidth = Math.round((viewport.width * 0.8) / this.scale);
+        const targetHeight = Math.round((viewport.height * 0.8) / this.scale);
 
         // Apply new dimensions
         wrapper.setAttribute('width', targetWidth);
@@ -1647,11 +1670,11 @@ class Canvas {
             if (sourceWrapper && targetWrapper) {
                 const sourcePos = {
                     x: parseFloat(sourceWrapper.getAttribute('x')),
-                    y: parseFloat(sourceWrapper.getAttribute('y'))
+                    y: parseFloat(sourceWrapper.getAttribute('y')),
                 };
                 const targetPos = {
                     x: parseFloat(targetWrapper.getAttribute('x')),
-                    y: parseFloat(targetWrapper.getAttribute('y'))
+                    y: parseFloat(targetWrapper.getAttribute('y')),
                 };
 
                 this.renderEdge(edge, sourcePos, targetPos);
@@ -1706,42 +1729,65 @@ class Canvas {
         const contentClasses = wrapped.getContentClasses();
 
         // Build action buttons HTML (may be empty for some node types like Matrix)
-        const actionsHtml = actions.map(action => {
-            const actionClass = action.id === 'reply' ? 'reply-btn' :
-                              action.id === 'branch' ? 'branch-btn' :
-                              action.id === 'summarize' ? 'summarize-btn' :
-                              action.id === 'fetch-summarize' ? 'fetch-summarize-btn' :
-                              action.id === 'edit-content' ? 'edit-content-btn' :
-                              action.id === 'resummarize' ? 'resummarize-btn' :
-                              action.id === 'copy' ? 'copy-btn' :
-                              action.id === 'create-flashcards' ? 'create-flashcards-btn' :
-                              action.id === 'flip-card' ? 'flip-card-btn' :
-                              action.id === 'review-card' ? 'review-card-btn' :
-                              action.id === 'analyze' ? 'analyze-btn' :
-                              action.id === 'edit-code' ? 'edit-code-btn' :
-                              action.id === 'generate' ? 'generate-btn' :
-                              action.id === 'run-code' ? 'run-code-btn' : '';
-            return `<button class="node-action ${actionClass}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
-        }).join('');
+        const actionsHtml = actions
+            .map((action) => {
+                const actionClass =
+                    action.id === 'reply'
+                        ? 'reply-btn'
+                        : action.id === 'branch'
+                          ? 'branch-btn'
+                          : action.id === 'summarize'
+                            ? 'summarize-btn'
+                            : action.id === 'fetch-summarize'
+                              ? 'fetch-summarize-btn'
+                              : action.id === 'edit-content'
+                                ? 'edit-content-btn'
+                                : action.id === 'resummarize'
+                                  ? 'resummarize-btn'
+                                  : action.id === 'copy'
+                                    ? 'copy-btn'
+                                    : action.id === 'create-flashcards'
+                                      ? 'create-flashcards-btn'
+                                      : action.id === 'flip-card'
+                                        ? 'flip-card-btn'
+                                        : action.id === 'review-card'
+                                          ? 'review-card-btn'
+                                          : action.id === 'analyze'
+                                            ? 'analyze-btn'
+                                            : action.id === 'edit-code'
+                                              ? 'edit-code-btn'
+                                              : action.id === 'generate'
+                                                ? 'generate-btn'
+                                                : action.id === 'run-code'
+                                                  ? 'run-code-btn'
+                                                  : '';
+                return `<button class="node-action ${actionClass}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
+            })
+            .join('');
 
         // Build header buttons HTML
-        const headerButtonsHtml = headerButtons.map(btn => {
-            // Collapse button is hidden by default, shown dynamically when node has children
-            if (btn.id === 'collapse') {
-                return `<button class="header-btn collapse-btn" title="${this.escapeHtml(btn.title)}" style="display:none;">${this.escapeHtml(btn.label)}</button>`;
-            }
-            const displayStyle = btn.hidden ? 'style="display:none;"' : '';
-            return `<button class="header-btn ${btn.id}-btn" title="${this.escapeHtml(btn.title)}" ${displayStyle}>${this.escapeHtml(btn.label)}</button>`;
-        }).join('');
+        const headerButtonsHtml = headerButtons
+            .map((btn) => {
+                // Collapse button is hidden by default, shown dynamically when node has children
+                if (btn.id === 'collapse') {
+                    return `<button class="header-btn collapse-btn" title="${this.escapeHtml(btn.title)}" style="display:none;">${this.escapeHtml(btn.label)}</button>`;
+                }
+                const displayStyle = btn.hidden ? 'style="display:none;"' : '';
+                return `<button class="header-btn ${btn.id}-btn" title="${this.escapeHtml(btn.title)}" ${displayStyle}>${this.escapeHtml(btn.label)}</button>`;
+            })
+            .join('');
 
         // Build content class string (node-content + any extra classes from protocol)
         const contentClassStr = contentClasses ? `node-content ${contentClasses}` : 'node-content';
 
         // Only render node-actions div if there are actions
-        const actionsSection = actions.length > 0 ? `
+        const actionsSection =
+            actions.length > 0
+                ? `
             <div class="node-actions">
                 ${actionsHtml}
-            </div>` : '';
+            </div>`
+                : '';
 
         div.innerHTML = `
             <div class="node-summary" title="Double-click to edit title">
@@ -1910,7 +1956,8 @@ class Canvas {
                 // Ease out cubic
                 const eased = 1 - Math.pow(1 - progress, 3);
 
-                const currentHeight = (collapsedHeight + panelOverlap) + (fullHeight - collapsedHeight - panelOverlap) * eased;
+                const currentHeight =
+                    collapsedHeight + panelOverlap + (fullHeight - collapsedHeight - panelOverlap) * eased;
                 panelWrapper.setAttribute('height', currentHeight);
 
                 if (panelBody) {
@@ -1953,7 +2000,7 @@ class Canvas {
         const duration = 250; // ms
         const startTime = performance.now();
         const startHeight = parseFloat(panelWrapper.getAttribute('height'));
-        const targetHeight = expand ? (fullHeight + panelOverlap) : (collapsedHeight + panelOverlap);
+        const targetHeight = expand ? fullHeight + panelOverlap : collapsedHeight + panelOverlap;
 
         // Show body immediately when expanding (so it's visible during animation)
         if (expand && panelBody) {
@@ -2100,6 +2147,57 @@ class Canvas {
     }
 
     /**
+     * Apply protocol-defined event bindings to a node element.
+     * This enables plugins to define their own event handlers.
+     *
+     * @param {HTMLElement} div - The node element
+     * @param {Object} node - The node data object
+     */
+    applyProtocolEventBindings(div, node) {
+        // Get protocol instance
+        const wrapped = wrapNode(node);
+        const bindings = wrapped.getEventBindings();
+
+        if (!bindings || bindings.length === 0) return;
+
+        for (const binding of bindings) {
+            const { selector, event = 'click', handler, multiple = false } = binding;
+
+            // Handle special 'init' event (called once after render, not a DOM event)
+            if (event === 'init') {
+                const element = div.querySelector(selector);
+                if (element && typeof handler === 'function') {
+                    // Create a fake event object for init handlers
+                    const fakeEvent = { currentTarget: element, target: element };
+                    try {
+                        handler(node.id, fakeEvent, this);
+                    } catch (err) {
+                        console.error(`Error in init handler for ${selector}:`, err);
+                    }
+                }
+                continue;
+            }
+
+            // Get elements to bind
+            const elements = multiple ? div.querySelectorAll(selector) : [div.querySelector(selector)].filter(Boolean);
+
+            for (const element of elements) {
+                element.addEventListener(event, (e) => {
+                    e.stopPropagation();
+
+                    if (typeof handler === 'string') {
+                        // Handler is an event name to emit
+                        this.emit(handler, node.id);
+                    } else if (typeof handler === 'function') {
+                        // Handler is a function: (nodeId, event, canvas) => void
+                        handler(node.id, e, this);
+                    }
+                });
+            }
+        }
+    }
+
+    /**
      * Setup event listeners for a node
      */
     setupNodeEvents(wrapper, node) {
@@ -2108,28 +2206,32 @@ class Canvas {
         // IMPORTANT: Use capture phase to ensure node selection happens BEFORE
         // any child element's stopPropagation() can prevent it. This provides
         // uniform selection behavior for ALL node types without special-casing.
-        div.addEventListener('click', (e) => {
-            // Skip resize handles - they shouldn't select
-            if (e.target.closest('.resize-handle')) return;
+        div.addEventListener(
+            'click',
+            (e) => {
+                // Skip resize handles - they shouldn't select
+                if (e.target.closest('.resize-handle')) return;
 
-            // Skip tag chips - clicking a tag should highlight by tag, not select node
-            if (e.target.closest('.node-tag')) return;
+                // Skip tag chips - clicking a tag should highlight by tag, not select node
+                if (e.target.closest('.node-tag')) return;
 
-            if (e.ctrlKey || e.metaKey) {
-                // Multi-select toggle
-                if (this.selectedNodes.has(node.id)) {
-                    this.deselectNode(node.id);
+                if (e.ctrlKey || e.metaKey) {
+                    // Multi-select toggle
+                    if (this.selectedNodes.has(node.id)) {
+                        this.deselectNode(node.id);
+                    } else {
+                        this.selectNode(node.id, true);
+                    }
                 } else {
-                    this.selectNode(node.id, true);
+                    // Single select (only if not already selected to avoid flicker)
+                    if (!this.selectedNodes.has(node.id)) {
+                        this.clearSelection();
+                        this.selectNode(node.id, false);
+                    }
                 }
-            } else {
-                // Single select (only if not already selected to avoid flicker)
-                if (!this.selectedNodes.has(node.id)) {
-                    this.clearSelection();
-                    this.selectNode(node.id, false);
-                }
-            }
-        }, true);  // true = capture phase
+            },
+            true
+        ); // true = capture phase
 
         // Drag to move - only via drag handle
         const dragHandle = div.querySelector('.drag-handle');
@@ -2152,7 +2254,7 @@ class Canvas {
                 const point = this.clientToSvg(e.clientX, e.clientY);
                 this.dragOffset = {
                     x: point.x - currentX,
-                    y: point.y - currentY
+                    y: point.y - currentY,
                 };
 
                 div.classList.add('dragging');
@@ -2184,7 +2286,7 @@ class Canvas {
             const point = this.clientToSvg(e.clientX, e.clientY);
             this.dragOffset = {
                 x: point.x - currentX,
-                y: point.y - currentY
+                y: point.y - currentY,
             };
 
             div.classList.add('dragging');
@@ -2192,7 +2294,7 @@ class Canvas {
 
         // Resize handles
         const resizeHandles = div.querySelectorAll('.resize-handle');
-        resizeHandles.forEach(handle => {
+        resizeHandles.forEach((handle) => {
             handle.addEventListener('mousedown', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
@@ -2324,7 +2426,10 @@ class Canvas {
                                         for (let c = 0; c < colItems.length; c++) {
                                             const cellKey = `${r}-${c}`;
                                             const cell = cells[cellKey];
-                                            const content = cell && cell.content ? cell.content.replace(/\n/g, ' ').replace(/\|/g, '\\|') : '';
+                                            const content =
+                                                cell && cell.content
+                                                    ? cell.content.replace(/\n/g, ' ').replace(/\|/g, '\\|')
+                                                    : '';
                                             text += ` ${content} |`;
                                         }
                                         text += '\n';
@@ -2487,14 +2592,7 @@ class Canvas {
             });
         }
 
-        // Initialize syntax highlighting for Code nodes (read-only display)
-        const codeDisplay = div.querySelector('.code-display');
-        if (codeDisplay && window.hljs) {
-            const codeEl = codeDisplay.querySelector('code');
-            if (codeEl) {
-                window.hljs.highlightElement(codeEl);
-            }
-        }
+        // Note: Syntax highlighting for Code nodes is now handled by CodeNode.getEventBindings()
 
         // Code output drawer toggle/clear buttons
         const outputToggle = div.querySelector('.code-output-toggle');
@@ -2513,107 +2611,9 @@ class Canvas {
             });
         }
 
-        // Matrix-specific event handlers
-        if (node.type === NodeType.MATRIX) {
-            // Cell click handlers (for filling or viewing)
-            const cells = div.querySelectorAll('.matrix-cell');
-            cells.forEach(cell => {
-                cell.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const row = parseInt(cell.dataset.row);
-                    const col = parseInt(cell.dataset.col);
-
-                    if (cell.classList.contains('filled')) {
-                        // View filled cell
-                        this.emit('matrixCellView', node.id, row, col);
-                    } else {
-                        // Fill empty cell
-                        this.emit('matrixCellFill', node.id, row, col);
-                    }
-                });
-            });
-
-            // Edit button
-            const editBtn = div.querySelector('.matrix-edit-btn');
-            if (editBtn) {
-                editBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.emit('matrixEdit', node.id);
-                });
-            }
-
-            // Fill all button
-            const fillAllBtn = div.querySelector('.matrix-fill-all-btn');
-            if (fillAllBtn) {
-                fillAllBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.emit('matrixFillAll', node.id);
-                });
-            }
-
-            // Copy context button
-            const copyContextBtn = div.querySelector('.matrix-context-copy');
-            if (copyContextBtn) {
-                copyContextBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    try {
-                        await navigator.clipboard.writeText(node.context);
-                        const originalText = copyContextBtn.textContent;
-                        copyContextBtn.textContent = '✓';
-                        setTimeout(() => {
-                            copyContextBtn.textContent = originalText;
-                        }, 1500);
-                    } catch (err) {
-                        console.error('Failed to copy:', err);
-                    }
-                });
-            }
-
-            // Row header click handlers (to extract row as node)
-            const rowHeaders = div.querySelectorAll('.row-header[data-row]');
-            rowHeaders.forEach(header => {
-                header.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const row = parseInt(header.dataset.row);
-                    this.emit('matrixRowExtract', node.id, row);
-                });
-            });
-
-            // Column header click handlers (to extract column as node)
-            const colHeaders = div.querySelectorAll('.col-header[data-col]');
-            colHeaders.forEach(header => {
-                header.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const col = parseInt(header.dataset.col);
-                    this.emit('matrixColExtract', node.id, col);
-                });
-            });
-
-            // Index column resize handle
-            const resizeHandle = div.querySelector('.index-col-resize-handle');
-            if (resizeHandle) {
-                resizeHandle.addEventListener('mousedown', (e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    this.startIndexColResize(e, node.id, div);
-                });
-            }
-        }
-
-        // Factcheck-specific event handlers (drawer toggle)
-        if (node.type === NodeType.FACTCHECK) {
-            const claimHeaders = div.querySelectorAll('.factcheck-claim-header');
-            claimHeaders.forEach(header => {
-                header.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const claimEl = header.closest('.factcheck-claim');
-                    if (claimEl && !claimEl.classList.contains('checking')) {
-                        // Toggle expanded state (multiple can be open)
-                        claimEl.classList.toggle('expanded');
-                    }
-                });
-            });
-        }
+        // Apply protocol-defined event bindings (for plugins and type-specific handlers)
+        // This replaces hardcoded if (node.type === ...) blocks with a declarative approach
+        this.applyProtocolEventBindings(div, node);
 
         // Track user scroll to pause auto-scroll during streaming
         // If user scrolls up (not at bottom), we stop auto-scrolling
@@ -2656,7 +2656,7 @@ class Canvas {
                     this.pendingImageNodeId = node.id;
                     this.showImageTooltip(imgSrc, {
                         x: rect.left + rect.width / 2,
-                        y: rect.top
+                        y: rect.top,
                     });
                 }
             });
@@ -2664,7 +2664,7 @@ class Canvas {
 
         // Tag chip click handlers (for highlighting nodes by tag)
         const tagChips = div.querySelectorAll('.node-tag');
-        tagChips.forEach(chip => {
+        tagChips.forEach((chip) => {
             chip.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const color = chip.dataset.color;
@@ -2732,9 +2732,8 @@ class Canvas {
         const summaryTextEl = wrapper.querySelector('.node-summary .summary-text');
         if (summaryTextEl) {
             // Priority: title > summary > truncated content
-            const displayText = node.title ||
-                                node.summary ||
-                                this.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
+            const displayText =
+                node.title || node.summary || this.truncate((node.content || '').replace(/[#*_`>\[\]()!]/g, ''), 60);
             summaryTextEl.textContent = displayText;
         }
     }
@@ -2780,7 +2779,7 @@ class Canvas {
      */
     clearMatrixCellHighlights() {
         const highlightedCells = this.nodesLayer.querySelectorAll('.matrix-cell.highlighted');
-        highlightedCells.forEach(cell => cell.classList.remove('highlighted'));
+        highlightedCells.forEach((cell) => cell.classList.remove('highlighted'));
     }
 
     /**
@@ -2922,10 +2921,12 @@ class Canvas {
             <div class="code-generate-input">
                 <input type="text" placeholder="Describe the code to generate..." class="generate-prompt-input" />
                 <select class="generate-model-select">
-                    ${models.map(m => {
-                        const selected = m.id === currentModel ? 'selected' : '';
-                        return `<option value="${this.escapeHtml(m.id)}" ${selected}>${this.escapeHtml(m.name)}</option>`;
-                    }).join('')}
+                    ${models
+                        .map((m) => {
+                            const selected = m.id === currentModel ? 'selected' : '';
+                            return `<option value="${this.escapeHtml(m.id)}" ${selected}>${this.escapeHtml(m.name)}</option>`;
+                        })
+                        .join('')}
                 </select>
                 <button class="generate-submit-btn" title="Generate code">→</button>
                 <button class="generate-cancel-btn" title="Cancel">×</button>
@@ -3406,10 +3407,10 @@ class Canvas {
         const targetHeight = targetWrapper ? parseFloat(targetWrapper.getAttribute('height')) || 100 : 100;
 
         // Calculate bezier curve with dynamic connection points
-        const d = this.calculateBezierPath(
-            sourcePos, { width: sourceWidth, height: sourceHeight },
-            targetPos, { width: targetWidth, height: targetHeight }
-        );
+        const d = this.calculateBezierPath(sourcePos, { width: sourceWidth, height: sourceHeight }, targetPos, {
+            width: targetWidth,
+            height: targetHeight,
+        });
         path.setAttribute('d', d);
 
         // Add arrowhead
@@ -3444,10 +3445,10 @@ class Canvas {
         const targetHeight = targetWrapper ? parseFloat(targetWrapper.getAttribute('height')) || 100 : 100;
 
         // Calculate bezier curve
-        const d = this.calculateBezierPath(
-            sourcePos, { width: sourceWidth, height: sourceHeight },
-            targetPos, { width: targetWidth, height: targetHeight }
-        );
+        const d = this.calculateBezierPath(sourcePos, { width: sourceWidth, height: sourceHeight }, targetPos, {
+            width: targetWidth,
+            height: targetHeight,
+        });
 
         // Check if edge already exists
         const existingPath = this.edgeElements.get(virtualEdgeId);
@@ -3513,7 +3514,7 @@ class Canvas {
     getConnectionPoint(nodePos, nodeSize, otherCenter) {
         const center = {
             x: nodePos.x + nodeSize.width / 2,
-            y: nodePos.y + nodeSize.height / 2
+            y: nodePos.y + nodeSize.height / 2,
         };
 
         // Calculate angle from this node's center to the other node's center
@@ -3526,17 +3527,17 @@ class Canvas {
         const PI = Math.PI;
         let side, x, y;
 
-        if (angle >= -PI/4 && angle < PI/4) {
+        if (angle >= -PI / 4 && angle < PI / 4) {
             // Right side
             side = 'right';
             x = nodePos.x + nodeSize.width;
             y = center.y;
-        } else if (angle >= PI/4 && angle < 3*PI/4) {
+        } else if (angle >= PI / 4 && angle < (3 * PI) / 4) {
             // Bottom side
             side = 'bottom';
             x = center.x;
             y = nodePos.y + nodeSize.height;
-        } else if (angle >= -3*PI/4 && angle < -PI/4) {
+        } else if (angle >= (-3 * PI) / 4 && angle < -PI / 4) {
             // Top side
             side = 'top';
             x = center.x;
@@ -3558,11 +3559,11 @@ class Canvas {
         // Calculate centers
         const sourceCenter = {
             x: sourcePos.x + sourceSize.width / 2,
-            y: sourcePos.y + sourceSize.height / 2
+            y: sourcePos.y + sourceSize.height / 2,
         };
         const targetCenter = {
             x: targetPos.x + targetSize.width / 2,
-            y: targetPos.y + targetSize.height / 2
+            y: targetPos.y + targetSize.height / 2,
         };
 
         // Get optimal connection points
@@ -3571,8 +3572,7 @@ class Canvas {
 
         // Calculate control points based on which sides are connected
         const distance = Math.sqrt(
-            Math.pow(targetPoint.x - sourcePoint.x, 2) +
-            Math.pow(targetPoint.y - sourcePoint.y, 2)
+            Math.pow(targetPoint.x - sourcePoint.x, 2) + Math.pow(targetPoint.y - sourcePoint.y, 2)
         );
         const controlOffset = Math.min(distance * 0.4, 150);
 
@@ -3580,17 +3580,41 @@ class Canvas {
 
         // Control point direction based on exit/entry side
         switch (sourcePoint.side) {
-            case 'right':  cp1x = sourcePoint.x + controlOffset; cp1y = sourcePoint.y; break;
-            case 'left':   cp1x = sourcePoint.x - controlOffset; cp1y = sourcePoint.y; break;
-            case 'top':    cp1x = sourcePoint.x; cp1y = sourcePoint.y - controlOffset; break;
-            case 'bottom': cp1x = sourcePoint.x; cp1y = sourcePoint.y + controlOffset; break;
+            case 'right':
+                cp1x = sourcePoint.x + controlOffset;
+                cp1y = sourcePoint.y;
+                break;
+            case 'left':
+                cp1x = sourcePoint.x - controlOffset;
+                cp1y = sourcePoint.y;
+                break;
+            case 'top':
+                cp1x = sourcePoint.x;
+                cp1y = sourcePoint.y - controlOffset;
+                break;
+            case 'bottom':
+                cp1x = sourcePoint.x;
+                cp1y = sourcePoint.y + controlOffset;
+                break;
         }
 
         switch (targetPoint.side) {
-            case 'right':  cp2x = targetPoint.x + controlOffset; cp2y = targetPoint.y; break;
-            case 'left':   cp2x = targetPoint.x - controlOffset; cp2y = targetPoint.y; break;
-            case 'top':    cp2x = targetPoint.x; cp2y = targetPoint.y - controlOffset; break;
-            case 'bottom': cp2x = targetPoint.x; cp2y = targetPoint.y + controlOffset; break;
+            case 'right':
+                cp2x = targetPoint.x + controlOffset;
+                cp2y = targetPoint.y;
+                break;
+            case 'left':
+                cp2x = targetPoint.x - controlOffset;
+                cp2y = targetPoint.y;
+                break;
+            case 'top':
+                cp2x = targetPoint.x;
+                cp2y = targetPoint.y - controlOffset;
+                break;
+            case 'bottom':
+                cp2x = targetPoint.x;
+                cp2y = targetPoint.y + controlOffset;
+                break;
         }
 
         return `M ${sourcePoint.x} ${sourcePoint.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetPoint.x} ${targetPoint.y}`;
@@ -3612,19 +3636,19 @@ class Canvas {
                 if (sourceWrapper && targetWrapper) {
                     const sourcePos = {
                         x: parseFloat(sourceWrapper.getAttribute('x')),
-                        y: parseFloat(sourceWrapper.getAttribute('y'))
+                        y: parseFloat(sourceWrapper.getAttribute('y')),
                     };
                     const targetPos = {
                         x: parseFloat(targetWrapper.getAttribute('x')),
-                        y: parseFloat(targetWrapper.getAttribute('y'))
+                        y: parseFloat(targetWrapper.getAttribute('y')),
                     };
                     const sourceSize = {
                         width: parseFloat(sourceWrapper.getAttribute('width')) || 420,
-                        height: parseFloat(sourceWrapper.getAttribute('height')) || 100
+                        height: parseFloat(sourceWrapper.getAttribute('height')) || 100,
                     };
                     const targetSize = {
                         width: parseFloat(targetWrapper.getAttribute('width')) || 420,
-                        height: parseFloat(targetWrapper.getAttribute('height')) || 100
+                        height: parseFloat(targetWrapper.getAttribute('height')) || 100,
                     };
 
                     // Update if this is the moved node
@@ -3746,7 +3770,7 @@ class Canvas {
             NodeType.NOTE,
             NodeType.AI,
             NodeType.RESEARCH,
-            NodeType.REFERENCE
+            NodeType.REFERENCE,
         ];
         return richTypes.includes(type);
     }
@@ -3785,9 +3809,7 @@ class Canvas {
         // If the source is not PNG, we need to convert it
         if (mimeType === 'image/png') {
             const blob = new Blob([byteArray], { type: 'image/png' });
-            await navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': blob })
-            ]);
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
         } else {
             // Convert to PNG using canvas
             const blob = new Blob([byteArray], { type: mimeType || 'image/png' });
@@ -3799,10 +3821,8 @@ class Canvas {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(imageBitmap, 0, 0);
 
-            const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-            await navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': pngBlob })
-            ]);
+            const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
         }
     }
 
@@ -3818,17 +3838,19 @@ class Canvas {
         const graph = window.app?.graph;
         if (!graph) return '';
 
-        const tagsHtml = node.tags.map(color => {
-            const tag = graph.getTag(color);
-            if (!tag) return '';
-            return `<div class="node-tag" data-color="${color}">${this.escapeHtml(tag.name)}</div>`;
-        }).filter(h => h).join('');
+        const tagsHtml = node.tags
+            .map((color) => {
+                const tag = graph.getTag(color);
+                if (!tag) return '';
+                return `<div class="node-tag" data-color="${color}">${this.escapeHtml(tag.name)}</div>`;
+            })
+            .filter((h) => h)
+            .join('');
 
         if (!tagsHtml) return '';
 
         return `<div class="node-tags">${tagsHtml}</div>`;
     }
-
 
     /**
      * Configure marked.js with KaTeX and other extensions (called once)
@@ -3853,10 +3875,12 @@ class Canvas {
             // Configure KaTeX extension first (if available)
             if (typeof markedKatex !== 'undefined') {
                 console.log('[Canvas] Configuring KaTeX extension...');
-                marked.use(markedKatex({
-                    throwOnError: false,
-                    nonStandard: true  // Enables \(...\) and \[...\] delimiters
-                }));
+                marked.use(
+                    markedKatex({
+                        throwOnError: false,
+                        nonStandard: true, // Enables \(...\) and \[...\] delimiters
+                    })
+                );
                 console.log('[Canvas] KaTeX extension configured');
             } else {
                 console.warn('[Canvas] markedKatex not available - math rendering will not work');
@@ -3864,14 +3888,14 @@ class Canvas {
 
             // Configure marked with custom link renderer and other options
             marked.use({
-                breaks: true,   // Convert \n to <br> within paragraphs
-                gfm: true,      // GitHub Flavored Markdown
+                breaks: true, // Convert \n to <br> within paragraphs
+                gfm: true, // GitHub Flavored Markdown
                 renderer: {
                     link({ href, title, text }) {
                         const titleAttr = title ? ` title="${title}"` : '';
                         return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
-                    }
-                }
+                    },
+                },
             });
 
             Canvas.markedConfigured = true;
@@ -3932,7 +3956,7 @@ class Canvas {
                         try {
                             const renderedMath = katex.renderToString(block.content, {
                                 displayMode: block.type === 'display',
-                                throwOnError: false
+                                throwOnError: false,
                             });
 
                             if (block.type === 'display') {
@@ -3944,7 +3968,10 @@ class Canvas {
                             console.warn('[Canvas] KaTeX error for:', block.content, mathError);
                             // Show the original LaTeX on error
                             const errorHtml = `<span class="katex-error">${this.escapeHtml(block.type === 'display' ? `\\[${block.content}\\]` : `\\(${block.content}\\)`)}</span>`;
-                            result = result.replace(block.type === 'display' ? displayPlaceholder : inlinePlaceholder, errorHtml);
+                            result = result.replace(
+                                block.type === 'display' ? displayPlaceholder : inlinePlaceholder,
+                                errorHtml
+                            );
                         }
                     }
                 }
@@ -3955,7 +3982,7 @@ class Canvas {
                         input: text.substring(0, 100),
                         mathBlocksFound: mathBlocks.length,
                         output: result.substring(0, 200),
-                        hasKatex: result.includes('katex')
+                        hasKatex: result.includes('katex'),
                     });
                 }
                 return result;
@@ -4051,9 +4078,4 @@ class Canvas {
 }
 
 // Export
-window.Canvas = Canvas;
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Canvas };
-}
+export { Canvas };

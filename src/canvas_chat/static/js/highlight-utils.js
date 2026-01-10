@@ -75,10 +75,13 @@ function alignStart(queryPrefix, target) {
 
     const isWs = (ch) => /\s/.test(ch);
 
-    const score = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+    const score = Array(m + 1)
+        .fill(null)
+        .map(() => Array(n + 1).fill(0));
 
     let maxScore = 0;
-    let maxI = 0, maxJ = 0;
+    let maxI = 0,
+        maxJ = 0;
 
     for (let i = 1; i <= m; i++) {
         for (let j = 1; j <= n; j++) {
@@ -111,7 +114,8 @@ function alignStart(queryPrefix, target) {
     if (maxScore === 0) return -1;
 
     // Traceback to find start position in target
-    let i = maxI, j = maxJ;
+    let i = maxI,
+        j = maxJ;
     let targetStart = j;
 
     while (i > 0 && j > 0 && score[i][j] > 0) {
@@ -130,7 +134,8 @@ function alignStart(queryPrefix, target) {
 
         if (i > 0 && j > 0 && score[i - 1][j - 1] + matchVal === current) {
             targetStart = j - 1;
-            i--; j--;
+            i--;
+            j--;
         } else if (i > 0 && score[i - 1][j] + GAP === current) {
             i--;
         } else {
@@ -207,13 +212,12 @@ function highlightTextInHtml(document, html, text) {
     temp.innerHTML = html;
 
     // Use TreeWalker to collect all text nodes, filtering out duplicates from KaTeX
-    const SHOW_TEXT = (document.defaultView && document.defaultView.NodeFilter)
-        ? document.defaultView.NodeFilter.SHOW_TEXT
-        : 4;
+    const SHOW_TEXT =
+        document.defaultView && document.defaultView.NodeFilter ? document.defaultView.NodeFilter.SHOW_TEXT : 4;
     const walker = document.createTreeWalker(temp, SHOW_TEXT);
     const textNodes = [];
     let node;
-    while (node = walker.nextNode()) {
+    while ((node = walker.nextNode())) {
         // Skip text nodes inside MathML/katex-mathml (they duplicate visible content)
         if (!isInsideSkippedElement(node)) {
             textNodes.push(node);
@@ -278,7 +282,7 @@ function highlightTextInHtml(document, html, text) {
             nodesToProcess.push({
                 node: textNode,
                 overlapStart,
-                overlapEnd
+                overlapEnd,
             });
         }
     }
@@ -327,20 +331,17 @@ function extractExcerptText(content) {
     let excerptText = content || '';
     excerptText = excerptText
         .split('\n')
-        .map(line => line.startsWith('> ') ? line.slice(2) : line)
+        .map((line) => (line.startsWith('> ') ? line.slice(2) : line))
         .join('\n');
     return excerptText;
 }
 
-// Export for ES module usage (tests)
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        highlightTextInHtml,
-        extractExcerptText,
-        isInsideSkippedElement,
-        normalizeKatexDuplication,
-        alignStart,
-        alignEnd,
-        findMatchRegion
-    };
-}
+export {
+    highlightTextInHtml,
+    extractExcerptText,
+    isInsideSkippedElement,
+    normalizeKatexDuplication,
+    alignStart,
+    alignEnd,
+    findMatchRegion,
+};

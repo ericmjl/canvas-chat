@@ -64,7 +64,7 @@ class ResearchFeature {
 
         // Create search node with original query initially
         const searchNode = createNode(NodeType.SEARCH, `Searching (${provider}): "${query}"`, {
-            position: this.graph.autoPosition(parentIds)
+            position: this.graph.autoPosition(parentIds),
         });
 
         this.graph.addNode(searchNode);
@@ -83,11 +83,7 @@ class ResearchFeature {
         this.updateEmptyState();
 
         // Smoothly pan to search node
-        this.canvas.centerOnAnimated(
-            searchNode.position.x + 160,
-            searchNode.position.y + 100,
-            300
-        );
+        this.canvas.centerOnAnimated(searchNode.position.x + 160, searchNode.position.y + 100, 300);
 
         try {
             let effectiveQuery = query;
@@ -99,11 +95,13 @@ class ResearchFeature {
                 const refineResponse = await fetch(apiUrl('/api/refine-query'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.buildLLMRequest({
-                        user_query: query,
-                        context: context,
-                        command_type: 'search'
-                    }))
+                    body: JSON.stringify(
+                        this.buildLLMRequest({
+                            user_query: query,
+                            context: context,
+                            command_type: 'search',
+                        })
+                    ),
                 });
 
                 if (refineResponse.ok) {
@@ -123,8 +121,8 @@ class ResearchFeature {
                     body: JSON.stringify({
                         query: effectiveQuery,
                         api_key: exaKey,
-                        num_results: 5
-                    })
+                        num_results: 5,
+                    }),
                 });
             } else {
                 response = await fetch(apiUrl('/api/ddg/search'), {
@@ -132,8 +130,8 @@ class ResearchFeature {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         query: effectiveQuery,
-                        max_results: 10
-                    })
+                        max_results: 10,
+                    }),
                 });
             }
 
@@ -153,7 +151,8 @@ class ResearchFeature {
 
             // Add one-time DDG tip for first-time users
             if (!hasExa && !sessionStorage.getItem('ddg-tip-shown')) {
-                searchContent += '\n\n---\n*Tip: For richer search with content extraction, add an Exa API key in Settings.*';
+                searchContent +=
+                    '\n\n---\n*Tip: For richer search with content extraction, add an Exa API key in Settings.*';
                 sessionStorage.setItem('ddg-tip-shown', 'true');
             }
 
@@ -168,8 +167,8 @@ class ResearchFeature {
                 const resultNode = createNode(NodeType.REFERENCE, resultContent, {
                     position: {
                         x: searchNode.position.x + 400,
-                        y: searchNode.position.y + offsetY
-                    }
+                        y: searchNode.position.y + offsetY,
+                    },
                 });
 
                 this.graph.addNode(resultNode);
@@ -184,7 +183,6 @@ class ResearchFeature {
             }
 
             this.saveSession();
-
         } catch (err) {
             const errorContent = `**Search (${provider}):** "${query}"\n\n*Error: ${err.message}*`;
             this.canvas.updateNodeContent(searchNode.id, errorContent, false);
@@ -238,11 +236,15 @@ class ResearchFeature {
             }
 
             // Create research node with original instructions initially
-            researchNode = createNode(NodeType.RESEARCH, `**Research${providerLabel}:** ${instructions}\n\n*Starting research...*`, {
-                position: this.graph.autoPosition(parentIds),
-                width: 500,  // Research nodes are wider for markdown reports
-                model: model  // Store model for display in header
-            });
+            researchNode = createNode(
+                NodeType.RESEARCH,
+                `**Research${providerLabel}:** ${instructions}\n\n*Starting research...*`,
+                {
+                    position: this.graph.autoPosition(parentIds),
+                    width: 500, // Research nodes are wider for markdown reports
+                    model: model, // Store model for display in header
+                }
+            );
 
             this.graph.addNode(researchNode);
             this.canvas.renderNode(researchNode);
@@ -260,11 +262,7 @@ class ResearchFeature {
             this.updateEmptyState();
 
             // Smoothly pan to research node
-            this.canvas.centerOnAnimated(
-                researchNode.position.x + 250,
-                researchNode.position.y + 100,
-                300
-            );
+            this.canvas.centerOnAnimated(researchNode.position.x + 250, researchNode.position.y + 100, 300);
         }
 
         // Create abort controller for stop button support
@@ -272,7 +270,7 @@ class ResearchFeature {
         this.registerStreaming(researchNode.id, abortController, {
             type: 'research',
             originalInstructions: instructions,
-            originalContext: context
+            originalContext: context,
         });
         this.canvas.showStopButton(researchNode.id);
 
@@ -284,23 +282,33 @@ class ResearchFeature {
 
             // If context is provided, use LLM to generate better research instructions
             if (context && context.trim()) {
-                this.canvas.updateNodeContent(nodeId, `**Research${providerLabel}:** ${instructions}\n\n*Refining research instructions...*`, true);
+                this.canvas.updateNodeContent(
+                    nodeId,
+                    `**Research${providerLabel}:** ${instructions}\n\n*Refining research instructions...*`,
+                    true
+                );
 
                 const refineResponse = await fetch(apiUrl('/api/refine-query'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.buildLLMRequest({
-                        user_query: instructions,
-                        context: context,
-                        command_type: 'research'
-                    }))
+                    body: JSON.stringify(
+                        this.buildLLMRequest({
+                            user_query: instructions,
+                            context: context,
+                            command_type: 'research',
+                        })
+                    ),
                 });
 
                 if (refineResponse.ok) {
                     const refineData = await refineResponse.json();
                     effectiveInstructions = refineData.refined_query;
                     // Update node to show what we're actually researching
-                    this.canvas.updateNodeContent(nodeId, `**Research${providerLabel}:** ${instructions}\n*Researching: "${effectiveInstructions}"*\n\n*Starting research...*`, true);
+                    this.canvas.updateNodeContent(
+                        nodeId,
+                        `**Research${providerLabel}:** ${instructions}\n*Researching: "${effectiveInstructions}"*\n\n*Starting research...*`,
+                        true
+                    );
                 }
             }
 
@@ -313,21 +321,23 @@ class ResearchFeature {
                     body: JSON.stringify({
                         instructions: effectiveInstructions,
                         api_key: exaKey,
-                        model: 'exa-research'
+                        model: 'exa-research',
                     }),
-                    signal: abortController.signal
+                    signal: abortController.signal,
                 });
             } else {
                 response = await fetch(apiUrl('/api/ddg/research'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.buildLLMRequest({
-                        instructions: effectiveInstructions,
-                        context: context || null,
-                        max_iterations: 4,
-                        max_sources: 40
-                    })),
-                    signal: abortController.signal
+                    body: JSON.stringify(
+                        this.buildLLMRequest({
+                            instructions: effectiveInstructions,
+                            context: context || null,
+                            max_iterations: 4,
+                            max_sources: 40,
+                        })
+                    ),
+                    signal: abortController.signal,
                 });
             }
 
@@ -360,9 +370,8 @@ class ResearchFeature {
                     if (eventType === 'status') {
                         lastStatus = data.trim();
                         if (!hasExa) {
-                            const sourcesBlock = ddgSourceCount > 0
-                                ? `## Sources (${ddgSourceCount})\n\n${ddgSourcesMd}`
-                                : '';
+                            const sourcesBlock =
+                                ddgSourceCount > 0 ? `## Sources (${ddgSourceCount})\n\n${ddgSourcesMd}` : '';
                             const statusContent = `${reportHeader}*${lastStatus}*\n\n${sourcesBlock}`.trim();
                             this.canvas.updateNodeContent(nodeId, statusContent, true);
                         } else {
@@ -449,11 +458,10 @@ class ResearchFeature {
                     if (err.name !== 'AbortError') {
                         throw err;
                     }
-                }
+                },
             });
 
             this.saveSession();
-
         } catch (err) {
             // Clean up streaming state
             const nodeId = researchNode.id;
@@ -482,5 +490,4 @@ class ResearchFeature {
     }
 }
 
-// Export for browser
-window.ResearchFeature = ResearchFeature;
+export { ResearchFeature };

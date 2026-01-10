@@ -17,23 +17,21 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-// Load required modules (simulate browser environment)
+// Mock browser globals before importing modules
 global.window = global;
+global.document = {
+    createElement: () => ({ textContent: '', innerHTML: '', id: '' }),
+    head: { appendChild: () => {} },
+};
 
-// Load graph-types.js to get NodeType and factory functions
+// Load graph-types.js with vm (not yet converted to ES module)
 const graphTypesPath = path.join(__dirname, '../src/canvas_chat/static/js/graph-types.js');
 const graphTypesCode = fs.readFileSync(graphTypesPath, 'utf8');
 vm.runInThisContext(graphTypesCode, { filename: graphTypesPath });
 
-// Load node-protocols.js
-const nodeProtocolsPath = path.join(__dirname, '../src/canvas_chat/static/js/node-protocols.js');
-const nodeProtocolsCode = fs.readFileSync(nodeProtocolsPath, 'utf8');
-vm.runInThisContext(nodeProtocolsCode, { filename: nodeProtocolsPath });
-
-// Extract functions and classes from window
+// Import ES modules - NodeRegistry and node-protocols
+const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
 const {
-    wrapNode,
-    validateNodeProtocol,
     Actions,
     BaseNode,
     HumanNode,
@@ -50,13 +48,17 @@ const {
     ColumnNode,
     FetchResultNode,
     PdfNode,
+    CsvNode,
+    CodeNode,
     OpinionNode,
     SynthesisNode,
     ReviewNode,
+    FactcheckNode,
     ImageNode,
-    CodeNode,
-    CsvNode
-} = global.window;
+    FlashcardNode,
+    wrapNode,
+    validateNodeProtocol,
+} = await import('../src/canvas_chat/static/js/node-protocols.js');
 
 // Simple test runner
 let passed = 0;
@@ -107,7 +109,7 @@ const mockCanvas = {
         return text.slice(0, maxLength - 1) + '…';
     },
     renderMarkdown: (text) => `<div>${text}</div>`,
-    showCopyFeedback: () => {}
+    showCopyFeedback: () => {},
 };
 
 // Note: mockApp is not used in these tests - protocol classes are tested directly
@@ -316,7 +318,7 @@ test('getSummaryText: MatrixNode generates from context and dimensions', () => {
         context: 'Evaluation',
         rowItems: ['A', 'B'],
         colItems: ['X', 'Y'],
-        cells: {}
+        cells: {},
     };
     const wrapped = wrapNode(node);
     assertEqual(wrapped.getSummaryText(mockCanvas), 'Evaluation (2×2)');
@@ -385,7 +387,7 @@ test('getHeaderButtons: BaseNode returns RESET_SIZE, FIT_VIEWPORT, DELETE', () =
     const node = { type: NodeType.NOTE, content: 'Test' };
     const wrapped = wrapNode(node);
     const buttons = wrapped.getHeaderButtons();
-    const buttonIds = buttons.map(b => b.id);
+    const buttonIds = buttons.map((b) => b.id);
     assertIncludes(buttonIds, 'reset-size');
     assertIncludes(buttonIds, 'fit-viewport');
     assertIncludes(buttonIds, 'delete');
@@ -395,7 +397,7 @@ test('getHeaderButtons: AINode includes STOP and CONTINUE', () => {
     const node = { type: NodeType.AI, content: 'Response' };
     const wrapped = wrapNode(node);
     const buttons = wrapped.getHeaderButtons();
-    const buttonIds = buttons.map(b => b.id);
+    const buttonIds = buttons.map((b) => b.id);
     assertIncludes(buttonIds, 'stop');
     assertIncludes(buttonIds, 'continue');
 });
@@ -404,7 +406,7 @@ test('getHeaderButtons: OpinionNode includes STOP and CONTINUE', () => {
     const node = { type: NodeType.OPINION, content: 'Opinion' };
     const wrapped = wrapNode(node);
     const buttons = wrapped.getHeaderButtons();
-    const buttonIds = buttons.map(b => b.id);
+    const buttonIds = buttons.map((b) => b.id);
     assertIncludes(buttonIds, 'stop');
     assertIncludes(buttonIds, 'continue');
 });
@@ -413,8 +415,8 @@ test('getHeaderButtons: STOP and CONTINUE buttons are hidden by default', () => 
     const node = { type: NodeType.AI, content: 'Response' };
     const wrapped = wrapNode(node);
     const buttons = wrapped.getHeaderButtons();
-    const stopBtn = buttons.find(b => b.id === 'stop');
-    const continueBtn = buttons.find(b => b.id === 'continue');
+    const stopBtn = buttons.find((b) => b.id === 'stop');
+    const continueBtn = buttons.find((b) => b.id === 'continue');
     assertTrue(stopBtn.hidden === true);
     assertTrue(continueBtn.hidden === true);
 });
@@ -485,7 +487,7 @@ test('renderContent: MatrixNode returns full HTML structure', () => {
         context: 'Test',
         rowItems: ['A'],
         colItems: ['X'],
-        cells: {}
+        cells: {},
     };
     const wrapped = wrapNode(node);
     const html = wrapped.renderContent(mockCanvas);
@@ -616,7 +618,7 @@ test('getHeaderButtons: CodeNode includes STOP and CONTINUE buttons', () => {
     const node = { type: NodeType.CODE, code: 'x = 1' };
     const wrapped = wrapNode(node);
     const buttons = wrapped.getHeaderButtons();
-    const buttonIds = buttons.map(b => b.id);
+    const buttonIds = buttons.map((b) => b.id);
     assertIncludes(buttonIds, 'stop');
     assertIncludes(buttonIds, 'continue');
 });

@@ -56,7 +56,7 @@ class FactcheckFeature {
 
         // Create a loading node immediately for feedback
         const loadingNode = createNode(NodeType.FACTCHECK, '🔄 **Analyzing text for claims...**', {
-            position: this.graph.autoPosition(parentIds)
+            position: this.graph.autoPosition(parentIds),
         });
         this.graph.addNode(loadingNode);
         this.canvas.renderNode(loadingNode);
@@ -82,11 +82,13 @@ class FactcheckFeature {
                 const refineResponse = await fetch(apiUrl('/api/refine-query'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.buildLLMRequest({
-                        user_query: input || 'verify this',
-                        context: context,
-                        command_type: 'factcheck'
-                    }))
+                    body: JSON.stringify(
+                        this.buildLLMRequest({
+                            user_query: input || 'verify this',
+                            context: context,
+                            command_type: 'factcheck',
+                        })
+                    ),
                 });
                 if (refineResponse.ok) {
                     const refineData = await refineResponse.json();
@@ -111,7 +113,8 @@ class FactcheckFeature {
 
             if (claims.length === 0) {
                 // No claims found - update loading node with error message
-                const errorContent = '**No verifiable claims found.**\n\nPlease provide specific factual statements to verify.';
+                const errorContent =
+                    '**No verifiable claims found.**\n\nPlease provide specific factual statements to verify.';
                 this.canvas.updateNodeContent(loadingNode.id, errorContent, false);
                 this.graph.updateNode(loadingNode.id, { content: errorContent });
                 this.saveSession();
@@ -128,9 +131,13 @@ class FactcheckFeature {
                     parentIds: parentIds,
                     model: model,
                     apiKey: apiKey,
-                    loadingNodeId: loadingNode.id
+                    loadingNodeId: loadingNode.id,
                 };
-                this.canvas.updateNodeContent(loadingNode.id, `🔄 **Found ${claims.length} claims.** Select which to verify...`, false);
+                this.canvas.updateNodeContent(
+                    loadingNode.id,
+                    `🔄 **Found ${claims.length} claims.** Select which to verify...`,
+                    false
+                );
                 this.showFactcheckModal(claims);
                 return;
             }
@@ -139,7 +146,6 @@ class FactcheckFeature {
             // Get API key (may be null in admin mode, backend handles it)
             const apiKey = chat.getApiKeyForModel(model);
             await this.executeFactcheck(claims, parentIds, model, apiKey, loadingNode.id);
-
         } catch (err) {
             console.error('Factcheck error:', err);
             // Update loading node with error
@@ -229,7 +235,7 @@ class FactcheckFeature {
      */
     handleFactcheckSelectAll(checked) {
         const checkboxes = document.querySelectorAll('#factcheck-claims-list input[type="checkbox"]');
-        checkboxes.forEach(cb => {
+        checkboxes.forEach((cb) => {
             cb.checked = checked;
         });
         this.updateFactcheckSelection();
@@ -290,8 +296,8 @@ class FactcheckFeature {
         if (!this._factcheckData) return;
 
         const checkboxes = document.querySelectorAll('#factcheck-claims-list input[type="checkbox"]:checked');
-        const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.value));
-        const selectedClaims = selectedIndices.map(i => this._factcheckData.claims[i]);
+        const selectedIndices = Array.from(checkboxes).map((cb) => parseInt(cb.value));
+        const selectedClaims = selectedIndices.map((i) => this._factcheckData.claims[i]);
 
         // Store data before closing modal (close nullifies _factcheckData)
         const { parentIds, model, apiKey, loadingNodeId } = this._factcheckData;
@@ -319,7 +325,7 @@ class FactcheckFeature {
             status: 'checking', // checking | verified | partially_true | misleading | false | unverifiable | error
             verdict: null,
             explanation: null,
-            sources: []
+            sources: [],
         }));
 
         const nodeContent = this.buildFactcheckContent(claimsData);
@@ -336,7 +342,7 @@ class FactcheckFeature {
             // Create new node
             factcheckNode = createNode(NodeType.FACTCHECK, nodeContent, {
                 position: this.graph.autoPosition(parentIds),
-                claims: claimsData
+                claims: claimsData,
             });
 
             this.graph.addNode(factcheckNode);
@@ -384,7 +390,7 @@ class FactcheckFeature {
             } else if (claim.explanation) {
                 lines.push(`${claim.explanation}`);
                 if (claim.sources && claim.sources.length > 0) {
-                    lines.push(`**Sources:** ${claim.sources.map(s => `[${s.title}](${s.url})`).join(', ')}`);
+                    lines.push(`**Sources:** ${claim.sources.map((s) => `[${s.title}](${s.url})`).join(', ')}`);
                 }
                 lines.push('');
             }
@@ -400,13 +406,13 @@ class FactcheckFeature {
      */
     getVerdictBadge(status) {
         const badges = {
-            'checking': '🔄',
-            'verified': '✅',
-            'partially_true': '⚠️',
-            'misleading': '🔶',
-            'false': '❌',
-            'unverifiable': '❓',
-            'error': '⚠️'
+            checking: '🔄',
+            verified: '✅',
+            partially_true: '⚠️',
+            misleading: '🔶',
+            false: '❌',
+            unverifiable: '❓',
+            error: '⚠️',
         };
         return badges[status] || '❓';
     }
@@ -432,7 +438,8 @@ class FactcheckFeature {
             const exaKey = hasExa ? storage.getExaApiKey() : null;
 
             const searchResults = [];
-            for (const query of queries.slice(0, 3)) { // Max 3 queries per claim
+            for (const query of queries.slice(0, 3)) {
+                // Max 3 queries per claim
                 try {
                     let response;
                     if (hasExa) {
@@ -442,8 +449,8 @@ class FactcheckFeature {
                             body: JSON.stringify({
                                 query: query,
                                 api_key: exaKey,
-                                num_results: 3
-                            })
+                                num_results: 3,
+                            }),
                         });
                     } else {
                         response = await fetch(apiUrl('/api/ddg/search'), {
@@ -451,8 +458,8 @@ class FactcheckFeature {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 query: query,
-                                max_results: 5
-                            })
+                                max_results: 5,
+                            }),
                         });
                     }
 
@@ -484,14 +491,13 @@ class FactcheckFeature {
                 status: verdict.status,
                 verdict: verdict.verdict,
                 explanation: verdict.explanation,
-                sources: verdict.sources
+                sources: verdict.sources,
             };
 
             // Update node data and re-render with protocol
             const newContent = this.buildFactcheckContent(node.claims);
             this.graph.updateNode(nodeId, { content: newContent, claims: node.claims });
             this.canvas.renderNode(this.graph.getNode(nodeId));
-
         } catch (err) {
             console.error('Claim verification error:', err);
 
@@ -500,7 +506,7 @@ class FactcheckFeature {
                 ...node.claims[claimIndex],
                 status: 'error',
                 explanation: `Verification failed: ${err.message}`,
-                sources: []
+                sources: [],
             };
 
             const newContent = this.buildFactcheckContent(node.claims);
@@ -540,7 +546,7 @@ If the input contains no factual content at all (e.g., just greetings or questio
         const response = await chat.sendMessageNonStreaming(
             [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: input }
+                { role: 'user', content: input },
             ],
             model,
             apiKey
@@ -554,7 +560,7 @@ If the input contains no factual content at all (e.g., just greetings or questio
             if (jsonMatch) {
                 const claims = JSON.parse(jsonMatch[0]);
                 console.log('[Factcheck] Parsed claims:', claims);
-                return claims.filter(c => typeof c === 'string' && c.trim().length > 0);
+                return claims.filter((c) => typeof c === 'string' && c.trim().length > 0);
             }
             console.warn('[Factcheck] No JSON array found in response');
             return [];
@@ -586,7 +592,7 @@ Respond with a JSON array of query strings. Example:
         const response = await chat.sendMessageNonStreaming(
             [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: claim }
+                { role: 'user', content: claim },
             ],
             model,
             apiKey
@@ -596,7 +602,7 @@ Respond with a JSON array of query strings. Example:
             const jsonMatch = response.match(/\[[\s\S]*\]/);
             if (jsonMatch) {
                 const queries = JSON.parse(jsonMatch[0]);
-                return queries.filter(q => typeof q === 'string' && q.trim().length > 0);
+                return queries.filter((q) => typeof q === 'string' && q.trim().length > 0);
             }
             return [claim]; // Fallback to claim itself as query
         } catch (e) {
@@ -619,14 +625,15 @@ Respond with a JSON array of query strings. Example:
                 status: 'unverifiable',
                 verdict: 'UNVERIFIABLE',
                 explanation: 'No relevant sources found to verify this claim.',
-                sources: []
+                sources: [],
             };
         }
 
         // Format search results for the prompt
-        const resultsText = searchResults.slice(0, 8).map((r, i) =>
-            `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet || ''}`
-        ).join('\n\n');
+        const resultsText = searchResults
+            .slice(0, 8)
+            .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet || ''}`)
+            .join('\n\n');
 
         const systemPrompt = `You are a fact-checking assistant. Analyze the search results to verify the given claim.
 
@@ -656,7 +663,7 @@ ${resultsText}`;
         const response = await chat.sendMessageNonStreaming(
             [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: userPrompt }
+                { role: 'user', content: userPrompt },
             ],
             model,
             apiKey
@@ -667,17 +674,17 @@ ${resultsText}`;
             if (jsonMatch) {
                 const result = JSON.parse(jsonMatch[0]);
                 const statusMap = {
-                    'VERIFIED': 'verified',
-                    'PARTIALLY_TRUE': 'partially_true',
-                    'MISLEADING': 'misleading',
-                    'FALSE': 'false',
-                    'UNVERIFIABLE': 'unverifiable'
+                    VERIFIED: 'verified',
+                    PARTIALLY_TRUE: 'partially_true',
+                    MISLEADING: 'misleading',
+                    FALSE: 'false',
+                    UNVERIFIABLE: 'unverifiable',
                 };
                 return {
                     status: statusMap[result.verdict] || 'unverifiable',
                     verdict: result.verdict,
                     explanation: result.explanation || 'No explanation provided.',
-                    sources: Array.isArray(result.sources) ? result.sources.slice(0, 3) : []
+                    sources: Array.isArray(result.sources) ? result.sources.slice(0, 3) : [],
                 };
             }
             throw new Error('No JSON found in response');
@@ -687,11 +694,10 @@ ${resultsText}`;
                 status: 'unverifiable',
                 verdict: 'UNVERIFIABLE',
                 explanation: 'Failed to analyze search results.',
-                sources: []
+                sources: [],
             };
         }
     }
 }
 
-// Export for browser
-window.FactcheckFeature = FactcheckFeature;
+export { FactcheckFeature };

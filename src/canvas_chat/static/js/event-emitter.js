@@ -90,10 +90,4 @@ class EventEmitter {
     }
 }
 
-// Export for browser
-window.EventEmitter = EventEmitter;
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { EventEmitter };
-}
+export { EventEmitter };

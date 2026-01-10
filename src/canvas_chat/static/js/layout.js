@@ -25,7 +25,7 @@ function getNodeSize(node, dimensions = null) {
     }
     return {
         width: node.width || DEFAULT_WIDTH,
-        height: node.height || DEFAULT_HEIGHT
+        height: node.height || DEFAULT_HEIGHT,
     };
 }
 
@@ -41,21 +41,21 @@ function getNodeSize(node, dimensions = null) {
 function wouldOverlapNodes(pos, width, height, nodes, padding = 20) {
     for (const node of nodes) {
         const nodeWidth = node.width || DEFAULT_WIDTH;
-        const nodeHeight = node.height || 200;  // Legacy default for this function
+        const nodeHeight = node.height || 200; // Legacy default for this function
 
         // Check bounding box overlap
         const noOverlap =
-            pos.x + width + padding < node.position.x ||  // new is left of existing
-            pos.x > node.position.x + nodeWidth + padding ||  // new is right of existing
-            pos.y + height + padding < node.position.y ||  // new is above existing
-            pos.y > node.position.y + nodeHeight + padding;   // new is below existing
+            pos.x + width + padding < node.position.x || // new is left of existing
+            pos.x > node.position.x + nodeWidth + padding || // new is right of existing
+            pos.y + height + padding < node.position.y || // new is above existing
+            pos.y > node.position.y + nodeHeight + padding; // new is below existing
 
         if (!noOverlap) {
-            return true;  // There is overlap
+            return true; // There is overlap
         }
     }
 
-    return false;  // No overlap with any node
+    return false; // No overlap with any node
 }
 
 /**
@@ -145,7 +145,7 @@ function resolveOverlaps(nodes, padding = DEFAULT_PADDING, maxIterations = 50, d
                     // This avoids diagonal pushes that may not resolve the overlap
                     if (overlapX < overlapY) {
                         // Push horizontally
-                        const pushAmount = (overlapX / 2) + 1; // +1 to ensure separation
+                        const pushAmount = overlapX / 2 + 1; // +1 to ensure separation
                         if (centerBx >= centerAx) {
                             nodeA.position.x -= pushAmount;
                             nodeB.position.x += pushAmount;
@@ -155,7 +155,7 @@ function resolveOverlaps(nodes, padding = DEFAULT_PADDING, maxIterations = 50, d
                         }
                     } else {
                         // Push vertically
-                        const pushAmount = (overlapY / 2) + 1;
+                        const pushAmount = overlapY / 2 + 1;
                         if (centerBy >= centerAy) {
                             nodeA.position.y -= pushAmount;
                             nodeB.position.y += pushAmount;
@@ -172,7 +172,8 @@ function resolveOverlaps(nodes, padding = DEFAULT_PADDING, maxIterations = 50, d
     }
 
     // Ensure all nodes stay in positive coordinates
-    let minX = Infinity, minY = Infinity;
+    let minX = Infinity,
+        minY = Infinity;
     for (const node of nodes) {
         minX = Math.min(minX, node.position.x);
         minY = Math.min(minY, node.position.y);
@@ -187,29 +188,13 @@ function resolveOverlaps(nodes, padding = DEFAULT_PADDING, maxIterations = 50, d
     }
 }
 
-// Export for browser (window) and Node.js (module.exports)
-if (typeof window !== 'undefined') {
-    window.layoutUtils = {
-        wouldOverlapNodes,
-        getOverlap,
-        hasAnyOverlap,
-        resolveOverlaps,
-        getNodeSize,
-        DEFAULT_WIDTH,
-        DEFAULT_HEIGHT,
-        DEFAULT_PADDING
-    };
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        wouldOverlapNodes,
-        getOverlap,
-        hasAnyOverlap,
-        resolveOverlaps,
-        getNodeSize,
-        DEFAULT_WIDTH,
-        DEFAULT_HEIGHT,
-        DEFAULT_PADDING
-    };
-}
+export {
+    wouldOverlapNodes,
+    getOverlap,
+    hasAnyOverlap,
+    resolveOverlaps,
+    getNodeSize,
+    DEFAULT_WIDTH,
+    DEFAULT_HEIGHT,
+    DEFAULT_PADDING,
+};

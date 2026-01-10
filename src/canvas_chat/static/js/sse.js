@@ -10,19 +10,21 @@
 function normalizeText(text) {
     if (!text) return text;
 
-    return text
-        // Fix hyphenated words split by spaces (e.g., "matter - of" -> "matter-of")
-        .replace(/ - /g, '-')
-        // Remove spaces before punctuation
-        .replace(/ +([.,!?;:)\]}])/g, '$1')
-        // Remove spaces after opening brackets/parens
-        .replace(/([[({]) +/g, '$1')
-        // Fix space before apostrophe in contractions
-        .replace(/ +'/g, "'")
-        // Fix multiple spaces (but preserve single spaces)
-        .replace(/ {2,}/g, ' ')
-        // Trim leading/trailing whitespace
-        .trim();
+    return (
+        text
+            // Fix hyphenated words split by spaces (e.g., "matter - of" -> "matter-of")
+            .replace(/ - /g, '-')
+            // Remove spaces before punctuation
+            .replace(/ +([.,!?;:)\]}])/g, '$1')
+            // Remove spaces after opening brackets/parens
+            .replace(/([[({]) +/g, '$1')
+            // Fix space before apostrophe in contractions
+            .replace(/ +'/g, "'")
+            // Fix multiple spaces (but preserve single spaces)
+            .replace(/ {2,}/g, ' ')
+            // Trim leading/trailing whitespace
+            .trim()
+    );
 }
 
 /**
@@ -70,7 +72,6 @@ async function readSSEStream(response, handlers) {
 
         // Stream ended without explicit 'done' event
         if (handlers.onDone) handlers.onDone();
-
     } catch (err) {
         if (handlers.onError) handlers.onError(err);
     }
@@ -172,27 +173,10 @@ async function streamSSEContent(response, handlers) {
         const normalized = normalizeText(fullContent);
         if (handlers.onDone) handlers.onDone(normalized);
         return normalized;
-
     } catch (err) {
         if (handlers.onError) handlers.onError(err);
         throw err;
     }
 }
 
-// Export for use in other modules
-window.SSE = {
-    normalizeText,
-    readSSEStream,
-    parseSSEEvent,
-    streamSSEContent
-};
-
-// CommonJS export for Node.js/testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        normalizeText,
-        readSSEStream,
-        parseSSEEvent,
-        streamSSEContent
-    };
-}
+export { normalizeText, readSSEStream, parseSSEEvent, streamSSEContent };

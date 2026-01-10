@@ -1,108 +1,29 @@
 {
-  "env": {
-    "browser": true,
-    "es2022": true
-  },
-  "parserOptions": {
-    "ecmaVersion": 2022,
-    "sourceType": "script"
-  },
-  "globals": {
-    "marked": "readonly",
-    "katex": "readonly",
-    "markedKatex": "readonly",
-    "Y": "readonly",
-    "IndexeddbPersistence": "readonly",
-    "WebrtcProvider": "readonly",
-    "module": "readonly",
-
-    "SSE": "writable",
-
-    "SearchIndex": "writable",
-    "tokenize": "writable",
-    "calculateIDF": "writable",
-    "getNodeTypeIcon": "writable",
-    "NODE_TYPE_ICONS": "writable",
-
-    "storage": "writable",
-
-    "wouldOverlapNodes": "writable",
-    "findNonOverlappingPosition": "writable",
-    "resolveOverlaps": "writable",
-
-    "highlightMatches": "writable",
-    "highlightTextInHtml": "writable",
-    "extractExcerptText": "writable",
-
-    "EventEmitter": "writable",
-
-    "NodeType": "writable",
-    "EdgeType": "writable",
-    "TAG_COLORS": "writable",
-    "DEFAULT_NODE_SIZES": "writable",
-    "getDefaultNodeSize": "writable",
-    "createNode": "writable",
-    "createEdge": "writable",
-    "createMatrixNode": "writable",
-    "createCellNode": "writable",
-    "createRowNode": "writable",
-    "createColumnNode": "writable",
-    "createFlashcardNode": "writable",
-
-    "CRDTGraph": "writable",
-
-    "Actions": "writable",
-    "HeaderButtons": "writable",
-    "BaseNode": "writable",
-    "HumanNode": "writable",
-    "AINode": "writable",
-    "NoteNode": "writable",
-    "SummaryNode": "writable",
-    "ReferenceNode": "writable",
-    "SearchNode": "writable",
-    "ResearchNode": "writable",
-    "HighlightNode": "writable",
-    "MatrixNode": "writable",
-    "CellNode": "writable",
-    "RowNode": "writable",
-    "ColumnNode": "writable",
-    "FetchResultNode": "writable",
-    "PDFNode": "writable",
-    "OpinionNode": "writable",
-    "SynthesisNode": "writable",
-    "ReviewNode": "writable",
-    "ImageNode": "writable",
-    "FlashcardNode": "writable",
-    "FactcheckNode": "writable",
-    "wrapNode": "writable",
-
-    "Canvas": "writable",
-
-    "chat": "writable",
-
-    "isUrlContent": "writable",
-    "extractUrlFromReferenceNode": "writable",
-    "getBasePath": "writable",
-    "apiUrl": "writable",
-    "truncateText": "writable",
-    "escapeHtmlText": "writable",
-    "formatMatrixAsText": "writable",
-    "formatUserError": "writable",
-    "buildMessagesForApi": "writable",
-    "applySM2": "writable",
-    "isFlashcardDue": "writable",
-    "getDueFlashcards": "writable",
-    "SlashCommandMenu": "writable",
-    "App": "writable"
-  },
-  "rules": {
-    "no-undef": "error",
-    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
-    "no-dupe-keys": "error",
-    "no-duplicate-case": "error",
-    "no-empty": "warn",
-    "no-unreachable": "error",
-    "eqeqeq": ["warn", "smart"],
-    "no-var": "warn"
-  }
+    "env": {
+        "browser": true,
+        "es2022": true
+    },
+    "parserOptions": {
+        "ecmaVersion": 2022,
+        "sourceType": "module"
+    },
+    "globals": {
+        "marked": "readonly",
+        "katex": "readonly",
+        "markedKatex": "readonly",
+        "Y": "readonly",
+        "IndexeddbPersistence": "readonly",
+        "WebrtcProvider": "readonly",
+        "pyodideRunner": "readonly"
+    },
+    "rules": {
+        "no-undef": "error",
+        "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+        "no-dupe-keys": "error",
+        "no-duplicate-case": "error",
+        "no-empty": "warn",
+        "no-unreachable": "error",
+        "eqeqeq": ["warn", "smart"],
+        "no-var": "warn"
+    }
 }
