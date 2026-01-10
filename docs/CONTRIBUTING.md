@@ -1,4 +1,24 @@
-# Documentation Site
+# Contributing to Canvas Chat
+
+## Code contributions
+
+**We are not accepting direct code contributions at this time.**
+
+Instead, we welcome **detailed issue descriptions for new feature requests**. The recommended workflow for proposing new features is:
+
+1. **Clone the repository** and explore the codebase
+2. **Open an agentic coding harness** (OpenCode, Claude Code, GitHub Copilot, Cursor, Windsurf, Antigravity, etc.)
+3. **Use Plan Mode with a high-quality model** (e.g., as of writing: Opus 4.5, GPT-5.2 (thinking), Gemini 3 Pro)
+4. **Instruct the model to explore your feature request** and ask clarifying questions
+5. **Once the model has no more questions**, have it post a detailed issue to the GitHub issue tracker with:
+    - Clear description of the feature
+    - Use cases and benefits
+    - Technical considerations
+    - Implementation approach (if explored)
+
+This workflow ensures feature requests are well-thought-out and technically feasible before implementation.
+
+## Documentation Site
 
 This directory contains the Canvas Chat documentation built with [MkDocs](https://www.mkdocs.org/) and [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/).
 
