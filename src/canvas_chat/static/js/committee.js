@@ -3,12 +3,12 @@
  *
  * Handles the /committee slash command which consults multiple LLMs
  * and synthesizes their responses.
- *
- * Dependencies:
- * - graph-types.js (NodeType, EdgeType, createNode, createEdge)
- * - storage.js (storage.getRecentModels, storage.addRecentModel, etc.)
- * - sse.js (SSE.readSSEStream)
  */
+
+import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
+import { storage } from './storage.js';
+import { readSSEStream } from './sse.js';
+import { apiUrl } from './utils.js';
 
 /**
  * CommitteeFeature class manages committee consultation functionality.
@@ -340,7 +340,7 @@ class CommitteeFeature {
             }
 
             // Process SSE stream
-            await SSE.readSSEStream(response, {
+            await readSSEStream(response, {
                 onEvent: (eventType, data) => {
                     let parsed;
                     try {

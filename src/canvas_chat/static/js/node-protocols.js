@@ -1248,57 +1248,6 @@ window.Actions = Actions;
 window.HeaderButtons = HeaderButtons;
 
 // Export classes for testing
-window.BaseNode = BaseNode;
-window.HumanNode = HumanNode;
-window.AINode = AINode;
-window.NoteNode = NoteNode;
-window.SummaryNode = SummaryNode;
-window.ReferenceNode = ReferenceNode;
-window.SearchNode = SearchNode;
-window.ResearchNode = ResearchNode;
-window.HighlightNode = HighlightNode;
-window.MatrixNode = MatrixNode;
-window.CellNode = CellNode;
-window.RowNode = RowNode;
-window.ColumnNode = ColumnNode;
-window.FetchResultNode = FetchResultNode;
-window.PdfNode = PdfNode;
-window.OpinionNode = OpinionNode;
-window.SynthesisNode = SynthesisNode;
-window.ReviewNode = ReviewNode;
-window.FactcheckNode = FactcheckNode;
-window.ImageNode = ImageNode;
-// Export all node protocol classes and utilities
-export {
-    wrapNode,
-    validateNodeProtocol,
-    Actions,
-    HeaderButtons,
-    BaseNode,
-    HumanNode,
-    AINode,
-    NoteNode,
-    SummaryNode,
-    ReferenceNode,
-    SearchNode,
-    ResearchNode,
-    HighlightNode,
-    MatrixNode,
-    CellNode,
-    RowNode,
-    ColumnNode,
-    FetchResultNode,
-    PdfNode,
-    OpinionNode,
-    SynthesisNode,
-    ReviewNode,
-    FactcheckNode,
-    ImageNode,
-    FlashcardNode,
-    CsvNode,
-    CodeNode,
-};
-
 // =============================================================================
 // Register built-in node types with NodeRegistry
 // =============================================================================
@@ -1400,38 +1349,3 @@ export {
     ImageNode,
     FlashcardNode,
 };
-
-// Also expose to global scope for backwards compatibility with non-module scripts
-if (typeof window !== 'undefined') {
-    Object.assign(window, {
-        Actions,
-        HeaderButtons,
-        wrapNode,
-        createMockNodeForType,
-        validateNodeProtocol,
-        registerBuiltinNodeTypes,
-        BaseNode,
-        HumanNode,
-        AINode,
-        NoteNode,
-        SummaryNode,
-        ReferenceNode,
-        SearchNode,
-        ResearchNode,
-        HighlightNode,
-        MatrixNode,
-        CellNode,
-        RowNode,
-        ColumnNode,
-        FetchResultNode,
-        PdfNode,
-        CsvNode,
-        CodeNode,
-        OpinionNode,
-        SynthesisNode,
-        ReviewNode,
-        FactcheckNode,
-        ImageNode,
-        FlashcardNode,
-    });
-}

@@ -19,6 +19,8 @@
  *   const size = NodeRegistry.getDefaultSize('my-node');
  */
 
+import { NodeType } from './graph-types.js';
+
 /**
  * @typedef {Object} NodeTypeConfig
  * @property {string} type - Unique node type identifier (e.g., 'poll', 'diagram')

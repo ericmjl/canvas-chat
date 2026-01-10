@@ -18,6 +18,11 @@
  * - NodeType, EdgeType: Type constants
  */
 
+import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
+import { storage } from './storage.js';
+import { chat } from './chat.js';
+import { apiUrl } from './utils.js';
+
 class FactcheckFeature {
     /**
      * Create a FactcheckFeature instance.

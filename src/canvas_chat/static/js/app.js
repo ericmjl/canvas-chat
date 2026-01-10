@@ -3,7 +3,7 @@
  */
 
 // Import dependencies
-import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
+import { NodeType, EdgeType, createNode, createEdge, TAG_COLORS, getDefaultNodeSize } from './graph-types.js';
 import { CRDTGraph } from './crdt-graph.js';
 import { Canvas } from './canvas.js';
 import { Chat, chat } from './chat.js';
@@ -18,7 +18,7 @@ import { CommitteeFeature } from './committee.js';
 import { MatrixFeature } from './matrix.js';
 import { FactcheckFeature } from './factcheck.js';
 import { ResearchFeature } from './research.js';
-import { SearchIndex } from './search.js';
+import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { NodeRegistry } from './node-registry.js';
 import { wrapNode } from './node-protocols.js';
 import {
@@ -36,7 +36,7 @@ import {
     apiUrl,
 } from './utils.js';
 import { highlightTextInHtml, extractExcerptText } from './highlight-utils.js';
-import { streamSSEContent } from './sse.js';
+import { streamSSEContent, readSSEStream } from './sse.js';
 
 /* global pyodideRunner */
 
@@ -2549,7 +2549,7 @@ df.head()
             }
 
             let generatedCode = '';
-            await SSE.readSSEStream(response, {
+            await readSSEStream(response, {
                 onEvent: (eventType, data) => {
                     if (eventType === 'message' && data) {
                         generatedCode += data;
@@ -3551,7 +3551,7 @@ df.head()
 
             let fullContent = '';
 
-            await SSE.readSSEStream(response, {
+            await readSSEStream(response, {
                 onEvent: (eventType, data) => {
                     if (eventType === 'message' && data) {
                         fullContent += data;
@@ -3559,7 +3559,7 @@ df.head()
                     }
                 },
                 onDone: () => {
-                    onDone(SSE.normalizeText(fullContent));
+                    onDone(fullContent);
                 },
                 onError: (err) => {
                     throw err;

@@ -2,6 +2,12 @@
  * Canvas module - SVG-based pan/zoom canvas with node rendering
  */
 
+import { EventEmitter } from './event-emitter.js';
+import { wrapNode, getDefaultNodeSize } from './node-protocols.js';
+import { NodeType } from './graph-types.js';
+import { highlightTextInHtml } from './highlight-utils.js';
+import { escapeHtmlText, truncateText } from './utils.js';
+
 class Canvas {
     // Static flag to track if marked has been configured (only configure once)
     static markedConfigured = false;

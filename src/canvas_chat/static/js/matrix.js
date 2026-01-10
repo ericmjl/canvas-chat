@@ -1,9 +1,19 @@
 /**
  * Matrix Feature Module
  * Handles matrix node creation, cell filling, editing, and slice extraction.
- *
- * Extracted from app.js to reduce file size and improve maintainability.
  */
+
+import {
+    NodeType,
+    EdgeType,
+    createMatrixNode,
+    createCellNode,
+    createRowNode,
+    createColumnNode,
+    createEdge,
+} from './graph-types.js';
+import { streamSSEContent } from './sse.js';
+import { apiUrl, escapeHtmlText, buildMessagesForApi } from './utils.js';
 
 /**
  * MatrixFeature - Encapsulates all matrix-related functionality.
@@ -378,7 +388,7 @@ class MatrixFeature {
             let lastStreamSync = 0;
             const streamSyncInterval = 50; // Sync every 50ms during streaming
 
-            await SSE.streamSSEContent(response, {
+            await streamSSEContent(response, {
                 onContent: (chunk, fullContent) => {
                     cellContent = fullContent;
                     this.canvas.updateMatrixCell(nodeId, row, col, cellContent, true);

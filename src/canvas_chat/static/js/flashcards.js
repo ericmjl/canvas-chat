@@ -10,6 +10,11 @@
  * - storage.js (storage.getFlashcardStrictness)
  */
 
+import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
+import { storage } from './storage.js';
+import { chat } from './chat.js';
+import { applySM2, isFlashcardDue, getDueFlashcards } from './utils.js';
+
 /**
  * FlashcardFeature class manages all flashcard-related functionality.
  * Uses dependency injection - receives app context rather than tight coupling.

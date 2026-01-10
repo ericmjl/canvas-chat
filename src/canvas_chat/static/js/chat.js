@@ -2,6 +2,10 @@
  * Chat module - LLM communication with SSE streaming
  */
 
+import { storage } from './storage.js';
+import { apiUrl } from './utils.js';
+import { readSSEStream, normalizeText } from './sse.js';
+
 // =============================================================================
 // Type Definitions (JSDoc)
 // =============================================================================
@@ -183,7 +187,7 @@ class Chat {
 
             let fullContent = '';
 
-            await SSE.readSSEStream(response, {
+            await readSSEStream(response, {
                 onEvent: (eventType, data) => {
                     if (eventType === 'message' && data) {
                         fullContent += data;
@@ -191,7 +195,7 @@ class Chat {
                     }
                 },
                 onDone: () => {
-                    onDone(SSE.normalizeText(fullContent));
+                    onDone(fullContent);
                 },
                 onError: (err) => {
                     throw err;
@@ -249,7 +253,7 @@ class Chat {
         // Collect full response from SSE stream
         let fullContent = '';
 
-        await SSE.readSSEStream(response, {
+        await readSSEStream(response, {
             onEvent: (eventType, data) => {
                 if (eventType === 'message' && data) {
                     fullContent += data;
@@ -261,7 +265,7 @@ class Chat {
             },
         });
 
-        return SSE.normalizeText(fullContent);
+        return normalizeText(fullContent);
     }
 
     /**
