@@ -1,12 +1,12 @@
 /* global NodeType, DEFAULT_NODE_SIZES */
 /**
- * Node Protocol Pattern
+ * Node Protocol Pattern - Plugin Architecture for Canvas-Chat
  *
- * Implements sklearn-style protocol classes where each node type defines its behaviors
- * in a single class. This centralizes node-type-specific logic that was previously
- * scattered across canvas.js and app.js with if (node.type === ...) checks.
+ * This module defines the protocol (interface) that all node types must implement.
+ * It enables dynamic node rendering through a factory pattern with protocol dispatch.
  */
 
+import { NodeType, DEFAULT_NODE_SIZES } from './graph-types.js';
 import { NodeRegistry } from './node-registry.js';
 
 /**

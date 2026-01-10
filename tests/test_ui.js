@@ -6,26 +6,9 @@
  */
 
 import { JSDOM } from 'jsdom';
-import { createRequire } from 'module';
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
 
-const require = createRequire(import.meta.url);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-
-// Load highlight-utils.js using vm.runInThisContext so exports are available globally
-// This pattern is used because the source files use conditional CommonJS exports
-// that don't work well with require() in this Node.js/ESM environment
-const highlightUtilsPath = path.join(__dirname, '../src/canvas_chat/static/js/highlight-utils.js');
-const highlightUtilsCode = fs.readFileSync(highlightUtilsPath, 'utf8');
-vm.runInThisContext(highlightUtilsCode, { filename: highlightUtilsPath });
-
-// Functions are now in global scope (highlightTextInHtml, extractExcerptText)
+// Import ES modules
+const { highlightTextInHtml, extractExcerptText } = await import('../src/canvas_chat/static/js/highlight-utils.js');
 
 // Simple test runner
 let passed = 0;
@@ -188,7 +171,7 @@ test('DOM: event listener registration', () => {
     // Simulate click
     const event = new dom.window.MouseEvent('click', {
         bubbles: true,
-        cancelable: true
+        cancelable: true,
     });
     button.dispatchEvent(event);
 
@@ -250,7 +233,7 @@ function simulateRenderNode(document, node) {
 test('Node rendering: creates correct structure', () => {
     const dom = new JSDOM('<!DOCTYPE html><svg id="nodes-layer"></svg>', {
         url: 'http://localhost',
-        pretendToBeVisual: true
+        pretendToBeVisual: true,
     });
     const { document } = dom.window;
 
@@ -260,7 +243,7 @@ test('Node rendering: creates correct structure', () => {
         content: 'Hello world',
         position: { x: 100, y: 200 },
         width: 420,
-        height: 200
+        height: 200,
     };
 
     const wrapper = simulateRenderNode(document, node);
@@ -279,7 +262,7 @@ test('Node rendering: creates correct structure', () => {
 test('Node rendering: sets correct attributes', () => {
     const dom = new JSDOM('<!DOCTYPE html><svg></svg>', {
         url: 'http://localhost',
-        pretendToBeVisual: true
+        pretendToBeVisual: true,
     });
     const { document } = dom.window;
 
@@ -289,7 +272,7 @@ test('Node rendering: sets correct attributes', () => {
         content: 'Response',
         position: { x: 0, y: 0 },
         width: 640,
-        height: 480
+        height: 480,
     };
 
     const wrapper = simulateRenderNode(document, node);
@@ -300,7 +283,7 @@ test('Node rendering: sets correct attributes', () => {
 test('Node rendering: includes delete button', () => {
     const dom = new JSDOM('<!DOCTYPE html><svg></svg>', {
         url: 'http://localhost',
-        pretendToBeVisual: true
+        pretendToBeVisual: true,
     });
     const { document } = dom.window;
 
@@ -308,7 +291,7 @@ test('Node rendering: includes delete button', () => {
         id: 'node-3',
         type: 'note',
         content: 'Note',
-        position: { x: 0, y: 0 }
+        position: { x: 0, y: 0 },
     };
 
     const wrapper = simulateRenderNode(document, node);
@@ -473,7 +456,7 @@ test('Tag highlighting: fades nodes without matching tag', () => {
 
     const nodeElements = new Map();
     const node1 = createMockNodeWithTags(document, 'node-1', ['#ffc9c9']);
-    const node2 = createMockNodeWithTags(document, 'node-2', []);  // No tags
+    const node2 = createMockNodeWithTags(document, 'node-2', []); // No tags
     nodeElements.set('node-1', node1);
     nodeElements.set('node-2', node2);
 
@@ -533,7 +516,7 @@ test('Tag highlighting: node with multiple tags matches any', () => {
     const { document } = dom.window;
 
     const nodeElements = new Map();
-    const node1 = createMockNodeWithTags(document, 'node-1', ['#ffc9c9', '#a5d8ff']);  // Both tags
+    const node1 = createMockNodeWithTags(document, 'node-1', ['#ffc9c9', '#a5d8ff']); // Both tags
     nodeElements.set('node-1', node1);
 
     // Should match red
@@ -562,7 +545,9 @@ function shouldSelectNodeOnClick(target) {
 }
 
 test('Tag chip click: does not select node when clicking tag chip', () => {
-    const dom = new JSDOM('<!DOCTYPE html><div class="node"><div class="node-tags"><div class="node-tag" data-color="#ffc9c9">Tag</div></div></div>');
+    const dom = new JSDOM(
+        '<!DOCTYPE html><div class="node"><div class="node-tags"><div class="node-tag" data-color="#ffc9c9">Tag</div></div></div>'
+    );
     const { document } = dom.window;
 
     const tagChip = document.querySelector('.node-tag');
@@ -705,7 +690,8 @@ test('highlightTextInHtml: complex markdown structure with heading, paragraph, a
         </ul>
     `;
     // Selection across heading, paragraph, and into the list
-    const text = 'The Machinery of Change\n\nIn a dynamic path system, we decompose the total risk into a series of additive "layers."\n\nWhere:\n\nis the Baseline Hazard';
+    const text =
+        'The Machinery of Change\n\nIn a dynamic path system, we decompose the total risk into a series of additive "layers."\n\nWhere:\n\nis the Baseline Hazard';
 
     const result = highlightTextInHtml(document, html, text);
     assertIncludes(result, '<mark class="source-highlight">The Machinery of Change</mark>');
@@ -898,54 +884,54 @@ function shouldAnimateDrawer(outputExpanded, skipAnimation, hadExistingPanel) {
 
 test('Drawer animation: animates on first render when expanded', () => {
     const result = shouldAnimateDrawer(
-        true,   // outputExpanded
-        false,  // skipAnimation
-        false   // hadExistingPanel (first render)
+        true, // outputExpanded
+        false, // skipAnimation
+        false // hadExistingPanel (first render)
     );
     assertTrue(result, 'Should animate on first render when expanded');
 });
 
 test('Drawer animation: skips animation when collapsed', () => {
     const result = shouldAnimateDrawer(
-        false,  // outputExpanded (collapsed)
-        false,  // skipAnimation
-        false   // hadExistingPanel
+        false, // outputExpanded (collapsed)
+        false, // skipAnimation
+        false // hadExistingPanel
     );
     assertFalse(result, 'Should not animate when drawer is collapsed');
 });
 
 test('Drawer animation: skips animation when skipAnimation is true', () => {
     const result = shouldAnimateDrawer(
-        true,   // outputExpanded
-        true,   // skipAnimation (explicit skip)
-        false   // hadExistingPanel
+        true, // outputExpanded
+        true, // skipAnimation (explicit skip)
+        false // hadExistingPanel
     );
     assertFalse(result, 'Should not animate when skipAnimation is explicitly true');
 });
 
 test('Drawer animation: skips animation when re-rendering existing panel', () => {
     const result = shouldAnimateDrawer(
-        true,   // outputExpanded
-        false,  // skipAnimation
-        true    // hadExistingPanel (re-render)
+        true, // outputExpanded
+        false, // skipAnimation
+        true // hadExistingPanel (re-render)
     );
     assertFalse(result, 'Should not animate when replacing an existing panel');
 });
 
 test('Drawer animation: skips when both skipAnimation and hadExistingPanel are true', () => {
     const result = shouldAnimateDrawer(
-        true,   // outputExpanded
-        true,   // skipAnimation
-        true    // hadExistingPanel
+        true, // outputExpanded
+        true, // skipAnimation
+        true // hadExistingPanel
     );
     assertFalse(result, 'Should not animate when both skip flags are true');
 });
 
 test('Drawer animation: skips when collapsed even if first render', () => {
     const result = shouldAnimateDrawer(
-        false,  // outputExpanded (collapsed)
-        false,  // skipAnimation
-        false   // hadExistingPanel (first render)
+        false, // outputExpanded (collapsed)
+        false, // skipAnimation
+        false // hadExistingPanel (first render)
     );
     assertFalse(result, 'Should not animate collapsed drawer even on first render');
 });
@@ -994,7 +980,7 @@ test('Drawer animation: installation flow - first message animates, subsequent d
     assertFalse(thirdRender, 'Third render should not animate (existing panel)');
 
     // Verify animation was only called once
-    const animatedCount = animationCalls.filter(c => c.shouldAnimate).length;
+    const animatedCount = animationCalls.filter((c) => c.shouldAnimate).length;
     assertEqual(animatedCount, 1);
 });
 
