@@ -144,14 +144,17 @@ jobs:
       - name: Run pre-commit to fix any formatting issues
         if: steps.check_release.outputs.already_released == 'false'
         run: |
-          # First run applies auto-fixes, second run verifies all checks pass
+          # First run applies auto-fixes (may fail if fixes are needed)
           uvx pre-commit run --all-files || true
+          # Stage all files (new and modified) including any fixes pre-commit applied
+          git add .
+          # Second run verifies all checks pass
           uvx pre-commit run --all-files
 
       - name: Commit release notes and lock file
         if: steps.check_release.outputs.already_released == 'false'
         run: |
-          git add docs/releases/v${{ env.version_number }}.md pixi.lock
+          # All files are already staged from the pre-commit step
           git commit -m "Add release notes for v${{ env.version_number }}"
 
       - name: Build package
