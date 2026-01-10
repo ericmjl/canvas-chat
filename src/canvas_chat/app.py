@@ -65,10 +65,14 @@ def get_admin_config() -> AdminConfig:
     if _admin_config is None:
         if os.environ.get("CANVAS_CHAT_ADMIN_MODE") == "true":
             try:
-                _admin_config = AdminConfig.load()
+                config_path_str = os.environ.get("CANVAS_CHAT_CONFIG_PATH")
+                config_path = Path(config_path_str) if config_path_str else None
+                _admin_config = AdminConfig.load(config_path)
                 logger.info(
                     f"Admin mode: {len(_admin_config.models)} models configured"
                 )
+                if _admin_config.plugins:
+                    logger.info(f"Loaded {len(_admin_config.plugins)} plugin(s)")
             except Exception as e:
                 logger.error(f"Failed to load admin config: {e}")
                 _admin_config = AdminConfig.disabled()
@@ -738,7 +742,25 @@ async def fetch_anthropic_models(api_key: str) -> list[dict]:
 async def root():
     """Serve the main application."""
     index_path = STATIC_DIR / "index.html"
-    return HTMLResponse(content=index_path.read_text())
+    html = index_path.read_text()
+
+    # Inject plugin script tags if in admin mode
+    config = get_admin_config()
+    if config.enabled and config.plugins:
+        plugin_scripts = []
+        for plugin_path in config.plugins:
+            plugin_url = f"/api/plugins/{plugin_path.name}"
+            plugin_scripts.append(
+                f'        <script type="module" src="{plugin_url}"></script>'
+            )
+
+        # Inject before the closing </body> tag
+        plugin_html = "\n".join(plugin_scripts)
+        html = html.replace(
+            "</body>", f"\n        <!-- Custom plugins -->\n{plugin_html}\n    </body>"
+        )
+
+    return HTMLResponse(content=html)
 
 
 @app.get("/api/config")
@@ -754,6 +776,65 @@ async def get_config():
         "adminMode": config.enabled,
         "models": config.get_frontend_models() if config.enabled else [],
     }
+
+
+@app.get("/api/plugins")
+async def list_plugins():
+    """List available plugin files.
+
+    Returns plugin information for plugins configured in config.yaml.
+    """
+    config = get_admin_config()
+    if not config.enabled or not config.plugins:
+        return {"plugins": []}
+
+    plugins_info = []
+    for plugin_path in config.plugins:
+        plugins_info.append(
+            {"name": plugin_path.name, "url": f"/api/plugins/{plugin_path.name}"}
+        )
+
+    return {"plugins": plugins_info}
+
+
+@app.get("/api/plugins/{plugin_name}")
+async def serve_plugin(plugin_name: str):
+    """Serve a plugin JavaScript file.
+
+    Args:
+        plugin_name: Name of the plugin file (e.g., "my-poll-node.js")
+
+    Returns:
+        The plugin file contents as JavaScript
+
+    Raises:
+        HTTPException: If plugin not found or admin mode disabled
+    """
+    config = get_admin_config()
+
+    if not config.enabled:
+        raise HTTPException(
+            status_code=404, detail="Plugins only available in admin mode"
+        )
+
+    # Find the plugin by name
+    plugin_path = None
+    for path in config.plugins:
+        if path.name == plugin_name:
+            plugin_path = path
+            break
+
+    if plugin_path is None:
+        raise HTTPException(status_code=404, detail=f"Plugin '{plugin_name}' not found")
+
+    try:
+        content = plugin_path.read_text()
+        return HTMLResponse(content=content, media_type="application/javascript")
+    except Exception as e:
+        logger.error(f"Error serving plugin {plugin_name}: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to load plugin: {str(e)}"
+        ) from e
 
 
 # --- Credential Injection for Admin Mode ---

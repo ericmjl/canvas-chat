@@ -5,6 +5,7 @@ import socket
 import threading
 import time
 import webbrowser
+from pathlib import Path
 
 import typer
 import uvicorn
@@ -57,7 +58,12 @@ def main(
     admin_mode: bool = typer.Option(
         False,
         "--admin-mode/--no-admin-mode",
-        help="Enable admin mode with server-side API keys from config.yaml",
+        help="Enable admin mode with server-side API keys",
+    ),
+    config_path: str = typer.Option(
+        "config.yaml",
+        "--config",
+        help="Path to configuration file (used with --admin-mode)",
     ),
 ) -> None:
     """Run the Canvas Chat server."""
@@ -65,14 +71,15 @@ def main(
     if admin_mode:
         try:
             # Load and validate config
-            config = AdminConfig.load()
+            config = AdminConfig.load(Path(config_path))
             config.validate_environment()
             typer.echo(
                 f"Admin mode enabled with {len(config.models)} models "
                 f"from {config._config_path}"
             )
-            # Set environment variable for the FastAPI app to read
+            # Set environment variables for the FastAPI app to read
             os.environ["CANVAS_CHAT_ADMIN_MODE"] = "true"
+            os.environ["CANVAS_CHAT_CONFIG_PATH"] = str(config._config_path)
         except FileNotFoundError as e:
             typer.echo(f"Error: {e}", err=True)
             raise typer.Exit(1) from e
@@ -82,6 +89,7 @@ def main(
     else:
         # Explicitly clear admin mode
         os.environ.pop("CANVAS_CHAT_ADMIN_MODE", None)
+        os.environ.pop("CANVAS_CHAT_CONFIG_PATH", None)
 
     url = f"http://{host}:{port}"
     typer.echo(f"Starting Canvas Chat at {url}")

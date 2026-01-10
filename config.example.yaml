@@ -1,55 +1,156 @@
-# Admin-controlled model configuration for canvas-chat
+# Canvas Chat Configuration Example
 #
-# This file is used when running with --admin-mode flag.
-# Copy to config.yaml and customize for your deployment.
+# This file demonstrates the configuration schema for canvas-chat admin mode.
+# Copy this file to `config.yaml` and customize it for your deployment.
+#
+# Usage:
+#   uvx canvas-chat main --admin-mode --config config.yaml
+#
+# Admin mode enables:
+# - Server-side API key management (users don't provide their own keys)
+# - Custom plugin loading for extending node types
+# - Centralized model configuration for enterprise deployments
 #
 # IMPORTANT: This file should be committed to version control.
 # API keys and endpoints should be set via environment variables, NOT in this file.
 # This allows the same config.yaml to work across dev/test/prod environments.
 
+# ============================================================================
+# MODELS - Define LLM providers and models available to users
+# ============================================================================
+#
+# Required for admin mode. At least one model must be configured.
+# API keys and endpoints are loaded from environment variables (not stored in config).
+
 models:
-  # OpenAI models
-  - id: "openai/gpt-4o"
-    name: "GPT-4o"
-    apiKeyEnvVar: "OPENAI_API_KEY"
-    contextWindow: 128000
+    # OpenAI models
+    - id: 'openai/gpt-4o'
+      name: 'GPT-4o'
+      apiKeyEnvVar: 'OPENAI_API_KEY'
+      contextWindow: 128000
 
-  - id: "openai/gpt-4o-mini"
-    name: "GPT-4o Mini"
-    apiKeyEnvVar: "OPENAI_API_KEY"
-    contextWindow: 128000
+    - id: 'openai/gpt-4o-mini'
+      name: 'GPT-4o Mini'
+      apiKeyEnvVar: 'OPENAI_API_KEY'
+      contextWindow: 128000
 
-  # Anthropic models
-  - id: "anthropic/claude-sonnet-4-20250514"
-    name: "Claude Sonnet 4"
-    apiKeyEnvVar: "ANTHROPIC_API_KEY"
-    contextWindow: 200000
+    - id: 'openai/o1'
+      name: 'O1'
+      apiKeyEnvVar: 'OPENAI_API_KEY'
+      contextWindow: 200000
 
-  - id: "anthropic/claude-3-5-haiku-20241022"
-    name: "Claude 3.5 Haiku"
-    apiKeyEnvVar: "ANTHROPIC_API_KEY"
-    contextWindow: 200000
+    # Anthropic models
+    - id: 'anthropic/claude-sonnet-4-20250514'
+      name: 'Claude Sonnet 4'
+      apiKeyEnvVar: 'ANTHROPIC_API_KEY'
+      contextWindow: 200000
 
-  # Google models
-  - id: "gemini/gemini-1.5-pro"
-    name: "Gemini 1.5 Pro"
-    apiKeyEnvVar: "GEMINI_API_KEY"
-    contextWindow: 2000000
+    - id: 'anthropic/claude-3-5-haiku-20241022'
+      name: 'Claude 3.5 Haiku'
+      apiKeyEnvVar: 'ANTHROPIC_API_KEY'
+      contextWindow: 200000
 
-  # Groq models (fast inference)
-  - id: "groq/llama-3.1-70b-versatile"
-    name: "Llama 3.1 70B (Groq)"
-    apiKeyEnvVar: "GROQ_API_KEY"
-    contextWindow: 128000
+    # Google models
+    - id: 'gemini/gemini-1.5-pro'
+      name: 'Gemini 1.5 Pro'
+      apiKeyEnvVar: 'GEMINI_API_KEY'
+      contextWindow: 2000000
 
-  # Example: Custom/internal LLM endpoint with environment-specific URL
-  # The endpointEnvVar allows different endpoints for dev/test/prod
-  # - id: "custom/internal-llm"
-  #   name: "Internal LLM"
-  #   apiKeyEnvVar: "INTERNAL_LLM_KEY"
-  #   endpointEnvVar: "INTERNAL_LLM_ENDPOINT"  # e.g., https://llm.dev.company.com/v1
-  #   contextWindow: 32000
+    # Groq models (fast inference)
+    - id: 'groq/llama-3.1-70b-versatile'
+      name: 'Llama 3.1 70B (Groq)'
+      apiKeyEnvVar: 'GROQ_API_KEY'
+      contextWindow: 128000
 
-# Exa API key for web search features (optional)
-# Set via EXA_API_KEY environment variable
-# exaApiKeyEnvVar: "EXA_API_KEY"
+    # Example: Local Ollama model
+    # - id: "ollama/llama3.2"
+    #   name: "Llama 3.2 (Local)"
+    #   apiKeyEnvVar: "OLLAMA_API_KEY"  # Can be a dummy value like "ollama"
+    #   endpointEnvVar: "OLLAMA_BASE_URL"  # Set to http://localhost:11434
+    #   contextWindow: 128000
+
+    # Example: Custom Azure OpenAI deployment
+    # - id: "azure/gpt-4-turbo"
+    #   name: "GPT-4 Turbo (Azure)"
+    #   apiKeyEnvVar: "AZURE_OPENAI_API_KEY"
+    #   endpointEnvVar: "AZURE_OPENAI_ENDPOINT"
+    #   contextWindow: 128000
+
+# ============================================================================
+# PLUGINS - Extend canvas-chat with custom node types
+# ============================================================================
+#
+# Optional. Plugins are JavaScript files that register custom node types.
+# Paths can be absolute or relative to this config file.
+#
+# Example plugins:
+
+# plugins:
+#   # Example: Poll node plugin (relative path)
+#   - path: ./plugins/my-poll-node.js
+#
+#   # Example: Absolute path
+#   - path: /absolute/path/to/custom-node.js
+#
+#   # Example: Multiple plugins
+#   - path: ../shared-plugins/diagram-node.js
+#   - path: ../shared-plugins/kanban-node.js
+
+# ============================================================================
+# FIELD REFERENCE
+# ============================================================================
+#
+# models (required, array):
+#   - id (required, string): LiteLLM-compatible model identifier
+#       Format: provider/model-name
+#       Examples: "openai/gpt-4o", "anthropic/claude-3-5-sonnet-20241022"
+#
+#   - name (required, string): Display name shown in UI
+#
+#   - apiKeyEnvVar (required, string): Environment variable name containing API key
+#       The actual key value is read from the environment at runtime
+#
+#   - contextWindow (optional, integer): Token limit for context building
+#       Default: 128000
+#
+#   - endpointEnvVar (optional, string): Environment variable for custom API endpoint
+#       Used for self-hosted models (Ollama, vLLM) or Azure deployments
+#
+# plugins (optional, array):
+#   - path (required, string): Path to plugin JavaScript file
+#       Can be absolute or relative to this config file
+#       Plugin files must be ES modules that import from '/static/js/'
+#
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+#
+# Set these environment variables before starting canvas-chat:
+#
+# # Required for each model
+# export OPENAI_API_KEY="sk-..."
+# export ANTHROPIC_API_KEY="sk-ant-..."
+# export GEMINI_API_KEY="..."
+# export GROQ_API_KEY="gsk_..."
+#
+# # Optional: Custom endpoints
+# export OLLAMA_BASE_URL="http://localhost:11434"
+# export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com/"
+#
+# # Optional: Exa API for research features
+# export EXA_API_KEY="your-exa-api-key"
+#
+# Then run:
+#   uvx canvas-chat main --admin-mode --config config.yaml
+#
+# ============================================================================
+# SECURITY NOTES
+# ============================================================================
+#
+# 1. NEVER commit API keys to this file
+# 2. Use environment variables for all secrets
+# 3. Set appropriate file permissions: chmod 600 config.yaml
+# 4. Add config.yaml to .gitignore (but commit config.example.yaml)
+# 5. Use different environment variables for dev/test/prod
+#
+# See documentation for more details on deployment and plugin development.

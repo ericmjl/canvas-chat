@@ -58,17 +58,19 @@ class ModelConfig:
 
 @dataclass
 class AdminConfig:
-    """Admin configuration for server-side API key management.
+    """Admin configuration for server-side API key management and plugins.
 
     When enabled, this configuration:
     1. Loads model definitions from config.yaml
     2. Resolves API keys from environment variables at request time
     3. Provides a safe model list for the frontend (without secrets)
     4. Injects credentials into requests via FastAPI dependency
+    5. Manages custom plugin files for node types
     """
 
     enabled: bool = False
     models: list[ModelConfig] = field(default_factory=list)
+    plugins: list[Path] = field(default_factory=list)
     _config_path: Path | None = None
 
     @classmethod
@@ -109,9 +111,37 @@ class AdminConfig:
             model = ModelConfig.from_dict(model_data, i)
             models.append(model)
 
-        config = cls(enabled=True, models=models, _config_path=config_path)
+        # Load plugins (optional)
+        plugins = []
+        if "plugins" in data and data["plugins"]:
+            config_dir = config_path.parent
+            for plugin_entry in data["plugins"]:
+                if isinstance(plugin_entry, dict) and "path" in plugin_entry:
+                    plugin_path = Path(plugin_entry["path"])
+                elif isinstance(plugin_entry, str):
+                    plugin_path = Path(plugin_entry)
+                else:
+                    logger.warning(f"Invalid plugin entry: {plugin_entry}")
+                    continue
+
+                # Resolve relative paths from config file directory
+                if not plugin_path.is_absolute():
+                    plugin_path = config_dir / plugin_path
+
+                if not plugin_path.exists():
+                    logger.warning(f"Plugin file not found: {plugin_path}")
+                    continue
+
+                plugins.append(plugin_path.resolve())
+                logger.info(f"Registered plugin: {plugin_path}")
+
+        config = cls(
+            enabled=True, models=models, plugins=plugins, _config_path=config_path
+        )
 
         logger.info(f"Admin mode enabled with {len(models)} models from {config_path}")
+        if plugins:
+            logger.info(f"Loaded {len(plugins)} plugin(s)")
 
         return config
 
