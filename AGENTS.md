@@ -365,6 +365,7 @@ Write unit tests for logic that does not require API calls:
 
 - `tests/test_setup.js` - Shared test environment setup and module loading
 - `tests/run_tests.js` - Automatic test discovery runner (similar to pytest)
+- `tests/test_app_init.js` - Integration test to verify App class initializes without errors (catches undefined method references)
 - `tests/test_utils.js` - Concurrent state management tests
 - `tests/test_utils_basic.js` - Basic utility functions (extractUrlFromReferenceNode, formatMatrixAsText, formatUserError, etc.)
 - `tests/test_utils_messages.js` - buildMessagesForApi edge cases
@@ -377,6 +378,7 @@ Write unit tests for logic that does not require API calls:
 - `tests/test_canvas_helpers.js` - Zoom class and popover selection logic
 - `tests/test_search.js` - BM25 search algorithm tests
 - `tests/test_ui.js` - DOM manipulation tests using jsdom simulation
+- `tests/test_node_protocols.js` - Node protocol implementations
 
 Do not write tests that require external API calls (LLM, Exa, etc.) - these are tested manually.
 
@@ -447,6 +449,131 @@ Refactor to extract pure functions that can be imported and tested directly.
 - ❌ `App.buildLLMRequest()` - Complex instance method, requires mocking
 - ✅ `extract_provider()` - Pure function, easily testable
 - ✅ Refactoring that makes `base_url` impossible to forget - Structural guarantee
+
+### Testing method bindings after refactoring
+
+When refactoring large files or moving methods between classes, use the method binding test pattern to catch undefined method references.
+
+**The problem:** When methods are moved (e.g., from `App` to `ModalManager`), event listeners or callbacks might still reference the old location, causing runtime errors like `Cannot read properties of undefined (reading 'bind')`.
+
+**The solution:** Create integration tests that verify method bindings **before** they're used. This catches errors at test time, not runtime.
+
+#### Patterns to Test
+
+##### 1. Event Listener Bindings
+
+Pattern: `.on('event', this.method.bind(this))`
+
+When it breaks: Method moved to another class but event listener not updated.
+
+```javascript
+test('Event listeners can be set up', () => {
+    const instance = new MyClass();
+
+    // Actually execute the binding - this will throw if method doesn't exist
+    instance.emitter
+        .on('event1', instance.handleEvent1.bind(instance))
+        .on('event2', instance.handleEvent2.bind(instance));
+});
+```
+
+##### 2. Delegated Methods
+
+Pattern: `this.manager.handleX()` when method moved to manager.
+
+When it breaks: Method moved but reference not updated.
+
+```javascript
+test('Delegated methods exist', () => {
+    const instance = new MyClass();
+
+    const delegated = {
+        handleX: 'manager.handleX',
+        handleY: 'manager.handleY'
+    };
+
+    for (const [methodName, target] of Object.entries(delegated)) {
+        const [targetName, targetMethod] = target.split('.');
+        if (typeof instance[targetName][targetMethod] !== 'function') {
+            throw new Error(`${methodName} -> ${target} is not a function`);
+        }
+    }
+});
+```
+
+##### 3. Callback Assignments
+
+Pattern: `this.canvas.onNodeXxx = this.handleXxx.bind(this)`
+
+When it breaks: Method moved but callback assignment not updated.
+
+```javascript
+test('Callbacks can be assigned', () => {
+    const canvas = new Canvas();
+    const app = new App();
+
+    // This will throw if method doesn't exist
+    canvas.onNodeSelect = app.handleNodeSelect.bind(app);
+    canvas.onNodeDelete = app.handleNodeDelete.bind(app);
+});
+```
+
+#### Complete Example
+
+See `tests/test_app_init.js` for a complete example that tests:
+
+- Direct methods on App class
+- Delegated methods (moved to ModalManager, FileUploadHandler)
+- Event listener setup (actually executes .bind() calls)
+
+```javascript
+test('App event listener methods exist', () => {
+    const app = new App();
+
+    // Test direct methods
+    const requiredMethods = ['handleNodeSelect', 'handleNodeDelete', ...];
+    for (const methodName of requiredMethods) {
+        if (typeof app[methodName] !== 'function') {
+            throw new Error(`Method ${methodName} is not a function`);
+        }
+    }
+
+    // Test delegated methods (moved to other classes)
+    const delegatedMethods = {
+        handleNodeTitleEdit: 'modalManager.handleNodeTitleEdit',
+        handlePdfDrop: 'fileUploadHandler.handlePdfDrop'
+    };
+    for (const [methodName, target] of Object.entries(delegatedMethods)) {
+        const [targetName, targetMethod] = target.split('.');
+        if (typeof app[targetName][targetMethod] !== 'function') {
+            throw new Error(`Delegated method ${methodName} -> ${target} is not a function`);
+        }
+    }
+
+    // Test event listener setup (actually executes .bind() calls)
+    app.canvas
+        .on('nodeSelect', app.handleNodeSelect.bind(app))  // Would throw if method doesn't exist
+        .on('nodeDelete', app.handleNodeDelete.bind(app));
+});
+```
+
+#### When to Use This Pattern
+
+- **Before major refactoring** - Establish baseline
+- **After extracting modules** - Verify nothing broke
+- **When moving methods** - Catch missed references
+- **When adding new features** - Ensure event listeners work
+
+#### Reusable Helpers
+
+For future ESM conversion, see `tests/test_helpers/method-binding-test.js` for reusable utilities:
+
+- `testMethodBindings(instance, methodNames, options)` - Test that methods exist before they're bound
+- `testCallbackAssignments(instance, callbackAssignments, options)` - Test callback pattern assignments
+- `testEventListenerSetup(setupFunction, options)` - Test event listener setup by executing binding code
+- `createMockEventEmitter()` - Create a mock EventEmitter for testing
+
+For now, inline the pattern as shown in `test_app_init.js`.
 
 ### Testing DOM-dependent functions
 
