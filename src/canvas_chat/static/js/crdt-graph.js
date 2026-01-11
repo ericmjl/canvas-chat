@@ -12,6 +12,7 @@
  */
 
 import { NodeType, TAG_COLORS } from './graph-types.js';
+import { EventEmitter } from './event-emitter.js';
 
 // =============================================================================
 // Type Imports (JSDoc)
@@ -101,13 +102,16 @@ function isYArray(value) {
 // CRDTGraph Class
 // =============================================================================
 
-class CRDTGraph {
+class CRDTGraph extends EventEmitter {
     /**
      * Create a new CRDT-backed graph
      * @param {string} sessionId - Unique session identifier for persistence
      * @param {Object} legacyData - Legacy data to load (nodes, edges, tags)
      */
     constructor(sessionId = null, legacyData = {}) {
+        // Call EventEmitter constructor
+        super();
+
         // Safety check: ensure Yjs is loaded
         if (typeof Y === 'undefined') {
             throw new Error(
@@ -739,6 +743,10 @@ class CRDTGraph {
         this.ydoc.transact(() => {
             this._addNodeToCRDT(node);
         }, 'local'); // Mark as local change
+
+        // Emit event for listeners (e.g., App to update empty state)
+        this.emit('nodeAdded', node);
+
         return node;
     }
 
@@ -837,6 +845,9 @@ class CRDTGraph {
         // Clear from local indexes
         this.incomingEdges.delete(id);
         this.outgoingEdges.delete(id);
+
+        // Emit event for listeners (e.g., App to update empty state)
+        this.emit('nodeRemoved', id);
     }
 
     /**
