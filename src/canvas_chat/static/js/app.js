@@ -294,6 +294,13 @@ class App {
      * @returns {FactcheckFeature}
      */
     get factcheckFeature() {
+        // Use plugin system instance
+        const feature = this.featureRegistry.getFeature('factcheck');
+        if (feature) {
+            return feature;
+        }
+
+        // Fallback: Lazy initialization for backwards compatibility
         if (!this._factcheckFeature) {
             this._factcheckFeature = new FactcheckFeature({
                 graph: this.graph,
@@ -1354,15 +1361,6 @@ class App {
             const noteContent = content.slice(6).trim();
             if (noteContent) {
                 await this.handleNote(noteContent);
-                return true;
-            }
-        }
-
-        // Check for /factcheck command
-        if (content.startsWith('/factcheck ')) {
-            const claim = content.slice(11).trim();
-            if (claim || context) {
-                await this.handleFactcheck(claim, context);
                 return true;
             }
         }
@@ -3127,6 +3125,19 @@ Output ONLY the corrected Python code, no explanations.`;
                 {
                     command: '/matrix',
                     handler: 'handleMatrix',
+                },
+            ],
+            priority: PRIORITY.BUILTIN,
+        });
+
+        // Register factcheck feature with /factcheck slash command
+        await this.featureRegistry.register({
+            id: 'factcheck',
+            feature: FactcheckFeature,
+            slashCommands: [
+                {
+                    command: '/factcheck',
+                    handler: 'handleFactcheck',
                 },
             ],
             priority: PRIORITY.BUILTIN,

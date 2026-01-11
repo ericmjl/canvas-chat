@@ -22,21 +22,32 @@ import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
 import { storage } from './storage.js';
 import { chat } from './chat.js';
 import { apiUrl } from './utils.js';
+import { FeaturePlugin } from './feature-plugin.js';
 
-class FactcheckFeature {
+/**
+ * FactcheckFeature - Handles /factcheck command for verifying claims with web search.
+ * Extends FeaturePlugin to integrate with the plugin architecture.
+ */
+class FactcheckFeature extends FeaturePlugin {
     /**
      * Create a FactcheckFeature instance.
-     * @param {Object} context - Dependencies injected from App
+     * @param {AppContext} context - Application context with injected dependencies
      */
     constructor(context) {
-        this.graph = context.graph;
-        this.canvas = context.canvas;
-        this.getModelPicker = context.getModelPicker;
-        this.saveSession = context.saveSession;
-        this.buildLLMRequest = context.buildLLMRequest;
+        super(context);
+
+        // Factcheck-specific dependency (not in base FeaturePlugin)
+        this.getModelPicker = () => context.modelPicker;
 
         // Modal state
         this._factcheckData = null;
+    }
+
+    /**
+     * Lifecycle hook called when the plugin is loaded.
+     */
+    async onLoad() {
+        console.log('[FactcheckFeature] Loaded');
     }
 
     /**
