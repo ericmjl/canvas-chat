@@ -2,6 +2,8 @@
  * Feature Plugin System - Base classes for extensible features
  */
 
+import { apiUrl } from './utils.js';
+
 /**
  * AppContext provides access to app-level APIs for feature plugins.
  * This encapsulates the App instance's public interface, enabling
@@ -46,6 +48,11 @@ class AppContext {
         this.getStreamingState = (nodeId) => {
             return app.streamingNodes.get(nodeId);
         };
+
+        // Code feature dependencies
+        this.pyodideRunner = typeof pyodideRunner !== 'undefined' ? pyodideRunner : null;
+        this.streamingNodes = app.streamingNodes;
+        this.apiUrl = apiUrl;
 
         // Admin mode access
         this.adminMode = app.adminMode;
@@ -111,6 +118,11 @@ class FeaturePlugin {
         this.registerStreaming = context.registerStreaming;
         this.unregisterStreaming = context.unregisterStreaming;
         this.getStreamingState = context.getStreamingState;
+
+        // Code feature dependencies
+        this.pyodideRunner = context.pyodideRunner;
+        this.streamingNodes = context.streamingNodes;
+        this.apiUrl = context.apiUrl;
 
         // Admin mode
         this.adminMode = context.adminMode;
