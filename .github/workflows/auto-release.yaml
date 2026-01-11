@@ -135,14 +135,20 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           llamabot configure default-model --model-name="gpt-4.1-mini"
-          llamabot git write-release-notes
+          llamabot git write-release-notes --release-notes-dir docs/releases/posts
           # Verify the release notes file was created
-          if [ ! -f "docs/releases/v${{ env.version_number }}.md" ]; then
-            echo "Error: llamabot git write-release-notes did not create docs/releases/v${{ env.version_number }}.md"
+          if [ ! -f "docs/releases/posts/v${{ env.version_number }}.md" ]; then
+            echo "Error: llamabot git write-release-notes did not create docs/releases/posts/v${{ env.version_number }}.md"
             echo "This indicates llamabot failed or the file was not generated."
             exit 1
           fi
-          echo "Release notes file created: docs/releases/v${{ env.version_number }}.md"
+          echo "Release notes file created: docs/releases/posts/v${{ env.version_number }}.md"
+
+      - name: Add blog frontmatter to release notes
+        if: steps.check_release.outputs.already_released == 'false'
+        run: |
+          uv run add_frontmatter.py
+          echo "Frontmatter added to docs/releases/posts/v${{ env.version_number }}.md"
 
       - name: Run pre-commit to fix any formatting issues
         if: steps.check_release.outputs.already_released == 'false'
@@ -186,18 +192,18 @@ jobs:
       - name: Verify release notes file exists before creating release
         if: steps.check_release.outputs.already_released == 'false'
         run: |
-          if [ ! -f "docs/releases/v${{ env.version_number }}.md" ]; then
-            echo "Error: Release notes file docs/releases/v${{ env.version_number }}.md does not exist"
+          if [ ! -f "docs/releases/posts/v${{ env.version_number }}.md" ]; then
+            echo "Error: Release notes file docs/releases/posts/v${{ env.version_number }}.md does not exist"
             echo "This should have been created in the 'Write release notes' step."
             exit 1
           fi
-          echo "Release notes file verified: docs/releases/v${{ env.version_number }}.md"
+          echo "Release notes file verified: docs/releases/posts/v${{ env.version_number }}.md"
 
       - name: Create release in GitHub repo
         if: steps.check_release.outputs.already_released == 'false'
         uses: ncipollo/release-action@v1
         with:
-          bodyFile: "docs/releases/v${{ env.version_number }}.md"
+          bodyFile: "docs/releases/posts/v${{ env.version_number }}.md"
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: v${{ env.version_number }}
 
