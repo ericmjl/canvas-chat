@@ -2755,77 +2755,11 @@ df.head()
         const appContext = new AppContext(this);
         this.featureRegistry.setAppContext(appContext);
 
-        // Register built-in features as plugins
-        await this.featureRegistry.register({
-            id: 'committee',
-            feature: CommitteeFeature,
-            slashCommands: [
-                {
-                    command: '/committee',
-                    handler: 'handleCommittee',
-                },
-            ],
-            priority: PRIORITY.BUILTIN,
-        });
+        // Register all built-in features (handles 6 features automatically)
+        await this.featureRegistry.registerBuiltInFeatures();
 
-        // Register flashcard feature (no slash commands, event-driven)
-        await this.featureRegistry.register({
-            id: 'flashcards',
-            feature: FlashcardFeature,
-            slashCommands: [],
-            priority: PRIORITY.BUILTIN,
-        });
-
-        // Register matrix feature with /matrix slash command
-        await this.featureRegistry.register({
-            id: 'matrix',
-            feature: MatrixFeature,
-            slashCommands: [
-                {
-                    command: '/matrix',
-                    handler: 'handleMatrix',
-                },
-            ],
-            priority: PRIORITY.BUILTIN,
-        });
-
-        // Register factcheck feature with /factcheck slash command
-        await this.featureRegistry.register({
-            id: 'factcheck',
-            feature: FactcheckFeature,
-            slashCommands: [
-                {
-                    command: '/factcheck',
-                    handler: 'handleFactcheck',
-                },
-            ],
-            priority: PRIORITY.BUILTIN,
-        });
-
-        // Register research feature with /search and /research slash commands
-        await this.featureRegistry.register({
-            id: 'research',
-            feature: ResearchFeature,
-            slashCommands: [
-                {
-                    command: '/search',
-                    handler: 'handleSearch',
-                },
-                {
-                    command: '/research',
-                    handler: 'handleResearch',
-                },
-            ],
-            priority: PRIORITY.BUILTIN,
-        });
-
-        // Register code feature (self-healing, no slash commands)
-        await this.featureRegistry.register({
-            id: 'code',
-            feature: CodeFeature,
-            slashCommands: [],
-            priority: PRIORITY.BUILTIN,
-        });
+        // TODO (Task 4.3): Load additional plugins from config file
+        // await this.featureRegistry.loadPluginsFromConfig();
 
         console.log('[App] Plugin system initialized');
     }

@@ -5,6 +5,12 @@
 
 import { EventEmitter } from './event-emitter.js';
 import { CanvasEvent, CancellableEvent } from './plugin-events.js';
+import { CommitteeFeature } from './committee.js';
+import { FlashcardFeature } from './flashcards.js';
+import { MatrixFeature } from './matrix.js';
+import { FactcheckFeature } from './factcheck.js';
+import { ResearchFeature } from './research.js';
+import { CodeFeature } from './code-feature.js';
 
 /**
  * Priority levels for slash command resolution
@@ -44,6 +50,84 @@ class FeatureRegistry {
      */
     setAppContext(appContext) {
         this._appContext = appContext;
+    }
+
+    /**
+     * Register all built-in features.
+     * This method knows about all 6 built-in features and registers them automatically.
+     * Called during app initialization.
+     * @returns {Promise<void>}
+     */
+    async registerBuiltInFeatures() {
+        // Built-in feature configurations
+        const features = [
+            {
+                id: 'committee',
+                feature: CommitteeFeature,
+                slashCommands: [
+                    {
+                        command: '/committee',
+                        handler: 'handleCommittee',
+                    },
+                ],
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'flashcards',
+                feature: FlashcardFeature,
+                slashCommands: [], // Event-driven, no slash commands
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'matrix',
+                feature: MatrixFeature,
+                slashCommands: [
+                    {
+                        command: '/matrix',
+                        handler: 'handleMatrix',
+                    },
+                ],
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'factcheck',
+                feature: FactcheckFeature,
+                slashCommands: [
+                    {
+                        command: '/factcheck',
+                        handler: 'handleFactcheck',
+                    },
+                ],
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'research',
+                feature: ResearchFeature,
+                slashCommands: [
+                    {
+                        command: '/search',
+                        handler: 'handleSearch',
+                    },
+                    {
+                        command: '/research',
+                        handler: 'handleResearch',
+                    },
+                ],
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'code',
+                feature: CodeFeature,
+                slashCommands: [], // Event-driven, no slash commands
+                priority: PRIORITY.BUILTIN,
+            },
+        ];
+
+        console.log('[FeatureRegistry] Registering built-in features...');
+        for (const config of features) {
+            await this.register(config);
+        }
+        console.log('[FeatureRegistry] All built-in features registered');
     }
 
     /**
