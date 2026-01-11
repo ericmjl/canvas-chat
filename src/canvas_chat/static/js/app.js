@@ -138,6 +138,9 @@ class App {
         // Load or create session
         await this.loadSession();
 
+        // Setup graph event listeners
+        this.graph.on('nodeAdded', () => this.updateEmptyState()).on('nodeRemoved', () => this.updateEmptyState());
+
         // Setup UI event listeners
         this.setupEventListeners();
 
@@ -5417,7 +5420,7 @@ df.head()
      */
     createAndAddNode(type, content = '', options = {}) {
         const node = createNode(type, content, options);
-        this.graph.addNode(node);
+        this.graph.addNode(node); // This will emit 'nodeAdded' event
         this.canvas.renderNode(node);
         return node;
     }
