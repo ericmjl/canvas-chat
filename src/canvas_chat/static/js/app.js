@@ -9,6 +9,7 @@ import { Canvas } from './canvas.js';
 import { Chat, chat } from './chat.js';
 import { Storage, storage } from './storage.js';
 import { EventEmitter } from './event-emitter.js';
+import { CancellableEvent } from './plugin-events.js';
 import { UndoManager } from './undo-manager.js';
 import { SlashCommandMenu, SLASH_COMMANDS } from './slash-command-menu.js';
 import { NodeRegistry } from './node-registry.js';
@@ -2693,6 +2694,24 @@ df.head()
 
         console.log(`🔧 Self-healing attempt ${attemptNum}/${maxAttempts}...`);
 
+        // Emit before:selfheal hook
+        const beforeEvent = new CancellableEvent('selfheal:before', {
+            nodeId,
+            code,
+            attemptNum,
+            maxAttempts,
+            originalPrompt,
+            model,
+            context,
+        });
+        this.featureRegistry.emit('selfheal:before', beforeEvent);
+
+        // Check if plugin prevented self-healing
+        if (beforeEvent.defaultPrevented) {
+            console.log('[Self-healing] Prevented by plugin');
+            return;
+        }
+
         // Update node to show self-healing status
         this.graph.updateNode(nodeId, {
             selfHealingAttempt: attemptNum,
@@ -2748,9 +2767,39 @@ df.head()
             if (result.error) {
                 console.log(`❌ Error on attempt ${attemptNum}:`, result.error);
 
+                // Emit selfheal:error hook
+                this.featureRegistry.emit(
+                    'selfheal:error',
+                    new CancellableEvent('selfheal:error', {
+                        nodeId,
+                        code,
+                        error: result.error,
+                        attemptNum,
+                        maxAttempts,
+                        originalPrompt,
+                        model,
+                        context,
+                    })
+                );
+
                 // If we've exhausted retries, show final error
                 if (attemptNum >= maxAttempts) {
                     console.log(`🛑 Max retries (${maxAttempts}) exceeded. Giving up.`);
+
+                    // Emit selfheal:failed hook
+                    this.featureRegistry.emit(
+                        'selfheal:failed',
+                        new CancellableEvent('selfheal:failed', {
+                            nodeId,
+                            code,
+                            error: result.error,
+                            attemptNum,
+                            maxAttempts,
+                            originalPrompt,
+                            model,
+                        })
+                    );
+
                     this.graph.updateNode(nodeId, {
                         executionState: 'error',
                         lastError: result.error,
@@ -2783,6 +2832,20 @@ df.head()
 
             // Success! Store output and clear self-healing status
             console.log(`✅ Code executed successfully on attempt ${attemptNum}`);
+
+            // Emit selfheal:success hook
+            this.featureRegistry.emit(
+                'selfheal:success',
+                new CancellableEvent('selfheal:success', {
+                    nodeId,
+                    code,
+                    attemptNum,
+                    originalPrompt,
+                    model,
+                    result,
+                })
+            );
+
             const stdout = result.stdout?.trim() || null;
             const resultHtml = result.resultHtml || null;
             const resultText = result.resultText || null;
@@ -2876,7 +2939,7 @@ df.head()
         console.log(`🩹 Asking LLM to fix error...`);
 
         // Build fix prompt
-        const fixPrompt = `The previous code failed with this error:
+        let fixPrompt = `The previous code failed with this error:
 
 \`\`\`
 ${errorMessage}
@@ -2890,6 +2953,27 @@ ${failedCode}
 Please fix the error and provide corrected Python code that accomplishes the original task: "${originalPrompt}"
 
 Output ONLY the corrected Python code, no explanations.`;
+
+        // Emit selfheal:fix hook to allow plugins to customize fix strategy
+        const fixEvent = new CancellableEvent('selfheal:fix', {
+            nodeId,
+            failedCode,
+            errorMessage,
+            originalPrompt,
+            model,
+            context,
+            attemptNum,
+            maxAttempts,
+            fixPrompt,
+            customFixPrompt: null, // Plugins can set this
+        });
+        this.featureRegistry.emit('selfheal:fix', fixEvent);
+
+        // Use custom fix prompt if plugin provided one
+        if (fixEvent.defaultPrevented && fixEvent.data.customFixPrompt) {
+            console.log('[Self-healing] Using custom fix strategy from plugin');
+            fixPrompt = fixEvent.data.customFixPrompt;
+        }
 
         try {
             // Show placeholder
