@@ -37,6 +37,9 @@ import {
 } from './utils.js';
 import { highlightTextInHtml, extractExcerptText } from './highlight-utils.js';
 import { streamSSEContent, readSSEStream } from './sse.js';
+// Plugin system
+import { FeatureRegistry, PRIORITY } from './feature-registry.js';
+import { AppContext } from './feature-plugin.js';
 
 /* global pyodideRunner */
 
@@ -75,6 +78,9 @@ class App {
         this._matrixFeature = null;
         this._factcheckFeature = null;
         this._researchFeature = null;
+
+        // Plugin system
+        this.featureRegistry = new FeatureRegistry();
 
         // Undo/Redo manager
         this.undoManager = new UndoManager();
@@ -137,6 +143,9 @@ class App {
 
         // Load or create session
         await this.loadSession();
+
+        // Initialize plugin system
+        await this.initializePluginSystem();
 
         // Setup graph event listeners
         this.graph
@@ -1289,9 +1298,10 @@ class App {
     async tryHandleSlashCommand(content, context = null) {
         // First check if this is a plugin-registered slash command
         const parts = content.split(' ');
-        const command = parts[0]; // e.g., '/poll'
+        const command = parts[0]; // e.g., '/poll', '/committee'
         const args = parts.slice(1).join(' '); // Everything after command
 
+        // Try node registry first (custom node plugins)
         if (NodeRegistry.hasSlashCommand(command)) {
             const cmdConfig = NodeRegistry.getSlashCommand(command);
             if (cmdConfig && cmdConfig.handler) {
@@ -1300,7 +1310,12 @@ class App {
             }
         }
 
-        // Fall through to built-in commands
+        // Try feature registry (feature plugins)
+        if (await this.featureRegistry.handleSlashCommand(command, args, { text: context })) {
+            return true;
+        }
+
+        // Fall through to built-in commands that haven't been migrated yet
         // Check for /search command
         if (content.startsWith('/search ')) {
             const query = content.slice(8).trim();
@@ -1324,15 +1339,6 @@ class App {
             const matrixContext = content.slice(8).trim();
             if (matrixContext) {
                 await this.handleMatrix(matrixContext);
-                return true;
-            }
-        }
-
-        // Check for /committee command
-        if (content.startsWith('/committee ')) {
-            const question = content.slice(11).trim();
-            if (question) {
-                await this.handleCommittee(question, context);
                 return true;
             }
         }
@@ -2206,11 +2212,17 @@ class App {
 
     /**
      * Handle /committee slash command - show modal to configure LLM committee.
+     * Delegates to the committee feature plugin via FeatureRegistry.
      * @param {string} question - The question to ask the committee
      * @param {string|null} context - Optional context text
      */
     async handleCommittee(question, context = null) {
-        return this.committeeFeature.handleCommittee(question, context);
+        const feature = this.featureRegistry.getFeature('committee');
+        if (feature) {
+            return feature.handleCommittee('/committee', question, { text: context });
+        }
+        // Fallback to old pattern if plugin system not initialized
+        return this.committeeFeature.handleCommittee('/committee', question, { text: context });
     }
 
     /**
@@ -2983,8 +2995,34 @@ Output ONLY the corrected Python code, no explanations.`;
             // After animation completes, update state and toggle button (no full re-render)
             this.graph.updateNode(nodeId, { outputExpanded: newExpanded });
             this.canvas.updateOutputToggleButton(nodeId, newExpanded);
-            this.saveSession();
         });
+        this.saveSession();
+        this.updateEmptyState();
+    }
+
+    /**
+     * Initialize the plugin system and register built-in features.
+     * Called during app initialization after graph and session are ready.
+     */
+    async initializePluginSystem() {
+        // Create AppContext for dependency injection
+        const appContext = new AppContext(this);
+        this.featureRegistry.setAppContext(appContext);
+
+        // Register built-in features as plugins
+        await this.featureRegistry.register({
+            id: 'committee',
+            feature: CommitteeFeature,
+            slashCommands: [
+                {
+                    command: '/committee',
+                    handler: 'handleCommittee',
+                },
+            ],
+            priority: PRIORITY.BUILTIN,
+        });
+
+        console.log('[App] Plugin system initialized');
     }
 
     /**

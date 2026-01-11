@@ -6,33 +6,21 @@
  */
 
 import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
+import { FeaturePlugin } from './feature-plugin.js';
 import { storage } from './storage.js';
 import { readSSEStream } from './sse.js';
 import { apiUrl } from './utils.js';
 
 /**
  * CommitteeFeature class manages committee consultation functionality.
- * Uses dependency injection - receives app context rather than tight coupling.
+ * Extends FeaturePlugin to integrate with the plugin architecture.
  */
-class CommitteeFeature {
+class CommitteeFeature extends FeaturePlugin {
     /**
-     * @param {Object} context - Application context
-     * @param {Object} context.graph - Graph instance
-     * @param {Object} context.canvas - Canvas instance
-     * @param {HTMLElement} context.modelPicker - Model picker element
-     * @param {HTMLElement} context.chatInput - Chat input element
-     * @param {Function} context.saveSession - Save session callback
-     * @param {Function} context.updateEmptyState - Update empty state callback
-     * @param {Function} context.buildLLMRequest - Build LLM request with credentials callback
+     * @param {AppContext} context - Application context with injected dependencies
      */
     constructor(context) {
-        this.graph = context.graph;
-        this.canvas = context.canvas;
-        this.modelPicker = context.modelPicker;
-        this.chatInput = context.chatInput;
-        this.saveSession = context.saveSession;
-        this.updateEmptyState = context.updateEmptyState;
-        this.buildLLMRequest = context.buildLLMRequest;
+        super(context);
 
         // Committee state
         this._committeeData = null;
@@ -40,15 +28,36 @@ class CommitteeFeature {
     }
 
     /**
-     * Handle /committee slash command - show modal to configure LLM committee.
-     * @param {string} question - The question to ask the committee
-     * @param {string|null} context - Optional context text
+     * Lifecycle hook: called when plugin is loaded
      */
-    async handleCommittee(question, context = null) {
+    async onLoad() {
+        console.log('[CommitteeFeature] Loaded');
+    }
+
+    /**
+     * Event subscriptions for this feature
+     */
+    getEventSubscriptions() {
+        return {
+            // Listen for committee-related events if needed
+        };
+    }
+
+    /**
+     * Handle /committee slash command - show modal to configure LLM committee.
+     * This is the main slash command handler called by FeatureRegistry.
+     * @param {string} command - The command string (e.g., '/committee')
+     * @param {string} args - The question to ask the committee
+     * @param {Object} context - Execution context (selected nodes, etc.)
+     */
+    async handleCommittee(command, args, context) {
+        const question = args.trim();
+        const contextText = context?.text || null;
+
         // Store data for the modal
         this._committeeData = {
             question: question,
-            context: context,
+            context: contextText,
             selectedModels: [],
             chairmanModel: this.modelPicker.value,
             includeReview: false,

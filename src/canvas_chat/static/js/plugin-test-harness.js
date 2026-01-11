@@ -197,8 +197,22 @@ class MockApp {
         this.undoManager = new MockUndoManager();
         this.searchIndex = new MockSearchIndex();
 
-        this.modelPicker = { value: 'gpt-4' };
-        this.chatInput = { value: '' };
+        this.modelPicker = {
+            value: 'gpt-4',
+            options: [
+                { value: 'gpt-4', textContent: 'GPT-4' },
+                { value: 'gpt-3.5-turbo', textContent: 'GPT-3.5 Turbo' },
+                { value: 'claude-3', textContent: 'Claude 3' },
+            ],
+            querySelector: (selector) => {
+                const match = selector.match(/option\[value="(.+)"\]/);
+                if (match) {
+                    return this.modelPicker.options.find((opt) => opt.value === match[1]);
+                }
+                return null;
+            },
+        };
+        this.chatInput = { value: '', style: { height: 'auto' } };
 
         this.streamingNodes = new Map();
         this.adminMode = false;
