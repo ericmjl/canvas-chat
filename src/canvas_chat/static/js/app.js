@@ -1624,6 +1624,7 @@ class App {
             });
 
             this.graph.addNode(noteNode);
+            this.canvas.renderNode(noteNode); // Render the node visually
 
             // Create edges from parents (if replying to selected nodes)
             for (const parentId of parentIds) {
@@ -1669,6 +1670,7 @@ class App {
         });
 
         this.graph.addNode(fetchNode);
+        this.canvas.renderNode(fetchNode); // Render the node visually
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
@@ -1742,6 +1744,7 @@ class App {
         });
 
         this.graph.addNode(pdfNode);
+        this.canvas.renderNode(pdfNode); // Render the node visually
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
