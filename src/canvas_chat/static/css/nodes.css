@@ -671,6 +671,8 @@
     word-wrap: break-word;
     overflow-wrap: break-word;
     white-space: normal;
+    overflow: auto; /* Allow scrolling for long content */
+    max-height: 100%; /* Constrain to node height */
 }
 
 .node-content::selection {

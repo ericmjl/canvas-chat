@@ -994,8 +994,9 @@ class Canvas {
             // Check for any scrollable container within nodes or output panels
             // Note: .code-output-panel-body handles all scrolling for output panels
             // Note: .code-editor-area is the scrollable area for code editor
+            // Note: .code-display is the scrollable area for syntax-highlighted code
             const scrollableContent = e.target.closest(
-                '.node-content, .code-output-panel-body, .csv-preview, .code-error-output, .code-editor-area'
+                '.node-content, .code-output-panel-body, .csv-preview, .code-error-output, .code-editor-area, .code-display'
             );
             if (scrollableContent) {
                 // Check if this content element is actually scrollable (has overflow: auto/scroll)
