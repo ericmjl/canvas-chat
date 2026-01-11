@@ -1439,7 +1439,6 @@ class App {
         });
 
         this.graph.addNode(humanNode);
-        this.canvas.renderNode(humanNode);
 
         // Create edges from parents
         for (const parentId of parentIds) {
@@ -1470,7 +1469,6 @@ class App {
         });
 
         this.graph.addNode(aiNode);
-        this.canvas.renderNode(aiNode);
 
         // Create edge from human to AI
         const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
@@ -1582,7 +1580,6 @@ class App {
             });
 
             this.graph.addNode(noteNode);
-            this.canvas.renderNode(noteNode);
 
             // Create edges from parents (if replying to selected nodes)
             for (const parentId of parentIds) {
@@ -1628,7 +1625,6 @@ class App {
         });
 
         this.graph.addNode(fetchNode);
-        this.canvas.renderNode(fetchNode);
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
@@ -1702,7 +1698,6 @@ class App {
         });
 
         this.graph.addNode(pdfNode);
-        this.canvas.renderNode(pdfNode);
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
@@ -2109,7 +2104,6 @@ class App {
             });
 
             this.graph.addNode(imageNode);
-            this.canvas.renderNode(imageNode);
 
             // Create edge from parent
             const edge = createEdge(parentNodeId, imageNode.id, EdgeType.HIGHLIGHT);
@@ -2863,7 +2857,6 @@ df.head()
             });
 
             this.graph.addNode(highlightNode);
-            this.canvas.renderNode(highlightNode);
 
             // Create highlight edge (dashed connection)
             const edge = createEdge(nodeId, highlightNode.id, EdgeType.HIGHLIGHT);
@@ -2895,7 +2888,6 @@ df.head()
                 });
 
                 this.graph.addNode(humanNode);
-                this.canvas.renderNode(humanNode);
 
                 // Edge from highlight to user message
                 const humanEdge = createEdge(highlightNode.id, humanNode.id, EdgeType.REPLY);
@@ -2915,7 +2907,6 @@ df.head()
                 });
 
                 this.graph.addNode(aiNode);
-                this.canvas.renderNode(aiNode);
 
                 const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
                 this.graph.addEdge(aiEdge);
@@ -3013,7 +3004,6 @@ df.head()
         });
 
         this.graph.addNode(summaryNode);
-        this.canvas.renderNode(summaryNode);
 
         const edge = createEdge(nodeId, summaryNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(edge);
@@ -3073,7 +3063,6 @@ df.head()
         });
 
         this.graph.addNode(fetchResultNode);
-        this.canvas.renderNode(fetchResultNode);
 
         const fetchEdge = createEdge(nodeId, fetchResultNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(fetchEdge);
@@ -3156,7 +3145,6 @@ df.head()
             });
 
             this.graph.addNode(summaryNode);
-            this.canvas.renderNode(summaryNode);
 
             const summaryEdge = createEdge(fetchResultNode.id, summaryNode.id, EdgeType.REFERENCE);
             this.graph.addEdge(summaryEdge);
