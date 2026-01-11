@@ -2650,9 +2650,9 @@ df.head()
         // Get ancestor context (conversation history)
         const ancestors = this.graph.getAncestors(nodeId);
         const ancestorContext = ancestors
-            .filter((n) => [NodeType.HUMAN, NodeType.AI, NodeType.NOTE].includes(n.type))
+            .filter((n) => [NodeType.HUMAN, NodeType.AI, NodeType.NOTE, NodeType.PDF].includes(n.type))
             .map((n) => ({
-                role: n.type === NodeType.HUMAN ? 'user' : 'assistant',
+                role: [NodeType.HUMAN, NodeType.PDF].includes(n.type) ? 'user' : 'assistant',
                 content: n.content,
             }));
 

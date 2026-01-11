@@ -11,7 +11,7 @@ import {
     NodeType,
     TestGraph,
     createTestNode,
-    createTestEdge
+    createTestEdge,
 } from './test_setup.js';
 
 // ============================================================
@@ -94,13 +94,13 @@ test('Graph: getAncestors handles diamond pattern', () => {
     const ancestors = graph.getAncestors('D');
     // The algorithm may return duplicates for A (once through B, once through C)
     // but all A, B, C should be present
-    const ids = ancestors.map(n => n.id);
+    const ids = ancestors.map((n) => n.id);
     assertTrue(ids.includes('A'), 'Should include A');
     assertTrue(ids.includes('B'), 'Should include B');
     assertTrue(ids.includes('C'), 'Should include C');
     // B and C should appear (each once)
-    assertEqual(ids.filter(id => id === 'B').length, 1, 'B should appear once');
-    assertEqual(ids.filter(id => id === 'C').length, 1, 'C should appear once');
+    assertEqual(ids.filter((id) => id === 'B').length, 1, 'B should appear once');
+    assertEqual(ids.filter((id) => id === 'C').length, 1, 'C should appear once');
 });
 
 test('Graph: topologicalSort returns nodes in correct order', () => {
@@ -117,7 +117,7 @@ test('Graph: topologicalSort returns nodes in correct order', () => {
     graph.addEdge(createTestEdge('B', 'C'));
 
     const sorted = graph.topologicalSort();
-    const ids = sorted.map(n => n.id);
+    const ids = sorted.map((n) => n.id);
 
     assertEqual(ids, ['A', 'B', 'C']);
 });
@@ -137,7 +137,7 @@ test('Graph: topologicalSort handles multiple roots', () => {
     graph.addEdge(createTestEdge('B', 'C'));
 
     const sorted = graph.topologicalSort();
-    const ids = sorted.map(n => n.id);
+    const ids = sorted.map((n) => n.id);
 
     // A and B should come before C
     assertTrue(ids.indexOf('A') < ids.indexOf('C'), 'A should come before C');
@@ -210,6 +210,21 @@ test('Graph.resolveContext: sorts by created_at', () => {
     assertEqual(context[1].content, 'Second');
 });
 
+test('Graph.resolveContext: includes PDF nodes as user role', () => {
+    const graph = new TestGraph();
+    const pdfNode = { id: '1', type: NodeType.PDF, content: 'PDF content...', created_at: 1 };
+    const codeNode = { id: '2', type: NodeType.CODE, content: '# code', created_at: 2 };
+    graph.addNode(pdfNode);
+    graph.addNode(codeNode);
+    graph.addEdge(createTestEdge('1', '2'));
+
+    const context = graph.resolveContext(['2']);
+    assertEqual(context.length, 2);
+    assertEqual(context[0].role, 'user', 'PDF node should be mapped to user role');
+    assertEqual(context[0].content, 'PDF content...');
+    assertEqual(context[1].role, 'assistant', 'CODE node should be mapped to assistant role');
+});
+
 // ============================================================
 // Graph.getDescendants() tests
 // ============================================================
@@ -227,8 +242,14 @@ test('Graph.getDescendants returns all descendants in chain', () => {
 
     const descendants = graph.getDescendants('A');
     assertEqual(descendants.length, 2);
-    assertTrue(descendants.some(n => n.id === 'B'), 'Should include B');
-    assertTrue(descendants.some(n => n.id === 'C'), 'Should include C');
+    assertTrue(
+        descendants.some((n) => n.id === 'B'),
+        'Should include B'
+    );
+    assertTrue(
+        descendants.some((n) => n.id === 'C'),
+        'Should include C'
+    );
 });
 
 test('Graph.getDescendants returns multiple children', () => {
@@ -277,7 +298,10 @@ test('Graph.getDescendants handles diamond/merge structure', () => {
     const descendants = graph.getDescendants('A');
     // Should include B, C, D (D only once despite two paths)
     assertEqual(descendants.length, 3);
-    assertTrue(descendants.some(n => n.id === 'D'), 'Should include D');
+    assertTrue(
+        descendants.some((n) => n.id === 'D'),
+        'Should include D'
+    );
 });
 
 // ============================================================
@@ -592,7 +616,7 @@ test('Graph.getVisibleAncestorsThroughHidden returns both visible parents for me
     const result = graph.getVisibleAncestorsThroughHidden(nodeD.id);
     // Both parents B and C are visible
     assertEqual(result.length, 2);
-    const ids = result.map(n => n.id);
+    const ids = result.map((n) => n.id);
     assertTrue(ids.includes(nodeB.id), 'Should include B');
     assertTrue(ids.includes(nodeC.id), 'Should include C');
 });
@@ -625,7 +649,7 @@ test('Graph.getVisibleAncestorsThroughHidden traverses through hidden nodes', ()
     // C is hidden, its parent B is visible (collapsed)
     // E is visible
     assertEqual(result.length, 2);
-    const ids = result.map(n => n.id);
+    const ids = result.map((n) => n.id);
     assertTrue(ids.includes(nodeB.id), 'Should include B (through hidden C)');
     assertTrue(ids.includes(nodeE.id), 'Should include E (direct visible parent)');
 });

@@ -1176,7 +1176,7 @@ class CRDTGraph extends EventEmitter {
         const sorted = Array.from(allAncestors.values()).sort((a, b) => a.created_at - b.created_at);
 
         // Convert to message format for API
-        const userTypes = [NodeType.HUMAN, NodeType.HIGHLIGHT, NodeType.NOTE, NodeType.IMAGE];
+        const userTypes = [NodeType.HUMAN, NodeType.HIGHLIGHT, NodeType.NOTE, NodeType.IMAGE, NodeType.PDF];
         return sorted.map((node) => {
             const msg = {
                 role: userTypes.includes(node.type) ? 'user' : 'assistant',

@@ -2940,13 +2940,18 @@ async def generate_code(request: GenerateCodeRequest, http_request: Request):
             )
             system_parts.append("\n" + "=" * 60)
 
-        # Add conversation context if available
+        # Add conversation context if available (PDF content, paper text, etc.)
+        # Note: We add this to system prompt to keep it separate from the
+        # code generation flow. This helps the model understand the broader
+        # context without confusing it with code-specific instructions.
         if request.context:
-            system_parts.append("\n\nConversation context:")
-            for msg in request.context[-5:]:  # Last 5 messages for context
+            system_parts.append("\n\nRelevant context from previous nodes:")
+            for msg in (
+                request.context
+            ):  # Include all context messages (don't truncate PDF content)
                 role = msg.role
-                content = msg.content[:200]  # Truncate long messages
-                system_parts.append(f"[{role}]: {content}")
+                content = msg.content
+                system_parts.append(f"\n[{role}]: {content}")
 
         # Add existing code context if modifying
         if request.existing_code:
