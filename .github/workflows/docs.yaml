@@ -15,8 +15,12 @@ on:
             - 'docs/**'
             - 'mkdocs.yml'
             - '.github/workflows/docs.yaml'
-    # Allow manual trigger from auto-release workflow
+    # Manual trigger
     workflow_dispatch:
+    # Daily deployment to catch any release notes added by auto-release
+    schedule:
+        # Run at 2 AM UTC daily (change time as needed)
+        - cron: '0 2 * * *'
 
 permissions:
     contents: read
