@@ -1360,14 +1360,43 @@ class Canvas {
 
             // Only animate if position changed
             if (startX !== endX || startY !== endY) {
-                animations.push({
+                const animData = {
                     nodeId: node.id,
                     wrapper,
                     startX,
                     startY,
                     endX,
                     endY,
-                });
+                };
+
+                // Check for output panel and calculate its animation path
+                // Output panels are positioned relative to their parent node, so when the node
+                // moves during auto-layout, the panel must move in sync to stay attached
+                const outputPanel = this.outputPanels.get(node.id);
+                if (outputPanel) {
+                    const nodeWidth = parseFloat(wrapper.getAttribute('width'));
+                    const nodeHeight = parseFloat(wrapper.getAttribute('height'));
+                    const panelWidth = parseFloat(outputPanel.getAttribute('width'));
+                    // Must match the overlap constant in renderOutputPanel() (line 1888)
+                    const panelOverlap = 10;
+
+                    // Calculate start panel position (where it currently is)
+                    const startPanelX = startX + (nodeWidth - panelWidth) / 2;
+                    const startPanelY = startY + nodeHeight - panelOverlap;
+
+                    // Calculate end panel position (where it should go)
+                    const endPanelX = endX + (nodeWidth - panelWidth) / 2;
+                    const endPanelY = endY + nodeHeight - panelOverlap;
+
+                    // Store panel animation data
+                    animData.outputPanel = outputPanel;
+                    animData.startPanelX = startPanelX;
+                    animData.startPanelY = startPanelY;
+                    animData.endPanelX = endPanelX;
+                    animData.endPanelY = endPanelY;
+                }
+
+                animations.push(animData);
             }
         }
 
@@ -1406,6 +1435,16 @@ class Canvas {
 
                 anim.wrapper.setAttribute('x', x);
                 anim.wrapper.setAttribute('y', y);
+
+                // Update output panel position if present
+                // This keeps the panel attached to its parent node during animation
+                // Position calculation matches handleMouseMove() drag logic (lines 916-923)
+                if (anim.outputPanel) {
+                    const panelX = anim.startPanelX + (anim.endPanelX - anim.startPanelX) * eased;
+                    const panelY = anim.startPanelY + (anim.endPanelY - anim.startPanelY) * eased;
+                    anim.outputPanel.setAttribute('x', panelX);
+                    anim.outputPanel.setAttribute('y', panelY);
+                }
             }
 
             // Update edges - use custom callback if provided
