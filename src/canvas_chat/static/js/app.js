@@ -637,6 +637,10 @@ class App {
             .on('createFlashcards', this.handleCreateFlashcards.bind(this))
             .on('reviewCard', this.reviewSingleCard.bind(this))
             .on('flipCard', this.handleFlipCard.bind(this))
+            // Poll plugin events
+            .on('pollVote', this.handlePollVote.bind(this))
+            .on('pollAddOption', this.handlePollAddOption.bind(this))
+            .on('pollResetVotes', this.handlePollResetVotes.bind(this))
             // File drop events
             .on('pdfDrop', (file, position) => this.fileUploadHandler.handlePdfDrop(file, position))
             .on('imageDrop', (file, position) => this.fileUploadHandler.handleImageDrop(file, position))
@@ -3877,6 +3881,66 @@ df.head()
      */
     checkDueFlashcardsOnLoad() {
         return this.flashcardFeature.checkDueFlashcardsOnLoad();
+    }
+
+    /**
+     * Handle voting on a poll option (plugin event)
+     */
+    handlePollVote(nodeId, optionIndex) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        // Initialize votes object if it doesn't exist
+        if (!node.votes) {
+            node.votes = {};
+        }
+
+        // Increment vote count for this option
+        node.votes[optionIndex] = (node.votes[optionIndex] || 0) + 1;
+
+        // Update graph and re-render
+        this.graph.updateNode(nodeId, { votes: node.votes });
+        this.canvas.renderNode(node);
+        this.saveSession();
+    }
+
+    /**
+     * Handle adding a new option to a poll (plugin event)
+     */
+    handlePollAddOption(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        const newOption = prompt('Enter new poll option:');
+        if (!newOption || !newOption.trim()) return;
+
+        // Initialize options array if needed
+        if (!node.options) {
+            node.options = [];
+        }
+
+        // Add new option
+        node.options.push(newOption.trim());
+
+        // Update graph and re-render
+        this.graph.updateNode(nodeId, { options: node.options });
+        this.canvas.renderNode(node);
+        this.saveSession();
+    }
+
+    /**
+     * Handle resetting all poll votes (plugin event)
+     */
+    handlePollResetVotes(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        if (!confirm('Reset all votes for this poll?')) return;
+
+        // Clear all votes
+        this.graph.updateNode(nodeId, { votes: {} });
+        this.canvas.renderNode(this.graph.getNode(nodeId));
+        this.saveSession();
     }
 
     /**
