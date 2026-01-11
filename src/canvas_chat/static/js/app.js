@@ -267,6 +267,13 @@ class App {
      * @returns {MatrixFeature}
      */
     get matrixFeature() {
+        // Use plugin system instance
+        const feature = this.featureRegistry.getFeature('matrix');
+        if (feature) {
+            return feature;
+        }
+
+        // Fallback: Lazy initialization for backwards compatibility
         if (!this._matrixFeature) {
             this._matrixFeature = new MatrixFeature({
                 graph: this.graph,
@@ -1338,15 +1345,6 @@ class App {
             const instructions = content.slice(10).trim();
             if (instructions) {
                 await this.handleResearch(instructions, context);
-                return true;
-            }
-        }
-
-        // Check for /matrix command
-        if (content.startsWith('/matrix ')) {
-            const matrixContext = content.slice(8).trim();
-            if (matrixContext) {
-                await this.handleMatrix(matrixContext);
                 return true;
             }
         }
@@ -3118,6 +3116,19 @@ Output ONLY the corrected Python code, no explanations.`;
             id: 'flashcards',
             feature: FlashcardFeature,
             slashCommands: [],
+            priority: PRIORITY.BUILTIN,
+        });
+
+        // Register matrix feature with /matrix slash command
+        await this.featureRegistry.register({
+            id: 'matrix',
+            feature: MatrixFeature,
+            slashCommands: [
+                {
+                    command: '/matrix',
+                    handler: 'handleMatrix',
+                },
+            ],
             priority: PRIORITY.BUILTIN,
         });
 

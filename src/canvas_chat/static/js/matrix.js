@@ -14,33 +14,24 @@ import {
 } from './graph-types.js';
 import { streamSSEContent } from './sse.js';
 import { apiUrl, escapeHtmlText, buildMessagesForApi } from './utils.js';
+import { FeaturePlugin } from './feature-plugin.js';
 
 /**
  * MatrixFeature - Encapsulates all matrix-related functionality.
- * Uses dependency injection via the context object.
+ * Extends FeaturePlugin to integrate with the plugin architecture.
  */
-class MatrixFeature {
+class MatrixFeature extends FeaturePlugin {
     /**
      * Create a MatrixFeature instance.
-     * @param {Object} context - Dependencies injected from the App class
-     * @param {Object} context.graph - The CRDTGraph instance
-     * @param {Object} context.canvas - The Canvas instance
-     * @param {Function} context.getModelPicker - Returns the model picker element
-     * @param {Function} context.saveSession - Callback to save session
-     * @param {Function} context.updateEmptyState - Callback to update empty state
-     * @param {Function} context.generateNodeSummary - Callback to generate node summary
-     * @param {Function} context.pushUndo - Callback to push undo action
-     * @param {Function} context.buildLLMRequest - Callback to build LLM request with credentials
+     * @param {AppContext} context - Application context with injected dependencies
      */
     constructor(context) {
-        this.graph = context.graph;
-        this.canvas = context.canvas;
-        this.getModelPicker = context.getModelPicker;
-        this.saveSession = context.saveSession;
-        this.updateEmptyState = context.updateEmptyState;
+        super(context);
+
+        // Additional dependencies specific to matrix (not in base FeaturePlugin)
+        this.getModelPicker = () => context.modelPicker;
         this.generateNodeSummary = context.generateNodeSummary;
-        this.pushUndo = context.pushUndo;
-        this.buildLLMRequest = context.buildLLMRequest;
+        this.pushUndo = context.pushUndo || (() => {});
 
         // Matrix modal state
         this._matrixData = null;
@@ -51,6 +42,13 @@ class MatrixFeature {
         // Matrix streaming state - Map of nodeId -> Map of cellKey -> AbortController
         // Allows stopping all cell fills for a matrix node at once
         this.streamingMatrixCells = new Map();
+    }
+
+    /**
+     * Lifecycle hook called when the plugin is loaded.
+     */
+    async onLoad() {
+        console.log('[MatrixFeature] Loaded');
     }
 
     /**
