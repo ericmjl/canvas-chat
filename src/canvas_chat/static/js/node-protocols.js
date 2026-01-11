@@ -697,11 +697,24 @@ class CodeNode extends BaseNode {
         // Execution state indicator
         let stateClass = '';
         let stateIndicator = '';
+        const selfHealingStatus = this.node.selfHealingStatus;
+        const selfHealingAttempt = this.node.selfHealingAttempt;
+
         if (executionState === 'running') {
             stateClass = 'code-running';
-            stateIndicator = '<div class="code-state-indicator">Running...</div>';
+            if (selfHealingAttempt) {
+                stateIndicator = `<div class="code-state-indicator code-self-healing">${selfHealingStatus === 'verifying' ? '🔍 Verifying' : '🔧 Self-healing'} (attempt ${selfHealingAttempt}/3)...</div>`;
+            } else {
+                stateIndicator = '<div class="code-state-indicator">Running...</div>';
+            }
         } else if (executionState === 'error') {
             stateClass = 'code-error';
+        } else if (selfHealingStatus === 'fixed') {
+            // Show success badge if code was self-healed
+            stateIndicator = '<div class="code-state-indicator code-self-healed">✅ Self-healed</div>';
+        } else if (selfHealingStatus === 'failed') {
+            // Show failure badge if self-healing gave up
+            stateIndicator = '<div class="code-state-indicator code-self-heal-failed">⚠️ Self-healing failed</div>';
         }
 
         // Syntax-highlighted read-only code display (click to edit opens modal)
