@@ -221,6 +221,13 @@ class App {
      * @returns {FlashcardFeature}
      */
     get flashcardFeature() {
+        // Use plugin system instance
+        const feature = this.featureRegistry.getFeature('flashcards');
+        if (feature) {
+            return feature;
+        }
+
+        // Fallback: Lazy initialization for backwards compatibility
         if (!this._flashcardFeature) {
             this._flashcardFeature = new FlashcardFeature({
                 graph: this.graph,
@@ -3103,6 +3110,14 @@ Output ONLY the corrected Python code, no explanations.`;
                     handler: 'handleCommittee',
                 },
             ],
+            priority: PRIORITY.BUILTIN,
+        });
+
+        // Register flashcard feature (no slash commands, event-driven)
+        await this.featureRegistry.register({
+            id: 'flashcards',
+            feature: FlashcardFeature,
+            slashCommands: [],
             priority: PRIORITY.BUILTIN,
         });
 
