@@ -6,8 +6,9 @@
 """
 Add blog frontmatter to all release notes.
 
-This script adds YAML frontmatter with date and categories to each release note file.
-Dates are extracted from git tag timestamps.
+This script adds YAML frontmatter with date (including time) and categories to each
+release note file. Dates and times are extracted from git tag timestamps to ensure
+correct ordering when multiple releases occur on the same day.
 
 For future releases, llamabot will create files in docs/releases/posts/ and they will
 need frontmatter added manually or via this script.
@@ -19,7 +20,7 @@ from pathlib import Path
 
 
 def get_git_tag_date(tag: str) -> str:
-    """Get the date of a git tag in YYYY-MM-DD format."""
+    """Get the date and time of a git tag in YYYY-MM-DD HH:MM:SS format."""
     result = subprocess.run(
         ["git", "log", "-1", "--format=%ai", tag],
         capture_output=True,
@@ -28,8 +29,10 @@ def get_git_tag_date(tag: str) -> str:
     )
     # Parse timestamp like "2026-01-10 15:51:03 +0000"
     timestamp_str = result.stdout.strip()
-    dt = datetime.strptime(timestamp_str.split()[0], "%Y-%m-%d")
-    return dt.strftime("%Y-%m-%d")
+    # Extract date and time components (ignore timezone for simplicity)
+    date_time_str = " ".join(timestamp_str.split()[:2])
+    dt = datetime.strptime(date_time_str, "%Y-%m-%d %H:%M:%S")
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def has_frontmatter(content: str) -> bool:
@@ -38,16 +41,30 @@ def has_frontmatter(content: str) -> bool:
 
 
 def add_frontmatter(file_path: Path, date: str) -> None:
-    """Add blog frontmatter to a release note file."""
+    """Add or update blog frontmatter in a release note file."""
     # Read existing content
     content = file_path.read_text()
 
-    # Skip if already has frontmatter
+    # If has frontmatter, remove it to get the body content
     if has_frontmatter(content):
-        print(f"✓ {file_path.name} already has frontmatter, skipping")
-        return
+        # Find the end of frontmatter (second "---")
+        lines = content.split("\n")
+        end_idx = None
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                end_idx = i
+                break
 
-    # Create frontmatter
+        if end_idx is not None:
+            # Extract content after frontmatter (skip closing --- and blank line)
+            body_content = "\n".join(lines[end_idx + 1 :]).lstrip("\n")
+        else:
+            # Malformed frontmatter, use original content
+            body_content = content
+    else:
+        body_content = content
+
+    # Create new frontmatter
     frontmatter = f"""---
 date: {date}
 categories:
@@ -56,12 +73,12 @@ categories:
 
 """
 
-    # Prepend frontmatter to content
-    new_content = frontmatter + content
+    # Combine frontmatter and body
+    new_content = frontmatter + body_content
 
     # Write back to file
     file_path.write_text(new_content)
-    print(f"✓ Added frontmatter to {file_path.name} (date: {date})")
+    print(f"✓ Updated {file_path.name} with timestamp (date: {date})")
 
 
 def main():
