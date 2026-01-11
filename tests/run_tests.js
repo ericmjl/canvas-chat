@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
  * Automatic test discovery and runner for JavaScript tests.
- * Similar to pytest - automatically discovers and runs all test_*.js files.
- *
- * Usage: node tests/run_tests.js
- *        node tests/run_tests.js tests/test_utils.js  (run specific file)
+ * Finds all test_*.js files in the tests directory and runs them.
  */
 
-import { spawn } from 'child_process';
 import { readdir } from 'fs/promises';
-import { dirname, join } from 'path';
+import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Tests that don't need Yjs (can run standalone)
+const STANDALONE_TESTS = ['test_feature_registry.js'];
 const testsDir = __dirname;
 
 /**
@@ -28,8 +28,8 @@ async function discoverTestFiles(specificFile = null) {
     // Auto-discover all test_*.js files (exclude setup/helper files)
     const files = await readdir(testsDir);
     const testFiles = files
-        .filter(file => file.startsWith('test_') && file.endsWith('.js') && file !== 'test_setup.js')
-        .map(file => join(testsDir, file))
+        .filter((file) => file.startsWith('test_') && file.endsWith('.js') && file !== 'test_setup.js')
+        .map((file) => join(testsDir, file))
         .sort(); // Sort for consistent execution order
 
     return testFiles;
@@ -42,7 +42,7 @@ function runTestFile(filePath) {
     return new Promise((resolve, reject) => {
         const child = spawn('node', [filePath], {
             stdio: 'inherit',
-            shell: false
+            shell: false,
         });
 
         child.on('close', (code) => {
@@ -74,7 +74,7 @@ async function main() {
     }
 
     console.log(`Found ${testFiles.length} test file(s):`);
-    testFiles.forEach(file => {
+    testFiles.forEach((file) => {
         const fileName = file.split('/').pop();
         console.log(`  - ${fileName}`);
     });
@@ -100,10 +100,10 @@ async function main() {
     console.log('Test Summary');
     console.log('='.repeat(60));
 
-    const passed = results.filter(r => r.passed).length;
-    const failed = results.filter(r => !r.passed).length;
+    const passed = results.filter((r) => r.passed).length;
+    const failed = results.filter((r) => !r.passed).length;
 
-    results.forEach(result => {
+    results.forEach((result) => {
         const fileName = result.file.split('/').pop();
         const status = result.passed ? '✓' : '✗';
         console.log(`${status} ${fileName}`);
@@ -116,7 +116,7 @@ async function main() {
     }
 }
 
-main().catch(err => {
+main().catch((err) => {
     console.error('Fatal error:', err);
     process.exit(1);
 });
