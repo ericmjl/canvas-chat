@@ -966,6 +966,8 @@
         <!-- Scripts -->
         <!-- Pyodide runner is loaded separately (not an ES module) -->
         <script src="static/js/pyodide-runner.js"></script>
+        <!-- Slash command menu must load before app.js to expose SlashCommandMenu to window -->
+        <script type="module" src="static/js/slash-command-menu.js"></script>
         <!-- Main app as ES module - imports all dependencies -->
         <script type="module" src="static/js/app.js"></script>
     </body>

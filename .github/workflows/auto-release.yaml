@@ -129,6 +129,10 @@ jobs:
         if: steps.check_release.outputs.already_released == 'false'
         run: uv version --bump ${{ env.VERSION_NAME }} --verbose
 
+      - name: Update pixi lockfile
+        if: steps.check_release.outputs.already_released == 'false'
+        run: pixi lock
+
       - name: Create version tag
         if: steps.check_release.outputs.already_released == 'false'
         run: git tag -a "v${{ env.version_number }}" -m "Release v${{ env.version_number }}"
