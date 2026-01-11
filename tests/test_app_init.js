@@ -170,6 +170,9 @@ test('App event listener methods exist', () => {
         'undo',
         'redo',
         'handleSearch',
+        // Self-healing code generation methods
+        'selfHealCode',
+        'fixCodeError',
     ];
 
     for (const methodName of requiredMethods) {
