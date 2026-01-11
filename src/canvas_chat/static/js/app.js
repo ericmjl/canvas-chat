@@ -5418,6 +5418,7 @@ df.head()
     createAndAddNode(type, content = '', options = {}) {
         const node = createNode(type, content, options);
         this.graph.addNode(node);
+        this.canvas.renderNode(node);
         return node;
     }
 
