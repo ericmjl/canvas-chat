@@ -20,6 +20,7 @@ class AppContext {
         this.modalManager = app.modalManager;
         this.undoManager = app.undoManager;
         this.searchIndex = app.searchIndex;
+        this.featureRegistry = app.featureRegistry;
 
         // UI elements
         this.modelPicker = app.modelPicker;
@@ -92,6 +93,7 @@ class FeaturePlugin {
         this.modalManager = context.modalManager;
         this.undoManager = context.undoManager;
         this.searchIndex = context.searchIndex;
+        this.featureRegistry = context.featureRegistry;
 
         // UI elements
         this.modelPicker = context.modelPicker;
@@ -149,6 +151,19 @@ class FeaturePlugin {
      */
     getEventSubscriptions() {
         return {};
+    }
+
+    /**
+     * Emit an event through the feature registry.
+     * Convenience method for plugins to emit custom events.
+     *
+     * @param {string} eventName - Name of the event to emit
+     * @param {Object|CanvasEvent} event - Event object or data
+     */
+    emit(eventName, event) {
+        if (this.featureRegistry) {
+            this.featureRegistry.emit(eventName, event);
+        }
     }
 }
 

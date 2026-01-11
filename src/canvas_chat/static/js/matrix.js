@@ -15,6 +15,7 @@ import {
 import { streamSSEContent } from './sse.js';
 import { apiUrl, escapeHtmlText, buildMessagesForApi } from './utils.js';
 import { FeaturePlugin } from './feature-plugin.js';
+import { CancellableEvent } from './plugin-events.js';
 
 /**
  * MatrixFeature - Encapsulates all matrix-related functionality.
@@ -343,6 +344,24 @@ class MatrixFeature extends FeaturePlugin {
             abortController = new AbortController();
         }
 
+        // Extension hook: matrix:before:fill - allow plugins to prevent or modify cell fill
+        const beforeEvent = new CancellableEvent('matrix:before:fill', {
+            nodeId,
+            row,
+            col,
+            rowItem,
+            colItem,
+            context,
+            messages,
+        });
+        this.emit('matrix:before:fill', beforeEvent);
+
+        // Check if a plugin prevented the fill
+        if (beforeEvent.defaultPrevented) {
+            console.log('[MatrixFeature] Cell fill prevented by plugin');
+            return;
+        }
+
         // Get or create the cell controllers map for this matrix node
         let cellControllers = this.streamingMatrixCells.get(nodeId);
         if (!cellControllers) {
@@ -355,12 +374,34 @@ class MatrixFeature extends FeaturePlugin {
         this.canvas.showStopButton(nodeId);
 
         try {
-            const requestBody = this.buildLLMRequest({
-                row_item: rowItem,
-                col_item: colItem,
-                context: context,
+            // Extension hook: matrix:cell:prompt - allow plugins to customize the prompt/request
+            const promptEvent = new CancellableEvent('matrix:cell:prompt', {
+                nodeId,
+                row,
+                col,
+                rowItem,
+                colItem,
+                context,
                 messages: buildMessagesForApi(messages),
+                customPrompt: null, // Plugins can set this to override the default prompt
             });
+            this.emit('matrix:cell:prompt', promptEvent);
+
+            // Build request body, using custom prompt if provided by a plugin
+            let requestBody;
+            if (promptEvent.data.customPrompt) {
+                requestBody = this.buildLLMRequest({
+                    custom_prompt: promptEvent.data.customPrompt,
+                    messages: promptEvent.data.messages,
+                });
+            } else {
+                requestBody = this.buildLLMRequest({
+                    row_item: rowItem,
+                    col_item: colItem,
+                    context: context,
+                    messages: promptEvent.data.messages,
+                });
+            }
 
             // Prepare fetch options with optional abort signal
             const fetchOptions = {
@@ -432,6 +473,17 @@ class MatrixFeature extends FeaturePlugin {
             });
 
             this.saveSession();
+
+            // Extension hook: matrix:after:fill - notify plugins that cell fill completed
+            this.emit('matrix:after:fill', {
+                nodeId,
+                row,
+                col,
+                rowItem,
+                colItem,
+                content: cellContent,
+                success: true,
+            });
         } catch (err) {
             // Don't log abort errors as failures
             if (err.name === 'AbortError') {
@@ -440,6 +492,18 @@ class MatrixFeature extends FeaturePlugin {
             }
             console.error('Failed to fill matrix cell:', err);
             alert(`Failed to fill cell: ${err.message}`);
+
+            // Extension hook: matrix:after:fill with error
+            this.emit('matrix:after:fill', {
+                nodeId,
+                row,
+                col,
+                rowItem,
+                colItem,
+                content: null,
+                success: false,
+                error: err.message,
+            });
         } finally {
             // Clean up this cell from tracking
             const controllers = this.streamingMatrixCells.get(nodeId);

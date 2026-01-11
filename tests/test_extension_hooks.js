@@ -444,4 +444,158 @@ await asyncTest('Plugins execute in registration order for events', async () => 
     assertEqual(executionOrder.length, 2, 'Both plugins should execute');
 });
 
+console.log('\n=== Matrix Extension Hook Tests ===\n');
+
+// Test: matrix:before:fill hook can prevent cell fill
+await asyncTest('matrix:before:fill hook can prevent cell fill', async () => {
+    const harness = new PluginTestHarness();
+
+    class MatrixBlockerPlugin extends FeaturePlugin {
+        getEventSubscriptions() {
+            return {
+                'matrix:before:fill': (event) => {
+                    event.preventDefault();
+                },
+            };
+        }
+    }
+
+    await harness.loadPlugin({
+        id: 'matrix-blocker',
+        feature: MatrixBlockerPlugin,
+    });
+
+    const event = new CancellableEvent('matrix:before:fill', {
+        nodeId: 'matrix-1',
+        row: 0,
+        col: 0,
+        rowItem: 'Row A',
+        colItem: 'Col 1',
+        context: 'Test context',
+        messages: [],
+    });
+
+    await harness.emitEvent('matrix:before:fill', event);
+
+    assertTrue(event.defaultPrevented, 'Cell fill should be prevented');
+});
+
+// Test: matrix:cell:prompt hook can customize prompt
+await asyncTest('matrix:cell:prompt hook can customize prompt', async () => {
+    const harness = new PluginTestHarness();
+
+    class CustomPromptPlugin extends FeaturePlugin {
+        getEventSubscriptions() {
+            return {
+                'matrix:cell:prompt': (event) => {
+                    event.data.customPrompt = 'Custom prompt for this cell';
+                    event.preventDefault();
+                },
+            };
+        }
+    }
+
+    await harness.loadPlugin({
+        id: 'custom-prompt',
+        feature: CustomPromptPlugin,
+    });
+
+    const event = new CancellableEvent('matrix:cell:prompt', {
+        nodeId: 'matrix-1',
+        row: 0,
+        col: 0,
+        rowItem: 'Row A',
+        colItem: 'Col 1',
+        context: 'Test context',
+        messages: [],
+        customPrompt: null,
+    });
+
+    await harness.emitEvent('matrix:cell:prompt', event);
+
+    assertTrue(event.defaultPrevented, 'Should prevent default');
+    assertEqual(event.data.customPrompt, 'Custom prompt for this cell', 'Should set custom prompt');
+});
+
+// Test: matrix:after:fill hook receives success data
+await asyncTest('matrix:after:fill hook receives success data', async () => {
+    const harness = new PluginTestHarness();
+
+    let capturedData = null;
+
+    class MatrixSuccessLogger extends FeaturePlugin {
+        getEventSubscriptions() {
+            return {
+                'matrix:after:fill': (event) => {
+                    capturedData = event.data;
+                },
+            };
+        }
+    }
+
+    await harness.loadPlugin({
+        id: 'success-logger',
+        feature: MatrixSuccessLogger,
+    });
+
+    const event = {
+        data: {
+            nodeId: 'matrix-1',
+            row: 0,
+            col: 0,
+            rowItem: 'Row A',
+            colItem: 'Col 1',
+            content: 'Generated cell content',
+            success: true,
+        },
+    };
+
+    await harness.emitEvent('matrix:after:fill', event);
+
+    assertTrue(capturedData !== null, 'Should capture data');
+    assertEqual(capturedData.success, true, 'Should indicate success');
+    assertEqual(capturedData.content, 'Generated cell content', 'Should receive content');
+});
+
+// Test: matrix:after:fill hook receives error data
+await asyncTest('matrix:after:fill hook receives error data', async () => {
+    const harness = new PluginTestHarness();
+
+    let capturedData = null;
+
+    class MatrixErrorLogger extends FeaturePlugin {
+        getEventSubscriptions() {
+            return {
+                'matrix:after:fill': (event) => {
+                    capturedData = event.data;
+                },
+            };
+        }
+    }
+
+    await harness.loadPlugin({
+        id: 'error-logger',
+        feature: MatrixErrorLogger,
+    });
+
+    const event = {
+        data: {
+            nodeId: 'matrix-1',
+            row: 0,
+            col: 0,
+            rowItem: 'Row A',
+            colItem: 'Col 1',
+            content: null,
+            success: false,
+            error: 'Network error',
+        },
+    };
+
+    await harness.emitEvent('matrix:after:fill', event);
+
+    assertTrue(capturedData !== null, 'Should capture data');
+    assertEqual(capturedData.success, false, 'Should indicate failure');
+    assertEqual(capturedData.error, 'Network error', 'Should receive error message');
+});
+
 console.log('\n=== All extension hook tests passed! ===\n');
