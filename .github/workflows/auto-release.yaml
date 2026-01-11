@@ -1,216 +1,224 @@
 name: Auto-release
 
 on:
-  # Automatic patch release after tests pass on main.
-  # This triggers whenever the "Tests" workflow completes.
-  # The job-level `if` condition ensures we only release when:
-  # 1. Tests passed (conclusion == 'success')
-  # 2. It was a push event (not a PR) - i.e., code was merged to main
-  workflow_run:
-    workflows: ["Tests"]
-    types:
-      - completed
-    branches:
-      - main
+    # Automatic patch release after tests pass on main.
+    # This triggers whenever the "Tests" workflow completes.
+    # The job-level `if` condition ensures we only release when:
+    # 1. Tests passed (conclusion == 'success')
+    # 2. It was a push event (not a PR) - i.e., code was merged to main
+    workflow_run:
+        workflows: ['Tests']
+        types:
+            - completed
+        branches:
+            - main
 
-  # Manual release for minor/major versions.
-  # To cut a new release, navigate to the Actions section of the repo
-  # and select this workflow (Auto-release) on the right hand side.
-  # Then, click "Run workflow" and select major, minor, or patch.
-  workflow_dispatch:
-    inputs:
-      version_name:
-        description: "One of major, minor, or patch"
-        required: true
-        type: choice
-        options:
-          - major
-          - minor
-          - patch
+    # Manual release for minor/major versions.
+    # To cut a new release, navigate to the Actions section of the repo
+    # and select this workflow (Auto-release) on the right hand side.
+    # Then, click "Run workflow" and select major, minor, or patch.
+    workflow_dispatch:
+        inputs:
+            version_name:
+                description: 'One of major, minor, or patch'
+                required: true
+                type: choice
+                options:
+                    - major
+                    - minor
+                    - patch
 
 permissions:
-  contents: write
-  id-token: write
+    contents: write
+    id-token: write
 
 env:
-  DEFAULT_VERSION_NAME: patch
+    DEFAULT_VERSION_NAME: patch
 
 jobs:
-  release:
-    name: Create a new release
-    runs-on: ubuntu-latest
-    # Run if:
-    # 1. Manual trigger (workflow_dispatch), OR
-    # 2. Automatic trigger where deploy passed AND it was a push (not PR)
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push')
+    release:
+        name: Create a new release
+        runs-on: ubuntu-latest
+        # Run if:
+        # 1. Manual trigger (workflow_dispatch), OR
+        # 2. Automatic trigger where deploy passed AND it was a push (not PR)
+        if: |
+            github.event_name == 'workflow_dispatch' ||
+            (github.event.workflow_run.conclusion == 'success' &&
+             github.event.workflow_run.event == 'push')
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          fetch-tags: true
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+                  fetch-tags: true
 
-      - name: Pull latest commits of main branch
-        run: |
-          git checkout main
-          git pull
+            - name: Pull latest commits of main branch
+              run: |
+                  git checkout main
+                  git pull
 
-      - name: Check if already released
-        id: check_release
-        run: |
-          CURRENT_COMMIT=$(git rev-parse HEAD)
-          echo "Current commit: $CURRENT_COMMIT"
-          if git tag --points-at $CURRENT_COMMIT | grep -q "^v"; then
-            echo "already_released=true" >> $GITHUB_OUTPUT
-            echo "This commit already has a release tag. Will skip release."
-            git tag --points-at $CURRENT_COMMIT
-          else
-            echo "already_released=false" >> $GITHUB_OUTPUT
-            echo "No release tag found. Proceeding with release."
-          fi
+            - name: Check if already released
+              id: check_release
+              run: |
+                  CURRENT_COMMIT=$(git rev-parse HEAD)
+                  echo "Current commit: $CURRENT_COMMIT"
+                  if git tag --points-at $CURRENT_COMMIT | grep -q "^v"; then
+                    echo "already_released=true" >> $GITHUB_OUTPUT
+                    echo "This commit already has a release tag. Will skip release."
+                    git tag --points-at $CURRENT_COMMIT
+                  else
+                    echo "already_released=false" >> $GITHUB_OUTPUT
+                    echo "No release tag found. Proceeding with release."
+                  fi
 
-      - name: Setup Python environment
-        if: steps.check_release.outputs.already_released == 'false'
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
+            - name: Setup Python environment
+              if: steps.check_release.outputs.already_released == 'false'
+              uses: actions/setup-python@v6
+              with:
+                  python-version: '3.12'
 
-      - name: Install uv
-        if: steps.check_release.outputs.already_released == 'false'
-        uses: astral-sh/setup-uv@v7
+            - name: Install uv
+              if: steps.check_release.outputs.already_released == 'false'
+              uses: astral-sh/setup-uv@v7
 
-      - name: Set version name
-        if: steps.check_release.outputs.already_released == 'false'
-        run: echo "VERSION_NAME=${{ github.event.inputs.version_name || env.DEFAULT_VERSION_NAME }}" >> $GITHUB_ENV
+            - name: Set version name
+              if: steps.check_release.outputs.already_released == 'false'
+              run: echo "VERSION_NAME=${{ github.event.inputs.version_name || env.DEFAULT_VERSION_NAME }}" >> $GITHUB_ENV
 
-      - name: Store current version number
-        if: steps.check_release.outputs.already_released == 'false'
-        run: echo "current_version=$(uv version --short)" >> $GITHUB_ENV
+            - name: Store current version number
+              if: steps.check_release.outputs.already_released == 'false'
+              run: echo "current_version=$(uv version --short)" >> $GITHUB_ENV
 
-      - name: Dry run uv version bump
-        if: steps.check_release.outputs.already_released == 'false'
-        run: uv version --bump ${{ env.VERSION_NAME }} --dry-run --verbose
+            - name: Dry run uv version bump
+              if: steps.check_release.outputs.already_released == 'false'
+              run: uv version --bump ${{ env.VERSION_NAME }} --dry-run --verbose
 
-      - name: Store new version number
-        if: steps.check_release.outputs.already_released == 'false'
-        run: echo "version_number=$(uv version --bump ${{ env.VERSION_NAME }} --dry-run --short)" >> $GITHUB_ENV
+            - name: Store new version number
+              if: steps.check_release.outputs.already_released == 'false'
+              run: echo "version_number=$(uv version --bump ${{ env.VERSION_NAME }} --dry-run --short)" >> $GITHUB_ENV
 
-      - name: Display new version number
-        if: steps.check_release.outputs.already_released == 'false'
-        run: |
-          echo "version_name: ${{ env.VERSION_NAME }}"
-          echo "version_number: v${{ env.version_number }}"
+            - name: Display new version number
+              if: steps.check_release.outputs.already_released == 'false'
+              run: |
+                  echo "version_name: ${{ env.VERSION_NAME }}"
+                  echo "version_number: v${{ env.version_number }}"
 
-      - name: Ensure repo status is clean
-        if: steps.check_release.outputs.already_released == 'false'
-        run: git status
+            - name: Ensure repo status is clean
+              if: steps.check_release.outputs.already_released == 'false'
+              run: git status
 
-      - name: Configure Git
-        if: steps.check_release.outputs.already_released == 'false'
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
+            - name: Configure Git
+              if: steps.check_release.outputs.already_released == 'false'
+              run: |
+                  git config user.name github-actions
+                  git config user.email github-actions@github.com
 
-      - name: Setup pixi
-        if: steps.check_release.outputs.already_released == 'false'
-        uses: prefix-dev/setup-pixi@v0.9.3
-        with:
-          run-install: false
+            - name: Setup pixi
+              if: steps.check_release.outputs.already_released == 'false'
+              uses: prefix-dev/setup-pixi@v0.9.3
+              with:
+                  run-install: false
 
-      - name: Install llamabot
-        if: steps.check_release.outputs.already_released == 'false'
-        run: uv tool install llamabot[cli]
+            - name: Install llamabot
+              if: steps.check_release.outputs.already_released == 'false'
+              run: uv tool install llamabot[cli]
 
-      - name: Run uv version bump
-        if: steps.check_release.outputs.already_released == 'false'
-        run: uv version --bump ${{ env.VERSION_NAME }} --verbose
+            - name: Run uv version bump
+              if: steps.check_release.outputs.already_released == 'false'
+              run: uv version --bump ${{ env.VERSION_NAME }} --verbose
 
-      - name: Update pixi lockfile
-        if: steps.check_release.outputs.already_released == 'false'
-        run: pixi lock
+            - name: Update pixi lockfile
+              if: steps.check_release.outputs.already_released == 'false'
+              run: pixi lock
 
-      - name: Create version tag
-        if: steps.check_release.outputs.already_released == 'false'
-        run: git tag -a "v${{ env.version_number }}" -m "Release v${{ env.version_number }}"
+            - name: Create version tag
+              if: steps.check_release.outputs.already_released == 'false'
+              run: git tag -a "v${{ env.version_number }}" -m "Release v${{ env.version_number }}"
 
-      - name: Write release notes
-        if: steps.check_release.outputs.already_released == 'false'
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          llamabot configure default-model --model-name="gpt-4.1-mini"
-          llamabot git write-release-notes --release-notes-dir docs/releases/posts
-          # Verify the release notes file was created
-          if [ ! -f "docs/releases/posts/v${{ env.version_number }}.md" ]; then
-            echo "Error: llamabot git write-release-notes did not create docs/releases/posts/v${{ env.version_number }}.md"
-            echo "This indicates llamabot failed or the file was not generated."
-            exit 1
-          fi
-          echo "Release notes file created: docs/releases/posts/v${{ env.version_number }}.md"
+            - name: Write release notes
+              if: steps.check_release.outputs.already_released == 'false'
+              env:
+                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+              run: |
+                  llamabot configure default-model --model-name="gpt-4.1-mini"
+                  llamabot git write-release-notes --release-notes-dir docs/releases/posts
+                  # Verify the release notes file was created
+                  if [ ! -f "docs/releases/posts/v${{ env.version_number }}.md" ]; then
+                    echo "Error: llamabot git write-release-notes did not create docs/releases/posts/v${{ env.version_number }}.md"
+                    echo "This indicates llamabot failed or the file was not generated."
+                    exit 1
+                  fi
+                  echo "Release notes file created: docs/releases/posts/v${{ env.version_number }}.md"
 
-      - name: Add blog frontmatter to release notes
-        if: steps.check_release.outputs.already_released == 'false'
-        run: |
-          uv run add_frontmatter.py
-          echo "Frontmatter added to docs/releases/posts/v${{ env.version_number }}.md"
+            - name: Add blog frontmatter to release notes
+              if: steps.check_release.outputs.already_released == 'false'
+              run: |
+                  uv run add_frontmatter.py
+                  echo "Frontmatter added to docs/releases/posts/v${{ env.version_number }}.md"
 
-      - name: Run pre-commit to fix any formatting issues
-        if: steps.check_release.outputs.already_released == 'false'
-        run: |
-          # First run applies auto-fixes (may fail if fixes are needed)
-          uvx pre-commit run --all-files || true
-          # Stage all files (new and modified) including any fixes pre-commit applied
-          git add .
-          # Second run verifies all checks pass
-          uvx pre-commit run --all-files
+            - name: Run pre-commit to fix any formatting issues
+              if: steps.check_release.outputs.already_released == 'false'
+              run: |
+                  # First run applies auto-fixes (may fail if fixes are needed)
+                  uvx pre-commit run --all-files || true
+                  # Stage all files (new and modified) including any fixes pre-commit applied
+                  git add .
+                  # Second run verifies all checks pass
+                  uvx pre-commit run --all-files
 
-      - name: Commit version bump, release notes, and lock file
-        if: steps.check_release.outputs.already_released == 'false'
-        run: |
-          # All files are already staged from the pre-commit step
-          git commit -m "Bump version: ${{ env.current_version }} → ${{ env.version_number }}
+            - name: Commit version bump, release notes, and lock file
+              if: steps.check_release.outputs.already_released == 'false'
+              run: |
+                  # All files are already staged from the pre-commit step
+                  git commit -m "Bump version: ${{ env.current_version }} → ${{ env.version_number }}
 
-          Add release notes for v${{ env.version_number }}"
+                  Add release notes for v${{ env.version_number }}"
 
-      - name: Verify tag creation
-        if: steps.check_release.outputs.already_released == 'false'
-        run: git tag | grep "v${{ env.version_number }}"
+            - name: Verify tag creation
+              if: steps.check_release.outputs.already_released == 'false'
+              run: git tag | grep "v${{ env.version_number }}"
 
-      - name: Build package
-        if: steps.check_release.outputs.already_released == 'false'
-        run: uv build --sdist --wheel
+            - name: Build package
+              if: steps.check_release.outputs.already_released == 'false'
+              run: uv build --sdist --wheel
 
-      - name: Publish package (trusted publishing)
-        if: steps.check_release.outputs.already_released == 'false'
-        run: uv publish --trusted-publishing always
+            - name: Publish package (trusted publishing)
+              if: steps.check_release.outputs.already_released == 'false'
+              run: uv publish --trusted-publishing always
 
-      - name: Push changes with tags
-        if: steps.check_release.outputs.already_released == 'false'
-        run: |
-          git push && git push --tags
+            - name: Push changes with tags
+              if: steps.check_release.outputs.already_released == 'false'
+              run: |
+                  git push && git push --tags
 
-      - name: Verify release notes file exists before creating release
-        if: steps.check_release.outputs.already_released == 'false'
-        run: |
-          if [ ! -f "docs/releases/posts/v${{ env.version_number }}.md" ]; then
-            echo "Error: Release notes file docs/releases/posts/v${{ env.version_number }}.md does not exist"
-            echo "This should have been created in the 'Write release notes' step."
-            exit 1
-          fi
-          echo "Release notes file verified: docs/releases/posts/v${{ env.version_number }}.md"
+            - name: Verify release notes file exists before creating release
+              if: steps.check_release.outputs.already_released == 'false'
+              run: |
+                  if [ ! -f "docs/releases/posts/v${{ env.version_number }}.md" ]; then
+                    echo "Error: Release notes file docs/releases/posts/v${{ env.version_number }}.md does not exist"
+                    echo "This should have been created in the 'Write release notes' step."
+                    exit 1
+                  fi
+                  echo "Release notes file verified: docs/releases/posts/v${{ env.version_number }}.md"
 
-      - name: Create release in GitHub repo
-        if: steps.check_release.outputs.already_released == 'false'
-        uses: ncipollo/release-action@v1
-        with:
-          bodyFile: "docs/releases/posts/v${{ env.version_number }}.md"
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: v${{ env.version_number }}
+            - name: Create release in GitHub repo
+              if: steps.check_release.outputs.already_released == 'false'
+              uses: ncipollo/release-action@v1
+              with:
+                  bodyFile: 'docs/releases/posts/v${{ env.version_number }}.md'
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  tag: v${{ env.version_number }}
 
-      - name: Ensure complete
-        if: steps.check_release.outputs.already_released == 'false'
-        run: echo "Auto-release complete!"
+            - name: Trigger docs deployment
+              if: steps.check_release.outputs.already_released == 'false'
+              run: |
+                  # Trigger docs workflow to deploy the new release notes
+                  gh workflow run docs.yaml --ref main
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Ensure complete
+              if: steps.check_release.outputs.already_released == 'false'
+              run: echo "Auto-release complete!"
