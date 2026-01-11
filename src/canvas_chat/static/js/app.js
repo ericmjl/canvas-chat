@@ -11,6 +11,7 @@ import { Storage, storage } from './storage.js';
 import { EventEmitter } from './event-emitter.js';
 import { UndoManager } from './undo-manager.js';
 import { SlashCommandMenu, SLASH_COMMANDS } from './slash-command-menu.js';
+import { NodeRegistry } from './node-registry.js';
 import { ModalManager } from './modal-manager.js';
 import { FileUploadHandler } from './file-upload-handler.js';
 import { FlashcardFeature } from './flashcards.js';
@@ -19,7 +20,6 @@ import { MatrixFeature } from './matrix.js';
 import { FactcheckFeature } from './factcheck.js';
 import { ResearchFeature } from './research.js';
 import { SearchIndex, getNodeTypeIcon } from './search.js';
-import { NodeRegistry } from './node-registry.js';
 import { wrapNode } from './node-protocols.js';
 import {
     isUrlContent,
@@ -1283,6 +1283,20 @@ class App {
      * @param {string} context - Optional context for contextual commands (e.g., selected text)
      */
     async tryHandleSlashCommand(content, context = null) {
+        // First check if this is a plugin-registered slash command
+        const parts = content.split(' ');
+        const command = parts[0]; // e.g., '/poll'
+        const args = parts.slice(1).join(' '); // Everything after command
+
+        if (NodeRegistry.hasSlashCommand(command)) {
+            const cmdConfig = NodeRegistry.getSlashCommand(command);
+            if (cmdConfig && cmdConfig.handler) {
+                await cmdConfig.handler(this, args, context);
+                return true;
+            }
+        }
+
+        // Fall through to built-in commands
         // Check for /search command
         if (content.startsWith('/search ')) {
             const query = content.slice(8).trim();

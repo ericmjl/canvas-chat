@@ -3,9 +3,10 @@
  */
 
 import { storage } from './storage.js';
+import { NodeRegistry } from './node-registry.js';
 
-// Slash command definitions
-const SLASH_COMMANDS = [
+// Built-in slash command definitions
+const BUILTIN_SLASH_COMMANDS = [
     { command: '/note', description: 'Add a note or fetch URL content', placeholder: 'markdown or https://...' },
     { command: '/search', description: 'Search the web', placeholder: 'query' },
     { command: '/research', description: 'Deep research', placeholder: 'topic' },
@@ -23,6 +24,18 @@ const SLASH_COMMANDS = [
         placeholder: 'optional description',
     },
 ];
+
+/**
+ * Get all available slash commands (built-in + plugin-registered)
+ * @returns {Array} Combined array of all slash commands
+ */
+function getAllSlashCommands() {
+    const pluginCommands = NodeRegistry.getSlashCommands();
+    return [...BUILTIN_SLASH_COMMANDS, ...pluginCommands];
+}
+
+// Export for backwards compatibility
+const SLASH_COMMANDS = getAllSlashCommands();
 
 /**
  * Slash command autocomplete menu
@@ -88,8 +101,9 @@ class SlashCommandMenu {
         if (value.startsWith('/')) {
             const typed = value.split(' ')[0].toLowerCase(); // Just the command part
 
-            // Filter commands that match
-            this.filteredCommands = SLASH_COMMANDS.filter((cmd) => cmd.command.toLowerCase().startsWith(typed));
+            // Filter commands that match (get fresh list to include plugin commands)
+            const allCommands = getAllSlashCommands();
+            this.filteredCommands = allCommands.filter((cmd) => cmd.command.toLowerCase().startsWith(typed));
 
             if (this.filteredCommands.length > 0 && !value.includes(' ')) {
                 // Show menu only if still typing command (no space yet)
@@ -278,6 +292,7 @@ class SlashCommandMenu {
 
 // Export for browser
 window.SlashCommandMenu = SlashCommandMenu;
-window.SLASH_COMMANDS = SLASH_COMMANDS;
+window.SLASH_COMMANDS = getAllSlashCommands();
+window.getAllSlashCommands = getAllSlashCommands;
 
-export { SlashCommandMenu, SLASH_COMMANDS };
+export { SlashCommandMenu, SLASH_COMMANDS, getAllSlashCommands };
