@@ -22,6 +22,15 @@
 import { NodeType } from './graph-types.js';
 
 /**
+ * @typedef {Object} SlashCommandConfig
+ * @property {string} command - Slash command (e.g., '/poll')
+ * @property {string} description - Description for autocomplete menu
+ * @property {string} placeholder - Placeholder text for input
+ * @property {Function} handler - Handler function(app, args, context)
+ * @property {boolean} [requiresContext] - Whether command requires selected nodes
+ */
+
+/**
  * @typedef {Object} NodeTypeConfig
  * @property {string} type - Unique node type identifier (e.g., 'poll', 'diagram')
  * @property {Function} protocol - Class extending BaseNode
@@ -29,6 +38,7 @@ import { NodeType } from './graph-types.js';
  * @property {string} [css] - CSS rules for this node type
  * @property {Object.<string, string>} [cssVariables] - CSS custom properties
  * @property {Function} [createNode] - Optional custom factory function
+ * @property {SlashCommandConfig} [slashCommand] - Optional slash command registration
  */
 
 /**
@@ -42,6 +52,13 @@ const NodeRegistry = {
      * @private
      */
     _types: new Map(),
+
+    /**
+     * Registered slash commands
+     * @type {Map<string, SlashCommandConfig & {type: string}>}
+     * @private
+     */
+    _slashCommands: new Map(),
 
     /**
      * Style element for injected CSS
@@ -87,7 +104,22 @@ const NodeRegistry = {
             css: config.css || '',
             cssVariables: config.cssVariables || {},
             createNode: config.createNode || null,
+            slashCommand: config.slashCommand || null,
         });
+
+        // Register slash command if provided
+        if (config.slashCommand) {
+            const cmd = config.slashCommand;
+            if (!cmd.command || !cmd.handler) {
+                console.warn(`NodeRegistry: Invalid slash command for type "${config.type}"`);
+            } else {
+                this._slashCommands.set(cmd.command, {
+                    ...cmd,
+                    type: config.type, // Link back to node type
+                });
+                console.debug(`NodeRegistry: Registered slash command "${cmd.command}" for type "${config.type}"`);
+            }
+        }
 
         // Add to NodeType enum if it doesn't exist
         if (typeof NodeType !== 'undefined' && !NodeType[config.type.toUpperCase()]) {
@@ -241,10 +273,37 @@ const NodeRegistry = {
     },
 
     /**
+     * Get all registered slash commands
+     * @returns {Array<{command: string, description: string, placeholder: string, handler: Function, requiresContext: boolean, type: string}>}
+     */
+    getSlashCommands() {
+        return Array.from(this._slashCommands.values());
+    },
+
+    /**
+     * Get slash command by command string
+     * @param {string} command - Command string (e.g., '/poll')
+     * @returns {Object|null} Command config or null if not found
+     */
+    getSlashCommand(command) {
+        return this._slashCommands.get(command) || null;
+    },
+
+    /**
+     * Check if a slash command is registered
+     * @param {string} command - Command string (e.g., '/poll')
+     * @returns {boolean}
+     */
+    hasSlashCommand(command) {
+        return this._slashCommands.has(command);
+    },
+
+    /**
      * Clear all registrations (for testing)
      */
     _reset() {
         this._types.clear();
+        this._slashCommands.clear();
         this._builtinsRegistered = false;
         if (this._styleElement) {
             this._styleElement.textContent = '';
