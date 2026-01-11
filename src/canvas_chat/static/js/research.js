@@ -92,9 +92,16 @@ class ResearchFeature {
 
                 if (refineResponse.ok) {
                     const refineData = await refineResponse.json();
-                    effectiveQuery = refineData.refined_query;
-                    // Update node to show what we're actually searching for
-                    this.canvas.updateNodeContent(searchNode.id, `Searching (${provider}): "${effectiveQuery}"`, true);
+                    // Only use refined query if it's non-empty
+                    if (refineData.refined_query && refineData.refined_query.trim()) {
+                        effectiveQuery = refineData.refined_query;
+                        // Update node to show what we're actually searching for
+                        this.canvas.updateNodeContent(
+                            searchNode.id,
+                            `Searching (${provider}): "${effectiveQuery}"`,
+                            true
+                        );
+                    }
                 }
             }
 
@@ -288,13 +295,16 @@ class ResearchFeature {
 
                 if (refineResponse.ok) {
                     const refineData = await refineResponse.json();
-                    effectiveInstructions = refineData.refined_query;
-                    // Update node to show what we're actually researching
-                    this.canvas.updateNodeContent(
-                        nodeId,
-                        `**Research${providerLabel}:** ${instructions}\n*Researching: "${effectiveInstructions}"*\n\n*Starting research...*`,
-                        true
-                    );
+                    // Only use refined query if it's non-empty
+                    if (refineData.refined_query && refineData.refined_query.trim()) {
+                        effectiveInstructions = refineData.refined_query;
+                        // Update node to show what we're actually researching
+                        this.canvas.updateNodeContent(
+                            nodeId,
+                            `**Research${providerLabel}:** ${instructions}\n*Researching: "${effectiveInstructions}"*\n\n*Starting research...*`,
+                            true
+                        );
+                    }
                 }
             }
 
