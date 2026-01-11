@@ -13,6 +13,7 @@
 
 import { NodeType, TAG_COLORS } from './graph-types.js';
 import { EventEmitter } from './event-emitter.js';
+import { wouldOverlapNodes, resolveOverlaps } from './layout.js';
 
 // =============================================================================
 // Type Imports (JSDoc)
@@ -1378,23 +1379,17 @@ class CRDTGraph extends EventEmitter {
         let attempts = 0;
         const maxAttempts = 20;
 
-        while (
-            attempts < maxAttempts &&
-            window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)
-        ) {
+        while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
             candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
             attempts++;
         }
 
-        if (window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
+        if (wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
             candidatePos.x += NODE_WIDTH + HORIZONTAL_GAP;
             candidatePos.y = initialY;
 
             attempts = 0;
-            while (
-                attempts < maxAttempts &&
-                window.layoutUtils.wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)
-            ) {
+            while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
                 candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
                 attempts++;
             }
@@ -1407,7 +1402,7 @@ class CRDTGraph extends EventEmitter {
      * Check if a position would overlap with existing nodes
      */
     wouldOverlap(pos, width, height, nodes) {
-        return window.layoutUtils.wouldOverlapNodes(pos, width, height, nodes);
+        return wouldOverlapNodes(pos, width, height, nodes);
     }
 
     /**
@@ -1773,7 +1768,7 @@ class CRDTGraph extends EventEmitter {
      * Delegates to the pure function from layout.js.
      */
     resolveOverlaps(nodes, dimensions = new Map()) {
-        window.layoutUtils.resolveOverlaps(nodes, 40, 50, dimensions);
+        resolveOverlaps(nodes, 40, 50, dimensions);
     }
 
     // =========================================================================
