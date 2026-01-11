@@ -158,45 +158,60 @@ git commit -m "message"
 
 ### Module system
 
-Canvas-Chat uses **ES modules** for new code and is gradually migrating existing code.
+**Canvas-Chat uses ES modules exclusively.** All JavaScript code must use ES module syntax.
 
-**For new files:**
+**Requirements:**
 
-- Use ES module `import`/`export` syntax
+- **ALWAYS** use `import`/`export` syntax (never CommonJS `require`/`module.exports`)
+- **ALWAYS** import dependencies explicitly at the top of files
+- **NEVER** rely on global scope (`window.X`) for module dependencies
 - Load in HTML with `<script type="module" src="...">`
 - Tests import modules directly with `import` statements
 
-**For backwards compatibility:**
-
-- ES modules can expose to global scope for non-module scripts:
-
-    ```javascript
-    export { MyClass };
-
-    // Backwards compatibility for non-module scripts
-    if (typeof window !== 'undefined') {
-        window.MyClass = MyClass;
-    }
-    ```
-
-**Migration strategy:**
-
-- New plugin-system files (`node-registry.js`, `node-protocols.js`) use ES modules
-- Legacy files (`app.js`, `canvas.js`, `graph-types.js`) still use global scope
-- Tests for ES modules use `await import()` instead of `vm.runInThisContext()`
-
-**Example ES module:**
+**Correct ES module pattern:**
 
 ```javascript
-// my-module.js
+// my-module.js - Exporting
 export class MyClass {
     doSomething() {}
 }
 
-// Backwards compatibility
-if (typeof window !== 'undefined') {
-    window.MyClass = MyClass;
+export function myFunction() {}
+
+// other-module.js - Importing
+import { MyClass, myFunction } from './my-module.js';
+
+const instance = new MyClass();
+myFunction();
+```
+
+**❌ NEVER do this (outdated patterns):**
+
+```javascript
+// WRONG - Don't use global scope for dependencies
+window.layoutUtils.someFunction();
+
+// WRONG - Don't use CommonJS
+const MyClass = require('./my-module.js');
+module.exports = { MyClass };
+
+// WRONG - Don't rely on globals when imports are available
+if (typeof MyClass === 'undefined') {
+    // ...
 }
+```
+
+**✅ ALWAYS do this:**
+
+```javascript
+// CORRECT - Use explicit imports
+import { someFunction } from './layout.js';
+someFunction();
+
+// CORRECT - Import all dependencies at the top
+import { NodeType } from './graph-types.js';
+import { wouldOverlapNodes } from './layout.js';
+import { EventEmitter } from './event-emitter.js';
 ```
 
 **Example test:**
@@ -210,6 +225,14 @@ test('MyClass works', () => {
     // ...
 });
 ```
+
+**When refactoring:**
+
+If you find code using `window.X` to access another module's functionality:
+
+1. Add an `import` statement at the top of the file
+2. Replace all `window.X.method()` calls with direct `method()` calls
+3. Ensure the imported module properly exports the functions/classes
 
 ### API key access
 
