@@ -318,6 +318,13 @@ class App {
      * @returns {ResearchFeature}
      */
     get researchFeature() {
+        // Use plugin system instance
+        const feature = this.featureRegistry.getFeature('research');
+        if (feature) {
+            return feature;
+        }
+
+        // Fallback: Lazy initialization for backwards compatibility
         if (!this._researchFeature) {
             this._researchFeature = new ResearchFeature({
                 graph: this.graph,
@@ -1338,24 +1345,6 @@ class App {
         }
 
         // Fall through to built-in commands that haven't been migrated yet
-        // Check for /search command
-        if (content.startsWith('/search ')) {
-            const query = content.slice(8).trim();
-            if (query) {
-                await this.handleSearch(query, context);
-                return true;
-            }
-        }
-
-        // Check for /research command
-        if (content.startsWith('/research ')) {
-            const instructions = content.slice(10).trim();
-            if (instructions) {
-                await this.handleResearch(instructions, context);
-                return true;
-            }
-        }
-
         // Check for /note command
         if (content.startsWith('/note ')) {
             const noteContent = content.slice(6).trim();
@@ -3138,6 +3127,23 @@ Output ONLY the corrected Python code, no explanations.`;
                 {
                     command: '/factcheck',
                     handler: 'handleFactcheck',
+                },
+            ],
+            priority: PRIORITY.BUILTIN,
+        });
+
+        // Register research feature with /search and /research slash commands
+        await this.featureRegistry.register({
+            id: 'research',
+            feature: ResearchFeature,
+            slashCommands: [
+                {
+                    command: '/search',
+                    handler: 'handleSearch',
+                },
+                {
+                    command: '/research',
+                    handler: 'handleResearch',
                 },
             ],
             priority: PRIORITY.BUILTIN,

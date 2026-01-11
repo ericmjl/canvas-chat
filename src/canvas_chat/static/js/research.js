@@ -2,29 +2,37 @@
  * Research Feature Module
  *
  * Handles the /search and /research commands.
+ * Extends FeaturePlugin to integrate with the plugin architecture.
  */
 
 import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
 import { storage } from './storage.js';
 import { readSSEStream, normalizeText } from './sse.js';
 import { apiUrl } from './utils.js';
+import { FeaturePlugin } from './feature-plugin.js';
 
-class ResearchFeature {
+/**
+ * ResearchFeature - Handles search and research commands with Exa/DuckDuckGo.
+ * Extends FeaturePlugin to integrate with the plugin architecture.
+ */
+class ResearchFeature extends FeaturePlugin {
     /**
      * Create a ResearchFeature instance.
-     * @param {Object} context - Dependencies injected from App
+     * @param {AppContext} context - Application context with injected dependencies
      */
     constructor(context) {
-        this.graph = context.graph;
-        this.canvas = context.canvas;
-        this.saveSession = context.saveSession;
-        this.updateEmptyState = context.updateEmptyState;
-        this.buildLLMRequest = context.buildLLMRequest;
-        this.generateNodeSummary = context.generateNodeSummary;
-        this.showSettingsModal = context.showSettingsModal;
-        this.getModelPicker = context.getModelPicker;
-        this.registerStreaming = context.registerStreaming;
-        this.unregisterStreaming = context.unregisterStreaming;
+        super(context);
+
+        // Research-specific dependencies (not in base FeaturePlugin)
+        this.getModelPicker = () => context.modelPicker;
+        this.showSettingsModal = () => this.modalManager.showSettingsModal();
+    }
+
+    /**
+     * Lifecycle hook called when the plugin is loaded.
+     */
+    async onLoad() {
+        console.log('[ResearchFeature] Loaded');
     }
 
     /**
