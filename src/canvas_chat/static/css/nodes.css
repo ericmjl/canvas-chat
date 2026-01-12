@@ -1482,10 +1482,11 @@
     cursor: default;
 }
 
-/* When viewport-fitted, allow code-display to grow and maintain its own scrolling */
+/* When viewport-fitted, let code-display grow naturally without flex constraints */
 .node.viewport-fitted .code-display {
-    max-height: none; /* Remove height limit - grow to fill available space */
-    /* Keep overflow: auto so code remains scrollable */
+    flex: none; /* Don't use flex sizing - grow to content size */
+    max-height: none; /* Remove height limit */
+    overflow: visible; /* No internal scroll - parent .node-content scrolls */
 }
 
 .code-display pre {
