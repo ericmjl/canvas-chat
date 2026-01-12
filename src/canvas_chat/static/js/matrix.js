@@ -97,8 +97,13 @@ class MatrixFeature extends FeaturePlugin {
             // Parse two lists from context (either from selected nodes or command text)
             const result = await this.parseTwoLists(contents, matrixContext, model);
 
+            console.log('[Matrix] Parsed result:', result);
+
             const rowItems = result.rows;
             const colItems = result.columns;
+
+            console.log('[Matrix] Row items:', rowItems);
+            console.log('[Matrix] Column items:', colItems);
 
             // Hide loading indicator
             document.getElementById('matrix-loading').style.display = 'none';
@@ -135,6 +140,12 @@ class MatrixFeature extends FeaturePlugin {
             context,
         });
 
+        console.log('[Matrix] Parsing request:', {
+            contentsCount: contents.length,
+            context: context,
+            model: requestBody.model,
+        });
+
         const response = await fetch(apiUrl('/api/parse-two-lists'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -142,10 +153,14 @@ class MatrixFeature extends FeaturePlugin {
         });
 
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[Matrix] Parse error:', response.status, errorText);
             throw new Error(`Failed to parse lists: ${response.statusText}`);
         }
 
-        return response.json();
+        const result = await response.json();
+        console.log('[Matrix] Parse result:', result);
+        return result;
     }
 
     /**
