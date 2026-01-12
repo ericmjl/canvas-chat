@@ -6,7 +6,7 @@
  * Root cause: Passing stale node.position instead of reading current position from wrapper
  */
 
-import { test, assertEqual, assertTrue, assertFalse } from './test_setup.js';
+import { test, assertTrue, assertFalse } from './test_setup.js';
 import { JSDOM } from 'jsdom';
 import { Canvas } from '../src/canvas_chat/static/js/canvas.js';
 import { createNode, EdgeType } from '../src/canvas_chat/static/js/graph-types.js';
@@ -20,10 +20,12 @@ function setupCanvasTest() {
         <!DOCTYPE html>
         <html>
             <body>
-                <svg id="canvas" width="1000" height="800">
-                    <g id="edges-container"></g>
-                    <g id="nodes-container"></g>
-                </svg>
+                <div id="canvas-container">
+                    <svg id="canvas-svg" width="1000" height="800">
+                        <g id="edges-layer"></g>
+                        <g id="nodes-layer"></g>
+                    </svg>
+                </div>
             </body>
         </html>
     `);
@@ -33,9 +35,8 @@ function setupCanvasTest() {
     global.SVGElement = dom.window.SVGElement;
     global.Element = dom.window.Element;
 
-    const svg = document.getElementById('canvas');
     const graph = new CRDTGraph();
-    const canvas = new Canvas(svg, () => graph);
+    const canvas = new Canvas('canvas-container', 'canvas-svg');
 
     return { canvas, graph, dom };
 }
