@@ -1482,9 +1482,12 @@
     cursor: default;
 }
 
-/* When viewport-fitted, let code-display grow naturally without flex constraints */
+/* When viewport-fitted, remove height constraints so content grows naturally.
+   The actual scrolling happens on .node-content (the parent), which has overflow: auto.
+   See findScrollableContainer() in canvas.js for scroll handling logic. */
 .node.viewport-fitted .code-display {
-    flex: none; /* Don't use flex sizing - grow to content size */
+    flex: 1; /* Fill available space */
+    min-height: 0; /* Allow shrinking */
     max-height: none; /* Remove height limit */
     overflow: visible; /* No internal scroll - parent .node-content scrolls */
 }
