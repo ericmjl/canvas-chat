@@ -295,21 +295,27 @@ class MatrixFeature extends FeaturePlugin {
             return;
         }
 
-        // Get context nodes for positioning
+        // Get context nodes for positioning (optional)
         const contextNodes = contextNodeIds.map((id) => this.graph.getNode(id)).filter(Boolean);
 
-        if (contextNodes.length === 0) {
-            alert('No valid context nodes found');
-            return;
+        // Determine position: near context nodes if they exist, otherwise at viewport center
+        let position;
+        if (contextNodes.length > 0) {
+            // Position matrix to the right of all context nodes, centered vertically
+            const maxX = Math.max(...contextNodes.map((n) => n.position.x));
+            const avgY = contextNodes.reduce((sum, n) => sum + n.position.y, 0) / contextNodes.length;
+            position = {
+                x: maxX + 450,
+                y: avgY,
+            };
+        } else {
+            // No context nodes - position at viewport center
+            const viewportCenter = this.canvas.getViewportCenter();
+            position = {
+                x: viewportCenter.x - 200, // Offset slightly left of center
+                y: viewportCenter.y - 150, // Offset slightly above center
+            };
         }
-
-        // Position matrix to the right of all context nodes, centered vertically
-        const maxX = Math.max(...contextNodes.map((n) => n.position.x));
-        const avgY = contextNodes.reduce((sum, n) => sum + n.position.y, 0) / contextNodes.length;
-        const position = {
-            x: maxX + 450,
-            y: avgY,
-        };
 
         // Create matrix node
         const matrixNode = createMatrixNode(context, contextNodeIds, rowItems, colItems, { position });
@@ -317,7 +323,7 @@ class MatrixFeature extends FeaturePlugin {
         this.graph.addNode(matrixNode);
         this.canvas.renderNode(matrixNode);
 
-        // Create edges from all context nodes to the matrix
+        // Create edges from context nodes to matrix (only if context nodes exist)
         for (const contextNode of contextNodes) {
             const edge = createEdge(contextNode.id, matrixNode.id, EdgeType.REPLY);
             this.graph.addEdge(edge);
