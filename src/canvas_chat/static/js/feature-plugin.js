@@ -3,6 +3,8 @@
  */
 
 import { apiUrl } from './utils.js';
+import { chat } from './chat.js';
+import { storage } from './storage.js';
 
 /**
  * AppContext provides access to app-level APIs for feature plugins.
@@ -20,8 +22,8 @@ class AppContext {
         // Core objects (use getters for live references)
         // Note: Don't copy app.graph, app.searchIndex here - they're created later
         this.canvas = app.canvas;
-        this.chat = app.chat;
-        this.storage = app.storage;
+        this.chat = chat; // Use global singleton from chat.js
+        this.storage = storage; // Use global singleton from storage.js
         this.modalManager = app.modalManager;
         this.undoManager = app.undoManager;
         this.featureRegistry = app.featureRegistry;
