@@ -616,18 +616,6 @@
     background: white;
 }
 
-/* When code is running, highlight the header */
-.node.code .code-node-content.code-running ~ .node-header {
-    background: var(--color-accent, #4a9eff);
-    color: white;
-}
-
-/* Self-healing variants */
-.node.code .code-node-content.code-running.code-self-healing ~ .node-header {
-    background: var(--color-warning, #f59e0b);
-    color: white;
-}
-
 /* Drag Handle */
 .drag-handle {
     display: grid;

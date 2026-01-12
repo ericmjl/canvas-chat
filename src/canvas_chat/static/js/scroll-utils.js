@@ -28,13 +28,15 @@ export function findScrollableContainer(target) {
     ];
 
     // Collect all potential scroll containers between target and document
-    const candidates = [];
+    // Use Set to avoid duplicates if a single element matches multiple selectors
+    const candidateSet = new Set();
     for (const selector of scrollContainerSelectors) {
         const container = target.closest(selector);
         if (container) {
-            candidates.push(container);
+            candidateSet.add(container);
         }
     }
+    const candidates = Array.from(candidateSet);
 
     // Sort by DOM depth (deepest first) - we want the most specific container
     // that actually has scrollable content
