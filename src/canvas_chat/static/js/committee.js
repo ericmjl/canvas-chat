@@ -6,33 +6,21 @@
  */
 
 import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
+import { FeaturePlugin } from './feature-plugin.js';
 import { storage } from './storage.js';
 import { readSSEStream } from './sse.js';
 import { apiUrl } from './utils.js';
 
 /**
  * CommitteeFeature class manages committee consultation functionality.
- * Uses dependency injection - receives app context rather than tight coupling.
+ * Extends FeaturePlugin to integrate with the plugin architecture.
  */
-class CommitteeFeature {
+class CommitteeFeature extends FeaturePlugin {
     /**
-     * @param {Object} context - Application context
-     * @param {Object} context.graph - Graph instance
-     * @param {Object} context.canvas - Canvas instance
-     * @param {HTMLElement} context.modelPicker - Model picker element
-     * @param {HTMLElement} context.chatInput - Chat input element
-     * @param {Function} context.saveSession - Save session callback
-     * @param {Function} context.updateEmptyState - Update empty state callback
-     * @param {Function} context.buildLLMRequest - Build LLM request with credentials callback
+     * @param {AppContext} context - Application context with injected dependencies
      */
     constructor(context) {
-        this.graph = context.graph;
-        this.canvas = context.canvas;
-        this.modelPicker = context.modelPicker;
-        this.chatInput = context.chatInput;
-        this.saveSession = context.saveSession;
-        this.updateEmptyState = context.updateEmptyState;
-        this.buildLLMRequest = context.buildLLMRequest;
+        super(context);
 
         // Committee state
         this._committeeData = null;
@@ -40,15 +28,36 @@ class CommitteeFeature {
     }
 
     /**
-     * Handle /committee slash command - show modal to configure LLM committee.
-     * @param {string} question - The question to ask the committee
-     * @param {string|null} context - Optional context text
+     * Lifecycle hook: called when plugin is loaded
      */
-    async handleCommittee(question, context = null) {
+    async onLoad() {
+        console.log('[CommitteeFeature] Loaded');
+    }
+
+    /**
+     * Event subscriptions for this feature
+     */
+    getEventSubscriptions() {
+        return {
+            // Listen for committee-related events if needed
+        };
+    }
+
+    /**
+     * Handle /committee slash command - show modal to configure LLM committee.
+     * This is the main slash command handler called by FeatureRegistry.
+     * @param {string} command - The command string (e.g., '/committee')
+     * @param {string} args - The question to ask the committee
+     * @param {Object} context - Execution context (selected nodes, etc.)
+     */
+    async handleCommittee(command, args, context) {
+        const question = args.trim();
+        const contextText = context?.text || null;
+
         // Store data for the modal
         this._committeeData = {
             question: question,
-            context: context,
+            context: contextText,
             selectedModels: [],
             chairmanModel: this.modelPicker.value,
             includeReview: false,
@@ -287,217 +296,363 @@ class CommitteeFeature {
         // Pan to see the committee
         this.canvas.centerOnAnimated(basePos.x, basePos.y + verticalOffset, 300);
 
-        // Build base request to check if we're in admin mode
-        const baseRequest = this.buildLLMRequest({});
-        const isAdminMode = !baseRequest.api_key; // Admin mode doesn't include api_key
-
-        // Collect API keys by provider for all models (in normal mode)
-        // In admin mode, backend handles credentials so we pass empty object
-        const apiKeys = isAdminMode ? {} : storage.getApiKeysForModels([...selectedModels, chairmanModel]);
-
-        // Get base URL if configured (only in normal mode)
-        const baseUrl = isAdminMode ? null : storage.getBaseUrl() || null;
-
-        // Track accumulated content for each opinion/review
-        const opinionContents = {};
-        const reviewContents = {};
-        let synthesisContent = '';
-
-        // Create abort controller for this committee session
-        const abortController = new AbortController();
-
-        // Show stop buttons on all opinion nodes
-        for (const node of opinionNodes) {
-            this.canvas.showStopButton(node.id);
-        }
-
-        // Store streaming state for potential abort
+        // Store state for tracking active committee
         this._activeCommittee = {
-            abortController,
             opinionNodeIds: opinionNodes.map((n) => n.id),
             reviewNodeIds: [],
             synthesisNodeId: synthesisNode.id,
+            abortControllers: new Map(), // nodeId -> AbortController
         };
 
-        try {
-            const response = await fetch(apiUrl('/api/committee'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    question,
-                    context: messages,
-                    models: selectedModels,
-                    chairman_model: chairmanModel,
-                    api_keys: apiKeys,
-                    base_url: baseUrl,
-                    include_review: includeReview,
-                }),
-                signal: abortController.signal,
-            });
+        // Generate opinions in parallel (like matrix cell fills)
+        const opinionPromises = opinionNodes.map((node, index) => {
+            return this.generateOpinion(node, selectedModels[index], messages, index);
+        });
 
-            if (!response.ok) {
-                throw new Error(`Committee request failed: ${response.statusText}`);
+        try {
+            // Wait for all opinions to complete
+            const opinions = await Promise.all(opinionPromises);
+
+            // If includeReview, generate reviews in parallel
+            if (includeReview) {
+                const reviewPromises = opinionNodes.map((opinionNode, index) => {
+                    return this.generateReview(
+                        opinionNode,
+                        selectedModels[index],
+                        messages,
+                        opinions,
+                        index,
+                        basePos,
+                        startX,
+                        spacing,
+                        verticalOffset,
+                        reviewNodes,
+                        reviewNodeMap
+                    );
+                });
+
+                await Promise.all(reviewPromises);
             }
 
-            // Process SSE stream
-            await readSSEStream(response, {
-                onEvent: (eventType, data) => {
-                    let parsed;
-                    try {
-                        parsed = JSON.parse(data);
-                    } catch {
-                        parsed = data;
-                    }
+            // Generate synthesis after opinions (and reviews if enabled)
+            await this.generateSynthesis(
+                synthesisNode,
+                chairmanModel,
+                messages,
+                opinions,
+                includeReview ? reviewNodes : opinionNodes
+            );
 
-                    if (eventType === 'opinion_start') {
-                        const nodeId = opinionNodeMap[parsed.index];
-                        const modelName = this.getModelDisplayName(parsed.model);
-                        opinionContents[parsed.index] = '';
-                        this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n*Thinking...*`, true);
-                        this.canvas.showStopButton(nodeId);
-                    } else if (eventType === 'opinion_chunk') {
-                        const nodeId = opinionNodeMap[parsed.index];
-                        opinionContents[parsed.index] = (opinionContents[parsed.index] || '') + parsed.content;
-                        const model = selectedModels[parsed.index];
-                        const modelName = this.getModelDisplayName(model);
-                        this.canvas.updateNodeContent(
-                            nodeId,
-                            `**${modelName}**\n\n${opinionContents[parsed.index]}`,
-                            true
-                        );
-                    } else if (eventType === 'opinion_done') {
-                        const nodeId = opinionNodeMap[parsed.index];
-                        const model = selectedModels[parsed.index];
-                        const modelName = this.getModelDisplayName(model);
-                        const finalContent = `**${modelName}**\n\n${parsed.full_content}`;
-                        this.canvas.updateNodeContent(nodeId, finalContent, false);
-                        this.canvas.hideStopButton(nodeId);
-                        this.graph.updateNode(nodeId, { content: finalContent });
-                    } else if (eventType === 'review_start') {
-                        // Create review node for this reviewer
-                        const reviewerIndex = parsed.reviewer_index;
-                        const modelName = this.getModelDisplayName(parsed.model);
-
-                        // Position review nodes between opinions and synthesis
-                        const reviewY = basePos.y + verticalOffset * 2;
-                        const reviewNode = createNode(
-                            NodeType.REVIEW,
-                            `**${modelName} Review**\n\n*Reviewing other opinions...*`,
-                            {
-                                position: {
-                                    x: startX + reviewerIndex * spacing,
-                                    y: reviewY,
-                                },
-                                model: parsed.model,
-                            }
-                        );
-
-                        this.graph.addNode(reviewNode);
-                        this.canvas.renderNode(reviewNode);
-                        reviewNodes.push(reviewNode);
-                        reviewNodeMap[reviewerIndex] = reviewNode.id;
-
-                        // Edge from opinion to its review
-                        const opinionNodeId = opinionNodeMap[reviewerIndex];
-                        const opinionNode = this.graph.getNode(opinionNodeId);
-                        const reviewEdge = createEdge(opinionNodeId, reviewNode.id, EdgeType.REVIEW);
-                        this.graph.addEdge(reviewEdge);
-                        this.canvas.renderEdge(reviewEdge, opinionNode.position, reviewNode.position);
-
-                        this.canvas.showStopButton(reviewNode.id);
-                        reviewContents[reviewerIndex] = '';
-
-                        if (this._activeCommittee) {
-                            this._activeCommittee.reviewNodeIds.push(reviewNode.id);
-                        }
-                    } else if (eventType === 'review_chunk') {
-                        const nodeId = reviewNodeMap[parsed.reviewer_index];
-                        if (nodeId) {
-                            reviewContents[parsed.reviewer_index] =
-                                (reviewContents[parsed.reviewer_index] || '') + parsed.content;
-                            const model = selectedModels[parsed.reviewer_index];
-                            const modelName = this.getModelDisplayName(model);
-                            this.canvas.updateNodeContent(
-                                nodeId,
-                                `**${modelName} Review**\n\n${reviewContents[parsed.reviewer_index]}`,
-                                true
-                            );
-                        }
-                    } else if (eventType === 'review_done') {
-                        const nodeId = reviewNodeMap[parsed.reviewer_index];
-                        if (nodeId) {
-                            const model = selectedModels[parsed.reviewer_index];
-                            const modelName = this.getModelDisplayName(model);
-                            const finalContent = `**${modelName} Review**\n\n${parsed.full_content}`;
-                            this.canvas.updateNodeContent(nodeId, finalContent, false);
-                            this.canvas.hideStopButton(nodeId);
-                            this.graph.updateNode(nodeId, { content: finalContent });
-                        }
-                    } else if (eventType === 'synthesis_start') {
-                        // Connect all opinion/review nodes to synthesis
-                        const sourceNodes = reviewNodes.length > 0 ? reviewNodes : opinionNodes;
-                        for (const node of sourceNodes) {
-                            const synthEdge = createEdge(node.id, synthesisNode.id, EdgeType.SYNTHESIS);
-                            this.graph.addEdge(synthEdge);
-                            this.canvas.renderEdge(synthEdge, node.position, synthesisNode.position);
-                        }
-
-                        const chairmanName = this.getModelDisplayName(parsed.model);
-                        synthesisContent = '';
-                        this.canvas.updateNodeContent(
-                            synthesisNode.id,
-                            `**Synthesis (${chairmanName})**\n\n*Synthesizing opinions...*`,
-                            true
-                        );
-                        this.canvas.showStopButton(synthesisNode.id);
-                    } else if (eventType === 'synthesis_chunk') {
-                        synthesisContent += parsed.content;
-                        const chairmanName = this.getModelDisplayName(chairmanModel);
-                        this.canvas.updateNodeContent(
-                            synthesisNode.id,
-                            `**Synthesis (${chairmanName})**\n\n${synthesisContent}`,
-                            true
-                        );
-                    } else if (eventType === 'synthesis_done') {
-                        const chairmanName = this.getModelDisplayName(chairmanModel);
-                        const finalContent = `**Synthesis (${chairmanName})**\n\n${parsed.full_content}`;
-                        this.canvas.updateNodeContent(synthesisNode.id, finalContent, false);
-                        this.canvas.hideStopButton(synthesisNode.id);
-                        this.graph.updateNode(synthesisNode.id, { content: finalContent });
-                    } else if (eventType === 'error') {
-                        console.error('Committee error:', parsed.message);
-                    }
-                },
-                onDone: () => {
-                    // Hide all stop buttons
-                    for (const nodeId of Object.values(opinionNodeMap)) {
-                        this.canvas.hideStopButton(nodeId);
-                    }
-                    for (const nodeId of Object.values(reviewNodeMap)) {
-                        this.canvas.hideStopButton(nodeId);
-                    }
-                    this.canvas.hideStopButton(synthesisNode.id);
-
-                    this._activeCommittee = null;
-                    this.saveSession();
-                },
-                onError: (err) => {
-                    console.error('Committee stream error:', err);
-                    this._activeCommittee = null;
-                },
-            });
+            // Cleanup
+            this._activeCommittee = null;
+            this.saveSession();
         } catch (err) {
             if (err.name === 'AbortError') {
-                console.log('Committee request aborted');
+                console.log('Committee generation aborted');
             } else {
                 console.error('Committee error:', err);
-                // Update synthesis node with error
+                // Show error in synthesis node
                 this.canvas.updateNodeContent(synthesisNode.id, `**Error**\n\n${err.message}`, false);
-                this.canvas.hideStopButton(synthesisNode.id);
             }
             this._activeCommittee = null;
             this.saveSession();
         }
+    }
+
+    /**
+     * Generate an opinion from a single model.
+     * @param {Object} opinionNode - The opinion node
+     * @param {string} model - Model ID
+     * @param {Array} messages - Conversation context
+     * @param {number} index - Opinion index
+     * @returns {Promise<string>} - The opinion content
+     */
+    async generateOpinion(opinionNode, model, messages, index) {
+        const modelName = this.getModelDisplayName(model);
+        const nodeId = opinionNode.id;
+
+        // Create abort controller for this opinion
+        const abortController = new AbortController();
+        this._activeCommittee.abortControllers.set(nodeId, abortController);
+
+        // Register with StreamingManager (auto-shows stop button)
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'committee',
+            context: { model, modelName, messages, index, nodeId },
+            onContinue: async (nodeId, state) => {
+                // Continue opinion generation from where it left off
+                await this.continueOpinion(nodeId, state.context);
+            },
+        });
+
+        return new Promise((resolve, reject) => {
+            let fullContent = '';
+
+            this.chat.sendMessage(
+                messages,
+                model,
+                // onChunk
+                (chunk, accumulated) => {
+                    fullContent = accumulated;
+                    this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${accumulated}`, true);
+                },
+                // onDone
+                (finalContent) => {
+                    fullContent = finalContent;
+                    this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${finalContent}`, false);
+                    this.graph.updateNode(nodeId, { content: `**${modelName}**\n\n${finalContent}` });
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
+                    this._activeCommittee.abortControllers.delete(nodeId);
+                    this.saveSession();
+                    resolve(finalContent);
+                },
+                // onError
+                (err) => {
+                    // Handle abort gracefully
+                    if (err.name === 'AbortError') {
+                        console.log(`[Committee] Opinion ${index} aborted`);
+                        // Don't unregister - StreamingManager.stop() handles UI state
+                        this._activeCommittee.abortControllers.delete(nodeId);
+                        resolve(''); // Resolve with empty to allow other opinions to continue
+                        return;
+                    }
+                    // Real errors
+                    this.canvas.hideStopButton(nodeId);
+                    this.streamingManager.unregister(nodeId);
+                    this._activeCommittee.abortControllers.delete(nodeId);
+                    reject(err);
+                },
+                abortController // Pass the abort controller
+            );
+        });
+    }
+
+    /**
+     * Generate a review from a model reviewing other opinions.
+     * @param {Object} opinionNode - The opinion node to review
+     * @param {string} model - Model ID
+     * @param {Array} messages - Conversation context
+     * @param {Array} opinions - All opinion contents
+     * @param {number} reviewerIndex - Index of this reviewer
+     * @param {Object} basePos - Base position
+     * @param {number} startX - Starting X position
+     * @param {number} spacing - Node spacing
+     * @param {number} verticalOffset - Vertical offset
+     * @param {Array} reviewNodes - Array to push review node to
+     * @param {Object} reviewNodeMap - Map of reviewer index to node ID
+     * @returns {Promise<string>} - The review content
+     */
+    async generateReview(
+        opinionNode,
+        model,
+        messages,
+        opinions,
+        reviewerIndex,
+        basePos,
+        startX,
+        spacing,
+        verticalOffset,
+        reviewNodes,
+        reviewNodeMap
+    ) {
+        const modelName = this.getModelDisplayName(model);
+
+        // Create review node
+        const reviewY = basePos.y + verticalOffset * 2;
+        const reviewNode = createNode(NodeType.REVIEW, `**${modelName} Review**\n\n*Reviewing other opinions...*`, {
+            position: {
+                x: startX + reviewerIndex * spacing,
+                y: reviewY,
+            },
+            model: model,
+        });
+
+        this.graph.addNode(reviewNode);
+        this.canvas.renderNode(reviewNode);
+        reviewNodes.push(reviewNode);
+        reviewNodeMap[reviewerIndex] = reviewNode.id;
+
+        // Edge from opinion to review
+        const reviewEdge = createEdge(opinionNode.id, reviewNode.id, EdgeType.REVIEW);
+        this.graph.addEdge(reviewEdge);
+        this.canvas.renderEdge(reviewEdge, opinionNode.position, reviewNode.position);
+
+        // Track this review node
+        this._activeCommittee.reviewNodeIds.push(reviewNode.id);
+
+        // Create abort controller for this review
+        const abortController = new AbortController();
+        this._activeCommittee.abortControllers.set(reviewNode.id, abortController);
+
+        // Register with StreamingManager
+        this.streamingManager.register(reviewNode.id, {
+            abortController,
+            featureId: 'committee',
+            context: {
+                model,
+                modelName,
+                messages,
+                opinions,
+                reviewerIndex,
+                nodeId: reviewNode.id,
+            },
+            onContinue: async (nodeId, state) => {
+                // Continue review generation from where it left off
+                await this.continueReview(nodeId, state.context);
+            },
+        });
+
+        // Build review prompt with all opinions
+        const reviewMessages = [
+            ...messages,
+            {
+                role: 'assistant',
+                content: `Here are opinions from multiple models:\n\n${opinions.map((op, i) => `Opinion ${i + 1}:\n${op}`).join('\n\n')}`,
+            },
+            {
+                role: 'user',
+                content: 'Please review these opinions, identifying strengths, weaknesses, and areas of disagreement.',
+            },
+        ];
+
+        return new Promise((resolve, reject) => {
+            let fullContent = '';
+
+            this.chat.sendMessage(
+                reviewMessages,
+                model,
+                // onChunk
+                (chunk, accumulated) => {
+                    fullContent = accumulated;
+                    this.canvas.updateNodeContent(reviewNode.id, `**${modelName} Review**\n\n${accumulated}`, true);
+                },
+                // onDone
+                (finalContent) => {
+                    fullContent = finalContent;
+                    this.canvas.updateNodeContent(reviewNode.id, `**${modelName} Review**\n\n${finalContent}`, false);
+                    this.graph.updateNode(reviewNode.id, { content: `**${modelName} Review**\n\n${finalContent}` });
+                    this.streamingManager.unregister(reviewNode.id); // Auto-hides stop button
+                    this._activeCommittee.abortControllers.delete(reviewNode.id);
+                    this.saveSession();
+                    resolve(finalContent);
+                },
+                // onError
+                (err) => {
+                    // Handle abort gracefully
+                    if (err.name === 'AbortError') {
+                        console.log(`[Committee] Review ${reviewerIndex} aborted`);
+                        // Don't unregister - StreamingManager.stop() handles UI state
+                        this._activeCommittee.abortControllers.delete(reviewNode.id);
+                        resolve(''); // Resolve with empty to allow other reviews to continue
+                        return;
+                    }
+                    // Real errors
+                    this.streamingManager.unregister(reviewNode.id); // Auto-hides stop button
+                    this._activeCommittee.abortControllers.delete(reviewNode.id);
+                    reject(err);
+                },
+                abortController // Pass the abort controller
+            );
+        });
+    }
+
+    /**
+     * Generate synthesis from the chairman model.
+     * @param {Object} synthesisNode - The synthesis node
+     * @param {string} chairmanModel - Chairman model ID
+     * @param {Array} messages - Conversation context
+     * @param {Array} opinions - All opinion contents
+     * @param {Array} sourceNodes - Opinion or review nodes to connect from
+     * @returns {Promise<void>}
+     */
+    async generateSynthesis(synthesisNode, chairmanModel, messages, opinions, sourceNodes) {
+        const chairmanName = this.getModelDisplayName(chairmanModel);
+        const nodeId = synthesisNode.id;
+
+        // Connect source nodes (opinions or reviews) to synthesis
+        for (const sourceNode of sourceNodes) {
+            const synthEdge = createEdge(sourceNode.id, synthesisNode.id, EdgeType.SYNTHESIS);
+            this.graph.addEdge(synthEdge);
+            this.canvas.renderEdge(synthEdge, sourceNode.position, synthesisNode.position);
+        }
+
+        // Create abort controller for synthesis
+        const abortController = new AbortController();
+        this._activeCommittee.abortControllers.set(nodeId, abortController);
+
+        // Register with StreamingManager (auto-shows stop button)
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'committee',
+            context: {
+                model: chairmanModel,
+                chairmanName,
+                messages,
+                opinions,
+                nodeId,
+            },
+            onContinue: async (nodeId, state) => {
+                // Continue synthesis generation from where it left off
+                await this.continueSynthesis(nodeId, state.context);
+            },
+        });
+
+        // Build synthesis prompt
+        const synthesisMessages = [
+            ...messages,
+            {
+                role: 'assistant',
+                content: `Here are opinions from multiple models:\n\n${opinions.map((op, i) => `Opinion ${i + 1}:\n${op}`).join('\n\n')}`,
+            },
+            {
+                role: 'user',
+                content:
+                    'Please synthesize these opinions into a coherent response, highlighting areas of consensus and noting any important differences.',
+            },
+        ];
+
+        return new Promise((resolve, reject) => {
+            let fullContent = '';
+
+            this.chat.sendMessage(
+                synthesisMessages,
+                chairmanModel,
+                // onChunk
+                (chunk, accumulated) => {
+                    fullContent = accumulated;
+                    this.canvas.updateNodeContent(nodeId, `**Synthesis (${chairmanName})**\n\n${accumulated}`, true);
+                },
+                // onDone
+                (finalContent) => {
+                    fullContent = finalContent;
+                    this.canvas.updateNodeContent(nodeId, `**Synthesis (${chairmanName})**\n\n${finalContent}`, false);
+                    this.graph.updateNode(nodeId, {
+                        content: `**Synthesis (${chairmanName})**\n\n${finalContent}`,
+                    });
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
+                    this._activeCommittee.abortControllers.delete(nodeId);
+                    this.saveSession();
+                    resolve();
+                },
+                // onError
+                (err) => {
+                    // Handle abort gracefully
+                    if (err.name === 'AbortError') {
+                        console.log('[Committee] Synthesis aborted');
+                        // Don't unregister - StreamingManager.stop() handles UI state
+                        this._activeCommittee.abortControllers.delete(nodeId);
+                        resolve(); // Resolve to prevent rejection
+                        return;
+                    }
+                    // Real errors
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
+                    this._activeCommittee.abortControllers.delete(nodeId);
+                    reject(err);
+                },
+                abortController // Pass the abort controller
+            );
+        });
     }
 
     /**
@@ -512,12 +667,248 @@ class CommitteeFeature {
 
     /**
      * Abort the active committee session if one is running.
+     * Aborts all individual streams.
      */
     abort() {
         if (this._activeCommittee) {
-            this._activeCommittee.abortController.abort();
+            // Abort all individual abort controllers
+            for (const [nodeId, abortController] of this._activeCommittee.abortControllers) {
+                abortController.abort();
+                this.streamingManager.unregister(nodeId);
+            }
+
+            this._activeCommittee.abortControllers.clear();
             this._activeCommittee = null;
         }
+    }
+
+    /**
+     * Continue opinion generation from where it was stopped.
+     * @param {string} nodeId - The opinion node ID
+     * @param {Object} context - Saved context with model, messages, etc.
+     */
+    async continueOpinion(nodeId, context) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        const { model, modelName, messages } = context;
+
+        // Get current content (remove model name header and stopped indicator)
+        let currentContent = node.content
+            .replace(new RegExp(`^\\*\\*${modelName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*\\*\\n\\n`), '')
+            .replace(/\n\n\*\[Generation stopped\]\*$/, '');
+
+        // Build continuation messages
+        const continueMessages = [
+            ...messages,
+            { role: 'assistant', content: currentContent },
+            { role: 'user', content: 'Please continue your response from where you left off.' },
+        ];
+
+        // Create new abort controller
+        const abortController = new AbortController();
+
+        // Re-register with StreamingManager
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'committee',
+            context,
+            onContinue: async (nodeId, state) => {
+                await this.continueOpinion(nodeId, state.context);
+            },
+        });
+
+        // Continue streaming
+        this.chat.sendMessage(
+            continueMessages,
+            model,
+            // onChunk
+            (chunk, accumulated) => {
+                const combinedContent = currentContent + accumulated;
+                this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${combinedContent}`, true);
+            },
+            // onDone
+            (finalContent) => {
+                const combinedContent = currentContent + finalContent;
+                this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${combinedContent}`, false);
+                this.graph.updateNode(nodeId, { content: `**${modelName}**\n\n${combinedContent}` });
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            // onError
+            (err) => {
+                if (err.name === 'AbortError') {
+                    console.log(`[Committee] Opinion continuation aborted`);
+                } else {
+                    console.error('[Committee] Opinion continuation error:', err);
+                    const errorContent = currentContent + `\n\n*Error continuing: ${err.message}*`;
+                    this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${errorContent}`, false);
+                    this.graph.updateNode(nodeId, { content: `**${modelName}**\n\n${errorContent}` });
+                }
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            abortController
+        );
+    }
+
+    /**
+     * Continue review generation from where it was stopped.
+     * @param {string} nodeId - The review node ID
+     * @param {Object} context - Saved context with model, messages, opinions, etc.
+     */
+    async continueReview(nodeId, context) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        const { model, modelName, messages, opinions } = context;
+
+        // Get current content (remove model name header and stopped indicator)
+        let currentContent = node.content
+            .replace(new RegExp(`^\\*\\*${modelName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*\\*\\n\\n`), '')
+            .replace(/\n\n\*\[Generation stopped\]\*$/, '');
+
+        // Build continuation messages (include opinions context)
+        const continueMessages = [
+            ...messages,
+            {
+                role: 'assistant',
+                content: `Here are opinions from multiple models:\n\n${opinions.map((op, i) => `Opinion ${i + 1}:\n${op}`).join('\n\n')}`,
+            },
+            {
+                role: 'user',
+                content: 'Please review these opinions, identifying strengths, weaknesses, and areas of disagreement.',
+            },
+            { role: 'assistant', content: currentContent },
+            { role: 'user', content: 'Please continue your review from where you left off.' },
+        ];
+
+        // Create new abort controller
+        const abortController = new AbortController();
+
+        // Re-register with StreamingManager
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'committee',
+            context,
+            onContinue: async (nodeId, state) => {
+                await this.continueReview(nodeId, state.context);
+            },
+        });
+
+        // Continue streaming
+        this.chat.sendMessage(
+            continueMessages,
+            model,
+            // onChunk
+            (chunk, accumulated) => {
+                const combinedContent = currentContent + accumulated;
+                this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${combinedContent}`, true);
+            },
+            // onDone
+            (finalContent) => {
+                const combinedContent = currentContent + finalContent;
+                this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${combinedContent}`, false);
+                this.graph.updateNode(nodeId, { content: `**${modelName}**\n\n${combinedContent}` });
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            // onError
+            (err) => {
+                if (err.name === 'AbortError') {
+                    console.log(`[Committee] Review continuation aborted`);
+                } else {
+                    console.error('[Committee] Review continuation error:', err);
+                    const errorContent = currentContent + `\n\n*Error continuing: ${err.message}*`;
+                    this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${errorContent}`, false);
+                    this.graph.updateNode(nodeId, { content: `**${modelName}**\n\n${errorContent}` });
+                }
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            abortController
+        );
+    }
+
+    /**
+     * Continue synthesis generation from where it was stopped.
+     * @param {string} nodeId - The synthesis node ID
+     * @param {Object} context - Saved context with model, messages, opinions, etc.
+     */
+    async continueSynthesis(nodeId, context) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        const { model, chairmanName, messages, opinions } = context;
+
+        // Get current content (remove chairman name header and stopped indicator)
+        let currentContent = node.content
+            .replace(
+                new RegExp(`^\\*\\*${chairmanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\(Chairman\\)\\*\\*\\n\\n`),
+                ''
+            )
+            .replace(/\n\n\*\[Generation stopped\]\*$/, '');
+
+        // Build continuation messages (include opinions context)
+        const continueMessages = [
+            ...messages,
+            {
+                role: 'assistant',
+                content: `Here are all the opinions:\n\n${opinions.map((op, i) => `Opinion ${i + 1}:\n${op}`).join('\n\n')}`,
+            },
+            {
+                role: 'user',
+                content: 'As chairman, please synthesize these opinions into a coherent response.',
+            },
+            { role: 'assistant', content: currentContent },
+            { role: 'user', content: 'Please continue your synthesis from where you left off.' },
+        ];
+
+        // Create new abort controller
+        const abortController = new AbortController();
+
+        // Re-register with StreamingManager
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'committee',
+            context,
+            onContinue: async (nodeId, state) => {
+                await this.continueSynthesis(nodeId, state.context);
+            },
+        });
+
+        // Continue streaming
+        this.chat.sendMessage(
+            continueMessages,
+            model,
+            // onChunk
+            (chunk, accumulated) => {
+                const combinedContent = currentContent + accumulated;
+                this.canvas.updateNodeContent(nodeId, `**${chairmanName} (Chairman)**\n\n${combinedContent}`, true);
+            },
+            // onDone
+            (finalContent) => {
+                const combinedContent = currentContent + finalContent;
+                this.canvas.updateNodeContent(nodeId, `**${chairmanName} (Chairman)**\n\n${combinedContent}`, false);
+                this.graph.updateNode(nodeId, { content: `**${chairmanName} (Chairman)**\n\n${combinedContent}` });
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            // onError
+            (err) => {
+                if (err.name === 'AbortError') {
+                    console.log(`[Committee] Synthesis continuation aborted`);
+                } else {
+                    console.error('[Committee] Synthesis continuation error:', err);
+                    const errorContent = currentContent + `\n\n*Error continuing: ${err.message}*`;
+                    this.canvas.updateNodeContent(nodeId, `**${chairmanName} (Chairman)**\n\n${errorContent}`, false);
+                    this.graph.updateNode(nodeId, { content: `**${chairmanName} (Chairman)**\n\n${errorContent}` });
+                }
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            abortController
+        );
     }
 
     /**

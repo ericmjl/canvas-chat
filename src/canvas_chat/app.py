@@ -2599,13 +2599,18 @@ Rules:
 - Extract just the NAME or LABEL of each item, not descriptions
 - For example: "GitHub Copilot: $10/month..." → "GitHub Copilot" (not the full text)
 - Look for two naturally separate categories (e.g., products vs attributes, services vs features)  # noqa: E501
+- If the text uses "vs" or "versus", split on that: items before "vs" go to rows, items after go to columns  # noqa: E501
+- If items are comma-separated, split them into individual entries
 - If the text has numbered/bulleted lists, extract the item names from those
 - If only one list is clearly present, put it in "rows" and infer reasonable column headers from the context  # noqa: E501
 - Maximum 10 items per list - pick the most distinct ones if there are more
 - Keep labels concise (1-5 words typically)
 
-Example input: "1. GitHub Copilot: $10/month... 2. Tabnine: Free tier available..."
-Example output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", "Features", "Python Support"]}}"""  # noqa: E501
+Example 1: "Python, JavaScript vs Speed, Ease of Learning"
+Example 1 output: {{"rows": ["Python", "JavaScript"], "columns": ["Speed", "Ease of Learning"]}}
+
+Example 2: "1. GitHub Copilot: $10/month... 2. Tabnine: Free tier available..."
+Example 2 output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", "Features", "Python Support"]}}"""  # noqa: E501
 
     try:
         kwargs = {

@@ -152,10 +152,13 @@ class Chat {
      * @param {Function} onChunk - Callback for each chunk
      * @param {Function} onDone - Callback when complete
      * @param {Function} onError - Callback on error
+     * @param {AbortController} [abortController] - Optional abort controller (creates new one if not provided)
      * @returns {AbortController} - Controller to abort the request
      */
-    async sendMessage(messages, model, onChunk, onDone, onError) {
-        const abortController = new AbortController();
+    async sendMessage(messages, model, onChunk, onDone, onError, abortController = null) {
+        if (!abortController) {
+            abortController = new AbortController();
+        }
 
         const apiKey = this.getApiKeyForModel(model);
         const baseUrl = this.getBaseUrl();
@@ -204,6 +207,7 @@ class Chat {
         } catch (err) {
             if (err.name === 'AbortError') {
                 console.log('Request aborted');
+                onError(err); // Call onError so callers can handle cleanup
                 return;
             }
 

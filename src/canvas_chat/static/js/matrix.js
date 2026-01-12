@@ -14,33 +14,25 @@ import {
 } from './graph-types.js';
 import { streamSSEContent } from './sse.js';
 import { apiUrl, escapeHtmlText, buildMessagesForApi } from './utils.js';
+import { FeaturePlugin } from './feature-plugin.js';
+import { CancellableEvent } from './plugin-events.js';
 
 /**
  * MatrixFeature - Encapsulates all matrix-related functionality.
- * Uses dependency injection via the context object.
+ * Extends FeaturePlugin to integrate with the plugin architecture.
  */
-class MatrixFeature {
+class MatrixFeature extends FeaturePlugin {
     /**
      * Create a MatrixFeature instance.
-     * @param {Object} context - Dependencies injected from the App class
-     * @param {Object} context.graph - The CRDTGraph instance
-     * @param {Object} context.canvas - The Canvas instance
-     * @param {Function} context.getModelPicker - Returns the model picker element
-     * @param {Function} context.saveSession - Callback to save session
-     * @param {Function} context.updateEmptyState - Callback to update empty state
-     * @param {Function} context.generateNodeSummary - Callback to generate node summary
-     * @param {Function} context.pushUndo - Callback to push undo action
-     * @param {Function} context.buildLLMRequest - Callback to build LLM request with credentials
+     * @param {AppContext} context - Application context with injected dependencies
      */
     constructor(context) {
-        this.graph = context.graph;
-        this.canvas = context.canvas;
-        this.getModelPicker = context.getModelPicker;
-        this.saveSession = context.saveSession;
-        this.updateEmptyState = context.updateEmptyState;
+        super(context);
+
+        // Additional dependencies specific to matrix (not in base FeaturePlugin)
+        this.getModelPicker = () => context.modelPicker;
         this.generateNodeSummary = context.generateNodeSummary;
-        this.pushUndo = context.pushUndo;
-        this.buildLLMRequest = context.buildLLMRequest;
+        this.pushUndo = context.pushUndo || (() => {});
 
         // Matrix modal state
         this._matrixData = null;
@@ -48,24 +40,33 @@ class MatrixFeature {
         this._currentCellData = null;
         this._currentSliceData = null;
 
-        // Matrix streaming state - Map of nodeId -> Map of cellKey -> AbortController
-        // Allows stopping all cell fills for a matrix node at once
+        // Legacy streaming state - kept for backwards compatibility during migration
+        // TODO: Remove after StreamingManager migration is complete
         this.streamingMatrixCells = new Map();
     }
 
     /**
-     * Handle the /matrix command - parse context and show modal
+     * Lifecycle hook called when the plugin is loaded.
      */
-    async handleMatrix(matrixContext) {
-        // Get selected nodes
-        const selectedIds = this.canvas.getSelectedNodeIds();
-        console.log('handleMatrix called with context:', matrixContext);
-        console.log('Selected node IDs:', selectedIds);
+    async onLoad() {
+        console.log('[MatrixFeature] Loaded');
+    }
 
-        if (selectedIds.length === 0) {
-            alert('Please select one or more nodes to provide context for the matrix.');
-            return;
-        }
+    /**
+     * Handle the /matrix command - parse context and show modal
+     * @param {string} command - The slash command (e.g., '/matrix')
+     * @param {string} args - Text after the command
+     * @param {Object} context - Additional context (e.g., { text: selectedNodesContent })
+     */
+    async handleMatrix(command, args, context) {
+        // Use args as the matrix context (text after /matrix)
+        const matrixContext = args.trim();
+
+        // Get selected nodes (optional - used as additional context if present)
+        const selectedIds = this.canvas.getSelectedNodeIds();
+        console.log('handleMatrix called with:', { command, args, context });
+        console.log('Matrix context:', matrixContext);
+        console.log('Selected node IDs:', selectedIds);
 
         const model = this.getModelPicker().value;
 
@@ -87,7 +88,7 @@ class MatrixFeature {
         console.log('Modal should now be visible');
 
         try {
-            // Gather content from all selected nodes
+            // Gather content from selected nodes (if any) for additional context
             const contents = selectedIds
                 .map((id) => {
                     const node = this.graph.getNode(id);
@@ -95,11 +96,21 @@ class MatrixFeature {
                 })
                 .filter((c) => c);
 
-            // Parse two lists from all context nodes
+            // If no selected nodes, use the matrix context itself as the content to parse
+            if (contents.length === 0) {
+                contents.push(matrixContext);
+            }
+
+            // Parse two lists from context (either from selected nodes or command text)
             const result = await this.parseTwoLists(contents, matrixContext, model);
+
+            console.log('[Matrix] Parsed result:', result);
 
             const rowItems = result.rows;
             const colItems = result.columns;
+
+            console.log('[Matrix] Row items:', rowItems);
+            console.log('[Matrix] Column items:', colItems);
 
             // Hide loading indicator
             document.getElementById('matrix-loading').style.display = 'none';
@@ -136,6 +147,12 @@ class MatrixFeature {
             context,
         });
 
+        console.log('[Matrix] Parsing request:', {
+            contentsCount: contents.length,
+            context: context,
+            model: requestBody.model,
+        });
+
         const response = await fetch(apiUrl('/api/parse-two-lists'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -143,10 +160,14 @@ class MatrixFeature {
         });
 
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[Matrix] Parse error:', response.status, errorText);
             throw new Error(`Failed to parse lists: ${response.statusText}`);
         }
 
-        return response.json();
+        const result = await response.json();
+        console.log('[Matrix] Parse result:', result);
+        return result;
     }
 
     /**
@@ -274,21 +295,27 @@ class MatrixFeature {
             return;
         }
 
-        // Get context nodes for positioning
+        // Get context nodes for positioning (optional)
         const contextNodes = contextNodeIds.map((id) => this.graph.getNode(id)).filter(Boolean);
 
-        if (contextNodes.length === 0) {
-            alert('No valid context nodes found');
-            return;
+        // Determine position: near context nodes if they exist, otherwise at viewport center
+        let position;
+        if (contextNodes.length > 0) {
+            // Position matrix to the right of all context nodes, centered vertically
+            const maxX = Math.max(...contextNodes.map((n) => n.position.x));
+            const avgY = contextNodes.reduce((sum, n) => sum + n.position.y, 0) / contextNodes.length;
+            position = {
+                x: maxX + 450,
+                y: avgY,
+            };
+        } else {
+            // No context nodes - position at viewport center
+            const viewportCenter = this.canvas.getViewportCenter();
+            position = {
+                x: viewportCenter.x - 200, // Offset slightly left of center
+                y: viewportCenter.y - 150, // Offset slightly above center
+            };
         }
-
-        // Position matrix to the right of all context nodes, centered vertically
-        const maxX = Math.max(...contextNodes.map((n) => n.position.x));
-        const avgY = contextNodes.reduce((sum, n) => sum + n.position.y, 0) / contextNodes.length;
-        const position = {
-            x: maxX + 450,
-            y: avgY,
-        };
 
         // Create matrix node
         const matrixNode = createMatrixNode(context, contextNodeIds, rowItems, colItems, { position });
@@ -296,7 +323,7 @@ class MatrixFeature {
         this.graph.addNode(matrixNode);
         this.canvas.renderNode(matrixNode);
 
-        // Create edges from all context nodes to the matrix
+        // Create edges from context nodes to matrix (only if context nodes exist)
         for (const contextNode of contextNodes) {
             const edge = createEdge(contextNode.id, matrixNode.id, EdgeType.REPLY);
             this.graph.addEdge(edge);
@@ -339,13 +366,55 @@ class MatrixFeature {
 
         // Track this cell fill for stop button support
         const cellKey = `${row}-${col}`;
-        const isStandaloneFill = !abortController; // Not called from Fill All
+        // Use a unique virtual nodeId for each cell to allow individual tracking
+        const cellNodeId = `${nodeId}:cell:${cellKey}`;
+        // Group all cells in this matrix together so stopping one stops all
+        const groupId = `matrix-${nodeId}`;
 
-        if (isStandaloneFill) {
-            abortController = new AbortController();
+        // Create abort controller for this cell
+        abortController = abortController || new AbortController();
+
+        // Extension hook: matrix:before:fill - allow plugins to prevent or modify cell fill
+        const beforeEvent = new CancellableEvent('matrix:before:fill', {
+            nodeId,
+            row,
+            col,
+            rowItem,
+            colItem,
+            context,
+            messages,
+        });
+        this.emit('matrix:before:fill', beforeEvent);
+
+        // Check if a plugin prevented the fill
+        if (beforeEvent.defaultPrevented) {
+            console.log('[MatrixFeature] Cell fill prevented by plugin');
+            return;
         }
 
-        // Get or create the cell controllers map for this matrix node
+        // Register this cell fill with StreamingManager
+        // Use virtual cell nodeId for tracking, but don't auto-show button on virtual ID
+        this.streamingManager.register(cellNodeId, {
+            abortController,
+            featureId: 'matrix',
+            groupId,
+            context: { nodeId, row, col, rowItem, colItem },
+            showStopButton: false, // We manage the button on parent matrix node manually
+            onStop: () => {
+                // Custom stop handler - no need to update content (cell is in matrix)
+                console.log(`[MatrixFeature] Cell fill stopped: ${cellKey}`);
+            },
+        });
+
+        // Show stop button on parent matrix node (not the virtual cell ID)
+        // Only show if this is the first cell in the group
+        const groupNodes = this.streamingManager.getGroupNodes(groupId);
+        if (groupNodes.size === 1) {
+            // First cell - show stop button on parent matrix node
+            this.canvas.showStopButton(nodeId);
+        }
+
+        // Legacy tracking for backwards compatibility
         let cellControllers = this.streamingMatrixCells.get(nodeId);
         if (!cellControllers) {
             cellControllers = new Map();
@@ -353,16 +422,35 @@ class MatrixFeature {
         }
         cellControllers.set(cellKey, abortController);
 
-        // Show stop button when any cell is being filled
-        this.canvas.showStopButton(nodeId);
-
         try {
-            const requestBody = this.buildLLMRequest({
-                row_item: rowItem,
-                col_item: colItem,
-                context: context,
+            // Extension hook: matrix:cell:prompt - allow plugins to customize the prompt/request
+            const promptEvent = new CancellableEvent('matrix:cell:prompt', {
+                nodeId,
+                row,
+                col,
+                rowItem,
+                colItem,
+                context,
                 messages: buildMessagesForApi(messages),
+                customPrompt: null, // Plugins can set this to override the default prompt
             });
+            this.emit('matrix:cell:prompt', promptEvent);
+
+            // Build request body, using custom prompt if provided by a plugin
+            let requestBody;
+            if (promptEvent.data.customPrompt) {
+                requestBody = this.buildLLMRequest({
+                    custom_prompt: promptEvent.data.customPrompt,
+                    messages: promptEvent.data.messages,
+                });
+            } else {
+                requestBody = this.buildLLMRequest({
+                    row_item: rowItem,
+                    col_item: colItem,
+                    context: context,
+                    messages: promptEvent.data.messages,
+                });
+            }
 
             // Prepare fetch options with optional abort signal
             const fetchOptions = {
@@ -434,6 +522,17 @@ class MatrixFeature {
             });
 
             this.saveSession();
+
+            // Extension hook: matrix:after:fill - notify plugins that cell fill completed
+            this.emit('matrix:after:fill', {
+                nodeId,
+                row,
+                col,
+                rowItem,
+                colItem,
+                content: cellContent,
+                success: true,
+            });
         } catch (err) {
             // Don't log abort errors as failures
             if (err.name === 'AbortError') {
@@ -442,15 +541,36 @@ class MatrixFeature {
             }
             console.error('Failed to fill matrix cell:', err);
             alert(`Failed to fill cell: ${err.message}`);
+
+            // Extension hook: matrix:after:fill with error
+            this.emit('matrix:after:fill', {
+                nodeId,
+                row,
+                col,
+                rowItem,
+                colItem,
+                content: null,
+                success: false,
+                error: err.message,
+            });
         } finally {
-            // Clean up this cell from tracking
+            // Unregister from StreamingManager (don't auto-hide since we manage parent button)
+            const cellNodeId = `${nodeId}:cell:${cellKey}`;
+            this.streamingManager.unregister(cellNodeId, { hideButtons: false });
+
+            // Hide stop button on parent matrix node when last cell completes
+            // (StreamingManager can't auto-hide because cells use virtual IDs)
+            const groupNodes = this.streamingManager.getGroupNodes(`matrix-${nodeId}`);
+            if (groupNodes.size === 0) {
+                this.canvas.hideStopButton(nodeId);
+            }
+
+            // Legacy cleanup
             const controllers = this.streamingMatrixCells.get(nodeId);
             if (controllers) {
                 controllers.delete(cellKey);
-                // If no more cells are being filled, hide stop button and clean up
                 if (controllers.size === 0) {
                     this.streamingMatrixCells.delete(nodeId);
-                    this.canvas.hideStopButton(nodeId);
                 }
             }
         }
@@ -790,18 +910,12 @@ class MatrixFeature {
     /**
      * Stop all streaming cell fills for a matrix node
      * @param {string} nodeId - The matrix node ID
-     * @returns {number} Number of aborted cell fills
+     * @returns {boolean} True if any cells were stopped
      */
     stopAllCellFills(nodeId) {
-        const controllers = this.streamingMatrixCells.get(nodeId);
-        if (!controllers) return 0;
-
-        let aborted = 0;
-        for (const [cellKey, controller] of controllers) {
-            controller.abort();
-            aborted++;
-        }
-        return aborted;
+        // Use StreamingManager to stop all cells in this matrix's group
+        const groupId = `matrix-${nodeId}`;
+        return this.streamingManager.stopGroup(groupId);
     }
 
     /**
@@ -810,8 +924,9 @@ class MatrixFeature {
      * @returns {boolean} True if cells are being filled
      */
     isFillingCells(nodeId) {
-        const controllers = this.streamingMatrixCells.get(nodeId);
-        return controllers && controllers.size > 0;
+        const groupId = `matrix-${nodeId}`;
+        const groupNodes = this.streamingManager.getGroupNodes(groupId);
+        return groupNodes.size > 0;
     }
 
     /**
@@ -822,12 +937,7 @@ class MatrixFeature {
         this._editMatrixData = null;
         this._currentCellData = null;
         this._currentSliceData = null;
-        // Abort any active cell fills
-        for (const [_nodeId, controllers] of this.streamingMatrixCells) {
-            for (const [_cellKey, controller] of controllers) {
-                controller.abort();
-            }
-        }
+        // StreamingManager handles cleanup via clear() when session changes
         this.streamingMatrixCells.clear();
     }
 }

@@ -34,6 +34,7 @@ Your browser will open automatically to the local server.
 - **Image Analysis**: Upload, paste, or drag-and-drop images for multimodal AI analysis
 - **Markdown & Math Rendering**: Full markdown support with LaTeX math rendering (KaTeX) for inline `\(...\)` and display `\[...\]` math
 - **Multiple LLM Providers**: Support for OpenAI, Anthropic, Google, Groq, GitHub Models, and local models via Ollama
+- **Extensible Plugin System**: Create custom node types and features with the three-level plugin architecture
 - **Local-First**: All data stored in your browser (IndexedDB)
 - **Export/Import**: Save sessions as `.canvaschat` files
 
@@ -108,6 +109,24 @@ Open your browser to the URL shown (usually `http://127.0.0.1:7865`).
 - **Frontend**: HTMX + vanilla JavaScript + CSS
 - **LLM**: LiteLLM (multi-provider support)
 - **Storage**: IndexedDB (browser-local)
+- **Plugin System**: Three-level extensibility (custom nodes, features, extensions)
+
+## Extensibility
+
+Canvas-Chat supports three levels of plugins:
+
+- **Level 1: Custom Node Types** - Add new visual node types with custom rendering and interactions
+- **Level 2: Feature Plugins** - Create complex workflows, slash commands, and multi-step LLM interactions
+- **Level 3: Extension Hooks** - Hook into existing features to modify or extend behaviors
+
+Learn more:
+
+- [How to Create Custom Node Types](how-to/create-custom-node-plugins.md)
+- [How to Create Feature Plugins](how-to/create-feature-plugins.md)
+- [Extension Hooks Reference](reference/extension-hooks.md)
+- [FeaturePlugin API](reference/feature-plugin-api.md)
+- [AppContext API](reference/app-context-api.md)
+- [FeatureRegistry API](reference/feature-registry-api.md)
 
 ## Browser compatibility
 

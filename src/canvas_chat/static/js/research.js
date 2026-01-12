@@ -2,29 +2,37 @@
  * Research Feature Module
  *
  * Handles the /search and /research commands.
+ * Extends FeaturePlugin to integrate with the plugin architecture.
  */
 
 import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
 import { storage } from './storage.js';
 import { readSSEStream, normalizeText } from './sse.js';
 import { apiUrl } from './utils.js';
+import { FeaturePlugin } from './feature-plugin.js';
 
-class ResearchFeature {
+/**
+ * ResearchFeature - Handles search and research commands with Exa/DuckDuckGo.
+ * Extends FeaturePlugin to integrate with the plugin architecture.
+ */
+class ResearchFeature extends FeaturePlugin {
     /**
      * Create a ResearchFeature instance.
-     * @param {Object} context - Dependencies injected from App
+     * @param {AppContext} context - Application context with injected dependencies
      */
     constructor(context) {
-        this.graph = context.graph;
-        this.canvas = context.canvas;
-        this.saveSession = context.saveSession;
-        this.updateEmptyState = context.updateEmptyState;
-        this.buildLLMRequest = context.buildLLMRequest;
-        this.generateNodeSummary = context.generateNodeSummary;
-        this.showSettingsModal = context.showSettingsModal;
-        this.getModelPicker = context.getModelPicker;
-        this.registerStreaming = context.registerStreaming;
-        this.unregisterStreaming = context.unregisterStreaming;
+        super(context);
+
+        // Research-specific dependencies (not in base FeaturePlugin)
+        this.getModelPicker = () => context.modelPicker;
+        this.showSettingsModal = () => this.modalManager.showSettingsModal();
+    }
+
+    /**
+     * Lifecycle hook called when the plugin is loaded.
+     */
+    async onLoad() {
+        console.log('[ResearchFeature] Loaded');
     }
 
     /**
@@ -32,31 +40,35 @@ class ResearchFeature {
      * @param {string} query - The user's search query
      * @param {string} context - Optional context to help refine the query (e.g., selected text)
      */
-    async handleSearch(query, context = null) {
+    /**
+     * Handle the /search command
+     * @param {string} command - The slash command (e.g., '/search')
+     * @param {string} args - Text after the command
+     * @param {Object} contextObj - Additional context (e.g., { text: selectedNodesContent })
+     */
+    async handleSearch(command, args, contextObj) {
+        const query = args.trim();
+        const selectedContext = contextObj?.text || null;
+
+        console.log('[Research] Search with:', { command, query, selectedContext });
+
         // Check which search provider to use
         const hasExa = storage.hasExaApiKey();
         const exaKey = hasExa ? storage.getExaApiKey() : null;
         const provider = hasExa ? 'Exa' : 'DuckDuckGo';
 
-        // Get selected nodes for positioning
-        let parentIds = this.canvas.getSelectedNodeIds();
-        if (parentIds.length === 0) {
-            const leaves = this.graph.getLeafNodes();
-            if (leaves.length > 0) {
-                leaves.sort((a, b) => b.created_at - a.created_at);
-                parentIds = [leaves[0].id];
-            }
-        }
+        // Get selected nodes for positioning (optional)
+        const parentIds = this.canvas.getSelectedNodeIds();
 
         // Create search node with original query initially
         const searchNode = createNode(NodeType.SEARCH, `Searching (${provider}): "${query}"`, {
-            position: this.graph.autoPosition(parentIds),
+            position: this.graph.autoPosition(parentIds.length > 0 ? parentIds : []),
         });
 
         this.graph.addNode(searchNode);
         this.canvas.renderNode(searchNode);
 
-        // Create edges from parents
+        // Create edges from parents only if they exist
         for (const parentId of parentIds) {
             const edge = createEdge(parentId, searchNode.id, EdgeType.REFERENCE);
             this.graph.addEdge(edge);
@@ -74,8 +86,8 @@ class ResearchFeature {
         try {
             let effectiveQuery = query;
 
-            // If context is provided, use LLM to generate a better search query
-            if (context && context.trim()) {
+            // If selectedContext is provided, use LLM to generate a better search query
+            if (selectedContext && selectedContext.trim()) {
                 this.canvas.updateNodeContent(searchNode.id, `Refining search query...`, true);
 
                 const refineResponse = await fetch(apiUrl('/api/refine-query'), {
@@ -84,7 +96,7 @@ class ResearchFeature {
                     body: JSON.stringify(
                         this.buildLLMRequest({
                             user_query: query,
-                            context: context,
+                            context: selectedContext,
                             command_type: 'search',
                         })
                     ),
@@ -185,12 +197,34 @@ class ResearchFeature {
     }
 
     /**
-     * Handle research command.
-     * @param {string} instructions - The user's research instructions
-     * @param {string} context - Optional context to help refine the instructions (e.g., selected text)
-     * @param {string} existingNodeId - Optional existing node ID to update instead of creating new node (for continue)
+     * Handle the /research command or internal continue call
+     *
+     * Supports two calling patterns:
+     * 1. Slash command: handleResearch(command, args, contextObj)
+     * 2. Internal continue: handleResearch(instructions, context, existingNodeId)
+     *
+     * @param {string} param1 - Command string (slash) or instructions (internal)
+     * @param {string|Object} param2 - Args (slash) or context (internal)
+     * @param {Object|string} param3 - Context object (slash) or existingNodeId (internal)
      */
-    async handleResearch(instructions, context = null, existingNodeId = null) {
+    async handleResearch(param1, param2, param3) {
+        // Detect calling pattern
+        let instructions, selectedContext, existingNodeId;
+
+        if (param1 === '/research' || param1 === '/search') {
+            // Slash command pattern: (command, args, contextObj)
+            instructions = param2.trim();
+            selectedContext = param3?.text || null;
+            existingNodeId = null;
+            console.log('[Research] Command with:', { param1, instructions, selectedContext });
+        } else {
+            // Internal continue pattern: (instructions, context, existingNodeId)
+            instructions = param1;
+            selectedContext = param2 || null;
+            existingNodeId = param3 || null;
+            console.log('[Research] Internal with:', { instructions, selectedContext, existingNodeId });
+        }
+
         const hasExa = storage.hasExaApiKey();
         const exaKey = hasExa ? storage.getExaApiKey() : null;
 
@@ -218,22 +252,15 @@ class ResearchFeature {
             this.graph.updateNode(existingNodeId, { content: restartContent });
         } else {
             // Create new research node
-            // Get selected nodes for positioning
-            let parentIds = this.canvas.getSelectedNodeIds();
-            if (parentIds.length === 0) {
-                const leaves = this.graph.getLeafNodes();
-                if (leaves.length > 0) {
-                    leaves.sort((a, b) => b.created_at - a.created_at);
-                    parentIds = [leaves[0].id];
-                }
-            }
+            // Get selected nodes for positioning (optional)
+            const parentIds = this.canvas.getSelectedNodeIds();
 
             // Create research node with original instructions initially
             researchNode = createNode(
                 NodeType.RESEARCH,
                 `**Research${providerLabel}:** ${instructions}\n\n*Starting research...*`,
                 {
-                    position: this.graph.autoPosition(parentIds),
+                    position: this.graph.autoPosition(parentIds.length > 0 ? parentIds : []),
                     width: 500, // Research nodes are wider for markdown reports
                     model: model, // Store model for display in header
                 }
@@ -242,7 +269,7 @@ class ResearchFeature {
             this.graph.addNode(researchNode);
             this.canvas.renderNode(researchNode);
 
-            // Create edges from parents
+            // Create edges from parents only if they exist
             for (const parentId of parentIds) {
                 const edge = createEdge(parentId, researchNode.id, EdgeType.REFERENCE);
                 this.graph.addEdge(edge);
@@ -260,21 +287,33 @@ class ResearchFeature {
 
         // Create abort controller for stop button support
         const abortController = new AbortController();
-        this.registerStreaming(researchNode.id, abortController, {
-            type: 'research',
-            originalInstructions: instructions,
-            originalContext: context,
-        });
-        this.canvas.showStopButton(researchNode.id);
 
-        // Capture nodeId early to avoid closure issues with parallel research
+        // Register with StreamingManager for unified stop/continue handling
         const nodeId = researchNode.id;
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'research',
+            context: {
+                type: 'research',
+                originalInstructions: instructions,
+                originalContext: selectedContext,
+            },
+            onContinue: async (nodeId, state, _newAbortController) => {
+                // Continue research from where it left off
+                await this.handleResearch(
+                    state.context.originalInstructions,
+                    state.context.originalContext,
+                    nodeId // Pass existing node ID to continue on same node
+                );
+            },
+        });
+        // StreamingManager auto-shows stop button
 
         try {
             let effectiveInstructions = instructions;
 
-            // If context is provided, use LLM to generate better research instructions
-            if (context && context.trim()) {
+            // If selectedContext is provided, use LLM to generate better research instructions
+            if (selectedContext && selectedContext.trim()) {
                 this.canvas.updateNodeContent(
                     nodeId,
                     `**Research${providerLabel}:** ${instructions}\n\n*Refining research instructions...*`,
@@ -287,7 +326,7 @@ class ResearchFeature {
                     body: JSON.stringify(
                         this.buildLLMRequest({
                             user_query: instructions,
-                            context: context,
+                            context: selectedContext,
                             command_type: 'research',
                         })
                     ),
@@ -328,7 +367,7 @@ class ResearchFeature {
                     body: JSON.stringify(
                         this.buildLLMRequest({
                             instructions: effectiveInstructions,
-                            context: context || null,
+                            context: selectedContext || null,
                             max_iterations: 4,
                             max_sources: 40,
                         })
@@ -422,8 +461,7 @@ class ResearchFeature {
                 },
                 onDone: () => {
                     // Clean up streaming state
-                    this.unregisterStreaming(nodeId);
-                    this.canvas.hideStopButton(nodeId);
+                    this.streamingManager.unregister(nodeId);
 
                     if (!hasExa && ddgFinalReport) {
                         reportContent = reportHeader + ddgFinalReport;
@@ -447,8 +485,7 @@ class ResearchFeature {
                 },
                 onError: (err) => {
                     // Clean up streaming state on error
-                    this.unregisterStreaming(nodeId);
-                    this.canvas.hideStopButton(nodeId);
+                    this.streamingManager.unregister(nodeId);
 
                     // Re-throw if not an abort error
                     if (err.name !== 'AbortError') {
@@ -460,19 +497,11 @@ class ResearchFeature {
             this.saveSession();
         } catch (err) {
             // Clean up streaming state
-            const nodeId = researchNode.id;
-            this.unregisterStreaming(nodeId);
-            this.canvas.hideStopButton(nodeId);
+            this.streamingManager.unregister(nodeId);
 
             // Check if it was aborted (user clicked stop)
+            // StreamingManager handles stopped indicator via default onStop behavior
             if (err.name === 'AbortError') {
-                // Add stopped indicator to current content
-                const node = this.graph.getNode(nodeId);
-                if (node) {
-                    const stoppedContent = node.content + '\n\n*[Research stopped]*';
-                    this.canvas.updateNodeContent(nodeId, stoppedContent, false);
-                    this.graph.updateNode(nodeId, { content: stoppedContent });
-                }
                 this.saveSession();
                 return;
             }

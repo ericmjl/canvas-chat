@@ -152,6 +152,15 @@ class BaseNode {
     }
 
     /**
+     * Whether this node type supports stop/continue buttons for streaming.
+     * Node types that generate content via LLM streaming should return true.
+     * @returns {boolean}
+     */
+    supportsStopContinue() {
+        return false;
+    }
+
+    /**
      * Get additional CSS classes for the node-content wrapper.
      * Override in subclasses that need custom content container styling.
      * @returns {string} Space-separated CSS class names
@@ -205,6 +214,10 @@ class AINode extends BaseNode {
 
     getActions() {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
+    }
+
+    supportsStopContinue() {
+        return true;
     }
 
     getHeaderButtons() {
@@ -789,6 +802,10 @@ class CodeNode extends BaseNode {
         return [Actions.EDIT_CODE, Actions.GENERATE, Actions.RUN_CODE, Actions.COPY];
     }
 
+    supportsStopContinue() {
+        return true;
+    }
+
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,
@@ -839,6 +856,10 @@ class OpinionNode extends BaseNode {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
 
+    supportsStopContinue() {
+        return true;
+    }
+
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,
@@ -868,6 +889,10 @@ class SynthesisNode extends BaseNode {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
 
+    supportsStopContinue() {
+        return true;
+    }
+
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,
@@ -895,6 +920,10 @@ class ReviewNode extends BaseNode {
 
     getActions() {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
+    }
+
+    supportsStopContinue() {
+        return true;
     }
 
     getHeaderButtons() {
@@ -1212,6 +1241,7 @@ function validateNodeProtocol(NodeClass) {
         'getHeaderButtons',
         'copyToClipboard',
         'isScrollable',
+        'supportsStopContinue',
     ];
 
     // Try to determine the node type from the class name

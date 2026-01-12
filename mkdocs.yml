@@ -53,6 +53,8 @@ nav:
     - Contributing to docs: CONTRIBUTING.md
     - How-to guides:
           - Admin mode: how-to/admin-mode.md
+          - Create custom node types: how-to/create-custom-node-plugins.md
+          - Create feature plugins: how-to/create-feature-plugins.md
           - Deep research: how-to/deep-research.md
           - Highlight and branch: how-to/highlight-and-branch.md
           - Import PDFs: how-to/import-pdfs.md
@@ -68,10 +70,15 @@ nav:
           - Matrix evaluation: explanation/matrix-evaluation.md
           - Matrix resize behavior: explanation/matrix-resize-behavior.md
           - Node protocols: explanation/node-protocols.md
+          - Plugin architecture: explanation/plugin-architecture.md
           - Streaming architecture: explanation/streaming-architecture.md
           - URL fetching: explanation/url-fetching.md
           - WebRTC signaling: explanation/webrtc-signaling.md
     - Reference:
+          - AppContext API: reference/app-context-api.md
+          - Extension hooks: reference/extension-hooks.md
+          - FeaturePlugin API: reference/feature-plugin-api.md
+          - FeatureRegistry API: reference/feature-registry-api.md
           - Keyboard shortcuts: reference/keyboard-shortcuts.md
           - Search API: reference/search-api.md
     - Blog: releases/

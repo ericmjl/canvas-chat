@@ -1,5 +1,43 @@
 # Contributing to Canvas Chat
 
+## Plugin development
+
+**Plugins are the recommended way to extend Canvas-Chat functionality.**
+
+Canvas-Chat supports three levels of extensibility:
+
+1. **Custom Node Types (Level 1)**: Add new visual node types with custom rendering and interactions
+2. **Feature Plugins (Level 2)**: Create complex workflows, slash commands, and multi-step LLM interactions
+3. **Extension Hooks (Level 3)**: Hook into existing features to modify or extend behaviors
+
+### Getting started with plugins
+
+Start with these guides:
+
+- [How to Create Custom Node Types](how-to/create-custom-node-plugins.md)
+- [How to Create Feature Plugins](how-to/create-feature-plugins.md)
+- [Extension Hooks Reference](reference/extension-hooks.md)
+
+### Plugin APIs
+
+Complete API documentation:
+
+- [FeaturePlugin API](reference/feature-plugin-api.md) - Base class for feature plugins
+- [AppContext API](reference/app-context-api.md) - Dependency injection and Canvas-Chat APIs
+- [FeatureRegistry API](reference/feature-registry-api.md) - Plugin registration and management
+
+### Sharing plugins
+
+To share your plugin with the community:
+
+1. Create a GitHub repository for your plugin
+2. Include clear README with installation and usage instructions
+3. Add example code and screenshots
+4. Open an issue in the main Canvas-Chat repo to announce your plugin
+5. Consider publishing to npm for easy installation
+
+We maintain a list of community plugins in the documentation.
+
 ## Code contributions
 
 **We are not accepting direct code contributions at this time.**

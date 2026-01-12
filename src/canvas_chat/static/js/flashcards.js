@@ -14,36 +14,29 @@ import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
 import { storage } from './storage.js';
 import { chat } from './chat.js';
 import { applySM2, isFlashcardDue, getDueFlashcards } from './utils.js';
+import { FeaturePlugin } from './feature-plugin.js';
 
 /**
  * FlashcardFeature class manages all flashcard-related functionality.
- * Uses dependency injection - receives app context rather than tight coupling.
+ * Extends FeaturePlugin to integrate with the plugin architecture.
  */
-class FlashcardFeature {
+class FlashcardFeature extends FeaturePlugin {
     /**
-     * @param {Object} context - Application context
-     * @param {Object} context.graph - Graph instance
-     * @param {Object} context.canvas - Canvas instance
-     * @param {HTMLElement} context.modelPicker - Model picker element
-     * @param {Function} context.saveSession - Save session callback
-     * @param {Function} context.updateEmptyState - Update empty state callback
-     * @param {Function} context.showToast - Show toast notification callback
-     * @param {Function} context.updateCollapseButtonForNode - Update collapse button callback
-     * @param {Function} context.buildLLMRequest - Build LLM request with credentials callback
+     * @param {AppContext} context - Application context with injected dependencies
      */
     constructor(context) {
-        this.graph = context.graph;
-        this.canvas = context.canvas;
-        this.modelPicker = context.modelPicker;
-        this.saveSession = context.saveSession;
-        this.updateEmptyState = context.updateEmptyState;
-        this.showToast = context.showToast;
-        this.updateCollapseButtonForNode = context.updateCollapseButtonForNode;
-        this.buildLLMRequest = context.buildLLMRequest;
+        super(context);
 
         // Review state
         this.reviewState = null;
         this.dueToastTimeout = null;
+    }
+
+    /**
+     * Lifecycle hook called when the plugin is loaded.
+     */
+    async onLoad() {
+        console.log('[FlashcardFeature] Loaded');
     }
 
     /**

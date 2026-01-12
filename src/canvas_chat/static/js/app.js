@@ -19,6 +19,7 @@ import { CommitteeFeature } from './committee.js';
 import { MatrixFeature } from './matrix.js';
 import { FactcheckFeature } from './factcheck.js';
 import { ResearchFeature } from './research.js';
+import './code-feature.js'; // Side-effect import for CodeFeature registration
 import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { wrapNode } from './node-protocols.js';
 import {
@@ -37,6 +38,10 @@ import {
 } from './utils.js';
 import { highlightTextInHtml, extractExcerptText } from './highlight-utils.js';
 import { streamSSEContent, readSSEStream } from './sse.js';
+// Plugin system
+import { FeatureRegistry } from './feature-registry.js';
+import { AppContext } from './feature-plugin.js';
+import { StreamingManager } from './streaming-manager.js';
 
 /* global pyodideRunner */
 
@@ -50,7 +55,11 @@ class App {
         this.searchSelectedIndex = 0;
         this.slashCommandMenu = new SlashCommandMenu();
 
-        // Streaming state - Map of nodeId -> { abortController, context }
+        // Unified streaming manager for all features
+        this.streamingManager = new StreamingManager();
+
+        // Legacy: Keep streamingNodes as alias for backwards compatibility during migration
+        // TODO: Remove after all features migrated to StreamingManager
         this.streamingNodes = new Map();
 
         // Retry contexts for error recovery
@@ -69,12 +78,8 @@ class App {
         this.adminMode = false;
         this.adminModels = []; // Models configured by admin (only in admin mode)
 
-        // Feature modules (initialized lazily)
-        this._flashcardFeature = null;
-        this._committeeFeature = null;
-        this._matrixFeature = null;
-        this._factcheckFeature = null;
-        this._researchFeature = null;
+        // Plugin system (all features managed by FeatureRegistry)
+        this.featureRegistry = new FeatureRegistry();
 
         // Undo/Redo manager
         this.undoManager = new UndoManager();
@@ -105,6 +110,10 @@ class App {
         // Initialize canvas
         this.canvas = new Canvas('canvas-container', 'canvas');
 
+        // Configure streaming manager with canvas and graph getter
+        this.streamingManager.setCanvas(this.canvas);
+        this.streamingManager.setGraphGetter(() => this.graph);
+
         // Setup canvas event listeners (using EventEmitter pattern)
         this.setupCanvasEventListeners();
 
@@ -134,6 +143,9 @@ class App {
         if (this.adminMode) {
             this.hideAdminRestrictedUI();
         }
+
+        // Initialize plugin system (must happen before loadSession since features are accessed during session load)
+        await this.initializePluginSystem();
 
         // Load or create session
         await this.loadSession();
@@ -207,109 +219,83 @@ class App {
     }
 
     /**
-     * Get the flashcard feature module (lazy initialization).
+     * Get a feature from the FeatureRegistry.
+     *
+     * ARCHITECTURAL PATTERN: Feature Getter Singleton
+     * ================================================
+     * All features MUST be retrieved from the FeatureRegistry to ensure single instance.
+     * This prevents the "dual instance" bug where:
+     * 1. FeatureRegistry creates instance #1 (for slash commands)
+     * 2. Lazy getter creates instance #2 (for modal buttons)
+     * 3. Modal state lives in instance #1, but buttons call methods on instance #2
+     *
+     * If a feature is not found in the registry, this indicates a serious initialization
+     * error and should fail fast with a clear error message.
+     *
+     * @param {string} featureId - Feature ID in FeatureRegistry (e.g., 'committee', 'matrix')
+     * @param {string} featureName - Human-readable feature name for error messages
+     * @returns {FeaturePlugin} The feature instance
+     * @throws {Error} If feature is not registered (initialization order bug)
+     * @private
+     */
+    _getFeature(featureId, featureName) {
+        const feature = this.featureRegistry.getFeature(featureId);
+        if (!feature) {
+            throw new Error(
+                `Feature "${featureName}" (${featureId}) not found in FeatureRegistry. ` +
+                    `This indicates initializePluginSystem() was not called before accessing the feature. ` +
+                    `Check initialization order in App.init().`
+            );
+        }
+        return feature;
+    }
+
+    /**
+     * Get the flashcard feature module.
      * @returns {FlashcardFeature}
      */
     get flashcardFeature() {
-        if (!this._flashcardFeature) {
-            this._flashcardFeature = new FlashcardFeature({
-                graph: this.graph,
-                canvas: this.canvas,
-                modelPicker: this.modelPicker,
-                saveSession: () => this.saveSession(),
-                updateEmptyState: () => this.updateEmptyState(),
-                showToast: (msg, type) => this.showToast(msg, type),
-                updateCollapseButtonForNode: (nodeId) => this.updateCollapseButtonForNode(nodeId),
-                buildLLMRequest: (params) => this.buildLLMRequest(params),
-            });
-        }
-        return this._flashcardFeature;
+        return this._getFeature('flashcards', 'FlashcardFeature');
     }
 
     /**
-     * Get the committee feature module (lazy initialization).
+     * Get the committee feature module.
      * @returns {CommitteeFeature}
      */
     get committeeFeature() {
-        if (!this._committeeFeature) {
-            this._committeeFeature = new CommitteeFeature({
-                graph: this.graph,
-                canvas: this.canvas,
-                modelPicker: this.modelPicker,
-                chatInput: this.chatInput,
-                saveSession: () => this.saveSession(),
-                updateEmptyState: () => this.updateEmptyState(),
-                buildLLMRequest: (params) => this.buildLLMRequest(params),
-            });
-        }
-        return this._committeeFeature;
+        return this._getFeature('committee', 'CommitteeFeature');
     }
 
     /**
-     * Get the matrix feature module (lazy initialization).
+     * Get the matrix feature module.
      * @returns {MatrixFeature}
      */
     get matrixFeature() {
-        if (!this._matrixFeature) {
-            this._matrixFeature = new MatrixFeature({
-                graph: this.graph,
-                canvas: this.canvas,
-                getModelPicker: () => this.modelPicker,
-                saveSession: () => this.saveSession(),
-                updateEmptyState: () => this.updateEmptyState(),
-                generateNodeSummary: (nodeId) => this.generateNodeSummary(nodeId),
-                pushUndo: (action) => this.undoManager.push(action),
-                buildLLMRequest: (params) => this.buildLLMRequest(params),
-            });
-        }
-        return this._matrixFeature;
+        return this._getFeature('matrix', 'MatrixFeature');
     }
 
     /**
-     * Get the factcheck feature module (lazy initialization).
+     * Get the factcheck feature module.
      * @returns {FactcheckFeature}
      */
     get factcheckFeature() {
-        if (!this._factcheckFeature) {
-            this._factcheckFeature = new FactcheckFeature({
-                graph: this.graph,
-                canvas: this.canvas,
-                getModelPicker: () => this.modelPicker,
-                saveSession: () => this.saveSession(),
-                buildLLMRequest: (params) => this.buildLLMRequest(params),
-            });
-        }
-        return this._factcheckFeature;
+        return this._getFeature('factcheck', 'FactcheckFeature');
     }
 
     /**
-     * Get the research feature module (lazy initialization).
+     * Get the research feature module.
      * @returns {ResearchFeature}
      */
     get researchFeature() {
-        if (!this._researchFeature) {
-            this._researchFeature = new ResearchFeature({
-                graph: this.graph,
-                canvas: this.canvas,
-                saveSession: () => this.saveSession(),
-                updateEmptyState: () => this.updateEmptyState(),
-                buildLLMRequest: (params) => this.buildLLMRequest(params),
-                generateNodeSummary: (nodeId) => this.generateNodeSummary(nodeId),
-                showSettingsModal: () => this.modalManager.showSettingsModal(),
-                getModelPicker: () => this.modelPicker,
-                registerStreaming: (nodeId, abortController, context = null) => {
-                    // Register research streaming state for stop button support
-                    this.streamingNodes.set(nodeId, {
-                        abortController: abortController,
-                        context: context || { type: 'research' },
-                    });
-                },
-                unregisterStreaming: (nodeId) => {
-                    this.streamingNodes.delete(nodeId);
-                },
-            });
-        }
-        return this._researchFeature;
+        return this._getFeature('research', 'ResearchFeature');
+    }
+
+    /**
+     * Get code feature instance.
+     * @returns {CodeFeature}
+     */
+    get codeFeature() {
+        return this._getFeature('code', 'CodeFeature');
     }
 
     async loadModels() {
@@ -461,11 +447,7 @@ class App {
         // Create CRDTGraph with automatic persistence
         console.log('%c[App] Using CRDT Graph mode', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(session.id, session);
-        this._flashcardFeature = null; // Reset feature modules for new graph
-        this._committeeFeature = null;
-        this._matrixFeature = null;
-        this._factcheckFeature = null;
-        this._researchFeature = null;
+        // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
 
         // Render graph
@@ -536,11 +518,7 @@ class App {
 
             console.log('%c[App] Creating empty CRDT Graph for shared session', 'color: #2196F3; font-weight: bold');
             this.graph = new CRDTGraph(sessionId);
-            this._flashcardFeature = null; // Reset feature modules for new graph
-            this._committeeFeature = null;
-            this._matrixFeature = null;
-            this._factcheckFeature = null;
-            this._researchFeature = null;
+            // Note: Features are managed by FeatureRegistry, no manual cleanup needed
             await this.graph.enablePersistence();
 
             // Render empty graph (will populate via sync)
@@ -577,11 +555,7 @@ class App {
         // Create new CRDT Graph
         console.log('%c[App] Creating new session with CRDT Graph', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(sessionId);
-        this._flashcardFeature = null; // Reset feature modules for new graph
-        this._committeeFeature = null;
-        this._matrixFeature = null;
-        this._factcheckFeature = null;
-        this._researchFeature = null;
+        // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
 
         this.canvas.clear();
@@ -621,9 +595,7 @@ class App {
             .on('matrixColExtract', this.handleMatrixColExtract.bind(this))
             .on('matrixEdit', this.handleMatrixEdit.bind(this))
             .on('matrixIndexColResize', this.handleMatrixIndexColResize.bind(this))
-            // Streaming control events
-            .on('nodeStopGeneration', this.handleNodeStopGeneration.bind(this))
-            .on('nodeContinueGeneration', this.handleNodeContinueGeneration.bind(this))
+            // Streaming control events (now handled by StreamingManager via setCanvas)
             // Error handling events
             .on('nodeRetry', this.handleNodeRetry.bind(this))
             .on('nodeDismissError', this.handleNodeDismissError.bind(this))
@@ -648,6 +620,7 @@ class App {
             // Image and tag click events
             .on('imageClick', this.handleImageClick.bind(this))
             .on('tagChipClick', this.handleTagChipClick.bind(this))
+            .on('tagRemove', this.handleTagRemove.bind(this))
             // Navigation events for parent/child traversal
             .on('navParentClick', this.handleNavParentClick.bind(this))
             .on('navChildClick', this.handleNavChildClick.bind(this))
@@ -1289,9 +1262,10 @@ class App {
     async tryHandleSlashCommand(content, context = null) {
         // First check if this is a plugin-registered slash command
         const parts = content.split(' ');
-        const command = parts[0]; // e.g., '/poll'
+        const command = parts[0]; // e.g., '/poll', '/committee'
         const args = parts.slice(1).join(' '); // Everything after command
 
+        // Try node registry first (custom node plugins)
         if (NodeRegistry.hasSlashCommand(command)) {
             const cmdConfig = NodeRegistry.getSlashCommand(command);
             if (cmdConfig && cmdConfig.handler) {
@@ -1300,57 +1274,17 @@ class App {
             }
         }
 
-        // Fall through to built-in commands
-        // Check for /search command
-        if (content.startsWith('/search ')) {
-            const query = content.slice(8).trim();
-            if (query) {
-                await this.handleSearch(query, context);
-                return true;
-            }
+        // Try feature registry (feature plugins)
+        if (await this.featureRegistry.handleSlashCommand(command, args, { text: context })) {
+            return true;
         }
 
-        // Check for /research command
-        if (content.startsWith('/research ')) {
-            const instructions = content.slice(10).trim();
-            if (instructions) {
-                await this.handleResearch(instructions, context);
-                return true;
-            }
-        }
-
-        // Check for /matrix command
-        if (content.startsWith('/matrix ')) {
-            const matrixContext = content.slice(8).trim();
-            if (matrixContext) {
-                await this.handleMatrix(matrixContext);
-                return true;
-            }
-        }
-
-        // Check for /committee command
-        if (content.startsWith('/committee ')) {
-            const question = content.slice(11).trim();
-            if (question) {
-                await this.handleCommittee(question, context);
-                return true;
-            }
-        }
-
+        // Fall through to built-in commands that haven't been migrated yet
         // Check for /note command
         if (content.startsWith('/note ')) {
             const noteContent = content.slice(6).trim();
             if (noteContent) {
                 await this.handleNote(noteContent);
-                return true;
-            }
-        }
-
-        // Check for /factcheck command
-        if (content.startsWith('/factcheck ')) {
-            const claim = content.slice(11).trim();
-            if (claim || context) {
-                await this.handleFactcheck(claim, context);
                 return true;
             }
         }
@@ -1506,12 +1440,16 @@ class App {
         // Create AbortController for this stream
         const abortController = new AbortController();
 
-        // Track streaming state for stop/continue functionality
-        this.streamingNodes.set(aiNode.id, {
+        // Register with StreamingManager (auto-shows stop button)
+        this.streamingManager.register(aiNode.id, {
             abortController,
+            featureId: 'ai',
             context: { messages, model, humanNodeId: humanNode.id },
+            onContinue: async (nodeId, state) => {
+                // Resume streaming from where we left off
+                await this.continueAIResponse(nodeId, state.context);
+            },
         });
-        this.canvas.showStopButton(aiNode.id);
 
         // Stream response
         this.streamWithAbort(
@@ -1526,8 +1464,7 @@ class App {
             },
             // onDone
             (fullContent) => {
-                this.streamingNodes.delete(aiNode.id);
-                this.canvas.hideStopButton(aiNode.id);
+                this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
                 this.canvas.updateNodeContent(aiNode.id, fullContent, false);
                 this.graph.updateNode(aiNode.id, { content: fullContent });
                 this.saveSession();
@@ -1537,8 +1474,7 @@ class App {
             },
             // onError
             (err) => {
-                this.streamingNodes.delete(aiNode.id);
-                this.canvas.hideStopButton(aiNode.id);
+                this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
 
                 // Format and display user-friendly error
                 const errorInfo = formatUserError(err);
@@ -1598,6 +1534,7 @@ class App {
             });
 
             this.graph.addNode(noteNode);
+            this.canvas.renderNode(noteNode); // Render the node visually
 
             // Create edges from parents (if replying to selected nodes)
             for (const parentId of parentIds) {
@@ -1643,6 +1580,7 @@ class App {
         });
 
         this.graph.addNode(fetchNode);
+        this.canvas.renderNode(fetchNode); // Render the node visually
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
@@ -1716,6 +1654,7 @@ class App {
         });
 
         this.graph.addNode(pdfNode);
+        this.canvas.renderNode(pdfNode); // Render the node visually
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
@@ -1814,6 +1753,52 @@ class App {
         if (drawer && drawer.classList.contains('open')) {
             this.renderTagSlots();
         }
+    }
+
+    /**
+     * Handle removing a tag from a specific node.
+     * Called when the X button on a tag chip is clicked.
+     *
+     * @param {string} nodeId - The node ID to remove the tag from
+     * @param {string} color - The tag color to remove
+     */
+    handleTagRemove(nodeId, color) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        // Store old tags for undo
+        const oldTags = [...(node.tags || [])];
+
+        // Remove the tag
+        this.graph.removeTagFromNode(nodeId, color);
+
+        // Store new tags for undo
+        const newTags = [...(node.tags || [])];
+
+        // Register undo action
+        this.undoManager.execute({
+            name: 'Remove Tag',
+            do: () => {
+                this.graph.updateNode(nodeId, { tags: newTags });
+                this.canvas.renderNode(this.graph.getNode(nodeId));
+            },
+            undo: () => {
+                this.graph.updateNode(nodeId, { tags: oldTags });
+                this.canvas.renderNode(this.graph.getNode(nodeId));
+            },
+        });
+
+        // Re-render the node to show updated tags
+        this.canvas.renderNode(node);
+
+        // Update tag drawer UI if it's open (selection state may have changed)
+        const drawer = document.getElementById('tag-drawer');
+        if (drawer && drawer.classList.contains('open')) {
+            this.renderTagSlots();
+        }
+
+        // Save session
+        this.saveSession();
     }
 
     /**
@@ -2206,11 +2191,17 @@ class App {
 
     /**
      * Handle /committee slash command - show modal to configure LLM committee.
+     * Delegates to the committee feature plugin via FeatureRegistry.
      * @param {string} question - The question to ask the committee
      * @param {string|null} context - Optional context text
      */
     async handleCommittee(question, context = null) {
-        return this.committeeFeature.handleCommittee(question, context);
+        const feature = this.featureRegistry.getFeature('committee');
+        if (feature) {
+            return feature.handleCommittee('/committee', question, { text: context });
+        }
+        // Fallback to old pattern if plugin system not initialized
+        return this.committeeFeature.handleCommittee('/committee', question, { text: context });
     }
 
     /**
@@ -2533,14 +2524,18 @@ df.head()
             this.canvas.updateCodeContent(nodeId, placeholderCode, true);
             this.graph.updateNode(nodeId, { content: placeholderCode });
 
-            // Show stop button
-            this.canvas.showStopButton(nodeId);
-
             // Create AbortController for this stream
             const abortController = new AbortController();
-            this.streamingNodes.set(nodeId, {
+
+            // Register with StreamingManager (auto-shows stop button)
+            this.streamingManager.register(nodeId, {
                 abortController,
+                featureId: 'code',
                 context: { prompt, model, nodeContext: context },
+                onContinue: async (nodeId, state) => {
+                    // Resume code generation from where we left off
+                    await this.continueCodeGeneration(nodeId, state.context);
+                },
             });
 
             // Build request body using centralized helper
@@ -2577,9 +2572,8 @@ df.head()
                     }
                 },
                 onDone: async () => {
-                    // Clean up streaming state
-                    this.streamingNodes.delete(nodeId);
-                    this.canvas.hideStopButton(nodeId);
+                    // Clean up streaming state (auto-hides stop button)
+                    this.streamingManager.unregister(nodeId);
 
                     // Final update ensures editor has final content
                     this.canvas.updateCodeContent(nodeId, generatedCode, false);
@@ -2587,16 +2581,15 @@ df.head()
                     this.saveSession();
 
                     // Self-healing: Auto-run and fix errors (max 3 attempts)
-                    await this.selfHealCode(nodeId, prompt, model, context, 1);
+                    await this.codeFeature.selfHealCode(nodeId, prompt, model, context, 1);
                 },
                 onError: (err) => {
                     throw err;
                 },
             });
         } catch (error) {
-            // Clean up on error
-            this.streamingNodes.delete(nodeId);
-            this.canvas.hideStopButton(nodeId);
+            // Clean up on error (auto-hides stop button)
+            this.streamingManager.unregister(nodeId);
 
             // Check if it was aborted (user clicked stop)
             if (error.name === 'AbortError') {
@@ -2662,309 +2655,32 @@ df.head()
         return { dataframeInfo, ancestorContext, existingCode };
     }
 
+    // --- Code Feature Wrappers ---
+    // Code feature is implemented in code-feature.js with CodeFeature class
+
     /**
-     * Self-healing loop: Auto-run code and fix errors iteratively
-     * @param {string} nodeId - The Code node ID
-     * @param {string} originalPrompt - The original user prompt
-     * @param {string} model - Model to use for fixes
-     * @param {Object} context - Code generation context (dataframeInfo, ancestorContext)
-     * @param {number} attemptNum - Current attempt number (1-indexed)
-     * @param {number} maxAttempts - Maximum retry attempts (default: 3)
+     * Self-heal code by executing it and auto-fixing errors through LLM iterations.
+     * Delegates to CodeFeature plugin.
      */
     async selfHealCode(nodeId, originalPrompt, model, context, attemptNum = 1, maxAttempts = 3) {
-        const node = this.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
-
-        // Get the current code
-        const code = node.code || node.content || '';
-        if (!code || code.includes('# Generating')) return;
-
-        console.log(`🔧 Self-healing attempt ${attemptNum}/${maxAttempts}...`);
-
-        // Update node to show self-healing status
-        this.graph.updateNode(nodeId, {
-            selfHealingAttempt: attemptNum,
-            selfHealingStatus: attemptNum === 1 ? 'verifying' : 'fixing',
-        });
-        this.canvas.renderNode(this.graph.getNode(nodeId));
-
-        // Run the code
-        const csvNodeIds = node.csvNodeIds || [];
-        const csvDataMap = {};
-        csvNodeIds.forEach((csvId, index) => {
-            const csvNode = this.graph.getNode(csvId);
-            if (csvNode && csvNode.csvData) {
-                const varName = csvNodeIds.length === 1 ? 'df' : `df${index + 1}`;
-                csvDataMap[varName] = csvNode.csvData;
-            }
-        });
-
-        // Set execution state
-        this.graph.updateNode(nodeId, {
-            executionState: 'running',
-            lastError: null,
-            installProgress: [],
-            outputExpanded: false,
-        });
-        this.canvas.renderNode(this.graph.getNode(nodeId));
-
-        const installMessages = [];
-        let drawerOpenedForInstall = false;
-
-        const onInstallProgress = (msg) => {
-            installMessages.push(msg);
-            if (!drawerOpenedForInstall) {
-                this.graph.updateNode(nodeId, {
-                    installProgress: [...installMessages],
-                    outputExpanded: true,
-                });
-                this.canvas.renderNode(this.graph.getNode(nodeId));
-                drawerOpenedForInstall = true;
-            } else {
-                this.graph.updateNode(nodeId, {
-                    installProgress: [...installMessages],
-                });
-                const updatedNode = this.graph.getNode(nodeId);
-                this.canvas.updateOutputPanelContent(nodeId, updatedNode);
-            }
-        };
-
-        try {
-            const result = await pyodideRunner.run(code, csvDataMap, onInstallProgress);
-
-            // Check for errors
-            if (result.error) {
-                console.log(`❌ Error on attempt ${attemptNum}:`, result.error);
-
-                // If we've exhausted retries, show final error
-                if (attemptNum >= maxAttempts) {
-                    console.log(`🛑 Max retries (${maxAttempts}) exceeded. Giving up.`);
-                    this.graph.updateNode(nodeId, {
-                        executionState: 'error',
-                        lastError: result.error,
-                        outputStdout: result.stdout?.trim() || null,
-                        outputHtml: null,
-                        outputText: null,
-                        outputExpanded: true,
-                        installProgress: null,
-                        selfHealingAttempt: null,
-                        selfHealingStatus: 'failed',
-                    });
-                    this.canvas.renderNode(this.graph.getNode(nodeId));
-                    this.saveSession();
-                    return;
-                }
-
-                // Otherwise, ask LLM to fix the error
-                await this.fixCodeError(
-                    nodeId,
-                    originalPrompt,
-                    model,
-                    context,
-                    code,
-                    result.error,
-                    attemptNum,
-                    maxAttempts
-                );
-                return;
-            }
-
-            // Success! Store output and clear self-healing status
-            console.log(`✅ Code executed successfully on attempt ${attemptNum}`);
-            const stdout = result.stdout?.trim() || null;
-            const resultHtml = result.resultHtml || null;
-            const resultText = result.resultText || null;
-            const hasOutput = !!(stdout || resultHtml || resultText);
-
-            this.graph.updateNode(nodeId, {
-                executionState: 'idle',
-                lastError: null,
-                outputStdout: stdout,
-                outputHtml: resultHtml,
-                outputText: resultText,
-                outputExpanded: drawerOpenedForInstall || hasOutput,
-                installProgress: drawerOpenedForInstall ? installMessages : null,
-                installComplete: drawerOpenedForInstall,
-                selfHealingAttempt: null,
-                selfHealingStatus: attemptNum > 1 ? 'fixed' : null, // Show "fixed" badge if we recovered from error
-            });
-
-            // Create child nodes for figures
-            if (result.figures && result.figures.length > 0) {
-                for (let i = 0; i < result.figures.length; i++) {
-                    const dataUrl = result.figures[i];
-                    const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-                    if (base64Match) {
-                        const position = this.graph.autoPosition([nodeId]);
-                        const outputNode = createNode(NodeType.IMAGE, '', {
-                            position,
-                            title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`,
-                            imageData: base64Match[2],
-                            mimeType: base64Match[1],
-                        });
-
-                        this.graph.addNode(outputNode);
-                        const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
-                        this.graph.addEdge(edge);
-                        this.canvas.renderNode(outputNode);
-                    }
-                }
-            }
-
-            this.canvas.renderNode(this.graph.getNode(nodeId));
-            this.canvas.updateAllEdges(this.graph);
-            this.canvas.updateAllNavButtonStates(this.graph);
-            this.saveSession();
-
-            // Auto-clear success badge after 5 seconds
-            if (attemptNum > 1) {
-                setTimeout(() => {
-                    const currentNode = this.graph.getNode(nodeId);
-                    if (currentNode && currentNode.selfHealingStatus === 'fixed') {
-                        this.graph.updateNode(nodeId, { selfHealingStatus: null });
-                        this.canvas.renderNode(this.graph.getNode(nodeId));
-                        this.saveSession();
-                    }
-                }, 5000);
-            }
-        } catch (error) {
-            // Show error
-            console.error('Self-healing execution error:', error);
-            this.graph.updateNode(nodeId, {
-                executionState: 'error',
-                lastError: error.message,
-                outputStdout: null,
-                outputHtml: null,
-                outputText: null,
-                outputExpanded: true,
-                installProgress: null,
-                selfHealingAttempt: null,
-                selfHealingStatus: 'failed',
-            });
-            this.canvas.renderNode(this.graph.getNode(nodeId));
-            this.saveSession();
-        }
+        return this.codeFeature.selfHealCode(nodeId, originalPrompt, model, context, attemptNum, maxAttempts);
     }
 
     /**
-     * Ask LLM to fix code errors and regenerate
-     * @param {string} nodeId - The Code node ID
-     * @param {string} originalPrompt - The original user prompt
-     * @param {string} model - Model to use for fixes
-     * @param {Object} context - Code generation context
-     * @param {string} failedCode - The code that failed
-     * @param {string} errorMessage - The error message from execution
-     * @param {number} attemptNum - Current attempt number
-     * @param {number} maxAttempts - Maximum retry attempts
+     * Ask LLM to fix code errors and regenerate.
+     * Delegates to CodeFeature plugin.
      */
     async fixCodeError(nodeId, originalPrompt, model, context, failedCode, errorMessage, attemptNum, maxAttempts) {
-        const node = this.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
-
-        console.log(`🩹 Asking LLM to fix error...`);
-
-        // Build fix prompt
-        const fixPrompt = `The previous code failed with this error:
-
-\`\`\`
-${errorMessage}
-\`\`\`
-
-Failed code:
-\`\`\`python
-${failedCode}
-\`\`\`
-
-Please fix the error and provide corrected Python code that accomplishes the original task: "${originalPrompt}"
-
-Output ONLY the corrected Python code, no explanations.`;
-
-        try {
-            // Show placeholder
-            const placeholderCode = `# Fixing error (attempt ${attemptNum + 1}/${maxAttempts})...\n`;
-            this.canvas.updateCodeContent(nodeId, placeholderCode, true);
-            this.graph.updateNode(nodeId, {
-                content: placeholderCode,
-                executionState: 'idle', // Clear running state
-                selfHealingStatus: 'fixing',
-            });
-            this.canvas.renderNode(this.graph.getNode(nodeId));
-
-            // Show stop button
-            this.canvas.showStopButton(nodeId);
-
-            // Create AbortController
-            const abortController = new AbortController();
-            this.streamingNodes.set(nodeId, {
-                abortController,
-                context: { originalPrompt, model, nodeContext: context },
-            });
-
-            // Build request body
-            const requestBody = this.buildLLMRequest({
-                prompt: fixPrompt,
-                existing_code: '', // Don't send failed code again in existing_code field
-                dataframe_info: context.dataframeInfo,
-                context: context.ancestorContext,
-            });
-
-            // Stream fixed code
-            const response = await fetch(apiUrl('/api/generate-code'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody),
-                signal: abortController.signal,
-            });
-
-            if (!response.ok) {
-                throw new Error(`API error: ${response.statusText}`);
-            }
-
-            let fixedCode = '';
-            await readSSEStream(response, {
-                onEvent: (eventType, data) => {
-                    if (eventType === 'message' && data) {
-                        fixedCode += data;
-                        this.canvas.updateCodeContent(nodeId, fixedCode, true);
-                    }
-                },
-                onDone: async () => {
-                    // Clean up streaming state
-                    this.streamingNodes.delete(nodeId);
-                    this.canvas.hideStopButton(nodeId);
-
-                    // Final update
-                    this.canvas.updateCodeContent(nodeId, fixedCode, false);
-                    this.graph.updateNode(nodeId, { content: fixedCode, code: fixedCode });
-                    this.saveSession();
-
-                    // Retry with fixed code
-                    await this.selfHealCode(nodeId, originalPrompt, model, context, attemptNum + 1, maxAttempts);
-                },
-                onError: (err) => {
-                    throw err;
-                },
-            });
-        } catch (error) {
-            // Clean up on error
-            this.streamingNodes.delete(nodeId);
-            this.canvas.hideStopButton(nodeId);
-
-            // Check if it was aborted
-            if (error.name === 'AbortError') {
-                return;
-            }
-
-            // Show error
-            console.error('Code fix generation failed:', error);
-            const errorCode = `# Code fix generation failed: ${error.message}\n`;
-            this.canvas.updateCodeContent(nodeId, errorCode, false);
-            this.graph.updateNode(nodeId, {
-                content: errorCode,
-                selfHealingStatus: 'failed',
-            });
-            this.saveSession();
-        }
+        return this.codeFeature.fixCodeError(
+            nodeId,
+            originalPrompt,
+            model,
+            context,
+            failedCode,
+            errorMessage,
+            attemptNum,
+            maxAttempts
+        );
     }
 
     /**
@@ -2983,8 +2699,27 @@ Output ONLY the corrected Python code, no explanations.`;
             // After animation completes, update state and toggle button (no full re-render)
             this.graph.updateNode(nodeId, { outputExpanded: newExpanded });
             this.canvas.updateOutputToggleButton(nodeId, newExpanded);
-            this.saveSession();
         });
+        this.saveSession();
+        this.updateEmptyState();
+    }
+
+    /**
+     * Initialize the plugin system and register built-in features.
+     * MUST be called before loadSession() since features may be accessed during session loading.
+     */
+    async initializePluginSystem() {
+        // Create AppContext for dependency injection
+        const appContext = new AppContext(this);
+        this.featureRegistry.setAppContext(appContext);
+
+        // Register all built-in features (handles 6 features automatically)
+        await this.featureRegistry.registerBuiltInFeatures();
+
+        // TODO (Task 4.3): Load additional plugins from config file
+        // await this.featureRegistry.loadPluginsFromConfig();
+
+        console.log('[App] Plugin system initialized');
     }
 
     /**
@@ -3251,12 +2986,16 @@ Output ONLY the corrected Python code, no explanations.`;
                 // Create AbortController for this stream
                 const abortController = new AbortController();
 
-                // Track streaming state for stop/continue functionality
-                this.streamingNodes.set(aiNode.id, {
+                // Register with StreamingManager (auto-shows stop button)
+                this.streamingManager.register(aiNode.id, {
                     abortController,
+                    featureId: 'ai',
                     context: { messages, model, humanNodeId: humanNode.id },
+                    onContinue: async (nodeId, state) => {
+                        // Resume streaming from where we left off
+                        await this.continueAIResponse(nodeId, state.context);
+                    },
                 });
-                this.canvas.showStopButton(aiNode.id);
 
                 // Stream response using streamWithAbort
                 this.streamWithAbort(
@@ -3271,8 +3010,7 @@ Output ONLY the corrected Python code, no explanations.`;
                     },
                     // onDone
                     (fullContent) => {
-                        this.streamingNodes.delete(aiNode.id);
-                        this.canvas.hideStopButton(aiNode.id);
+                        this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
                         this.canvas.updateNodeContent(aiNode.id, fullContent, false);
                         this.graph.updateNode(aiNode.id, { content: fullContent });
                         this.saveSession();
@@ -3280,8 +3018,7 @@ Output ONLY the corrected Python code, no explanations.`;
                     },
                     // onError
                     (err) => {
-                        this.streamingNodes.delete(aiNode.id);
-                        this.canvas.hideStopButton(aiNode.id);
+                        this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
 
                         // Format and display user-friendly error
                         const errorInfo = formatUserError(err);
@@ -3668,141 +3405,36 @@ Output ONLY the corrected Python code, no explanations.`;
     // Edit Title Modal methods moved to modal-manager.js
 
     /**
-     * Handle stopping generation for a streaming node (AI nodes or Matrix fill)
+     * Continue AI response from where it was stopped.
+     * Called by StreamingManager's onContinue callback for AI nodes.
+     * @param {string} nodeId - The node to continue
+     * @param {Object} context - Saved context with messages and model
      */
-    handleNodeStopGeneration(nodeId) {
-        // Check if this is a matrix node with active cell fills
-        const matrixCellControllers = this.matrixFeature.streamingMatrixCells.get(nodeId);
-        if (matrixCellControllers) {
-            // Abort all active cell fills for this matrix
-            for (const [cellKey, controller] of matrixCellControllers) {
-                controller.abort();
-            }
-            // Cleanup will happen in handleMatrixFillAll's finally block
-            return;
-        }
-
-        // Otherwise, handle as regular AI node
-        const streamingState = this.streamingNodes.get(nodeId);
-        if (!streamingState) return;
-
-        // Abort the request
-        streamingState.abortController.abort();
-
-        // Get current content and add stopped indicator
+    async continueAIResponse(nodeId, context) {
         const node = this.graph.getNode(nodeId);
-        if (node) {
-            const stoppedContent = node.content + '\n\n*[Generation stopped]*';
-            this.canvas.updateNodeContent(nodeId, stoppedContent, false);
-            this.graph.updateNode(nodeId, { content: stoppedContent });
-        }
-
-        // Update UI state - keep context for continue but mark as stopped
-        this.canvas.hideStopButton(nodeId);
-        this.canvas.showContinueButton(nodeId);
-
-        // Store context for continue, then remove from streaming
-        this.streamingNodes.set(nodeId, {
-            ...streamingState,
-            abortController: null,
-            stopped: true,
-        });
-
-        this.saveSession();
-    }
-
-    /**
-     * Handle continuing generation for a stopped node
-     */
-    async handleNodeContinueGeneration(nodeId) {
-        const node = this.graph.getNode(nodeId);
-        const streamingState = this.streamingNodes.get(nodeId);
         if (!node) return;
-
-        // Special case: Research nodes restart the research process
-        if (node.type === NodeType.RESEARCH) {
-            // Get original instructions and context from streaming state
-            const instructions = streamingState?.context?.originalInstructions;
-            const context = streamingState?.context?.originalContext || null;
-
-            if (!instructions) {
-                // Fallback: try to extract from node content
-                const contentMatch = node.content.match(/^\*\*Research(?: \(DDG\))?:\*\* (.+?)(?:\n\n|$)/);
-                if (!contentMatch) {
-                    console.error('Could not extract instructions from research node');
-                    return;
-                }
-                // Use extracted instructions, but we don't have context
-                const extractedInstructions = contentMatch[1].trim();
-
-                // Hide continue button, show stop button
-                this.canvas.hideContinueButton(nodeId);
-                this.canvas.showStopButton(nodeId);
-
-                // Clear the stopped indicator and restart
-                const cleanedContent = node.content
-                    .replace(/\n\n\*\[Research stopped\]\*$/, '')
-                    .replace(/\n\n\*\[Generation stopped\]\*$/, '');
-                this.canvas.updateNodeContent(nodeId, cleanedContent, false);
-
-                // Restart research with extracted instructions (no context) on existing node
-                try {
-                    await this.researchFeature.handleResearch(extractedInstructions, null, nodeId);
-                } catch (err) {
-                    console.error('Error continuing research:', err);
-                    const errorContent = node.content + `\n\n*Error continuing research: ${err.message}*`;
-                    this.canvas.updateNodeContent(nodeId, errorContent, false);
-                    this.graph.updateNode(nodeId, { content: errorContent });
-                    this.saveSession();
-                }
-                return;
-            }
-
-            // Hide continue button, show stop button
-            this.canvas.hideContinueButton(nodeId);
-            this.canvas.showStopButton(nodeId);
-
-            // Clear the stopped indicator from content
-            const cleanedContent = node.content
-                .replace(/\n\n\*\[Research stopped\]\*$/, '')
-                .replace(/\n\n\*\[Generation stopped\]\*$/, '');
-            this.canvas.updateNodeContent(nodeId, cleanedContent, false);
-
-            // Restart research with same instructions and context on existing node
-            try {
-                await this.researchFeature.handleResearch(instructions, context, nodeId);
-            } catch (err) {
-                console.error('Error continuing research:', err);
-                const errorContent = node.content + `\n\n*Error continuing research: ${err.message}*`;
-                this.canvas.updateNodeContent(nodeId, errorContent, false);
-                this.graph.updateNode(nodeId, { content: errorContent });
-                this.saveSession();
-            }
-            return;
-        }
-
-        // Regular AI node continue logic
-        if (!streamingState?.context) return;
-
-        // Hide continue button, show stop button
-        this.canvas.hideContinueButton(nodeId);
-        this.canvas.showStopButton(nodeId);
 
         // Get current content (remove the stopped indicator)
         let currentContent = node.content.replace(/\n\n\*\[Generation stopped\]\*$/, '');
 
         // Build messages with current partial response
         const messages = [
-            ...streamingState.context.messages,
+            ...context.messages,
             { role: 'assistant', content: currentContent },
             { role: 'user', content: 'Please continue your response from where you left off.' },
         ];
 
         // Create new AbortController for the continuation
         const abortController = new AbortController();
-        this.streamingNodes.set(nodeId, {
+
+        // Re-register with StreamingManager (auto-shows stop button)
+        this.streamingManager.register(nodeId, {
             abortController,
-            context: streamingState.context,
+            featureId: 'ai',
+            context,
+            onContinue: async (nodeId, state) => {
+                await this.continueAIResponse(nodeId, state.context);
+            },
         });
 
         // Continue streaming
@@ -3810,7 +3442,7 @@ Output ONLY the corrected Python code, no explanations.`;
             nodeId,
             abortController,
             messages,
-            streamingState.context.model,
+            context.model,
             // onChunk
             (chunk, fullContent) => {
                 // Append to existing content
@@ -3820,26 +3452,110 @@ Output ONLY the corrected Python code, no explanations.`;
             },
             // onDone
             (fullContent) => {
-                this.streamingNodes.delete(nodeId);
-                this.canvas.hideStopButton(nodeId);
+                this.streamingManager.unregister(nodeId); // Auto-hides stop button
                 const combinedContent = currentContent + fullContent;
                 this.canvas.updateNodeContent(nodeId, combinedContent, false);
                 this.graph.updateNode(nodeId, { content: combinedContent });
                 this.saveSession();
-
-                // Generate summary async
                 this.generateNodeSummary(nodeId);
             },
             // onError
             (err) => {
-                this.streamingNodes.delete(nodeId);
-                this.canvas.hideStopButton(nodeId);
+                this.streamingManager.unregister(nodeId); // Auto-hides stop button
                 const errorContent = currentContent + `\n\n*Error continuing: ${err.message}*`;
                 this.canvas.updateNodeContent(nodeId, errorContent, false);
                 this.graph.updateNode(nodeId, { content: errorContent });
                 this.saveSession();
             }
         );
+    }
+
+    /**
+     * Continue code generation from where it was stopped.
+     * Called by StreamingManager's onContinue callback for code nodes.
+     * @param {string} nodeId - The code node to continue
+     * @param {Object} context - Saved context with prompt, model, and nodeContext
+     */
+    async continueCodeGeneration(nodeId, context) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        // For code generation, we don't support partial continuation
+        // Instead, restart the generation with the same prompt
+        // This is simpler and more reliable than trying to continue partial code
+
+        const { prompt, model, nodeContext } = context;
+
+        // Create new AbortController
+        const abortController = new AbortController();
+
+        // Re-register with StreamingManager (auto-shows stop button)
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'code',
+            context,
+            onContinue: async (nodeId, state) => {
+                await this.continueCodeGeneration(nodeId, state.context);
+            },
+        });
+
+        // Build request body
+        const requestBody = this.buildLLMRequest({
+            prompt,
+            existing_code: nodeContext.existingCode,
+            dataframe_info: nodeContext.dataframeInfo,
+            context: nodeContext.ancestorContext,
+        });
+
+        try {
+            // Stream code generation
+            const response = await fetch(apiUrl('/api/generate-code'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+                signal: abortController.signal,
+            });
+
+            if (!response.ok) {
+                throw new Error(`API error: ${response.statusText}`);
+            }
+
+            let generatedCode = '';
+            await readSSEStream(response, {
+                onEvent: (eventType, data) => {
+                    if (eventType === 'message' && data) {
+                        generatedCode += data;
+                        this.canvas.updateCodeContent(nodeId, generatedCode, true);
+                    }
+                },
+                onDone: async () => {
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
+                    this.canvas.updateCodeContent(nodeId, generatedCode, false);
+                    this.graph.updateNode(nodeId, { content: generatedCode, code: generatedCode });
+                    this.saveSession();
+
+                    // Self-healing: Auto-run and fix errors
+                    await this.codeFeature.selfHealCode(nodeId, prompt, model, nodeContext, 1);
+                },
+                onError: (err) => {
+                    throw err;
+                },
+            });
+        } catch (error) {
+            this.streamingManager.unregister(nodeId); // Auto-hides stop button
+
+            if (error.name === 'AbortError') {
+                console.log('Code generation aborted');
+                this.saveSession();
+                return;
+            }
+
+            console.error('Code generation error:', error);
+            const errorCode = `# Error generating code: ${error.message}\n`;
+            this.canvas.updateCodeContent(nodeId, errorCode, false);
+            this.graph.updateNode(nodeId, { content: errorCode, code: errorCode });
+            this.saveSession();
+        }
     }
 
     /**
@@ -3936,12 +3652,16 @@ Output ONLY the corrected Python code, no explanations.`;
             // Create AbortController for this retry
             const abortController = new AbortController();
 
-            // Track streaming state with new pattern
-            this.streamingNodes.set(nodeId, {
+            // Register with StreamingManager (auto-shows stop button)
+            this.streamingManager.register(nodeId, {
                 abortController,
+                featureId: 'ai',
                 context: { messages: retryContext.messages, model: retryContext.model },
+                onContinue: async (nodeId, state) => {
+                    // Resume streaming from where we left off
+                    await this.continueAIResponse(nodeId, state.context);
+                },
             });
-            this.canvas.showStopButton(nodeId);
 
             // Retry the chat request using streamWithAbort
             this.streamWithAbort(
@@ -3956,8 +3676,7 @@ Output ONLY the corrected Python code, no explanations.`;
                 },
                 // onDone
                 (fullContent) => {
-                    this.streamingNodes.delete(nodeId);
-                    this.canvas.hideStopButton(nodeId);
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
                     this.canvas.updateNodeContent(nodeId, fullContent, false);
                     this.graph.updateNode(nodeId, { content: fullContent });
                     this.saveSession();
@@ -3965,8 +3684,7 @@ Output ONLY the corrected Python code, no explanations.`;
                 },
                 // onError
                 (err) => {
-                    this.streamingNodes.delete(nodeId);
-                    this.canvas.hideStopButton(nodeId);
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
                     const errorInfo = formatUserError(err);
                     this.showNodeError(nodeId, errorInfo, retryContext);
                 }
@@ -4099,12 +3817,16 @@ Output ONLY the corrected Python code, no explanations.`;
         // Create AbortController for this stream
         const abortController = new AbortController();
 
-        // Track streaming state
-        this.streamingNodes.set(summaryNode.id, {
+        // Register with StreamingManager (auto-shows stop button)
+        this.streamingManager.register(summaryNode.id, {
             abortController,
+            featureId: 'ai',
             context: { messages, model },
+            onContinue: async (nodeId, state) => {
+                // Resume streaming from where we left off
+                await this.continueAIResponse(nodeId, state.context);
+            },
         });
-        this.canvas.showStopButton(summaryNode.id);
 
         // Stream the summary
         this.streamWithAbort(
@@ -4119,8 +3841,7 @@ Output ONLY the corrected Python code, no explanations.`;
             },
             // onDone
             (fullContent) => {
-                this.streamingNodes.delete(summaryNode.id);
-                this.canvas.hideStopButton(summaryNode.id);
+                this.streamingManager.unregister(summaryNode.id); // Auto-hides stop button
                 this.canvas.updateNodeContent(summaryNode.id, fullContent, false);
                 this.graph.updateNode(summaryNode.id, { content: fullContent });
                 this.saveSession();
@@ -4128,8 +3849,7 @@ Output ONLY the corrected Python code, no explanations.`;
             },
             // onError
             (err) => {
-                this.streamingNodes.delete(summaryNode.id);
-                this.canvas.hideStopButton(summaryNode.id);
+                this.streamingManager.unregister(summaryNode.id); // Auto-hides stop button
                 const errorContent = `*Error generating summary: ${err.message}*`;
                 this.canvas.updateNodeContent(summaryNode.id, errorContent, false);
                 this.graph.updateNode(summaryNode.id, { content: errorContent });
