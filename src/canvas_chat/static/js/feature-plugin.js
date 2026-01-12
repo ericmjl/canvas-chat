@@ -14,14 +14,16 @@ class AppContext {
      * @param {App} app - The main App instance
      */
     constructor(app) {
-        // Core objects
-        this.graph = app.graph;
+        // Store reference to app for live property access
+        this._app = app;
+
+        // Core objects (use getters for live references)
+        // Note: Don't copy app.graph, app.searchIndex here - they're created later
         this.canvas = app.canvas;
         this.chat = app.chat;
         this.storage = app.storage;
         this.modalManager = app.modalManager;
         this.undoManager = app.undoManager;
-        this.searchIndex = app.searchIndex;
         this.featureRegistry = app.featureRegistry;
 
         // UI elements
@@ -57,6 +59,20 @@ class AppContext {
         // Admin mode access
         this.adminMode = app.adminMode;
         this.adminModels = app.adminModels;
+    }
+
+    /**
+     * Get graph instance (live reference, created during session load)
+     */
+    get graph() {
+        return this._app.graph;
+    }
+
+    /**
+     * Get search index (live reference, created during session load)
+     */
+    get searchIndex() {
+        return this._app.searchIndex;
     }
 }
 
