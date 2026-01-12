@@ -54,11 +54,18 @@ class MatrixFeature extends FeaturePlugin {
 
     /**
      * Handle the /matrix command - parse context and show modal
+     * @param {string} command - The slash command (e.g., '/matrix')
+     * @param {string} args - Text after the command
+     * @param {Object} context - Additional context (e.g., { text: selectedNodesContent })
      */
-    async handleMatrix(matrixContext) {
+    async handleMatrix(command, args, context) {
+        // Use args as the matrix context (text after /matrix)
+        const matrixContext = args.trim();
+
         // Get selected nodes (optional - used as additional context if present)
         const selectedIds = this.canvas.getSelectedNodeIds();
-        console.log('handleMatrix called with context:', matrixContext);
+        console.log('handleMatrix called with:', { command, args, context });
+        console.log('Matrix context:', matrixContext);
         console.log('Selected node IDs:', selectedIds);
 
         const model = this.getModelPicker().value;
