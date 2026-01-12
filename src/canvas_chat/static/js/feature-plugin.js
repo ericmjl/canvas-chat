@@ -108,21 +108,23 @@ class FeaturePlugin {
      * @param {AppContext} context - Application context with injected dependencies
      */
     constructor(context) {
-        // Inject all app-level APIs
-        this.graph = context.graph;
+        // Store context for live property access via getters
+        // This ensures features always access current app state, not stale snapshots
+        this._context = context;
+
+        // Static dependencies (initialized before plugins, safe to copy)
         this.canvas = context.canvas;
         this.chat = context.chat;
         this.storage = context.storage;
         this.modalManager = context.modalManager;
         this.undoManager = context.undoManager;
-        this.searchIndex = context.searchIndex;
         this.featureRegistry = context.featureRegistry;
 
-        // UI elements
+        // UI elements (initialized before plugins, safe to copy)
         this.modelPicker = context.modelPicker;
         this.chatInput = context.chatInput;
 
-        // Helper methods
+        // Helper methods (bound functions, safe to copy)
         this.showToast = context.showToast;
         this.saveSession = context.saveSession;
         this.updateEmptyState = context.updateEmptyState;
@@ -130,7 +132,7 @@ class FeaturePlugin {
         this.buildLLMRequest = context.buildLLMRequest;
         this.generateNodeSummary = context.generateNodeSummary;
 
-        // Streaming state management
+        // Streaming state management (functions, safe to copy)
         this.registerStreaming = context.registerStreaming;
         this.unregisterStreaming = context.unregisterStreaming;
         this.getStreamingState = context.getStreamingState;
@@ -140,9 +142,25 @@ class FeaturePlugin {
         this.streamingNodes = context.streamingNodes;
         this.apiUrl = context.apiUrl;
 
-        // Admin mode
+        // Admin mode (set once during init, safe to copy)
         this.adminMode = context.adminMode;
         this.adminModels = context.adminModels;
+    }
+
+    /**
+     * Get graph instance (live reference - created during session load, after plugins)
+     * @returns {CRDTGraph|null}
+     */
+    get graph() {
+        return this._context.graph;
+    }
+
+    /**
+     * Get search index (live reference - created during session load, after plugins)
+     * @returns {SearchIndex|null}
+     */
+    get searchIndex() {
+        return this._context.searchIndex;
     }
 
     /**
