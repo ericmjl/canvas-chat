@@ -312,36 +312,76 @@ class CommitteeFeature extends FeaturePlugin {
         const reviewContents = {};
         let synthesisContent = '';
 
-        // Create abort controller for this committee session
+        // Create abort controller for this committee session (shared, only used if ALL nodes stopped)
         const abortController = new AbortController();
 
-        // Use humanNode.id as groupId for this committee session
-        const groupId = `committee-${humanNode.id}`;
+        // Track paused nodes - these ignore incoming chunks but backend continues streaming
+        const pausedNodes = new Set();
 
-        // Register all opinion nodes with StreamingManager (shared abort controller, grouped)
-        for (const node of opinionNodes) {
+        // Helper to check if a node is paused
+        const isNodePaused = (nodeId) => pausedNodes.has(nodeId);
+
+        // Helper to create stop/continue callbacks for committee nodes
+        const createNodeCallbacks = (nodeId, getContentFn) => ({
+            onStop: () => {
+                // Frontend-only pause - add to paused set, append stopped message
+                pausedNodes.add(nodeId);
+                const currentContent = getContentFn();
+                const stoppedContent = currentContent + '\n\n*[Generation paused]*';
+                this.canvas.updateNodeContent(nodeId, stoppedContent, false);
+                this.graph.updateNode(nodeId, { content: stoppedContent });
+            },
+            onContinue: async () => {
+                // Resume accepting chunks - remove stopped message, mark as streaming again
+                pausedNodes.delete(nodeId);
+                const node = this.graph.getNode(nodeId);
+                if (node) {
+                    // Remove the stopped message suffix
+                    let content = node.content;
+                    if (content.endsWith('\n\n*[Generation paused]*')) {
+                        content = content.slice(0, -'\n\n*[Generation paused]*'.length);
+                    }
+                    this.canvas.updateNodeContent(nodeId, content, true);
+                    this.graph.updateNode(nodeId, { content });
+                }
+            },
+        });
+
+        // Register all opinion nodes with StreamingManager (no groupId - each independent)
+        for (let i = 0; i < opinionNodes.length; i++) {
+            const node = opinionNodes[i];
+            const index = i;
+            const callbacks = createNodeCallbacks(node.id, () => {
+                const model = selectedModels[index];
+                const modelName = this.getModelDisplayName(model);
+                return `**${modelName}**\n\n${opinionContents[index] || ''}`;
+            });
             this.streamingManager.register(node.id, {
                 abortController,
                 featureId: 'committee',
-                groupId,
-                context: { question, humanNodeId: humanNode.id },
-                onStop: null, // Use default stop behavior
-                onContinue: null, // Committee doesn't support continue (would need to restart)
+                context: { question, humanNodeId: humanNode.id, index },
+                onStop: callbacks.onStop,
+                onContinue: callbacks.onContinue,
             });
         }
 
-        // Also register synthesis node
+        // Register synthesis node
+        const synthesisCallbacks = createNodeCallbacks(synthesisNode.id, () => {
+            const chairmanName = this.getModelDisplayName(chairmanModel);
+            return `**Synthesis (${chairmanName})**\n\n${synthesisContent}`;
+        });
         this.streamingManager.register(synthesisNode.id, {
             abortController,
             featureId: 'committee',
-            groupId,
             context: { question, humanNodeId: humanNode.id },
+            onStop: synthesisCallbacks.onStop,
+            onContinue: synthesisCallbacks.onContinue,
         });
 
         // Store streaming state for internal tracking
         this._activeCommittee = {
             abortController,
-            groupId,
+            pausedNodes,
             opinionNodeIds: opinionNodes.map((n) => n.id),
             reviewNodeIds: [],
             synthesisNodeId: synthesisNode.id,
@@ -385,21 +425,27 @@ class CommitteeFeature extends FeaturePlugin {
                         this.canvas.showStopButton(nodeId);
                     } else if (eventType === 'opinion_chunk') {
                         const nodeId = opinionNodeMap[parsed.index];
+                        // Always accumulate content (for done event), but skip UI update if paused
                         opinionContents[parsed.index] = (opinionContents[parsed.index] || '') + parsed.content;
-                        const model = selectedModels[parsed.index];
-                        const modelName = this.getModelDisplayName(model);
-                        this.canvas.updateNodeContent(
-                            nodeId,
-                            `**${modelName}**\n\n${opinionContents[parsed.index]}`,
-                            true
-                        );
+                        if (!isNodePaused(nodeId)) {
+                            const model = selectedModels[parsed.index];
+                            const modelName = this.getModelDisplayName(model);
+                            this.canvas.updateNodeContent(
+                                nodeId,
+                                `**${modelName}**\n\n${opinionContents[parsed.index]}`,
+                                true
+                            );
+                        }
                     } else if (eventType === 'opinion_done') {
                         const nodeId = opinionNodeMap[parsed.index];
+                        // Generation complete - remove from paused set and show final content
+                        pausedNodes.delete(nodeId);
                         const model = selectedModels[parsed.index];
                         const modelName = this.getModelDisplayName(model);
                         const finalContent = `**${modelName}**\n\n${parsed.full_content}`;
                         this.canvas.updateNodeContent(nodeId, finalContent, false);
                         this.canvas.hideStopButton(nodeId);
+                        this.canvas.hideContinueButton(nodeId);
                         this.graph.updateNode(nodeId, { content: finalContent });
                     } else if (eventType === 'review_start') {
                         // Create review node for this reviewer
@@ -434,13 +480,20 @@ class CommitteeFeature extends FeaturePlugin {
 
                         reviewContents[reviewerIndex] = '';
 
-                        // Register review node with StreamingManager (same group as opinions/synthesis)
+                        // Register review node with StreamingManager (no groupId - each independent)
+                        const reviewCallbacks = createNodeCallbacks(reviewNode.id, () => {
+                            const model = selectedModels[reviewerIndex];
+                            const modelName = this.getModelDisplayName(model);
+                            return `**${modelName} Review**\n\n${reviewContents[reviewerIndex] || ''}`;
+                        });
                         this.streamingManager.register(reviewNode.id, {
                             abortController,
                             featureId: 'committee',
-                            groupId,
-                            context: { question, humanNodeId: humanNode.id },
+                            context: { question, humanNodeId: humanNode.id, reviewerIndex },
+                            onStop: reviewCallbacks.onStop,
+                            onContinue: reviewCallbacks.onContinue,
                         });
+                        this.canvas.showStopButton(reviewNode.id);
 
                         if (this._activeCommittee) {
                             this._activeCommittee.reviewNodeIds.push(reviewNode.id);
@@ -448,24 +501,30 @@ class CommitteeFeature extends FeaturePlugin {
                     } else if (eventType === 'review_chunk') {
                         const nodeId = reviewNodeMap[parsed.reviewer_index];
                         if (nodeId) {
+                            // Always accumulate content (for done event), but skip UI update if paused
                             reviewContents[parsed.reviewer_index] =
                                 (reviewContents[parsed.reviewer_index] || '') + parsed.content;
-                            const model = selectedModels[parsed.reviewer_index];
-                            const modelName = this.getModelDisplayName(model);
-                            this.canvas.updateNodeContent(
-                                nodeId,
-                                `**${modelName} Review**\n\n${reviewContents[parsed.reviewer_index]}`,
-                                true
-                            );
+                            if (!isNodePaused(nodeId)) {
+                                const model = selectedModels[parsed.reviewer_index];
+                                const modelName = this.getModelDisplayName(model);
+                                this.canvas.updateNodeContent(
+                                    nodeId,
+                                    `**${modelName} Review**\n\n${reviewContents[parsed.reviewer_index]}`,
+                                    true
+                                );
+                            }
                         }
                     } else if (eventType === 'review_done') {
                         const nodeId = reviewNodeMap[parsed.reviewer_index];
                         if (nodeId) {
+                            // Generation complete - remove from paused set and show final content
+                            pausedNodes.delete(nodeId);
                             const model = selectedModels[parsed.reviewer_index];
                             const modelName = this.getModelDisplayName(model);
                             const finalContent = `**${modelName} Review**\n\n${parsed.full_content}`;
                             this.canvas.updateNodeContent(nodeId, finalContent, false);
                             this.canvas.hideStopButton(nodeId);
+                            this.canvas.hideContinueButton(nodeId);
                             this.graph.updateNode(nodeId, { content: finalContent });
                         }
                     } else if (eventType === 'synthesis_start') {
@@ -486,18 +545,24 @@ class CommitteeFeature extends FeaturePlugin {
                         );
                         this.canvas.showStopButton(synthesisNode.id);
                     } else if (eventType === 'synthesis_chunk') {
+                        // Always accumulate content (for done event), but skip UI update if paused
                         synthesisContent += parsed.content;
-                        const chairmanName = this.getModelDisplayName(chairmanModel);
-                        this.canvas.updateNodeContent(
-                            synthesisNode.id,
-                            `**Synthesis (${chairmanName})**\n\n${synthesisContent}`,
-                            true
-                        );
+                        if (!isNodePaused(synthesisNode.id)) {
+                            const chairmanName = this.getModelDisplayName(chairmanModel);
+                            this.canvas.updateNodeContent(
+                                synthesisNode.id,
+                                `**Synthesis (${chairmanName})**\n\n${synthesisContent}`,
+                                true
+                            );
+                        }
                     } else if (eventType === 'synthesis_done') {
+                        // Generation complete - remove from paused set and show final content
+                        pausedNodes.delete(synthesisNode.id);
                         const chairmanName = this.getModelDisplayName(chairmanModel);
                         const finalContent = `**Synthesis (${chairmanName})**\n\n${parsed.full_content}`;
                         this.canvas.updateNodeContent(synthesisNode.id, finalContent, false);
                         this.canvas.hideStopButton(synthesisNode.id);
+                        this.canvas.hideContinueButton(synthesisNode.id);
                         this.graph.updateNode(synthesisNode.id, { content: finalContent });
                     } else if (eventType === 'error') {
                         console.error('Committee error:', parsed.message);
@@ -562,11 +627,24 @@ class CommitteeFeature extends FeaturePlugin {
 
     /**
      * Abort the active committee session if one is running.
+     * This aborts the entire SSE connection, stopping all nodes.
      */
     abort() {
         if (this._activeCommittee) {
-            // Use StreamingManager to stop the entire group
-            this.streamingManager.stopGroup(this._activeCommittee.groupId);
+            // Abort the shared controller - this stops the SSE connection entirely
+            this._activeCommittee.abortController.abort();
+
+            // Unregister all nodes from StreamingManager
+            for (const nodeId of this._activeCommittee.opinionNodeIds) {
+                this.streamingManager.unregister(nodeId);
+            }
+            for (const nodeId of this._activeCommittee.reviewNodeIds) {
+                this.streamingManager.unregister(nodeId);
+            }
+            if (this._activeCommittee.synthesisNodeId) {
+                this.streamingManager.unregister(this._activeCommittee.synthesisNodeId);
+            }
+
             this._activeCommittee = null;
         }
     }
