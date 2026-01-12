@@ -3359,6 +3359,160 @@ df.head()
     // Edit Title Modal methods moved to modal-manager.js
 
     /**
+     * Continue AI response from where it was stopped.
+     * Called by StreamingManager's onContinue callback for AI nodes.
+     * @param {string} nodeId - The node to continue
+     * @param {Object} context - Saved context with messages and model
+     */
+    async continueAIResponse(nodeId, context) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        // Get current content (remove the stopped indicator)
+        let currentContent = node.content.replace(/\n\n\*\[Generation stopped\]\*$/, '');
+
+        // Build messages with current partial response
+        const messages = [
+            ...context.messages,
+            { role: 'assistant', content: currentContent },
+            { role: 'user', content: 'Please continue your response from where you left off.' },
+        ];
+
+        // Create new AbortController for the continuation
+        const abortController = new AbortController();
+
+        // Re-register with StreamingManager (auto-shows stop button)
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'ai',
+            context,
+            onContinue: async (nodeId, state) => {
+                await this.continueAIResponse(nodeId, state.context);
+            },
+        });
+
+        // Continue streaming
+        this.streamWithAbort(
+            nodeId,
+            abortController,
+            messages,
+            context.model,
+            // onChunk
+            (chunk, fullContent) => {
+                // Append to existing content
+                const combinedContent = currentContent + fullContent;
+                this.canvas.updateNodeContent(nodeId, combinedContent, true);
+                this.graph.updateNode(nodeId, { content: combinedContent });
+            },
+            // onDone
+            (fullContent) => {
+                this.streamingManager.unregister(nodeId); // Auto-hides stop button
+                const combinedContent = currentContent + fullContent;
+                this.canvas.updateNodeContent(nodeId, combinedContent, false);
+                this.graph.updateNode(nodeId, { content: combinedContent });
+                this.saveSession();
+                this.generateNodeSummary(nodeId);
+            },
+            // onError
+            (err) => {
+                this.streamingManager.unregister(nodeId); // Auto-hides stop button
+                const errorContent = currentContent + `\n\n*Error continuing: ${err.message}*`;
+                this.canvas.updateNodeContent(nodeId, errorContent, false);
+                this.graph.updateNode(nodeId, { content: errorContent });
+                this.saveSession();
+            }
+        );
+    }
+
+    /**
+     * Continue code generation from where it was stopped.
+     * Called by StreamingManager's onContinue callback for code nodes.
+     * @param {string} nodeId - The code node to continue
+     * @param {Object} context - Saved context with prompt, model, and nodeContext
+     */
+    async continueCodeGeneration(nodeId, context) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        // For code generation, we don't support partial continuation
+        // Instead, restart the generation with the same prompt
+        // This is simpler and more reliable than trying to continue partial code
+
+        const { prompt, model, nodeContext } = context;
+
+        // Create new AbortController
+        const abortController = new AbortController();
+
+        // Re-register with StreamingManager (auto-shows stop button)
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'code',
+            context,
+            onContinue: async (nodeId, state) => {
+                await this.continueCodeGeneration(nodeId, state.context);
+            },
+        });
+
+        // Build request body
+        const requestBody = this.buildLLMRequest({
+            prompt,
+            existing_code: nodeContext.existingCode,
+            dataframe_info: nodeContext.dataframeInfo,
+            context: nodeContext.ancestorContext,
+        });
+
+        try {
+            // Stream code generation
+            const response = await fetch(apiUrl('/api/generate-code'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+                signal: abortController.signal,
+            });
+
+            if (!response.ok) {
+                throw new Error(`API error: ${response.statusText}`);
+            }
+
+            let generatedCode = '';
+            await readSSEStream(response, {
+                onEvent: (eventType, data) => {
+                    if (eventType === 'message' && data) {
+                        generatedCode += data;
+                        this.canvas.updateCodeContent(nodeId, generatedCode, true);
+                    }
+                },
+                onDone: async () => {
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
+                    this.canvas.updateCodeContent(nodeId, generatedCode, false);
+                    this.graph.updateNode(nodeId, { content: generatedCode, code: generatedCode });
+                    this.saveSession();
+
+                    // Self-healing: Auto-run and fix errors
+                    await this.codeFeature.selfHealCode(nodeId, prompt, model, nodeContext, 1);
+                },
+                onError: (err) => {
+                    throw err;
+                },
+            });
+        } catch (error) {
+            this.streamingManager.unregister(nodeId); // Auto-hides stop button
+
+            if (error.name === 'AbortError') {
+                console.log('Code generation aborted');
+                this.saveSession();
+                return;
+            }
+
+            console.error('Code generation error:', error);
+            const errorCode = `# Error generating code: ${error.message}\n`;
+            this.canvas.updateCodeContent(nodeId, errorCode, false);
+            this.graph.updateNode(nodeId, { content: errorCode, code: errorCode });
+            this.saveSession();
+        }
+    }
+
+    /**
      * Helper method to stream LLM responses with abort support
      * Wraps the streaming call with proper error handling for AbortController
      * @param {string} nodeId - The node ID being streamed to
