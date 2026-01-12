@@ -823,4 +823,3 @@ test('Context is preserved through stop/continue cycle', async () => {
 });
 
 console.log('\n=== All StreamingManager tests passed! ===\n');
-console.log('Tests: 47 | Passed: 47 | Failed: 0\n');

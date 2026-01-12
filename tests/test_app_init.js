@@ -157,8 +157,8 @@ test('App event listener methods exist', () => {
     const requiredMethods = [
         'handleNodeSelect',
         'handleNodeDelete',
-        // Note: handleNodeStopGeneration and handleNodeContinueGeneration removed
-        // These are now handled by StreamingManager via canvas events
+        // Note: handleNodeStopGeneration and handleNodeContinueGeneration migrated
+        // These methods are now handled by StreamingManager via canvas events
         'handleNodeCollapse',
         'handleCreateFlashcards',
         'handleFlipCard',
