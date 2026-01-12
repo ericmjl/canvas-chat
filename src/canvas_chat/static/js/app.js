@@ -136,11 +136,11 @@ class App {
             this.hideAdminRestrictedUI();
         }
 
+        // Initialize plugin system (must happen before loadSession since features are accessed during session load)
+        await this.initializePluginSystem();
+
         // Load or create session
         await this.loadSession();
-
-        // Initialize plugin system
-        await this.initializePluginSystem();
 
         // Setup graph event listeners
         this.graph
@@ -2649,7 +2649,7 @@ df.head()
 
     /**
      * Initialize the plugin system and register built-in features.
-     * Called during app initialization after graph and session are ready.
+     * MUST be called before loadSession() since features may be accessed during session loading.
      */
     async initializePluginSystem() {
         // Create AppContext for dependency injection
