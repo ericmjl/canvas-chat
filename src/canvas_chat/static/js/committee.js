@@ -409,11 +409,22 @@ class CommitteeFeature extends FeaturePlugin {
                 },
                 // onError
                 (err) => {
+                    // Handle abort gracefully
+                    if (err.name === 'AbortError') {
+                        console.log(`[Committee] Opinion ${index} aborted`);
+                        this.canvas.hideStopButton(nodeId);
+                        this.streamingManager.unregister(nodeId);
+                        this._activeCommittee.abortControllers.delete(nodeId);
+                        resolve(''); // Resolve with empty to allow other opinions to continue
+                        return;
+                    }
+                    // Real errors
                     this.canvas.hideStopButton(nodeId);
                     this.streamingManager.unregister(nodeId);
                     this._activeCommittee.abortControllers.delete(nodeId);
                     reject(err);
-                }
+                },
+                abortController // Pass the abort controller
             );
         });
     }
@@ -522,11 +533,22 @@ class CommitteeFeature extends FeaturePlugin {
                 },
                 // onError
                 (err) => {
+                    // Handle abort gracefully
+                    if (err.name === 'AbortError') {
+                        console.log(`[Committee] Review ${reviewerIndex} aborted`);
+                        this.canvas.hideStopButton(reviewNode.id);
+                        this.streamingManager.unregister(reviewNode.id);
+                        this._activeCommittee.abortControllers.delete(reviewNode.id);
+                        resolve(''); // Resolve with empty to allow other reviews to continue
+                        return;
+                    }
+                    // Real errors
                     this.canvas.hideStopButton(reviewNode.id);
                     this.streamingManager.unregister(reviewNode.id);
                     this._activeCommittee.abortControllers.delete(reviewNode.id);
                     reject(err);
-                }
+                },
+                abortController // Pass the abort controller
             );
         });
     }
@@ -605,11 +627,22 @@ class CommitteeFeature extends FeaturePlugin {
                 },
                 // onError
                 (err) => {
+                    // Handle abort gracefully
+                    if (err.name === 'AbortError') {
+                        console.log('[Committee] Synthesis aborted');
+                        this.canvas.hideStopButton(nodeId);
+                        this.streamingManager.unregister(nodeId);
+                        this._activeCommittee.abortControllers.delete(nodeId);
+                        resolve(); // Resolve to prevent rejection
+                        return;
+                    }
+                    // Real errors
                     this.canvas.hideStopButton(nodeId);
                     this.streamingManager.unregister(nodeId);
                     this._activeCommittee.abortControllers.delete(nodeId);
                     reject(err);
-                }
+                },
+                abortController // Pass the abort controller
             );
         });
     }
