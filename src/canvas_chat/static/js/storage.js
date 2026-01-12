@@ -71,6 +71,12 @@ class Storage {
      * Initialize IndexedDB
      */
     async initDB() {
+        // Check if indexedDB is available (not available in Node.js test environment)
+        if (typeof indexedDB === 'undefined') {
+            console.warn('[Storage] IndexedDB not available (running in Node.js?)');
+            return null;
+        }
+
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
 

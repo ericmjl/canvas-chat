@@ -19,20 +19,30 @@ global.localStorage = {
     clear: () => {},
 };
 global.indexedDB = {
-    open: () => ({
-        onsuccess: null,
-        onerror: null,
-        onupgradeneeded: null,
-        result: {
-            transaction: () => ({
-                objectStore: () => ({
-                    get: () => ({ onsuccess: null, onerror: null }),
-                    put: () => ({ onsuccess: null, onerror: null }),
-                    delete: () => ({ onsuccess: null, onerror: null }),
+    open: () => {
+        // Return a mock IDBOpenDBRequest
+        const request = {
+            onsuccess: null,
+            onerror: null,
+            onupgradeneeded: null,
+            result: {
+                transaction: () => ({
+                    objectStore: () => ({
+                        get: () => ({ onsuccess: null, onerror: null }),
+                        put: () => ({ onsuccess: null, onerror: null }),
+                        delete: () => ({ onsuccess: null, onerror: null }),
+                    }),
                 }),
-            }),
-        },
-    }),
+            },
+        };
+        // Simulate successful connection asynchronously
+        setTimeout(() => {
+            if (request.onsuccess) {
+                request.onsuccess({ target: request });
+            }
+        }, 0);
+        return request;
+    },
 };
 global.document = {
     createElement: (tagName) => {
