@@ -594,25 +594,28 @@
         color 0.2s;
 }
 
-/* When code is running, highlight the header in blue */
-.node.code-running .node-header {
-    background: var(--color-accent, #4a9eff);
-    color: white;
+/* When code is running, pulse the border blue */
+.node.code-running {
+    border: 2px solid var(--color-accent, #4a9eff);
+    animation: pulse-border 1.5s ease-in-out infinite;
 }
 
-.node.code-running .node-header .grip-dot {
-    background: white;
+/* Self-healing variant - pulse orange */
+.node.code-self-healing {
+    border: 2px solid var(--color-warning, #f59e0b);
+    animation: pulse-border 1.5s ease-in-out infinite;
 }
 
-/* Self-healing variant - orange */
-.node.code-self-healing .node-header {
-    background: var(--color-warning, #f59e0b);
-    color: white;
-    animation: pulse 1.5s ease-in-out infinite;
-}
-
-.node.code-self-healing .node-header .grip-dot {
-    background: white;
+@keyframes pulse-border {
+    0%,
+    100% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 currentColor;
+    }
+    50% {
+        opacity: 0.7;
+        box-shadow: 0 0 8px 2px currentColor;
+    }
 }
 
 /* When code is running, highlight the header */
@@ -1522,7 +1525,6 @@
 
 .code-state-indicator.code-self-healing {
     background: var(--color-warning, #f59e0b);
-    animation: pulse 1.5s ease-in-out infinite;
     /* Show self-healing indicator with attempt count */
     display: block;
 }
