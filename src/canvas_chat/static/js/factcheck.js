@@ -551,11 +551,12 @@ Rules:
 4. Maximum 10 claims - prioritize the most significant ones
 5. Be inclusive - if something looks like a factual assertion, include it
 6. Political statements about countries' actions or positions ARE verifiable claims
+7. IMPORTANT: Even simple statements like "The Earth is flat" or "Water boils at 100°C" ARE verifiable claims - include them!
 
 Respond with a JSON array of claim strings. Example:
 ["The Eiffel Tower is 330 meters tall", "Paris is the capital of France"]
 
-If the input contains no factual content at all (e.g., just greetings or questions), respond with an empty array: []`;
+If the input contains no factual content at all (e.g., ONLY greetings or questions with no assertions), respond with an empty array: []`;
 
         console.log('[Factcheck] Extracting claims from:', input);
 
