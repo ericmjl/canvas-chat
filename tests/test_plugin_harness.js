@@ -155,7 +155,7 @@ console.log('\n=== PluginTestHarness Tests ===\n');
 // Test: Create harness
 test('PluginTestHarness can be created', () => {
     const harness = new PluginTestHarness();
-    assertTrue(harness !== null, 'Harness created');
+    assertTrue(harness instanceof PluginTestHarness, 'Harness created');
     assertTrue(harness.mockApp !== undefined, 'Has mock app');
     assertTrue(harness.appContext !== undefined, 'Has app context');
     assertTrue(harness.registry !== undefined, 'Has registry');

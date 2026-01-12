@@ -86,7 +86,7 @@ console.log('\n=== FeatureRegistry Tests ===\n');
 // Test: Create FeatureRegistry
 test('FeatureRegistry can be created', () => {
     const registry = new FeatureRegistry();
-    assertTrue(registry !== null, 'Registry should be created');
+    assertTrue(registry instanceof FeatureRegistry, 'Registry should be created');
 });
 
 // Test: Priority constants are defined

@@ -49,20 +49,6 @@ import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
 // Import MatrixFeature class
 const { MatrixFeature } = await import('../src/canvas_chat/static/js/matrix.js');
 
-function test(description, fn) {
-    try {
-        fn();
-        console.log(`✓ ${description}`);
-    } catch (error) {
-        console.error(`✗ ${description}`);
-        console.error(`  ${error.message}`);
-        if (error.stack) {
-            console.error(error.stack.split('\n').slice(1, 4).join('\n'));
-        }
-        process.exit(1);
-    }
-}
-
 async function asyncTest(description, fn) {
     try {
         await fn();
@@ -74,12 +60,6 @@ async function asyncTest(description, fn) {
             console.error(error.stack.split('\n').slice(1, 4).join('\n'));
         }
         process.exit(1);
-    }
-}
-
-function assertEqual(actual, expected, message) {
-    if (actual !== expected) {
-        throw new Error(`${message}: expected ${expected}, got ${actual}`);
     }
 }
 

@@ -9,7 +9,6 @@ import { Canvas } from './canvas.js';
 import { Chat, chat } from './chat.js';
 import { Storage, storage } from './storage.js';
 import { EventEmitter } from './event-emitter.js';
-import { CancellableEvent } from './plugin-events.js';
 import { UndoManager } from './undo-manager.js';
 import { SlashCommandMenu, SLASH_COMMANDS } from './slash-command-menu.js';
 import { NodeRegistry } from './node-registry.js';
@@ -20,7 +19,7 @@ import { CommitteeFeature } from './committee.js';
 import { MatrixFeature } from './matrix.js';
 import { FactcheckFeature } from './factcheck.js';
 import { ResearchFeature } from './research.js';
-import { CodeFeature } from './code-feature.js';
+import './code-feature.js'; // Side-effect import for CodeFeature registration
 import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { wrapNode } from './node-protocols.js';
 import {
@@ -40,7 +39,7 @@ import {
 import { highlightTextInHtml, extractExcerptText } from './highlight-utils.js';
 import { streamSSEContent, readSSEStream } from './sse.js';
 // Plugin system
-import { FeatureRegistry, PRIORITY } from './feature-registry.js';
+import { FeatureRegistry } from './feature-registry.js';
 import { AppContext } from './feature-plugin.js';
 import { StreamingManager } from './streaming-manager.js';
 

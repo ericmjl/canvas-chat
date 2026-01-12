@@ -244,10 +244,9 @@ test('Node without tags property handles tag operations gracefully', () => {
 });
 
 test('Can retrieve tag colors', () => {
-    const graph = createTestGraph();
     assert(Array.isArray(TAG_COLORS), 'TAG_COLORS should be an array');
     assert(TAG_COLORS.length > 0, 'Should have at least one tag color');
-    assert(TAG_COLORS[0].startsWith('#'), 'Tag colors should be hex format');
+    assert(TAG_COLORS[0].startsWith('#'), 'Tag colors should be in hex format');
 });
 
 test('Empty tag name is allowed', () => {
