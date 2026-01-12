@@ -412,7 +412,7 @@ class CommitteeFeature extends FeaturePlugin {
                     // Handle abort gracefully
                     if (err.name === 'AbortError') {
                         console.log(`[Committee] Opinion ${index} aborted`);
-                        this.streamingManager.unregister(nodeId); // Auto-hides stop button
+                        // Don't unregister - StreamingManager.stop() handles UI state
                         this._activeCommittee.abortControllers.delete(nodeId);
                         resolve(''); // Resolve with empty to allow other opinions to continue
                         return;
@@ -542,7 +542,7 @@ class CommitteeFeature extends FeaturePlugin {
                     // Handle abort gracefully
                     if (err.name === 'AbortError') {
                         console.log(`[Committee] Review ${reviewerIndex} aborted`);
-                        this.streamingManager.unregister(reviewNode.id); // Auto-hides stop button
+                        // Don't unregister - StreamingManager.stop() handles UI state
                         this._activeCommittee.abortControllers.delete(reviewNode.id);
                         resolve(''); // Resolve with empty to allow other reviews to continue
                         return;
@@ -640,7 +640,7 @@ class CommitteeFeature extends FeaturePlugin {
                     // Handle abort gracefully
                     if (err.name === 'AbortError') {
                         console.log('[Committee] Synthesis aborted');
-                        this.streamingManager.unregister(nodeId); // Auto-hides stop button
+                        // Don't unregister - StreamingManager.stop() handles UI state
                         this._activeCommittee.abortControllers.delete(nodeId);
                         resolve(); // Resolve to prevent rejection
                         return;
