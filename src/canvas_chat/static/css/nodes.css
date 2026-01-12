@@ -691,18 +691,19 @@
     }
 }
 
-/* Header buttons (stop/continue) - in node header next to delete */
+/* Header buttons - visible by default, hide specific buttons explicitly */
 .header-btn {
+    display: inline-flex;
     padding: 4px 8px;
     border: none;
     border-radius: var(--radius-sm);
     font-size: 12px;
     cursor: pointer;
     transition: all 0.15s;
-    display: none;
 }
 
 .header-btn.stop-btn {
+    display: none; /* Hidden by default, shown during generation */
     background: var(--danger);
     color: white;
 }
@@ -712,6 +713,7 @@
 }
 
 .header-btn.continue-btn {
+    display: none; /* Hidden by default, shown after stopping */
     background: var(--success);
     color: white;
 }
@@ -722,7 +724,6 @@
 
 .header-btn.fit-viewport-btn,
 .header-btn.reset-size-btn {
-    display: inline-flex;
     background: var(--bg-secondary);
     color: var(--text-secondary);
     opacity: 0;
@@ -746,7 +747,6 @@
 /* Navigation buttons */
 .header-btn.nav-parent-btn,
 .header-btn.nav-child-btn {
-    display: inline-flex;
     background: var(--bg-secondary);
     color: var(--text-secondary);
     opacity: 0;
