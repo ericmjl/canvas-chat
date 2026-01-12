@@ -379,7 +379,11 @@ class CommitteeFeature extends FeaturePlugin {
         this.streamingManager.register(nodeId, {
             abortController,
             featureId: 'committee',
-            context: { model, index },
+            context: { model, modelName, messages, index, nodeId },
+            onContinue: async (nodeId, state) => {
+                // Continue opinion generation from where it left off
+                await this.continueOpinion(nodeId, state.context);
+            },
         });
 
         return new Promise((resolve, reject) => {
@@ -485,7 +489,18 @@ class CommitteeFeature extends FeaturePlugin {
         this.streamingManager.register(reviewNode.id, {
             abortController,
             featureId: 'committee',
-            context: { model, reviewerIndex },
+            context: {
+                model,
+                modelName,
+                messages,
+                opinions,
+                reviewerIndex,
+                nodeId: reviewNode.id,
+            },
+            onContinue: async (nodeId, state) => {
+                // Continue review generation from where it left off
+                await this.continueReview(nodeId, state.context);
+            },
         });
 
         // Build review prompt with all opinions
@@ -570,7 +585,17 @@ class CommitteeFeature extends FeaturePlugin {
         this.streamingManager.register(nodeId, {
             abortController,
             featureId: 'committee',
-            context: { model: chairmanModel },
+            context: {
+                model: chairmanModel,
+                chairmanName,
+                messages,
+                opinions,
+                nodeId,
+            },
+            onContinue: async (nodeId, state) => {
+                // Continue synthesis generation from where it left off
+                await this.continueSynthesis(nodeId, state.context);
+            },
         });
 
         // Build synthesis prompt
@@ -655,6 +680,235 @@ class CommitteeFeature extends FeaturePlugin {
             this._activeCommittee.abortControllers.clear();
             this._activeCommittee = null;
         }
+    }
+
+    /**
+     * Continue opinion generation from where it was stopped.
+     * @param {string} nodeId - The opinion node ID
+     * @param {Object} context - Saved context with model, messages, etc.
+     */
+    async continueOpinion(nodeId, context) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        const { model, modelName, messages } = context;
+
+        // Get current content (remove model name header and stopped indicator)
+        let currentContent = node.content
+            .replace(new RegExp(`^\\*\\*${modelName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*\\*\\n\\n`), '')
+            .replace(/\n\n\*\[Generation stopped\]\*$/, '');
+
+        // Build continuation messages
+        const continueMessages = [
+            ...messages,
+            { role: 'assistant', content: currentContent },
+            { role: 'user', content: 'Please continue your response from where you left off.' },
+        ];
+
+        // Create new abort controller
+        const abortController = new AbortController();
+
+        // Re-register with StreamingManager
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'committee',
+            context,
+            onContinue: async (nodeId, state) => {
+                await this.continueOpinion(nodeId, state.context);
+            },
+        });
+
+        // Continue streaming
+        this.chat.sendMessage(
+            continueMessages,
+            model,
+            // onChunk
+            (chunk, accumulated) => {
+                const combinedContent = currentContent + accumulated;
+                this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${combinedContent}`, true);
+            },
+            // onDone
+            (finalContent) => {
+                const combinedContent = currentContent + finalContent;
+                this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${combinedContent}`, false);
+                this.graph.updateNode(nodeId, { content: `**${modelName}**\n\n${combinedContent}` });
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            // onError
+            (err) => {
+                if (err.name === 'AbortError') {
+                    console.log(`[Committee] Opinion continuation aborted`);
+                } else {
+                    console.error('[Committee] Opinion continuation error:', err);
+                    const errorContent = currentContent + `\n\n*Error continuing: ${err.message}*`;
+                    this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${errorContent}`, false);
+                    this.graph.updateNode(nodeId, { content: `**${modelName}**\n\n${errorContent}` });
+                }
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            abortController
+        );
+    }
+
+    /**
+     * Continue review generation from where it was stopped.
+     * @param {string} nodeId - The review node ID
+     * @param {Object} context - Saved context with model, messages, opinions, etc.
+     */
+    async continueReview(nodeId, context) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        const { model, modelName, messages, opinions } = context;
+
+        // Get current content (remove model name header and stopped indicator)
+        let currentContent = node.content
+            .replace(new RegExp(`^\\*\\*${modelName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*\\*\\n\\n`), '')
+            .replace(/\n\n\*\[Generation stopped\]\*$/, '');
+
+        // Build continuation messages (include opinions context)
+        const continueMessages = [
+            ...messages,
+            {
+                role: 'assistant',
+                content: `Here are opinions from multiple models:\n\n${opinions.map((op, i) => `Opinion ${i + 1}:\n${op}`).join('\n\n')}`,
+            },
+            {
+                role: 'user',
+                content: 'Please review these opinions, identifying strengths, weaknesses, and areas of disagreement.',
+            },
+            { role: 'assistant', content: currentContent },
+            { role: 'user', content: 'Please continue your review from where you left off.' },
+        ];
+
+        // Create new abort controller
+        const abortController = new AbortController();
+
+        // Re-register with StreamingManager
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'committee',
+            context,
+            onContinue: async (nodeId, state) => {
+                await this.continueReview(nodeId, state.context);
+            },
+        });
+
+        // Continue streaming
+        this.chat.sendMessage(
+            continueMessages,
+            model,
+            // onChunk
+            (chunk, accumulated) => {
+                const combinedContent = currentContent + accumulated;
+                this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${combinedContent}`, true);
+            },
+            // onDone
+            (finalContent) => {
+                const combinedContent = currentContent + finalContent;
+                this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${combinedContent}`, false);
+                this.graph.updateNode(nodeId, { content: `**${modelName}**\n\n${combinedContent}` });
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            // onError
+            (err) => {
+                if (err.name === 'AbortError') {
+                    console.log(`[Committee] Review continuation aborted`);
+                } else {
+                    console.error('[Committee] Review continuation error:', err);
+                    const errorContent = currentContent + `\n\n*Error continuing: ${err.message}*`;
+                    this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${errorContent}`, false);
+                    this.graph.updateNode(nodeId, { content: `**${modelName}**\n\n${errorContent}` });
+                }
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            abortController
+        );
+    }
+
+    /**
+     * Continue synthesis generation from where it was stopped.
+     * @param {string} nodeId - The synthesis node ID
+     * @param {Object} context - Saved context with model, messages, opinions, etc.
+     */
+    async continueSynthesis(nodeId, context) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        const { model, chairmanName, messages, opinions } = context;
+
+        // Get current content (remove chairman name header and stopped indicator)
+        let currentContent = node.content
+            .replace(
+                new RegExp(`^\\*\\*${chairmanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\(Chairman\\)\\*\\*\\n\\n`),
+                ''
+            )
+            .replace(/\n\n\*\[Generation stopped\]\*$/, '');
+
+        // Build continuation messages (include opinions context)
+        const continueMessages = [
+            ...messages,
+            {
+                role: 'assistant',
+                content: `Here are all the opinions:\n\n${opinions.map((op, i) => `Opinion ${i + 1}:\n${op}`).join('\n\n')}`,
+            },
+            {
+                role: 'user',
+                content: 'As chairman, please synthesize these opinions into a coherent response.',
+            },
+            { role: 'assistant', content: currentContent },
+            { role: 'user', content: 'Please continue your synthesis from where you left off.' },
+        ];
+
+        // Create new abort controller
+        const abortController = new AbortController();
+
+        // Re-register with StreamingManager
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'committee',
+            context,
+            onContinue: async (nodeId, state) => {
+                await this.continueSynthesis(nodeId, state.context);
+            },
+        });
+
+        // Continue streaming
+        this.chat.sendMessage(
+            continueMessages,
+            model,
+            // onChunk
+            (chunk, accumulated) => {
+                const combinedContent = currentContent + accumulated;
+                this.canvas.updateNodeContent(nodeId, `**${chairmanName} (Chairman)**\n\n${combinedContent}`, true);
+            },
+            // onDone
+            (finalContent) => {
+                const combinedContent = currentContent + finalContent;
+                this.canvas.updateNodeContent(nodeId, `**${chairmanName} (Chairman)**\n\n${combinedContent}`, false);
+                this.graph.updateNode(nodeId, { content: `**${chairmanName} (Chairman)**\n\n${combinedContent}` });
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            // onError
+            (err) => {
+                if (err.name === 'AbortError') {
+                    console.log(`[Committee] Synthesis continuation aborted`);
+                } else {
+                    console.error('[Committee] Synthesis continuation error:', err);
+                    const errorContent = currentContent + `\n\n*Error continuing: ${err.message}*`;
+                    this.canvas.updateNodeContent(nodeId, `**${chairmanName} (Chairman)**\n\n${errorContent}`, false);
+                    this.graph.updateNode(nodeId, { content: `**${chairmanName} (Chairman)**\n\n${errorContent}` });
+                }
+                this.streamingManager.unregister(nodeId);
+                this.saveSession();
+            },
+            abortController
+        );
     }
 
     /**
