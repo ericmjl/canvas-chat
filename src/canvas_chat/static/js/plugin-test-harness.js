@@ -5,7 +5,7 @@
 
 import { FeatureRegistry } from './feature-registry.js';
 import { AppContext } from './feature-plugin.js';
-import { CanvasEvent, CancellableEvent } from './plugin-events.js';
+import { CanvasEvent } from './plugin-events.js';
 
 /**
  * Mock Graph for testing (doesn't require Yjs)

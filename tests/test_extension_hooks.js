@@ -9,20 +9,6 @@ import { CancellableEvent } from '../src/canvas_chat/static/js/plugin-events.js'
 import { SmartFixPlugin } from '../src/canvas_chat/static/js/smart-fix-plugin.js';
 import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
 
-function test(description, fn) {
-    try {
-        fn();
-        console.log(`✓ ${description}`);
-    } catch (error) {
-        console.error(`✗ ${description}`);
-        console.error(`  ${error.message}`);
-        if (error.stack) {
-            console.error(error.stack.split('\n').slice(1, 4).join('\n'));
-        }
-        process.exit(1);
-    }
-}
-
 async function asyncTest(description, fn) {
     try {
         await fn();
@@ -37,15 +23,15 @@ async function asyncTest(description, fn) {
     }
 }
 
-function assertTrue(value, message) {
-    if (!value) {
-        throw new Error(message || 'Expected true, got false');
-    }
-}
-
 function assertEqual(actual, expected, message) {
     if (actual !== expected) {
         throw new Error(`${message}: expected ${expected}, got ${actual}`);
+    }
+}
+
+function assertTrue(value, message) {
+    if (!value) {
+        throw new Error(message || 'Expected true, got false');
     }
 }
 

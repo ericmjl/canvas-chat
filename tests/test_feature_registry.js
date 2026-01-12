@@ -3,7 +3,6 @@
  */
 
 import { FeatureRegistry, PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
-import { AppContext, FeaturePlugin } from '../src/canvas_chat/static/js/feature-plugin.js';
 import { SimpleTestPlugin, ComplexTestPlugin } from '../src/canvas_chat/static/js/example-test-plugin.js';
 import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
 
@@ -50,20 +49,6 @@ function assertTrue(value, message) {
 function assertFalse(value, message) {
     if (value) {
         throw new Error(message || 'Expected false, got true');
-    }
-}
-
-function assertThrows(fn, expectedMessage) {
-    try {
-        fn();
-        throw new Error('Expected function to throw, but it did not');
-    } catch (error) {
-        if (error.message === 'Expected function to throw, but it did not') {
-            throw error;
-        }
-        if (expectedMessage && !error.message.includes(expectedMessage)) {
-            throw new Error(`Expected error message to include "${expectedMessage}", got "${error.message}"`);
-        }
     }
 }
 

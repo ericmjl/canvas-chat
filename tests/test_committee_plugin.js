@@ -49,20 +49,6 @@ import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
 // Import CommitteeFeature class only (not the module)
 const { CommitteeFeature } = await import('../src/canvas_chat/static/js/committee.js');
 
-function test(description, fn) {
-    try {
-        fn();
-        console.log(`✓ ${description}`);
-    } catch (error) {
-        console.error(`✗ ${description}`);
-        console.error(`  ${error.message}`);
-        if (error.stack) {
-            console.error(error.stack.split('\n').slice(1, 4).join('\n'));
-        }
-        process.exit(1);
-    }
-}
-
 async function asyncTest(description, fn) {
     try {
         await fn();
@@ -74,12 +60,6 @@ async function asyncTest(description, fn) {
             console.error(error.stack.split('\n').slice(1, 4).join('\n'));
         }
         process.exit(1);
-    }
-}
-
-function assertEqual(actual, expected, message) {
-    if (actual !== expected) {
-        throw new Error(`${message}: expected ${expected}, got ${actual}`);
     }
 }
 
@@ -198,7 +178,7 @@ await asyncTest('/committee slash command routes to CommitteeFeature', async () 
 
     const feature = harness.getPlugin('committee');
     assertTrue(feature._committeeData !== null, 'Committee data should be set');
-    assertEqual(feature._committeeData.question, 'What is AI?', 'Question should be stored');
+    assertTrue(feature._committeeData.question === 'What is AI?', 'Question should be stored');
 });
 
 // Test: Committee feature has abort method

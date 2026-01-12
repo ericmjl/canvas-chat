@@ -2,7 +2,7 @@
  * Tests for FeaturePlugin base class and Plugin Events
  */
 
-import { FeaturePlugin, AppContext } from '../src/canvas_chat/static/js/feature-plugin.js';
+import { FeaturePlugin } from '../src/canvas_chat/static/js/feature-plugin.js';
 import { CanvasEvent, CancellableEvent } from '../src/canvas_chat/static/js/plugin-events.js';
 import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
 

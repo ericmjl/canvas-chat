@@ -12,8 +12,6 @@ import { spawn } from 'child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Tests that don't need Yjs (can run standalone)
-const STANDALONE_TESTS = ['test_feature_registry.js'];
 const testsDir = __dirname;
 
 /**
