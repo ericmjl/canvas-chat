@@ -2,6 +2,29 @@
 
 Instructions for AI coding agents working on this project.
 
+## Maintaining this document
+
+**CRITICAL:** When making architectural changes to the codebase, **you MUST update this AGENTS.md file** to reflect those changes.
+
+This includes:
+
+- **Adding new modules** - Update the "Codebase map" tables with new files
+- **Changing architecture patterns** - Update the "Architecture patterns" section
+- **Adding new constants** - Update the "Key constants and their locations" table
+- **Deprecating patterns** - Remove outdated information and add migration notes
+- **Refactoring features** - Update file locations and purposes
+- **New testing patterns** - Document in the "Testing" section
+- **New development workflows** - Add to relevant sections
+
+**Why this matters:** This document is the primary onboarding guide for AI agents. If it's outdated, agents will:
+
+- Use deprecated APIs
+- Create files in the wrong locations
+- Follow obsolete patterns
+- Break existing conventions
+
+**When to update:** Before completing a PR that changes architecture, review this document and update it. Include AGENTS.md changes in your PR.
+
 ## Codebase map
 
 Quick reference for which files to edit for common tasks:
@@ -23,15 +46,47 @@ Quick reference for which files to edit for common tasks:
 | `src/canvas_chat/static/js/sse.js`         | Server-sent events utilities                | Streaming connection handling                                       |
 | `src/canvas_chat/static/js/utils.js`       | Pure utility functions                      | Image resizing, error formatting, text processing                   |
 
-#### Feature modules
+#### Plugin architecture modules
 
-| File                                      | Purpose                | Edit for...                                |
-| ----------------------------------------- | ---------------------- | ------------------------------------------ |
-| `src/canvas_chat/static/js/flashcards.js` | FlashcardFeature class | Flashcard generation, spaced repetition UI |
-| `src/canvas_chat/static/js/committee.js`  | CommitteeFeature class | Multi-LLM consultation, synthesis          |
-| `src/canvas_chat/static/js/matrix.js`     | MatrixFeature class    | Comparison matrix creation, cell filling   |
-| `src/canvas_chat/static/js/factcheck.js`  | FactcheckFeature class | Claim verification, web search integration |
-| `src/canvas_chat/static/js/research.js`   | ResearchFeature class  | Deep research with Exa API                 |
+| File                                               | Purpose                                 | Edit for...                                       |
+| -------------------------------------------------- | --------------------------------------- | ------------------------------------------------- |
+| `src/canvas_chat/static/js/feature-plugin.js`      | FeaturePlugin base class, AppContext    | Plugin base class, dependency injection           |
+| `src/canvas_chat/static/js/feature-registry.js`    | Plugin registration and lifecycle       | Registering plugins, slash command routing        |
+| `src/canvas_chat/static/js/plugin-events.js`       | Event system for plugin communication   | Event types, cancellable events                   |
+| `src/canvas_chat/static/js/node-registry.js`       | Custom node type registration           | Registering custom node types                     |
+| `src/canvas_chat/static/js/node-protocols.js`      | Node protocol classes, wrapNode utility | Node rendering, actions, protocol implementations |
+| `src/canvas_chat/static/js/plugin-test-harness.js` | Testing utilities for plugins           | Writing plugin tests                              |
+
+#### Feature plugins (built-in)
+
+| File                                        | Purpose                | Edit for...                                |
+| ------------------------------------------- | ---------------------- | ------------------------------------------ |
+| `src/canvas_chat/static/js/flashcards.js`   | FlashcardFeature class | Flashcard generation, spaced repetition UI |
+| `src/canvas_chat/static/js/committee.js`    | CommitteeFeature class | Multi-LLM consultation, synthesis          |
+| `src/canvas_chat/static/js/matrix.js`       | MatrixFeature class    | Comparison matrix creation, cell filling   |
+| `src/canvas_chat/static/js/factcheck.js`    | FactcheckFeature class | Claim verification, web search integration |
+| `src/canvas_chat/static/js/research.js`     | ResearchFeature class  | Deep research with Exa API                 |
+| `src/canvas_chat/static/js/code-feature.js` | CodeFeature class      | Self-healing code execution                |
+
+#### Example plugins
+
+| File                                               | Purpose                                | Edit for...                 |
+| -------------------------------------------------- | -------------------------------------- | --------------------------- |
+| `src/canvas_chat/static/js/smart-fix-plugin.js`    | SmartFixPlugin - Enhanced self-healing | Example of extension hooks  |
+| `src/canvas_chat/static/js/example-test-plugin.js` | Simple test plugin                     | Plugin development examples |
+
+#### Support modules
+
+| File                                               | Purpose                               | Edit for...                        |
+| -------------------------------------------------- | ------------------------------------- | ---------------------------------- |
+| `src/canvas_chat/static/js/streaming-manager.js`   | Concurrent streaming state management | Managing multiple LLM streams      |
+| `src/canvas_chat/static/js/modal-manager.js`       | Modal lifecycle management            | Modal creation, event handling     |
+| `src/canvas_chat/static/js/file-upload-handler.js` | File upload processing                | PDF, CSV, image upload handling    |
+| `src/canvas_chat/static/js/undo-manager.js`        | Undo/redo functionality               | Action history, undo operations    |
+| `src/canvas_chat/static/js/slash-command-menu.js`  | Slash command autocomplete UI         | Command menu behavior              |
+| `src/canvas_chat/static/js/pyodide-runner.js`      | Python code execution (Pyodide)       | Code execution, environment setup  |
+| `src/canvas_chat/static/js/highlight-utils.js`     | Text highlighting utilities           | Text selection, excerpt extraction |
+| `src/canvas_chat/static/js/event-emitter.js`       | Event emitter pattern                 | Event-driven architecture          |
 
 ### Frontend (HTML/CSS)
 
@@ -49,13 +104,13 @@ Quick reference for which files to edit for common tasks:
 
 ### Key constants and their locations
 
-| Constant             | Location               | Purpose                         |
-| -------------------- | ---------------------- | ------------------------------- |
-| `NodeType`           | `graph-types.js:11-32` | All node type definitions       |
-| `EdgeType`           | `graph-types.js:82-94` | All edge type definitions       |
-| `DEFAULT_NODE_SIZES` | `graph-types.js:40-68` | Default dimensions by node type |
-| `SLASH_COMMANDS`     | `app.js:15-22`         | Slash command definitions       |
-| CSS variables        | `style.css:10-75`      | Colors, sizing, theming         |
+| Constant             | Location                   | Purpose                                                 |
+| -------------------- | -------------------------- | ------------------------------------------------------- |
+| `NodeType`           | `graph-types.js:11-32`     | All node type definitions                               |
+| `EdgeType`           | `graph-types.js:82-94`     | All edge type definitions                               |
+| `DEFAULT_NODE_SIZES` | `graph-types.js:40-68`     | Default dimensions by node type                         |
+| `PRIORITY`           | `feature-registry.js:8-12` | Plugin priority levels (BUILTIN > OFFICIAL > COMMUNITY) |
+| CSS variables        | `style.css:10-75`          | Colors, sizing, theming                                 |
 
 ### Zoom levels (semantic zoom)
 
@@ -155,6 +210,166 @@ git commit -m "message"
 ```
 
 ## Architecture patterns
+
+### Plugin architecture
+
+Canvas-Chat uses a **three-level plugin architecture** for extensibility:
+
+1. **Level 1: Custom Node Types** - Custom rendering and visual appearance
+2. **Level 2: Feature Plugins** - Complex workflows, slash commands, multi-step LLM operations
+3. **Level 3: Extension Hooks** - Hook into existing features to modify behaviors
+
+**For detailed information**, see:
+
+- [Plugin Architecture Explanation](docs/explanation/plugin-architecture.md) - Design decisions and rationale
+- [Create Feature Plugins Guide](docs/how-to/create-feature-plugins.md) - Step-by-step plugin development
+- [Feature Plugin API](docs/reference/feature-plugin-api.md) - Complete API reference
+
+#### When to use each level
+
+**Custom Node Types** (Level 1):
+
+- You need custom rendering (polls, charts, forms)
+- You need custom action buttons on nodes
+- You DON'T need slash commands or complex workflows
+
+**Feature Plugins** (Level 2):
+
+- You need slash commands (`/mycommand`)
+- You need multi-step LLM workflows
+- You need state management across operations
+- You need access to graph, canvas, chat APIs
+
+**Extension Hooks** (Level 3):
+
+- You want to enhance existing features (not replace them)
+- You need to intercept operations (logging, validation)
+- Multiple plugins need to react to the same event
+
+#### Adding a new feature plugin
+
+1. **Create plugin file** in `src/canvas_chat/static/js/my-feature.js`:
+
+    ```javascript
+    import { FeaturePlugin } from './feature-plugin.js';
+
+    export class MyFeature extends FeaturePlugin {
+        constructor(context) {
+            super(context);
+            this.graph = context.graph;
+            this.canvas = context.canvas;
+            this.chat = context.chat;
+        }
+
+        getSlashCommands() {
+            return [
+                {
+                    command: '/mycommand',
+                    description: 'Does something cool',
+                    placeholder: 'Enter input...',
+                },
+            ];
+        }
+
+        async handleCommand(command, args, context) {
+            // Implement command logic
+        }
+
+        async onLoad() {
+            console.log('[MyFeature] Loaded');
+        }
+    }
+    ```
+
+2. **Register in FeatureRegistry** (`feature-registry.js`):
+
+    ```javascript
+    static registerBuiltInFeatures(app) {
+        // ... existing features ...
+
+        registry.registerFeature(new MyFeature(ctx), PRIORITY.BUILTIN);
+    }
+    ```
+
+3. **Add getter in App** (`app.js`):
+
+    ```javascript
+    get myFeature() {
+        return this._getFeature('my-feature', 'MyFeature');
+    }
+    ```
+
+4. **Write tests** (`tests/test_my_feature.js`):
+
+    ```javascript
+    import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
+    import { MyFeature } from '../src/canvas_chat/static/js/my-feature.js';
+
+    asyncTest('MyFeature handles command', async () => {
+        const harness = new PluginTestHarness();
+        await harness.loadPlugin(MyFeature, 'my-feature');
+
+        const result = await harness.executeCommand('/mycommand arg');
+        assertTrue(result);
+    });
+    ```
+
+### StreamingManager for concurrent operations
+
+When a feature needs to manage multiple concurrent LLM streaming operations, **always use StreamingManager**.
+
+**DO NOT** create per-feature state management for streaming. StreamingManager provides:
+
+- Centralized stop/continue button management
+- Automatic abort controller lifecycle
+- Group streaming (e.g., matrix cells)
+- Canvas event integration
+- Feature-specific stop messages
+
+**Example usage:**
+
+```javascript
+class MyFeature extends FeaturePlugin {
+    async startGeneration(nodeId) {
+        const abortController = new AbortController();
+
+        // Register with StreamingManager
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: this.id,
+            onStop: (nodeId) => this.handleStop(nodeId),
+            onContinue: async (nodeId, state) => this.handleContinue(nodeId, state),
+        });
+
+        // Start streaming with abort signal
+        this.chat.sendMessage(
+            messages,
+            model,
+            (chunk) => this.handleChunk(nodeId, chunk),
+            () => this.streamingManager.unregister(nodeId),
+            () => this.streamingManager.unregister(nodeId),
+            { signal: abortController.signal }
+        );
+    }
+}
+```
+
+**Group streaming** (for operations like matrix cell filling):
+
+```javascript
+// Register group
+const groupId = `matrix-${matrixId}`;
+cellIds.forEach((cellId) => {
+    this.streamingManager.register(cellId, {
+        abortController: controllers.get(cellId),
+        featureId: this.id,
+        groupId: groupId,
+    });
+});
+
+// Stop entire group at once
+this.streamingManager.stopGroup(groupId);
+```
 
 ### Module system
 
@@ -513,6 +728,23 @@ Write unit tests for logic that does not require API calls:
 - `tests/test_search.js` - BM25 search algorithm tests
 - `tests/test_ui.js` - DOM manipulation tests using jsdom simulation
 - `tests/test_node_protocols.js` - Node protocol implementations
+- `tests/test_node_registry.js` - Custom node type registration
+- `tests/test_tags.js` - Tag system (creation, assignment, queries)
+- `tests/test_streaming_manager.js` - Concurrent streaming state management
+
+**Plugin system tests:**
+
+- `tests/test_feature_plugin.js` - FeaturePlugin base class and lifecycle
+- `tests/test_feature_registry.js` - Plugin registration and conflict resolution
+- `tests/test_plugin_harness.js` - PluginTestHarness testing utilities
+- `tests/test_plugin_registration.js` - Custom node type registration patterns
+- `tests/test_extension_hooks.js` - Extension hooks system
+- `tests/test_code_plugin.js` - CodeFeature plugin tests
+- `tests/test_committee_plugin.js` - CommitteeFeature plugin tests
+- `tests/test_factcheck_plugin.js` - FactcheckFeature plugin tests
+- `tests/test_flashcards_plugin.js` - FlashcardFeature plugin tests
+- `tests/test_matrix_plugin.js` - MatrixFeature plugin tests
+- `tests/test_research_plugin.js` - ResearchFeature plugin tests
 
 Do not write tests that require external API calls (LLM, Exa, etc.) - these are tested manually.
 
