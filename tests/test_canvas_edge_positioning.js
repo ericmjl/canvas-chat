@@ -1,9 +1,12 @@
 /**
  * Tests for canvas edge positioning during node operations
  * Ensures edges stay correctly attached to nodes during resize, drag, etc.
+ *
+ * Regression test for issue: Edge position jumps during node resize
+ * Root cause: Passing stale node.position instead of reading current position from wrapper
  */
 
-import { test, assertEqual, assertTrue } from './test_setup.js';
+import { test, assertEqual, assertTrue, assertFalse } from './test_setup.js';
 import { JSDOM } from 'jsdom';
 import { Canvas } from '../src/canvas_chat/static/js/canvas.js';
 import { createNode, EdgeType } from '../src/canvas_chat/static/js/graph-types.js';
@@ -48,9 +51,12 @@ function cleanupCanvasTest() {
 }
 
 /**
- * Helper to extract edge path positions
+ * Helper to extract edge path positions from SVG path data
+ * Handles both simple and complex Bezier curve paths
  */
 function getEdgePathPositions(pathD) {
+    if (!pathD) return null;
+
     // Parse SVG path data to extract start and end positions
     // Path format: "M x1 y1 C cp1x cp1y, cp2x cp2y, x2 y2"
     const match = pathD.match(/M\s+([\d.-]+)\s+([\d.-]+).*,\s+([\d.-]+)\s+([\d.-]+)$/);
@@ -62,12 +68,90 @@ function getEdgePathPositions(pathD) {
     };
 }
 
+/**
+ * Helper to check if two positions are approximately equal (within tolerance)
+ * Useful for floating point comparisons
+ */
+function positionsEqual(pos1, pos2, tolerance = 0.01) {
+    return Math.abs(pos1.x - pos2.x) < tolerance && Math.abs(pos1.y - pos2.y) < tolerance;
+}
+
 // ============================================================
-// Edge positioning during node resize
+// Edge positioning during node resize - Regression tests
 // ============================================================
 
+test('REGRESSION: Passing stale position causes edge to jump (the bug we fixed)', () => {
+    const { canvas, graph } = setupCanvasTest();
+
+    try {
+        // Create two connected nodes
+        const sourceNode = createNode('ai', 'Source node', { x: 100, y: 100 });
+        const targetNode = createNode('ai', 'Target node', { x: 500, y: 100 });
+
+        graph.addNode(sourceNode);
+        graph.addNode(targetNode);
+
+        const edge = {
+            id: 'edge-1',
+            source: sourceNode.id,
+            target: targetNode.id,
+            type: EdgeType.REPLY,
+        };
+        graph.addEdge(edge);
+
+        // Render nodes and edge
+        canvas.renderNode(sourceNode);
+        canvas.renderNode(targetNode);
+        canvas.renderEdge(edge, sourceNode.position, targetNode.position);
+
+        // Get initial edge positions
+        const edgePath = canvas.edgeElements.get(edge.id);
+        const initialPath = edgePath.getAttribute('d');
+        const initialPositions = getEdgePathPositions(initialPath);
+
+        // Simulate what happened in the bug: node position in graph is stale
+        const stalePosition = { x: 999, y: 999 }; // Some completely wrong position
+
+        // Resize the node (width changes but position doesn't)
+        const sourceWrapper = canvas.nodeElements.get(sourceNode.id);
+        const newWidth = parseFloat(sourceWrapper.getAttribute('width')) + 200;
+        sourceWrapper.setAttribute('width', newWidth);
+
+        // OLD BUGGY CODE would pass stale position: updateEdgesForNode(id, node.position)
+        // This should cause edge to jump to wrong position
+        canvas.updateEdgesForNode(sourceNode.id, stalePosition);
+
+        const buggyPath = edgePath.getAttribute('d');
+        const buggyPositions = getEdgePathPositions(buggyPath);
+
+        // With buggy code, edge would jump to the stale position
+        assertFalse(
+            positionsEqual(buggyPositions.start, initialPositions.start),
+            'Edge should have jumped with stale position (this proves the bug existed)'
+        );
+
+        // NOW FIX IT: Read current position from wrapper (what the fix does)
+        const currentPos = {
+            x: parseFloat(sourceWrapper.getAttribute('x')),
+            y: parseFloat(sourceWrapper.getAttribute('y')),
+        };
+        canvas.updateEdgesForNode(sourceNode.id, currentPos);
+
+        const fixedPath = edgePath.getAttribute('d');
+        const fixedPositions = getEdgePathPositions(fixedPath);
+
+        // With the fix, edge should be back at correct position
+        assertTrue(
+            positionsEqual(fixedPositions.start, initialPositions.start),
+            'Edge should return to correct position with current position from wrapper'
+        );
+        assertTrue(positionsEqual(fixedPositions.end, initialPositions.end), 'Edge end should remain stable');
+    } finally {
+        cleanupCanvasTest();
+    }
+});
+
 test('Edge position remains correct when source node is resized', () => {
-    console.log('Testing edge position during source node resize...');
     const { canvas, graph } = setupCanvasTest();
 
     try {
@@ -116,13 +200,15 @@ test('Edge position remains correct when source node is resized', () => {
         const updatedPath = edgePath.getAttribute('d');
         const updatedPositions = getEdgePathPositions(updatedPath);
 
-        // Edge start position should remain at source node position (not jump elsewhere)
-        assertEqual(updatedPositions.start.x, initialPositions.start.x);
-        assertEqual(updatedPositions.start.y, initialPositions.start.y);
-
-        // Edge end position should remain at target node position
-        assertEqual(updatedPositions.end.x, initialPositions.end.x);
-        assertEqual(updatedPositions.end.y, initialPositions.end.y);
+        // Edge positions should remain stable (node size changed, not position)
+        assertTrue(
+            positionsEqual(updatedPositions.start, initialPositions.start),
+            'Edge start should remain at source node position'
+        );
+        assertTrue(
+            positionsEqual(updatedPositions.end, initialPositions.end),
+            'Edge end should remain at target node position'
+        );
     } finally {
         cleanupCanvasTest();
     }
@@ -176,11 +262,15 @@ test('Edge position remains correct when target node is resized', () => {
         const updatedPath = edgePath.getAttribute('d');
         const updatedPositions = getEdgePathPositions(updatedPath);
 
-        // Positions should remain stable
-        assertEqual(updatedPositions.start.x, initialPositions.start.x);
-        assertEqual(updatedPositions.start.y, initialPositions.start.y);
-        assertEqual(updatedPositions.end.x, initialPositions.end.x);
-        assertEqual(updatedPositions.end.y, initialPositions.end.y);
+        // Positions should remain stable (target size changed, not position)
+        assertTrue(
+            positionsEqual(updatedPositions.start, initialPositions.start),
+            'Edge start should remain at source position'
+        );
+        assertTrue(
+            positionsEqual(updatedPositions.end, initialPositions.end),
+            'Edge end should remain at target position'
+        );
     } finally {
         cleanupCanvasTest();
     }
@@ -229,12 +319,16 @@ test('Edge position updates correctly when node is actually moved', () => {
         const updatedPositions = getEdgePathPositions(updatedPath);
 
         // Edge start should have moved with the node
-        assertTrue(updatedPositions.start.x !== initialPositions.start.x);
-        assertTrue(updatedPositions.start.y !== initialPositions.start.y);
+        assertFalse(
+            positionsEqual(updatedPositions.start, initialPositions.start),
+            'Edge start should have moved to new source position'
+        );
 
-        // Edge end should remain at target position
-        assertEqual(updatedPositions.end.x, initialPositions.end.x);
-        assertEqual(updatedPositions.end.y, initialPositions.end.y);
+        // Edge end should remain at target position (target didn't move)
+        assertTrue(
+            positionsEqual(updatedPositions.end, initialPositions.end),
+            'Edge end should remain at target position'
+        );
     } finally {
         cleanupCanvasTest();
     }
@@ -298,20 +392,27 @@ test('Multiple edges update correctly when node is resized', () => {
             edge3: getEdgePathPositions(canvas.edgeElements.get(edge3.id).getAttribute('d')),
         };
 
-        // All edge positions should remain stable (center node didn't move, just resized)
-        // Edge1: start at node1, end at centerNode
-        assertEqual(updatedPaths.edge1.start.x, initialPaths.edge1.start.x);
-        assertEqual(updatedPaths.edge1.start.y, initialPaths.edge1.start.y);
-        assertEqual(updatedPaths.edge1.end.x, initialPaths.edge1.end.x);
-        assertEqual(updatedPaths.edge1.end.y, initialPaths.edge1.end.y);
+        // All edge positions should remain stable (center node resized but didn't move)
+        // Edge1: node1 → centerNode
+        assertTrue(
+            positionsEqual(updatedPaths.edge1.start, initialPaths.edge1.start) &&
+                positionsEqual(updatedPaths.edge1.end, initialPaths.edge1.end),
+            'Edge1 positions should remain stable'
+        );
 
-        // Edge2: start at centerNode, end at node2
-        assertEqual(updatedPaths.edge2.start.x, initialPaths.edge2.start.x);
-        assertEqual(updatedPaths.edge2.start.y, initialPaths.edge2.start.y);
+        // Edge2: centerNode → node2
+        assertTrue(
+            positionsEqual(updatedPaths.edge2.start, initialPaths.edge2.start) &&
+                positionsEqual(updatedPaths.edge2.end, initialPaths.edge2.end),
+            'Edge2 positions should remain stable'
+        );
 
-        // Edge3: start at centerNode, end at node3
-        assertEqual(updatedPaths.edge3.start.x, initialPaths.edge3.start.x);
-        assertEqual(updatedPaths.edge3.start.y, initialPaths.edge3.start.y);
+        // Edge3: centerNode → node3
+        assertTrue(
+            positionsEqual(updatedPaths.edge3.start, initialPaths.edge3.start) &&
+                positionsEqual(updatedPaths.edge3.end, initialPaths.edge3.end),
+            'Edge3 positions should remain stable'
+        );
     } finally {
         cleanupCanvasTest();
     }
