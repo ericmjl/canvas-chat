@@ -2399,8 +2399,12 @@ class Canvas {
                     }
                     // If just resizing east on a matrix, don't change height at all
 
-                    // Update edges
-                    this.updateEdgesForNode(node.id, node.position);
+                    // Update edges - read current position from wrapper, not stale node.position
+                    const currentPos = {
+                        x: parseFloat(wrapper.getAttribute('x')),
+                        y: parseFloat(wrapper.getAttribute('y')),
+                    };
+                    this.updateEdgesForNode(node.id, currentPos);
 
                     // Notify for real-time multiplayer sync
                     this.emit('nodeResizing', node.id, newWidth, newHeight);
