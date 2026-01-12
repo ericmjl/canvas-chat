@@ -209,6 +209,9 @@ class StreamingManager {
         const state = this.streams.get(nodeId);
         if (!state) return false;
 
+        // If already stopped, return early (idempotent)
+        if (state.stopped) return true;
+
         // If part of a group, stop all nodes in the group
         if (state.groupId) {
             return this.stopGroup(state.groupId);
