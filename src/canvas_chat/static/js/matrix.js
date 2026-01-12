@@ -56,15 +56,10 @@ class MatrixFeature extends FeaturePlugin {
      * Handle the /matrix command - parse context and show modal
      */
     async handleMatrix(matrixContext) {
-        // Get selected nodes
+        // Get selected nodes (optional - used as additional context if present)
         const selectedIds = this.canvas.getSelectedNodeIds();
         console.log('handleMatrix called with context:', matrixContext);
         console.log('Selected node IDs:', selectedIds);
-
-        if (selectedIds.length === 0) {
-            alert('Please select one or more nodes to provide context for the matrix.');
-            return;
-        }
 
         const model = this.getModelPicker().value;
 
@@ -86,7 +81,7 @@ class MatrixFeature extends FeaturePlugin {
         console.log('Modal should now be visible');
 
         try {
-            // Gather content from all selected nodes
+            // Gather content from selected nodes (if any) for additional context
             const contents = selectedIds
                 .map((id) => {
                     const node = this.graph.getNode(id);
@@ -94,7 +89,12 @@ class MatrixFeature extends FeaturePlugin {
                 })
                 .filter((c) => c);
 
-            // Parse two lists from all context nodes
+            // If no selected nodes, use the matrix context itself as the content to parse
+            if (contents.length === 0) {
+                contents.push(matrixContext);
+            }
+
+            // Parse two lists from context (either from selected nodes or command text)
             const result = await this.parseTwoLists(contents, matrixContext, model);
 
             const rowItems = result.rows;
