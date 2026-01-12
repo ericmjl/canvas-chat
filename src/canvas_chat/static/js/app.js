@@ -42,6 +42,7 @@ import { streamSSEContent, readSSEStream } from './sse.js';
 // Plugin system
 import { FeatureRegistry, PRIORITY } from './feature-registry.js';
 import { AppContext } from './feature-plugin.js';
+import { StreamingManager } from './streaming-manager.js';
 
 /* global pyodideRunner */
 
@@ -55,7 +56,11 @@ class App {
         this.searchSelectedIndex = 0;
         this.slashCommandMenu = new SlashCommandMenu();
 
-        // Streaming state - Map of nodeId -> { abortController, context }
+        // Unified streaming manager for all features
+        this.streamingManager = new StreamingManager();
+
+        // Legacy: Keep streamingNodes as alias for backwards compatibility during migration
+        // TODO: Remove after all features migrated to StreamingManager
         this.streamingNodes = new Map();
 
         // Retry contexts for error recovery
@@ -105,6 +110,10 @@ class App {
 
         // Initialize canvas
         this.canvas = new Canvas('canvas-container', 'canvas');
+
+        // Configure streaming manager with canvas and graph getter
+        this.streamingManager.setCanvas(this.canvas);
+        this.streamingManager.setGraphGetter(() => this.graph);
 
         // Setup canvas event listeners (using EventEmitter pattern)
         this.setupCanvasEventListeners();
@@ -3346,21 +3355,29 @@ df.head()
     // Edit Title Modal methods moved to modal-manager.js
 
     /**
-     * Handle stopping generation for a streaming node (AI nodes or Matrix fill)
+     * Handle stopping generation for a node.
+     * Uses StreamingManager for unified stop handling across all features.
      */
     handleNodeStopGeneration(nodeId) {
-        // Check if this is a matrix node with active cell fills
-        const matrixCellControllers = this.matrixFeature.streamingMatrixCells.get(nodeId);
-        if (matrixCellControllers) {
-            // Abort all active cell fills for this matrix
-            for (const [cellKey, controller] of matrixCellControllers) {
-                controller.abort();
-            }
-            // Cleanup will happen in handleMatrixFillAll's finally block
+        // First try StreamingManager (new unified system)
+        if (this.streamingManager.isStreaming(nodeId) || this.streamingManager.getState(nodeId)) {
+            this.streamingManager.stop(nodeId);
+            this.saveSession();
             return;
         }
 
-        // Otherwise, handle as regular AI node
+        // Check if this is a matrix node with cells streaming (uses group ID)
+        const matrixGroupId = `matrix-${nodeId}`;
+        const matrixCells = this.streamingManager.getGroupNodes(matrixGroupId);
+        if (matrixCells.size > 0) {
+            this.streamingManager.stopGroup(matrixGroupId);
+            this.canvas.hideStopButton(nodeId);
+            this.saveSession();
+            return;
+        }
+
+        // Legacy fallback: Handle as regular AI node via old streamingNodes map
+        // TODO: Remove after all features migrated to StreamingManager
         const streamingState = this.streamingNodes.get(nodeId);
         if (!streamingState) return;
 
@@ -3390,14 +3407,24 @@ df.head()
     }
 
     /**
-     * Handle continuing generation for a stopped node
+     * Handle continuing generation for a stopped node.
+     * Uses StreamingManager for unified continue handling across all features.
      */
     async handleNodeContinueGeneration(nodeId) {
+        // First try StreamingManager (new unified system)
+        if (this.streamingManager.isStopped(nodeId)) {
+            await this.streamingManager.continue(nodeId);
+            this.saveSession();
+            return;
+        }
+
+        // Legacy fallback for features not yet migrated
         const node = this.graph.getNode(nodeId);
         const streamingState = this.streamingNodes.get(nodeId);
         if (!node) return;
 
         // Special case: Research nodes restart the research process
+        // TODO: Migrate to StreamingManager with onContinue callback
         if (node.type === NodeType.RESEARCH) {
             // Get original instructions and context from streaming state
             const instructions = streamingState?.context?.originalInstructions;

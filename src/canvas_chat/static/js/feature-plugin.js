@@ -40,7 +40,11 @@ class AppContext {
         this.buildLLMRequest = app.buildLLMRequest.bind(app);
         this.generateNodeSummary = app.generateNodeSummary ? app.generateNodeSummary.bind(app) : null;
 
-        // Streaming state management
+        // Unified streaming manager (preferred)
+        this.streamingManager = app.streamingManager;
+
+        // Legacy streaming state management (for backwards compatibility during migration)
+        // TODO: Remove after all features migrated to StreamingManager
         this.registerStreaming = (nodeId, abortController, context = null) => {
             app.streamingNodes.set(nodeId, { abortController, context });
         };
@@ -120,6 +124,9 @@ class FeaturePlugin {
         this.undoManager = context.undoManager;
         this.featureRegistry = context.featureRegistry;
 
+        // Unified streaming manager (preferred for new code)
+        this.streamingManager = context.streamingManager;
+
         // UI elements (initialized before plugins, safe to copy)
         this.modelPicker = context.modelPicker;
         this.chatInput = context.chatInput;
@@ -132,7 +139,8 @@ class FeaturePlugin {
         this.buildLLMRequest = context.buildLLMRequest;
         this.generateNodeSummary = context.generateNodeSummary;
 
-        // Streaming state management (functions, safe to copy)
+        // Legacy streaming state management (for backwards compatibility)
+        // TODO: Remove after all features migrated to StreamingManager
         this.registerStreaming = context.registerStreaming;
         this.unregisterStreaming = context.unregisterStreaming;
         this.getStreamingState = context.getStreamingState;

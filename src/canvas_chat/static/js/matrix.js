@@ -40,8 +40,8 @@ class MatrixFeature extends FeaturePlugin {
         this._currentCellData = null;
         this._currentSliceData = null;
 
-        // Matrix streaming state - Map of nodeId -> Map of cellKey -> AbortController
-        // Allows stopping all cell fills for a matrix node at once
+        // Legacy streaming state - kept for backwards compatibility during migration
+        // TODO: Remove after StreamingManager migration is complete
         this.streamingMatrixCells = new Map();
     }
 
@@ -338,11 +338,13 @@ class MatrixFeature extends FeaturePlugin {
 
         // Track this cell fill for stop button support
         const cellKey = `${row}-${col}`;
-        const isStandaloneFill = !abortController; // Not called from Fill All
+        // Use a unique virtual nodeId for each cell to allow individual tracking
+        const cellNodeId = `${nodeId}:cell:${cellKey}`;
+        // Group all cells in this matrix together so stopping one stops all
+        const groupId = `matrix-${nodeId}`;
 
-        if (isStandaloneFill) {
-            abortController = new AbortController();
-        }
+        // Create abort controller for this cell
+        abortController = abortController || new AbortController();
 
         // Extension hook: matrix:before:fill - allow plugins to prevent or modify cell fill
         const beforeEvent = new CancellableEvent('matrix:before:fill', {
@@ -362,16 +364,29 @@ class MatrixFeature extends FeaturePlugin {
             return;
         }
 
-        // Get or create the cell controllers map for this matrix node
+        // Register this cell fill with StreamingManager
+        // Use virtual cell nodeId for tracking, with real nodeId's stop button
+        this.streamingManager.register(cellNodeId, {
+            abortController,
+            featureId: 'matrix',
+            groupId,
+            context: { nodeId, row, col, rowItem, colItem },
+            onStop: () => {
+                // Custom stop handler - no need to update content (cell is in matrix)
+                console.log(`[MatrixFeature] Cell fill stopped: ${cellKey}`);
+            },
+        });
+
+        // Show stop button on the matrix node (not virtual cell nodeId)
+        this.canvas.showStopButton(nodeId);
+
+        // Legacy tracking for backwards compatibility
         let cellControllers = this.streamingMatrixCells.get(nodeId);
         if (!cellControllers) {
             cellControllers = new Map();
             this.streamingMatrixCells.set(nodeId, cellControllers);
         }
         cellControllers.set(cellKey, abortController);
-
-        // Show stop button when any cell is being filled
-        this.canvas.showStopButton(nodeId);
 
         try {
             // Extension hook: matrix:cell:prompt - allow plugins to customize the prompt/request
@@ -505,14 +520,23 @@ class MatrixFeature extends FeaturePlugin {
                 error: err.message,
             });
         } finally {
-            // Clean up this cell from tracking
+            // Unregister from StreamingManager
+            const cellNodeId = `${nodeId}:cell:${cellKey}`;
+            this.streamingManager.unregister(cellNodeId, { hideButtons: false });
+
+            // Check if any cells are still streaming for this matrix
+            const groupNodes = this.streamingManager.getGroupNodes(`matrix-${nodeId}`);
+            if (groupNodes.size === 0) {
+                // No more cells being filled, hide stop button
+                this.canvas.hideStopButton(nodeId);
+            }
+
+            // Legacy cleanup
             const controllers = this.streamingMatrixCells.get(nodeId);
             if (controllers) {
                 controllers.delete(cellKey);
-                // If no more cells are being filled, hide stop button and clean up
                 if (controllers.size === 0) {
                     this.streamingMatrixCells.delete(nodeId);
-                    this.canvas.hideStopButton(nodeId);
                 }
             }
         }
@@ -852,18 +876,12 @@ class MatrixFeature extends FeaturePlugin {
     /**
      * Stop all streaming cell fills for a matrix node
      * @param {string} nodeId - The matrix node ID
-     * @returns {number} Number of aborted cell fills
+     * @returns {boolean} True if any cells were stopped
      */
     stopAllCellFills(nodeId) {
-        const controllers = this.streamingMatrixCells.get(nodeId);
-        if (!controllers) return 0;
-
-        let aborted = 0;
-        for (const [cellKey, controller] of controllers) {
-            controller.abort();
-            aborted++;
-        }
-        return aborted;
+        // Use StreamingManager to stop all cells in this matrix's group
+        const groupId = `matrix-${nodeId}`;
+        return this.streamingManager.stopGroup(groupId);
     }
 
     /**
@@ -872,8 +890,9 @@ class MatrixFeature extends FeaturePlugin {
      * @returns {boolean} True if cells are being filled
      */
     isFillingCells(nodeId) {
-        const controllers = this.streamingMatrixCells.get(nodeId);
-        return controllers && controllers.size > 0;
+        const groupId = `matrix-${nodeId}`;
+        const groupNodes = this.streamingManager.getGroupNodes(groupId);
+        return groupNodes.size > 0;
     }
 
     /**
@@ -884,12 +903,7 @@ class MatrixFeature extends FeaturePlugin {
         this._editMatrixData = null;
         this._currentCellData = null;
         this._currentSliceData = null;
-        // Abort any active cell fills
-        for (const [_nodeId, controllers] of this.streamingMatrixCells) {
-            for (const [_cellKey, controller] of controllers) {
-                controller.abort();
-            }
-        }
+        // StreamingManager handles cleanup via clear() when session changes
         this.streamingMatrixCells.clear();
     }
 }

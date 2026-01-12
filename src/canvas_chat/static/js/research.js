@@ -268,15 +268,27 @@ class ResearchFeature extends FeaturePlugin {
 
         // Create abort controller for stop button support
         const abortController = new AbortController();
-        this.registerStreaming(researchNode.id, abortController, {
-            type: 'research',
-            originalInstructions: instructions,
-            originalContext: context,
-        });
-        this.canvas.showStopButton(researchNode.id);
 
-        // Capture nodeId early to avoid closure issues with parallel research
+        // Register with StreamingManager for unified stop/continue handling
         const nodeId = researchNode.id;
+        this.streamingManager.register(nodeId, {
+            abortController,
+            featureId: 'research',
+            context: {
+                type: 'research',
+                originalInstructions: instructions,
+                originalContext: context,
+            },
+            onContinue: async (nodeId, state, newAbortController) => {
+                // Continue research from where it left off
+                await this.handleResearch(
+                    state.context.originalInstructions,
+                    state.context.originalContext,
+                    nodeId // Pass existing node ID to continue on same node
+                );
+            },
+        });
+        this.canvas.showStopButton(nodeId);
 
         try {
             let effectiveInstructions = instructions;
@@ -430,8 +442,7 @@ class ResearchFeature extends FeaturePlugin {
                 },
                 onDone: () => {
                     // Clean up streaming state
-                    this.unregisterStreaming(nodeId);
-                    this.canvas.hideStopButton(nodeId);
+                    this.streamingManager.unregister(nodeId);
 
                     if (!hasExa && ddgFinalReport) {
                         reportContent = reportHeader + ddgFinalReport;
@@ -455,8 +466,7 @@ class ResearchFeature extends FeaturePlugin {
                 },
                 onError: (err) => {
                     // Clean up streaming state on error
-                    this.unregisterStreaming(nodeId);
-                    this.canvas.hideStopButton(nodeId);
+                    this.streamingManager.unregister(nodeId);
 
                     // Re-throw if not an abort error
                     if (err.name !== 'AbortError') {
@@ -468,19 +478,11 @@ class ResearchFeature extends FeaturePlugin {
             this.saveSession();
         } catch (err) {
             // Clean up streaming state
-            const nodeId = researchNode.id;
-            this.unregisterStreaming(nodeId);
-            this.canvas.hideStopButton(nodeId);
+            this.streamingManager.unregister(nodeId);
 
             // Check if it was aborted (user clicked stop)
+            // StreamingManager handles stopped indicator via default onStop behavior
             if (err.name === 'AbortError') {
-                // Add stopped indicator to current content
-                const node = this.graph.getNode(nodeId);
-                if (node) {
-                    const stoppedContent = node.content + '\n\n*[Research stopped]*';
-                    this.canvas.updateNodeContent(nodeId, stoppedContent, false);
-                    this.graph.updateNode(nodeId, { content: stoppedContent });
-                }
                 this.saveSession();
                 return;
             }

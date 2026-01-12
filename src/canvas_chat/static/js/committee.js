@@ -315,14 +315,33 @@ class CommitteeFeature extends FeaturePlugin {
         // Create abort controller for this committee session
         const abortController = new AbortController();
 
-        // Show stop buttons on all opinion nodes
+        // Use humanNode.id as groupId for this committee session
+        const groupId = `committee-${humanNode.id}`;
+
+        // Register all opinion nodes with StreamingManager (shared abort controller, grouped)
         for (const node of opinionNodes) {
-            this.canvas.showStopButton(node.id);
+            this.streamingManager.register(node.id, {
+                abortController,
+                featureId: 'committee',
+                groupId,
+                context: { question, humanNodeId: humanNode.id },
+                onStop: null, // Use default stop behavior
+                onContinue: null, // Committee doesn't support continue (would need to restart)
+            });
         }
 
-        // Store streaming state for potential abort
+        // Also register synthesis node
+        this.streamingManager.register(synthesisNode.id, {
+            abortController,
+            featureId: 'committee',
+            groupId,
+            context: { question, humanNodeId: humanNode.id },
+        });
+
+        // Store streaming state for internal tracking
         this._activeCommittee = {
             abortController,
+            groupId,
             opinionNodeIds: opinionNodes.map((n) => n.id),
             reviewNodeIds: [],
             synthesisNodeId: synthesisNode.id,
@@ -413,8 +432,15 @@ class CommitteeFeature extends FeaturePlugin {
                         this.graph.addEdge(reviewEdge);
                         this.canvas.renderEdge(reviewEdge, opinionNode.position, reviewNode.position);
 
-                        this.canvas.showStopButton(reviewNode.id);
                         reviewContents[reviewerIndex] = '';
+
+                        // Register review node with StreamingManager (same group as opinions/synthesis)
+                        this.streamingManager.register(reviewNode.id, {
+                            abortController,
+                            featureId: 'committee',
+                            groupId,
+                            context: { question, humanNodeId: humanNode.id },
+                        });
 
                         if (this._activeCommittee) {
                             this._activeCommittee.reviewNodeIds.push(reviewNode.id);
@@ -478,20 +504,28 @@ class CommitteeFeature extends FeaturePlugin {
                     }
                 },
                 onDone: () => {
-                    // Hide all stop buttons
+                    // Unregister all nodes from StreamingManager
                     for (const nodeId of Object.values(opinionNodeMap)) {
-                        this.canvas.hideStopButton(nodeId);
+                        this.streamingManager.unregister(nodeId);
                     }
                     for (const nodeId of Object.values(reviewNodeMap)) {
-                        this.canvas.hideStopButton(nodeId);
+                        this.streamingManager.unregister(nodeId);
                     }
-                    this.canvas.hideStopButton(synthesisNode.id);
+                    this.streamingManager.unregister(synthesisNode.id);
 
                     this._activeCommittee = null;
                     this.saveSession();
                 },
                 onError: (err) => {
                     console.error('Committee stream error:', err);
+                    // Unregister all nodes from StreamingManager
+                    for (const nodeId of Object.values(opinionNodeMap)) {
+                        this.streamingManager.unregister(nodeId);
+                    }
+                    for (const nodeId of Object.values(reviewNodeMap)) {
+                        this.streamingManager.unregister(nodeId);
+                    }
+                    this.streamingManager.unregister(synthesisNode.id);
                     this._activeCommittee = null;
                 },
             });
@@ -502,8 +536,15 @@ class CommitteeFeature extends FeaturePlugin {
                 console.error('Committee error:', err);
                 // Update synthesis node with error
                 this.canvas.updateNodeContent(synthesisNode.id, `**Error**\n\n${err.message}`, false);
-                this.canvas.hideStopButton(synthesisNode.id);
             }
+            // Unregister all nodes from StreamingManager
+            for (const nodeId of Object.values(opinionNodeMap)) {
+                this.streamingManager.unregister(nodeId);
+            }
+            for (const nodeId of Object.values(reviewNodeMap)) {
+                this.streamingManager.unregister(nodeId);
+            }
+            this.streamingManager.unregister(synthesisNode.id);
             this._activeCommittee = null;
             this.saveSession();
         }
@@ -524,7 +565,8 @@ class CommitteeFeature extends FeaturePlugin {
      */
     abort() {
         if (this._activeCommittee) {
-            this._activeCommittee.abortController.abort();
+            // Use StreamingManager to stop the entire group
+            this.streamingManager.stopGroup(this._activeCommittee.groupId);
             this._activeCommittee = null;
         }
     }

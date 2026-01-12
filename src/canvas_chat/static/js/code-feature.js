@@ -25,7 +25,7 @@ export class CodeFeature extends FeaturePlugin {
 
         // All dependencies are now inherited from FeaturePlugin base class:
         // - this.pyodideRunner
-        // - this.streamingNodes
+        // - this.streamingManager (unified streaming state)
         // - this.apiUrl
         // - this.buildLLMRequest
         // - this.graph, this.canvas, this.saveSession, etc.
@@ -352,11 +352,13 @@ Output ONLY the corrected Python code, no explanations.`;
             // Show stop button
             this.canvas.showStopButton(nodeId);
 
-            // Create AbortController
+            // Create AbortController and register with StreamingManager
             const abortController = new AbortController();
-            this.streamingNodes.set(nodeId, {
+            this.streamingManager.register(nodeId, {
                 abortController,
+                featureId: 'code',
                 context: { originalPrompt, model, nodeContext: context },
+                // Code self-healing doesn't support continue (would need to restart)
             });
 
             // Build request body
@@ -389,8 +391,7 @@ Output ONLY the corrected Python code, no explanations.`;
                 },
                 onDone: async () => {
                     // Clean up streaming state
-                    this.streamingNodes.delete(nodeId);
-                    this.canvas.hideStopButton(nodeId);
+                    this.streamingManager.unregister(nodeId);
 
                     // Final update
                     this.canvas.updateCodeContent(nodeId, fixedCode, false);
@@ -406,8 +407,7 @@ Output ONLY the corrected Python code, no explanations.`;
             });
         } catch (error) {
             // Clean up on error
-            this.streamingNodes.delete(nodeId);
-            this.canvas.hideStopButton(nodeId);
+            this.streamingManager.unregister(nodeId);
 
             // Check if it was aborted
             if (error.name === 'AbortError') {
