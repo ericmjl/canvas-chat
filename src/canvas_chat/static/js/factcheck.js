@@ -55,29 +55,32 @@ class FactcheckFeature extends FeaturePlugin {
      * @param {string} input - The user's input (claim or vague reference)
      * @param {string} context - Optional context from selected nodes
      */
-    async handleFactcheck(input, context = null) {
-        console.log('[Factcheck] Starting with input:', input, 'context:', context);
+    /**
+     * Handle the /factcheck command
+     * @param {string} command - The slash command (e.g., '/factcheck')
+     * @param {string} args - Text after the command
+     * @param {Object} contextObj - Additional context (e.g., { text: selectedNodesContent })
+     */
+    async handleFactcheck(command, args, contextObj) {
+        // Use args as the input, and contextObj.text as additional context from selected nodes
+        const input = args.trim();
+        const selectedContext = contextObj?.text || null;
+
+        console.log('[Factcheck] Starting with:', { command, input, selectedContext });
 
         const model = this.getModelPicker().value;
 
-        // Get parent node IDs for positioning
-        let parentIds = this.canvas.getSelectedNodeIds();
-        if (parentIds.length === 0) {
-            const leaves = this.graph.getLeafNodes();
-            if (leaves.length > 0) {
-                leaves.sort((a, b) => b.created_at - a.created_at);
-                parentIds = [leaves[0].id];
-            }
-        }
+        // Get parent node IDs for positioning (optional)
+        const parentIds = this.canvas.getSelectedNodeIds();
 
         // Create a loading node immediately for feedback
         const loadingNode = createNode(NodeType.FACTCHECK, '🔄 **Analyzing text for claims...**', {
-            position: this.graph.autoPosition(parentIds),
+            position: this.graph.autoPosition(parentIds.length > 0 ? parentIds : []),
         });
         this.graph.addNode(loadingNode);
         this.canvas.renderNode(loadingNode);
 
-        // Connect to parent nodes
+        // Connect to parent nodes only if they exist
         for (const parentId of parentIds) {
             const edge = createEdge(parentId, loadingNode.id, EdgeType.REFERENCE);
             this.graph.addEdge(edge);
@@ -89,9 +92,9 @@ class FactcheckFeature extends FeaturePlugin {
         this.canvas.panToNodeAnimated(loadingNode.id);
 
         try {
-            // If context provided but input is vague, refine it
+            // If selectedContext provided but input is vague, refine it
             let effectiveInput = input;
-            if (context && context.trim() && (!input || input.length < 20)) {
+            if (selectedContext && selectedContext.trim() && (!input || input.length < 20)) {
                 console.log('[Factcheck] Refining vague input with context');
                 this.canvas.updateNodeContent(loadingNode.id, '🔄 **Refining query...**', true);
 
@@ -101,7 +104,7 @@ class FactcheckFeature extends FeaturePlugin {
                     body: JSON.stringify(
                         this.buildLLMRequest({
                             user_query: input || 'verify this',
-                            context: context,
+                            context: selectedContext,
                             command_type: 'factcheck',
                         })
                     ),
@@ -112,13 +115,13 @@ class FactcheckFeature extends FeaturePlugin {
                     console.log('[Factcheck] Refined to:', effectiveInput);
                 } else {
                     console.warn('[Factcheck] Refine failed, using context directly');
-                    effectiveInput = context;
+                    effectiveInput = selectedContext;
                 }
             }
 
-            // Use context as input if no direct input provided
-            if (!effectiveInput && context) {
-                effectiveInput = context;
+            // Use selectedContext as input if no direct input provided
+            if (!effectiveInput && selectedContext) {
+                effectiveInput = selectedContext;
             }
 
             console.log('[Factcheck] Final effectiveInput:', effectiveInput);
