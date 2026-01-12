@@ -349,10 +349,7 @@ Output ONLY the corrected Python code, no explanations.`;
             });
             this.canvas.renderNode(this.graph.getNode(nodeId));
 
-            // Show stop button
-            this.canvas.showStopButton(nodeId);
-
-            // Create AbortController and register with StreamingManager
+            // Create AbortController and register with StreamingManager (auto-shows stop button)
             const abortController = new AbortController();
             this.streamingManager.register(nodeId, {
                 abortController,
@@ -390,7 +387,7 @@ Output ONLY the corrected Python code, no explanations.`;
                     }
                 },
                 onDone: async () => {
-                    // Clean up streaming state
+                    // Clean up streaming state (auto-hides stop button)
                     this.streamingManager.unregister(nodeId);
 
                     // Final update
@@ -406,7 +403,7 @@ Output ONLY the corrected Python code, no explanations.`;
                 },
             });
         } catch (error) {
-            // Clean up on error
+            // Clean up on error (auto-hides stop button)
             this.streamingManager.unregister(nodeId);
 
             // Check if it was aborted

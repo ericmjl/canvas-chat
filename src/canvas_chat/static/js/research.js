@@ -288,7 +288,7 @@ class ResearchFeature extends FeaturePlugin {
                 );
             },
         });
-        this.canvas.showStopButton(nodeId);
+        // StreamingManager auto-shows stop button
 
         try {
             let effectiveInstructions = instructions;

@@ -365,20 +365,26 @@ class MatrixFeature extends FeaturePlugin {
         }
 
         // Register this cell fill with StreamingManager
-        // Use virtual cell nodeId for tracking, with real nodeId's stop button
+        // Use virtual cell nodeId for tracking, but don't auto-show button on virtual ID
         this.streamingManager.register(cellNodeId, {
             abortController,
             featureId: 'matrix',
             groupId,
             context: { nodeId, row, col, rowItem, colItem },
+            showStopButton: false, // We manage the button on parent matrix node manually
             onStop: () => {
                 // Custom stop handler - no need to update content (cell is in matrix)
                 console.log(`[MatrixFeature] Cell fill stopped: ${cellKey}`);
             },
         });
 
-        // Show stop button on the matrix node (not virtual cell nodeId)
-        this.canvas.showStopButton(nodeId);
+        // Show stop button on parent matrix node (not the virtual cell ID)
+        // Only show if this is the first cell in the group
+        const groupNodes = this.streamingManager.getGroupNodes(groupId);
+        if (groupNodes.size === 1) {
+            // First cell - show stop button on parent matrix node
+            this.canvas.showStopButton(nodeId);
+        }
 
         // Legacy tracking for backwards compatibility
         let cellControllers = this.streamingMatrixCells.get(nodeId);
@@ -520,14 +526,14 @@ class MatrixFeature extends FeaturePlugin {
                 error: err.message,
             });
         } finally {
-            // Unregister from StreamingManager
+            // Unregister from StreamingManager (don't auto-hide since we manage parent button)
             const cellNodeId = `${nodeId}:cell:${cellKey}`;
             this.streamingManager.unregister(cellNodeId, { hideButtons: false });
 
-            // Check if any cells are still streaming for this matrix
+            // Hide stop button on parent matrix node when last cell completes
+            // (StreamingManager can't auto-hide because cells use virtual IDs)
             const groupNodes = this.streamingManager.getGroupNodes(`matrix-${nodeId}`);
             if (groupNodes.size === 0) {
-                // No more cells being filled, hide stop button
                 this.canvas.hideStopButton(nodeId);
             }
 

@@ -596,9 +596,7 @@ class App {
             .on('matrixColExtract', this.handleMatrixColExtract.bind(this))
             .on('matrixEdit', this.handleMatrixEdit.bind(this))
             .on('matrixIndexColResize', this.handleMatrixIndexColResize.bind(this))
-            // Streaming control events
-            .on('nodeStopGeneration', this.handleNodeStopGeneration.bind(this))
-            .on('nodeContinueGeneration', this.handleNodeContinueGeneration.bind(this))
+            // Streaming control events (now handled by StreamingManager via setCanvas)
             // Error handling events
             .on('nodeRetry', this.handleNodeRetry.bind(this))
             .on('nodeDismissError', this.handleNodeDismissError.bind(this))
@@ -1442,12 +1440,16 @@ class App {
         // Create AbortController for this stream
         const abortController = new AbortController();
 
-        // Track streaming state for stop/continue functionality
-        this.streamingNodes.set(aiNode.id, {
+        // Register with StreamingManager (auto-shows stop button)
+        this.streamingManager.register(aiNode.id, {
             abortController,
+            featureId: 'ai',
             context: { messages, model, humanNodeId: humanNode.id },
+            onContinue: async (nodeId, state) => {
+                // Resume streaming from where we left off
+                await this.continueAIResponse(nodeId, state.context);
+            },
         });
-        this.canvas.showStopButton(aiNode.id);
 
         // Stream response
         this.streamWithAbort(
@@ -1462,8 +1464,7 @@ class App {
             },
             // onDone
             (fullContent) => {
-                this.streamingNodes.delete(aiNode.id);
-                this.canvas.hideStopButton(aiNode.id);
+                this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
                 this.canvas.updateNodeContent(aiNode.id, fullContent, false);
                 this.graph.updateNode(aiNode.id, { content: fullContent });
                 this.saveSession();
@@ -1473,8 +1474,7 @@ class App {
             },
             // onError
             (err) => {
-                this.streamingNodes.delete(aiNode.id);
-                this.canvas.hideStopButton(aiNode.id);
+                this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
 
                 // Format and display user-friendly error
                 const errorInfo = formatUserError(err);
@@ -2478,14 +2478,18 @@ df.head()
             this.canvas.updateCodeContent(nodeId, placeholderCode, true);
             this.graph.updateNode(nodeId, { content: placeholderCode });
 
-            // Show stop button
-            this.canvas.showStopButton(nodeId);
-
             // Create AbortController for this stream
             const abortController = new AbortController();
-            this.streamingNodes.set(nodeId, {
+
+            // Register with StreamingManager (auto-shows stop button)
+            this.streamingManager.register(nodeId, {
                 abortController,
+                featureId: 'code',
                 context: { prompt, model, nodeContext: context },
+                onContinue: async (nodeId, state) => {
+                    // Resume code generation from where we left off
+                    await this.continueCodeGeneration(nodeId, state.context);
+                },
             });
 
             // Build request body using centralized helper
@@ -2522,9 +2526,8 @@ df.head()
                     }
                 },
                 onDone: async () => {
-                    // Clean up streaming state
-                    this.streamingNodes.delete(nodeId);
-                    this.canvas.hideStopButton(nodeId);
+                    // Clean up streaming state (auto-hides stop button)
+                    this.streamingManager.unregister(nodeId);
 
                     // Final update ensures editor has final content
                     this.canvas.updateCodeContent(nodeId, generatedCode, false);
@@ -2539,9 +2542,8 @@ df.head()
                 },
             });
         } catch (error) {
-            // Clean up on error
-            this.streamingNodes.delete(nodeId);
-            this.canvas.hideStopButton(nodeId);
+            // Clean up on error (auto-hides stop button)
+            this.streamingManager.unregister(nodeId);
 
             // Check if it was aborted (user clicked stop)
             if (error.name === 'AbortError') {
@@ -2938,12 +2940,16 @@ df.head()
                 // Create AbortController for this stream
                 const abortController = new AbortController();
 
-                // Track streaming state for stop/continue functionality
-                this.streamingNodes.set(aiNode.id, {
+                // Register with StreamingManager (auto-shows stop button)
+                this.streamingManager.register(aiNode.id, {
                     abortController,
+                    featureId: 'ai',
                     context: { messages, model, humanNodeId: humanNode.id },
+                    onContinue: async (nodeId, state) => {
+                        // Resume streaming from where we left off
+                        await this.continueAIResponse(nodeId, state.context);
+                    },
                 });
-                this.canvas.showStopButton(aiNode.id);
 
                 // Stream response using streamWithAbort
                 this.streamWithAbort(
@@ -2958,8 +2964,7 @@ df.head()
                     },
                     // onDone
                     (fullContent) => {
-                        this.streamingNodes.delete(aiNode.id);
-                        this.canvas.hideStopButton(aiNode.id);
+                        this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
                         this.canvas.updateNodeContent(aiNode.id, fullContent, false);
                         this.graph.updateNode(aiNode.id, { content: fullContent });
                         this.saveSession();
@@ -2967,8 +2972,7 @@ df.head()
                     },
                     // onError
                     (err) => {
-                        this.streamingNodes.delete(aiNode.id);
-                        this.canvas.hideStopButton(aiNode.id);
+                        this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
 
                         // Format and display user-friendly error
                         const errorInfo = formatUserError(err);
@@ -3355,199 +3359,6 @@ df.head()
     // Edit Title Modal methods moved to modal-manager.js
 
     /**
-     * Handle stopping generation for a node.
-     * Uses StreamingManager for unified stop handling across all features.
-     */
-    handleNodeStopGeneration(nodeId) {
-        // First try StreamingManager (new unified system)
-        if (this.streamingManager.isStreaming(nodeId) || this.streamingManager.getState(nodeId)) {
-            this.streamingManager.stop(nodeId);
-            this.saveSession();
-            return;
-        }
-
-        // Check if this is a matrix node with cells streaming (uses group ID)
-        const matrixGroupId = `matrix-${nodeId}`;
-        const matrixCells = this.streamingManager.getGroupNodes(matrixGroupId);
-        if (matrixCells.size > 0) {
-            this.streamingManager.stopGroup(matrixGroupId);
-            this.canvas.hideStopButton(nodeId);
-            this.saveSession();
-            return;
-        }
-
-        // Legacy fallback: Handle as regular AI node via old streamingNodes map
-        // TODO: Remove after all features migrated to StreamingManager
-        const streamingState = this.streamingNodes.get(nodeId);
-        if (!streamingState) return;
-
-        // Abort the request
-        streamingState.abortController.abort();
-
-        // Get current content and add stopped indicator
-        const node = this.graph.getNode(nodeId);
-        if (node) {
-            const stoppedContent = node.content + '\n\n*[Generation stopped]*';
-            this.canvas.updateNodeContent(nodeId, stoppedContent, false);
-            this.graph.updateNode(nodeId, { content: stoppedContent });
-        }
-
-        // Update UI state - keep context for continue but mark as stopped
-        this.canvas.hideStopButton(nodeId);
-        this.canvas.showContinueButton(nodeId);
-
-        // Store context for continue, then remove from streaming
-        this.streamingNodes.set(nodeId, {
-            ...streamingState,
-            abortController: null,
-            stopped: true,
-        });
-
-        this.saveSession();
-    }
-
-    /**
-     * Handle continuing generation for a stopped node.
-     * Uses StreamingManager for unified continue handling across all features.
-     */
-    async handleNodeContinueGeneration(nodeId) {
-        // First try StreamingManager (new unified system)
-        if (this.streamingManager.isStopped(nodeId)) {
-            await this.streamingManager.continue(nodeId);
-            this.saveSession();
-            return;
-        }
-
-        // Legacy fallback for features not yet migrated
-        const node = this.graph.getNode(nodeId);
-        const streamingState = this.streamingNodes.get(nodeId);
-        if (!node) return;
-
-        // Special case: Research nodes restart the research process
-        // TODO: Migrate to StreamingManager with onContinue callback
-        if (node.type === NodeType.RESEARCH) {
-            // Get original instructions and context from streaming state
-            const instructions = streamingState?.context?.originalInstructions;
-            const context = streamingState?.context?.originalContext || null;
-
-            if (!instructions) {
-                // Fallback: try to extract from node content
-                const contentMatch = node.content.match(/^\*\*Research(?: \(DDG\))?:\*\* (.+?)(?:\n\n|$)/);
-                if (!contentMatch) {
-                    console.error('Could not extract instructions from research node');
-                    return;
-                }
-                // Use extracted instructions, but we don't have context
-                const extractedInstructions = contentMatch[1].trim();
-
-                // Hide continue button, show stop button
-                this.canvas.hideContinueButton(nodeId);
-                this.canvas.showStopButton(nodeId);
-
-                // Clear the stopped indicator and restart
-                const cleanedContent = node.content
-                    .replace(/\n\n\*\[Research stopped\]\*$/, '')
-                    .replace(/\n\n\*\[Generation stopped\]\*$/, '');
-                this.canvas.updateNodeContent(nodeId, cleanedContent, false);
-
-                // Restart research with extracted instructions (no context) on existing node
-                try {
-                    await this.researchFeature.handleResearch(extractedInstructions, null, nodeId);
-                } catch (err) {
-                    console.error('Error continuing research:', err);
-                    const errorContent = node.content + `\n\n*Error continuing research: ${err.message}*`;
-                    this.canvas.updateNodeContent(nodeId, errorContent, false);
-                    this.graph.updateNode(nodeId, { content: errorContent });
-                    this.saveSession();
-                }
-                return;
-            }
-
-            // Hide continue button, show stop button
-            this.canvas.hideContinueButton(nodeId);
-            this.canvas.showStopButton(nodeId);
-
-            // Clear the stopped indicator from content
-            const cleanedContent = node.content
-                .replace(/\n\n\*\[Research stopped\]\*$/, '')
-                .replace(/\n\n\*\[Generation stopped\]\*$/, '');
-            this.canvas.updateNodeContent(nodeId, cleanedContent, false);
-
-            // Restart research with same instructions and context on existing node
-            try {
-                await this.researchFeature.handleResearch(instructions, context, nodeId);
-            } catch (err) {
-                console.error('Error continuing research:', err);
-                const errorContent = node.content + `\n\n*Error continuing research: ${err.message}*`;
-                this.canvas.updateNodeContent(nodeId, errorContent, false);
-                this.graph.updateNode(nodeId, { content: errorContent });
-                this.saveSession();
-            }
-            return;
-        }
-
-        // Regular AI node continue logic
-        if (!streamingState?.context) return;
-
-        // Hide continue button, show stop button
-        this.canvas.hideContinueButton(nodeId);
-        this.canvas.showStopButton(nodeId);
-
-        // Get current content (remove the stopped indicator)
-        let currentContent = node.content.replace(/\n\n\*\[Generation stopped\]\*$/, '');
-
-        // Build messages with current partial response
-        const messages = [
-            ...streamingState.context.messages,
-            { role: 'assistant', content: currentContent },
-            { role: 'user', content: 'Please continue your response from where you left off.' },
-        ];
-
-        // Create new AbortController for the continuation
-        const abortController = new AbortController();
-        this.streamingNodes.set(nodeId, {
-            abortController,
-            context: streamingState.context,
-        });
-
-        // Continue streaming
-        this.streamWithAbort(
-            nodeId,
-            abortController,
-            messages,
-            streamingState.context.model,
-            // onChunk
-            (chunk, fullContent) => {
-                // Append to existing content
-                const combinedContent = currentContent + fullContent;
-                this.canvas.updateNodeContent(nodeId, combinedContent, true);
-                this.graph.updateNode(nodeId, { content: combinedContent });
-            },
-            // onDone
-            (fullContent) => {
-                this.streamingNodes.delete(nodeId);
-                this.canvas.hideStopButton(nodeId);
-                const combinedContent = currentContent + fullContent;
-                this.canvas.updateNodeContent(nodeId, combinedContent, false);
-                this.graph.updateNode(nodeId, { content: combinedContent });
-                this.saveSession();
-
-                // Generate summary async
-                this.generateNodeSummary(nodeId);
-            },
-            // onError
-            (err) => {
-                this.streamingNodes.delete(nodeId);
-                this.canvas.hideStopButton(nodeId);
-                const errorContent = currentContent + `\n\n*Error continuing: ${err.message}*`;
-                this.canvas.updateNodeContent(nodeId, errorContent, false);
-                this.graph.updateNode(nodeId, { content: errorContent });
-                this.saveSession();
-            }
-        );
-    }
-
-    /**
      * Helper method to stream LLM responses with abort support
      * Wraps the streaming call with proper error handling for AbortController
      * @param {string} nodeId - The node ID being streamed to
@@ -3641,12 +3452,16 @@ df.head()
             // Create AbortController for this retry
             const abortController = new AbortController();
 
-            // Track streaming state with new pattern
-            this.streamingNodes.set(nodeId, {
+            // Register with StreamingManager (auto-shows stop button)
+            this.streamingManager.register(nodeId, {
                 abortController,
+                featureId: 'ai',
                 context: { messages: retryContext.messages, model: retryContext.model },
+                onContinue: async (nodeId, state) => {
+                    // Resume streaming from where we left off
+                    await this.continueAIResponse(nodeId, state.context);
+                },
             });
-            this.canvas.showStopButton(nodeId);
 
             // Retry the chat request using streamWithAbort
             this.streamWithAbort(
@@ -3661,8 +3476,7 @@ df.head()
                 },
                 // onDone
                 (fullContent) => {
-                    this.streamingNodes.delete(nodeId);
-                    this.canvas.hideStopButton(nodeId);
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
                     this.canvas.updateNodeContent(nodeId, fullContent, false);
                     this.graph.updateNode(nodeId, { content: fullContent });
                     this.saveSession();
@@ -3670,8 +3484,7 @@ df.head()
                 },
                 // onError
                 (err) => {
-                    this.streamingNodes.delete(nodeId);
-                    this.canvas.hideStopButton(nodeId);
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
                     const errorInfo = formatUserError(err);
                     this.showNodeError(nodeId, errorInfo, retryContext);
                 }
@@ -3804,12 +3617,16 @@ df.head()
         // Create AbortController for this stream
         const abortController = new AbortController();
 
-        // Track streaming state
-        this.streamingNodes.set(summaryNode.id, {
+        // Register with StreamingManager (auto-shows stop button)
+        this.streamingManager.register(summaryNode.id, {
             abortController,
+            featureId: 'ai',
             context: { messages, model },
+            onContinue: async (nodeId, state) => {
+                // Resume streaming from where we left off
+                await this.continueAIResponse(nodeId, state.context);
+            },
         });
-        this.canvas.showStopButton(summaryNode.id);
 
         // Stream the summary
         this.streamWithAbort(
@@ -3824,8 +3641,7 @@ df.head()
             },
             // onDone
             (fullContent) => {
-                this.streamingNodes.delete(summaryNode.id);
-                this.canvas.hideStopButton(summaryNode.id);
+                this.streamingManager.unregister(summaryNode.id); // Auto-hides stop button
                 this.canvas.updateNodeContent(summaryNode.id, fullContent, false);
                 this.graph.updateNode(summaryNode.id, { content: fullContent });
                 this.saveSession();
@@ -3833,8 +3649,7 @@ df.head()
             },
             // onError
             (err) => {
-                this.streamingNodes.delete(summaryNode.id);
-                this.canvas.hideStopButton(summaryNode.id);
+                this.streamingManager.unregister(summaryNode.id); // Auto-hides stop button
                 const errorContent = `*Error generating summary: ${err.message}*`;
                 this.canvas.updateNodeContent(summaryNode.id, errorContent, false);
                 this.graph.updateNode(summaryNode.id, { content: errorContent });
