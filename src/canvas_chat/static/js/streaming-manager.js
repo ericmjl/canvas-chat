@@ -41,11 +41,20 @@ class StreamingManager {
     }
 
     /**
-     * Set the canvas reference for UI updates
+     * Set the canvas reference for UI updates and wire up event listeners
      * @param {Canvas} canvas
      */
     setCanvas(canvas) {
         this.canvas = canvas;
+
+        // Wire StreamingManager to handle stop/continue events directly
+        canvas.on('nodeStopGeneration', (nodeId) => {
+            this.handleStopEvent(nodeId);
+        });
+
+        canvas.on('nodeContinueGeneration', async (nodeId) => {
+            await this.handleContinueEvent(nodeId);
+        });
     }
 
     /**
@@ -390,6 +399,45 @@ class StreamingManager {
             if (!state.stopped) ids.push(nodeId);
         }
         return ids;
+    }
+
+    /**
+     * Handle stop button click event from canvas.
+     * This is called automatically when user clicks stop button on any node.
+     * @param {string} nodeId - The node to stop
+     */
+    handleStopEvent(nodeId) {
+        // Check if this node is streaming
+        if (this.isStreaming(nodeId) || this.getState(nodeId)) {
+            this.stop(nodeId);
+            return;
+        }
+
+        // Check if this is a matrix node with cells streaming (group)
+        const matrixGroupId = `matrix-${nodeId}`;
+        const matrixCells = this.getGroupNodes(matrixGroupId);
+        if (matrixCells.size > 0) {
+            this.stopGroup(matrixGroupId);
+            if (this.canvas) {
+                this.canvas.hideStopButton(nodeId);
+            }
+            return;
+        }
+
+        console.warn(`[StreamingManager] No streaming state found for node ${nodeId}`);
+    }
+
+    /**
+     * Handle continue button click event from canvas.
+     * This is called automatically when user clicks continue button on any node.
+     * @param {string} nodeId - The node to continue
+     */
+    async handleContinueEvent(nodeId) {
+        if (this.isStopped(nodeId)) {
+            await this.continue(nodeId);
+        } else {
+            console.warn(`[StreamingManager] Node ${nodeId} is not stopped, cannot continue`);
+        }
     }
 }
 

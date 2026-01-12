@@ -375,15 +375,12 @@ class CommitteeFeature extends FeaturePlugin {
         const abortController = new AbortController();
         this._activeCommittee.abortControllers.set(nodeId, abortController);
 
-        // Register with StreamingManager
+        // Register with StreamingManager (auto-shows stop button)
         this.streamingManager.register(nodeId, {
             abortController,
             featureId: 'committee',
             context: { model, index },
         });
-
-        // Show stop button
-        this.canvas.showStopButton(nodeId);
 
         return new Promise((resolve, reject) => {
             let fullContent = '';
@@ -400,9 +397,8 @@ class CommitteeFeature extends FeaturePlugin {
                 (finalContent) => {
                     fullContent = finalContent;
                     this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${finalContent}`, false);
-                    this.canvas.hideStopButton(nodeId);
                     this.graph.updateNode(nodeId, { content: `**${modelName}**\n\n${finalContent}` });
-                    this.streamingManager.unregister(nodeId);
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
                     this._activeCommittee.abortControllers.delete(nodeId);
                     this.saveSession();
                     resolve(finalContent);
@@ -412,8 +408,7 @@ class CommitteeFeature extends FeaturePlugin {
                     // Handle abort gracefully
                     if (err.name === 'AbortError') {
                         console.log(`[Committee] Opinion ${index} aborted`);
-                        this.canvas.hideStopButton(nodeId);
-                        this.streamingManager.unregister(nodeId);
+                        this.streamingManager.unregister(nodeId); // Auto-hides stop button
                         this._activeCommittee.abortControllers.delete(nodeId);
                         resolve(''); // Resolve with empty to allow other opinions to continue
                         return;
@@ -493,9 +488,6 @@ class CommitteeFeature extends FeaturePlugin {
             context: { model, reviewerIndex },
         });
 
-        // Show stop button
-        this.canvas.showStopButton(reviewNode.id);
-
         // Build review prompt with all opinions
         const reviewMessages = [
             ...messages,
@@ -524,9 +516,8 @@ class CommitteeFeature extends FeaturePlugin {
                 (finalContent) => {
                     fullContent = finalContent;
                     this.canvas.updateNodeContent(reviewNode.id, `**${modelName} Review**\n\n${finalContent}`, false);
-                    this.canvas.hideStopButton(reviewNode.id);
                     this.graph.updateNode(reviewNode.id, { content: `**${modelName} Review**\n\n${finalContent}` });
-                    this.streamingManager.unregister(reviewNode.id);
+                    this.streamingManager.unregister(reviewNode.id); // Auto-hides stop button
                     this._activeCommittee.abortControllers.delete(reviewNode.id);
                     this.saveSession();
                     resolve(finalContent);
@@ -536,15 +527,13 @@ class CommitteeFeature extends FeaturePlugin {
                     // Handle abort gracefully
                     if (err.name === 'AbortError') {
                         console.log(`[Committee] Review ${reviewerIndex} aborted`);
-                        this.canvas.hideStopButton(reviewNode.id);
-                        this.streamingManager.unregister(reviewNode.id);
+                        this.streamingManager.unregister(reviewNode.id); // Auto-hides stop button
                         this._activeCommittee.abortControllers.delete(reviewNode.id);
                         resolve(''); // Resolve with empty to allow other reviews to continue
                         return;
                     }
                     // Real errors
-                    this.canvas.hideStopButton(reviewNode.id);
-                    this.streamingManager.unregister(reviewNode.id);
+                    this.streamingManager.unregister(reviewNode.id); // Auto-hides stop button
                     this._activeCommittee.abortControllers.delete(reviewNode.id);
                     reject(err);
                 },
@@ -577,15 +566,12 @@ class CommitteeFeature extends FeaturePlugin {
         const abortController = new AbortController();
         this._activeCommittee.abortControllers.set(nodeId, abortController);
 
-        // Register with StreamingManager
+        // Register with StreamingManager (auto-shows stop button)
         this.streamingManager.register(nodeId, {
             abortController,
             featureId: 'committee',
             context: { model: chairmanModel },
         });
-
-        // Show stop button
-        this.canvas.showStopButton(nodeId);
 
         // Build synthesis prompt
         const synthesisMessages = [
@@ -616,11 +602,10 @@ class CommitteeFeature extends FeaturePlugin {
                 (finalContent) => {
                     fullContent = finalContent;
                     this.canvas.updateNodeContent(nodeId, `**Synthesis (${chairmanName})**\n\n${finalContent}`, false);
-                    this.canvas.hideStopButton(nodeId);
                     this.graph.updateNode(nodeId, {
                         content: `**Synthesis (${chairmanName})**\n\n${finalContent}`,
                     });
-                    this.streamingManager.unregister(nodeId);
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
                     this._activeCommittee.abortControllers.delete(nodeId);
                     this.saveSession();
                     resolve();
@@ -630,15 +615,13 @@ class CommitteeFeature extends FeaturePlugin {
                     // Handle abort gracefully
                     if (err.name === 'AbortError') {
                         console.log('[Committee] Synthesis aborted');
-                        this.canvas.hideStopButton(nodeId);
-                        this.streamingManager.unregister(nodeId);
+                        this.streamingManager.unregister(nodeId); // Auto-hides stop button
                         this._activeCommittee.abortControllers.delete(nodeId);
                         resolve(); // Resolve to prevent rejection
                         return;
                     }
                     // Real errors
-                    this.canvas.hideStopButton(nodeId);
-                    this.streamingManager.unregister(nodeId);
+                    this.streamingManager.unregister(nodeId); // Auto-hides stop button
                     this._activeCommittee.abortControllers.delete(nodeId);
                     reject(err);
                 },
