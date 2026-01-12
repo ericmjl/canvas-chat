@@ -357,7 +357,8 @@ class CommitteeFeature extends FeaturePlugin {
                 return `**${modelName}**\n\n${opinionContents[index] || ''}`;
             });
             this.streamingManager.register(node.id, {
-                abortController,
+                // Don't pass abortController - we handle pause in onStop callback
+                // abortController is shared across all nodes and would kill the entire SSE
                 featureId: 'committee',
                 context: { question, humanNodeId: humanNode.id, index },
                 onStop: callbacks.onStop,
@@ -371,7 +372,8 @@ class CommitteeFeature extends FeaturePlugin {
             return `**Synthesis (${chairmanName})**\n\n${synthesisContent}`;
         });
         this.streamingManager.register(synthesisNode.id, {
-            abortController,
+            // Don't pass abortController - we handle pause in onStop callback
+            // abortController is shared across all nodes and would kill the entire SSE
             featureId: 'committee',
             context: { question, humanNodeId: humanNode.id },
             onStop: synthesisCallbacks.onStop,
@@ -487,7 +489,8 @@ class CommitteeFeature extends FeaturePlugin {
                             return `**${modelName} Review**\n\n${reviewContents[reviewerIndex] || ''}`;
                         });
                         this.streamingManager.register(reviewNode.id, {
-                            abortController,
+                            // Don't pass abortController - we handle pause in onStop callback
+                            // abortController is shared across all nodes and would kill the entire SSE
                             featureId: 'committee',
                             context: { question, humanNodeId: humanNode.id, reviewerIndex },
                             onStop: reviewCallbacks.onStop,
