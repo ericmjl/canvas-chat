@@ -74,14 +74,7 @@ class App {
         this.adminMode = false;
         this.adminModels = []; // Models configured by admin (only in admin mode)
 
-        // Feature modules (initialized lazily)
-        this._flashcardFeature = null;
-        this._committeeFeature = null;
-        this._matrixFeature = null;
-        this._factcheckFeature = null;
-        this._researchFeature = null;
-
-        // Plugin system
+        // Plugin system (all features managed by FeatureRegistry)
         this.featureRegistry = new FeatureRegistry();
 
         // Undo/Redo manager
@@ -218,163 +211,83 @@ class App {
     }
 
     /**
-     * Get the flashcard feature module (lazy initialization).
+     * Get a feature from the FeatureRegistry.
+     *
+     * ARCHITECTURAL PATTERN: Feature Getter Singleton
+     * ================================================
+     * All features MUST be retrieved from the FeatureRegistry to ensure single instance.
+     * This prevents the "dual instance" bug where:
+     * 1. FeatureRegistry creates instance #1 (for slash commands)
+     * 2. Lazy getter creates instance #2 (for modal buttons)
+     * 3. Modal state lives in instance #1, but buttons call methods on instance #2
+     *
+     * If a feature is not found in the registry, this indicates a serious initialization
+     * error and should fail fast with a clear error message.
+     *
+     * @param {string} featureId - Feature ID in FeatureRegistry (e.g., 'committee', 'matrix')
+     * @param {string} featureName - Human-readable feature name for error messages
+     * @returns {FeaturePlugin} The feature instance
+     * @throws {Error} If feature is not registered (initialization order bug)
+     * @private
+     */
+    _getFeature(featureId, featureName) {
+        const feature = this.featureRegistry.getFeature(featureId);
+        if (!feature) {
+            throw new Error(
+                `Feature "${featureName}" (${featureId}) not found in FeatureRegistry. ` +
+                    `This indicates initializePluginSystem() was not called before accessing the feature. ` +
+                    `Check initialization order in App.init().`
+            );
+        }
+        return feature;
+    }
+
+    /**
+     * Get the flashcard feature module.
      * @returns {FlashcardFeature}
      */
     get flashcardFeature() {
-        // Use plugin system instance
-        const feature = this.featureRegistry.getFeature('flashcards');
-        if (feature) {
-            return feature;
-        }
-
-        // Fallback: Lazy initialization for backwards compatibility
-        if (!this._flashcardFeature) {
-            this._flashcardFeature = new FlashcardFeature({
-                graph: this.graph,
-                canvas: this.canvas,
-                modelPicker: this.modelPicker,
-                saveSession: () => this.saveSession(),
-                updateEmptyState: () => this.updateEmptyState(),
-                showToast: (msg, type) => this.showToast(msg, type),
-                updateCollapseButtonForNode: (nodeId) => this.updateCollapseButtonForNode(nodeId),
-                buildLLMRequest: (params) => this.buildLLMRequest(params),
-            });
-        }
-        return this._flashcardFeature;
+        return this._getFeature('flashcards', 'FlashcardFeature');
     }
 
     /**
-     * Get the committee feature module (lazy initialization).
+     * Get the committee feature module.
      * @returns {CommitteeFeature}
      */
     get committeeFeature() {
-        if (!this._committeeFeature) {
-            this._committeeFeature = new CommitteeFeature({
-                graph: this.graph,
-                canvas: this.canvas,
-                modelPicker: this.modelPicker,
-                chatInput: this.chatInput,
-                saveSession: () => this.saveSession(),
-                updateEmptyState: () => this.updateEmptyState(),
-                buildLLMRequest: (params) => this.buildLLMRequest(params),
-            });
-        }
-        return this._committeeFeature;
+        return this._getFeature('committee', 'CommitteeFeature');
     }
 
     /**
-     * Get the matrix feature module (lazy initialization).
+     * Get the matrix feature module.
      * @returns {MatrixFeature}
      */
     get matrixFeature() {
-        // Use plugin system instance
-        const feature = this.featureRegistry.getFeature('matrix');
-        if (feature) {
-            return feature;
-        }
-
-        // Fallback: Lazy initialization for backwards compatibility
-        if (!this._matrixFeature) {
-            this._matrixFeature = new MatrixFeature({
-                graph: this.graph,
-                canvas: this.canvas,
-                getModelPicker: () => this.modelPicker,
-                saveSession: () => this.saveSession(),
-                updateEmptyState: () => this.updateEmptyState(),
-                generateNodeSummary: (nodeId) => this.generateNodeSummary(nodeId),
-                pushUndo: (action) => this.undoManager.push(action),
-                buildLLMRequest: (params) => this.buildLLMRequest(params),
-            });
-        }
-        return this._matrixFeature;
+        return this._getFeature('matrix', 'MatrixFeature');
     }
 
     /**
-     * Get the factcheck feature module (lazy initialization).
+     * Get the factcheck feature module.
      * @returns {FactcheckFeature}
      */
     get factcheckFeature() {
-        // Use plugin system instance
-        const feature = this.featureRegistry.getFeature('factcheck');
-        if (feature) {
-            return feature;
-        }
-
-        // Fallback: Lazy initialization for backwards compatibility
-        if (!this._factcheckFeature) {
-            this._factcheckFeature = new FactcheckFeature({
-                graph: this.graph,
-                canvas: this.canvas,
-                getModelPicker: () => this.modelPicker,
-                saveSession: () => this.saveSession(),
-                buildLLMRequest: (params) => this.buildLLMRequest(params),
-            });
-        }
-        return this._factcheckFeature;
+        return this._getFeature('factcheck', 'FactcheckFeature');
     }
 
     /**
-     * Get the research feature module (lazy initialization).
+     * Get the research feature module.
      * @returns {ResearchFeature}
      */
     get researchFeature() {
-        // Use plugin system instance
-        const feature = this.featureRegistry.getFeature('research');
-        if (feature) {
-            return feature;
-        }
-
-        // Fallback: Lazy initialization for backwards compatibility
-        if (!this._researchFeature) {
-            this._researchFeature = new ResearchFeature({
-                graph: this.graph,
-                canvas: this.canvas,
-                saveSession: () => this.saveSession(),
-                updateEmptyState: () => this.updateEmptyState(),
-                buildLLMRequest: (params) => this.buildLLMRequest(params),
-                generateNodeSummary: (nodeId) => this.generateNodeSummary(nodeId),
-                showSettingsModal: () => this.modalManager.showSettingsModal(),
-                getModelPicker: () => this.modelPicker,
-                registerStreaming: (nodeId, abortController, context = null) => {
-                    // Register research streaming state for stop button support
-                    this.streamingNodes.set(nodeId, {
-                        abortController: abortController,
-                        context: context || { type: 'research' },
-                    });
-                },
-                unregisterStreaming: (nodeId) => {
-                    this.streamingNodes.delete(nodeId);
-                },
-            });
-        }
-        return this._researchFeature;
+        return this._getFeature('research', 'ResearchFeature');
     }
 
     /**
-     * Get code feature instance (plugin system or fallback)
+     * Get code feature instance.
+     * @returns {CodeFeature}
      */
     get codeFeature() {
-        // Use plugin system instance
-        const feature = this.featureRegistry.getFeature('code');
-        if (feature) {
-            return feature;
-        }
-
-        // Fallback: Lazy initialization for backwards compatibility
-        if (!this._codeFeature) {
-            this._codeFeature = new CodeFeature({
-                graph: this.graph,
-                canvas: this.canvas,
-                saveSession: () => this.saveSession(),
-                updateEmptyState: () => this.updateEmptyState(),
-                buildLLMRequest: (params) => this.buildLLMRequest(params),
-                pyodideRunner: pyodideRunner,
-                streamingNodes: this.streamingNodes,
-                apiUrl: apiUrl,
-            });
-        }
-        return this._codeFeature;
+        return this._getFeature('code', 'CodeFeature');
     }
 
     async loadModels() {
@@ -526,11 +439,7 @@ class App {
         // Create CRDTGraph with automatic persistence
         console.log('%c[App] Using CRDT Graph mode', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(session.id, session);
-        this._flashcardFeature = null; // Reset feature modules for new graph
-        this._committeeFeature = null;
-        this._matrixFeature = null;
-        this._factcheckFeature = null;
-        this._researchFeature = null;
+        // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
 
         // Render graph
@@ -601,11 +510,7 @@ class App {
 
             console.log('%c[App] Creating empty CRDT Graph for shared session', 'color: #2196F3; font-weight: bold');
             this.graph = new CRDTGraph(sessionId);
-            this._flashcardFeature = null; // Reset feature modules for new graph
-            this._committeeFeature = null;
-            this._matrixFeature = null;
-            this._factcheckFeature = null;
-            this._researchFeature = null;
+            // Note: Features are managed by FeatureRegistry, no manual cleanup needed
             await this.graph.enablePersistence();
 
             // Render empty graph (will populate via sync)
@@ -642,11 +547,7 @@ class App {
         // Create new CRDT Graph
         console.log('%c[App] Creating new session with CRDT Graph', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(sessionId);
-        this._flashcardFeature = null; // Reset feature modules for new graph
-        this._committeeFeature = null;
-        this._matrixFeature = null;
-        this._factcheckFeature = null;
-        this._researchFeature = null;
+        // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
 
         this.canvas.clear();

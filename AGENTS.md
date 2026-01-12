@@ -335,6 +335,62 @@ this.streamingNodes.get(nodeId).abortController.abort();
 this.streamingNodes.delete(nodeId);
 ```
 
+### Feature instance access (plugin architecture)
+
+**CRITICAL:** All feature instances MUST be accessed through the FeatureRegistry, never instantiated directly.
+
+**The problem:** Direct instantiation creates duplicate instances with separate state:
+
+- Instance #1: Created by FeatureRegistry (handles slash commands)
+- Instance #2: Created by lazy getter (handles modal buttons)
+- Result: Modal state lives in instance #1, but buttons call methods on instance #2
+
+**The pattern:** Use `_getFeature()` helper for all feature getters:
+
+```javascript
+// WRONG: Direct instantiation creates dual instances
+get committeeFeature() {
+    if (!this._committeeFeature) {
+        this._committeeFeature = new CommitteeFeature({...});
+    }
+    return this._committeeFeature;
+}
+
+// CORRECT: Always use FeatureRegistry instance
+get committeeFeature() {
+    return this._getFeature('committee', 'CommitteeFeature');
+}
+```
+
+**The `_getFeature()` helper:**
+
+```javascript
+_getFeature(featureId, featureName) {
+    const feature = this.featureRegistry.getFeature(featureId);
+    if (!feature) {
+        throw new Error(
+            `Feature "${featureName}" not found in FeatureRegistry. ` +
+            `Check initialization order in App.init().`
+        );
+    }
+    return feature;
+}
+```
+
+**Why this matters:**
+
+- Ensures single instance per feature (singleton pattern)
+- Prevents state desynchronization between slash commands and UI
+- Fails fast with clear error if initialization order is wrong
+- Forces correct architecture (no backwards compatibility trap)
+
+**When adding new features:**
+
+1. Register feature in `FeatureRegistry.registerBuiltInFeatures()`
+2. Create getter using `_getFeature()` helper
+3. Never instantiate the feature class directly in app.js
+4. Never create private `_featureName` instance variables
+
 ### Node content updates
 
 Nodes have two text displays that must stay in sync:
