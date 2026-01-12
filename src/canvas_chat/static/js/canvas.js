@@ -87,6 +87,9 @@ class Canvas {
         // Tag chip click callback (for highlighting nodes by tag)
         this.onTagChipClick = null; // For handling clicks on tag chips
 
+        // Tag remove callback (for removing tag from node)
+        this.onTagRemove = null; // For removing a tag from a specific node
+
         // EventEmitter for new event-based API
         this.events = new EventEmitter();
 
@@ -2258,6 +2261,19 @@ class Canvas {
                 // Skip resize handles - they shouldn't select
                 if (e.target.closest('.resize-handle')) return;
 
+                // Handle tag remove button
+                const removeBtn = e.target.closest('.node-tag-remove');
+                if (removeBtn) {
+                    e.stopPropagation();
+                    const tagEl = removeBtn.closest('.node-tag');
+                    const color = tagEl?.dataset.color;
+                    const nodeId = tagEl?.dataset.nodeId;
+                    if (color && nodeId && this.onTagRemove) {
+                        this.onTagRemove(nodeId, color);
+                    }
+                    return;
+                }
+
                 // Skip tag chips - clicking a tag should highlight by tag, not select node
                 if (e.target.closest('.node-tag')) return;
 
@@ -3888,7 +3904,10 @@ class Canvas {
             .map((color) => {
                 const tag = graph.getTag(color);
                 if (!tag) return '';
-                return `<div class="node-tag" data-color="${color}">${this.escapeHtml(tag.name)}</div>`;
+                return `<div class="node-tag" data-color="${color}" data-node-id="${node.id}">
+                    <span class="node-tag-name">${this.escapeHtml(tag.name)}</span>
+                    <button class="node-tag-remove" title="Remove tag" aria-label="Remove tag">✕</button>
+                </div>`;
             })
             .filter((h) => h)
             .join('');

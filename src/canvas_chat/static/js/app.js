@@ -621,6 +621,7 @@ class App {
             // Image and tag click events
             .on('imageClick', this.handleImageClick.bind(this))
             .on('tagChipClick', this.handleTagChipClick.bind(this))
+            .on('tagRemove', this.handleTagRemove.bind(this))
             // Navigation events for parent/child traversal
             .on('navParentClick', this.handleNavParentClick.bind(this))
             .on('navChildClick', this.handleNavChildClick.bind(this))
@@ -1753,6 +1754,52 @@ class App {
         if (drawer && drawer.classList.contains('open')) {
             this.renderTagSlots();
         }
+    }
+
+    /**
+     * Handle removing a tag from a specific node.
+     * Called when the X button on a tag chip is clicked.
+     *
+     * @param {string} nodeId - The node ID to remove the tag from
+     * @param {string} color - The tag color to remove
+     */
+    handleTagRemove(nodeId, color) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+
+        // Store old tags for undo
+        const oldTags = [...(node.tags || [])];
+
+        // Remove the tag
+        this.graph.removeTagFromNode(nodeId, color);
+
+        // Store new tags for undo
+        const newTags = [...(node.tags || [])];
+
+        // Register undo action
+        this.undoManager.execute({
+            name: 'Remove Tag',
+            do: () => {
+                this.graph.updateNode(nodeId, { tags: newTags });
+                this.canvas.renderNode(this.graph.getNode(nodeId));
+            },
+            undo: () => {
+                this.graph.updateNode(nodeId, { tags: oldTags });
+                this.canvas.renderNode(this.graph.getNode(nodeId));
+            },
+        });
+
+        // Re-render the node to show updated tags
+        this.canvas.renderNode(node);
+
+        // Update tag drawer UI if it's open (selection state may have changed)
+        const drawer = document.getElementById('tag-drawer');
+        if (drawer && drawer.classList.contains('open')) {
+            this.renderTagSlots();
+        }
+
+        // Save session
+        this.saveSession();
     }
 
     /**
