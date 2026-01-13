@@ -36,7 +36,7 @@ Quick reference for which files to edit for common tasks:
 | File                                       | Purpose                                     | Edit for...                                                         |
 | ------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------- |
 | `src/canvas_chat/static/js/app.js`         | Main application, orchestrates everything   | Slash commands, keyboard shortcuts, App class methods               |
-| `src/canvas_chat/static/js/canvas.js`      | SVG canvas, pan/zoom, node rendering        | Node appearance, drag behavior, viewport logic, node event handlers |
+| `src/canvas_chat/static/js/canvas.js`      | SVG canvas, pan/zoom, node/edge rendering with defensive edge deferral | Node appearance, drag behavior, viewport logic, node event handlers, edge rendering, deferred edge queue |
 | `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions          | Node types, edge types, createNode/createEdge utilities             |
 | `src/canvas_chat/static/js/crdt-graph.js`  | CRDT-backed graph (Yjs), graph traversal    | Graph data model, node positioning, graph traversal                 |
 | `src/canvas_chat/static/js/layout.js`      | Pure layout functions for overlap detection | Overlap detection, overlap resolution, node positioning algorithms  |
@@ -621,6 +621,124 @@ this.canvas.renderEdge(edge, humanNode.position, aiNode.position);
 await this.chat.sendMessage(...);
 ```
 
+### Event-driven rendering with defensive edge deferral
+
+**CRITICAL:** The canvas uses event-driven rendering. DO NOT manually call `canvas.renderNode()` or `canvas.renderEdge()` unless you have a specific reason.
+
+**How it works:**
+
+```javascript
+// In app.js (lines 154-166), event listeners automatically render:
+graph.on('nodeAdded', (node) => {
+    canvas.renderNode(node);  // Automatic!
+});
+
+graph.on('edgeAdded', (edge) => {
+    canvas.renderEdge(edge, graph);  // Automatic!
+});
+```
+
+**In your feature code, just use the graph:**
+
+```javascript
+// CORRECT: Let events handle rendering
+const node = createNode('human', 'Hello', { position: { x: 0, y: 0 } });
+graph.addNode(node);  // Event fires → canvas.renderNode() called automatically
+
+const edge = createEdge(node1.id, node2.id, 'reply');
+graph.addEdge(edge);  // Event fires → canvas.renderEdge() called automatically
+```
+
+**Defensive edge rendering:**
+
+The canvas has **defensive edge rendering** that handles timing issues automatically:
+
+- If you add an edge when nodes aren't rendered yet, the edge is **deferred** to a queue
+- When nodes finish rendering, deferred edges **automatically retry** and render
+- This prevents "invisible edge" bugs in rapid node+edge creation scenarios
+
+**Implementation details (canvas.js):**
+
+```javascript
+// When renderEdge() is called via event:
+renderEdge(edge, graph) {
+    // Get nodes from graph
+    const sourceNode = graph.getNode(edge.source);
+    const targetNode = graph.getNode(edge.target);
+
+    // Check if nodes are in DOM
+    const sourceWrapper = this.nodeElements.get(edge.source);
+    const targetWrapper = this.nodeElements.get(edge.target);
+
+    if (!sourceWrapper || !targetWrapper) {
+        // Defensive: Defer edge until nodes render
+        this.deferredEdges.set(edge.id, { edge, graph });
+        this._addNodeRenderCallback(edge.source, () => this._retryDeferredEdge(edge.id));
+        return null;
+    }
+
+    // Both nodes ready → render edge normally
+}
+```
+
+**When nodes finish rendering:**
+
+```javascript
+renderNode(node) {
+    // ... create DOM element ...
+
+    this.nodeElements.set(node.id, wrapper);
+
+    // Notify any edges waiting for this node
+    this._notifyNodeRendered(node.id);  // Triggers deferred edge retry
+}
+```
+
+**When to manually call renderNode():**
+
+Rarely! But acceptable cases:
+
+- **Testing**: When events aren't set up (unit tests, mocks)
+- **Legacy code**: Using the old pattern (but refactor to events when possible)
+- **Explicit control**: You need rendering to happen at a specific time (document why!)
+
+**When to manually call renderEdge():**
+
+Only when using the **legacy signature** with explicit positions:
+
+```javascript
+// Legacy signature: renderEdge(edge, sourcePos, targetPos)
+// Used when you have positions but nodes might not be in graph yet
+canvas.renderEdge(edge, { x: 10, y: 10 }, { x: 100, y: 100 });
+```
+
+**Why this matters:**
+
+- **Committee feature**: Creates multiple opinion nodes + edges rapidly
+- **Without defensive rendering**: Edges try to render before nodes are in DOM → invisible edges
+- **With defensive rendering**: Edges automatically defer and retry → everything appears correctly
+
+**Example: Committee pattern (works automatically):**
+
+```javascript
+// Create human node
+const humanNode = createNode('human', question, { position });
+graph.addNode(humanNode);  // Event → renderNode() → node in DOM
+
+// Create opinion nodes + edges rapidly
+for (const member of members) {
+    const opinionNode = createNode('opinion', 'Waiting...', { position });
+    graph.addNode(opinionNode);  // Event → renderNode() → node in DOM
+
+    const edge = createEdge(humanNode.id, opinionNode.id, 'opinion');
+    graph.addEdge(edge);  // Event → renderEdge() → might defer if node not ready yet
+}
+
+// Result: All nodes appear immediately, edges render as soon as nodes are ready
+```
+
+**No manual rendering needed!** The event system + defensive deferral handles everything.
+
 ### Feature instance access (plugin architecture)
 
 **CRITICAL:** All feature instances MUST be accessed through the FeatureRegistry, never instantiated directly.
@@ -854,6 +972,91 @@ test('resolveOverlaps works', () => {
 
 If a function is tightly coupled to a class and hard to test, that's a design smell.
 Refactor to extract pure functions that can be imported and tested directly.
+
+### Testing DOM-dependent code with JSDOM
+
+**CRITICAL:** Always use JSDOM for testing code that manipulates the DOM (Canvas, UI elements, node rendering, etc.)
+
+The project has JSDOM as a dependency specifically for this purpose. Many tests already use this pattern successfully.
+
+**IMPORTANT:** Before running tests that use JSDOM, ensure jsdom is installed via npm:
+```bash
+npm install  # or pixi run npm install
+```
+
+If JSDOM tests fail with `Cannot find package 'jsdom'`, this indicates the node_modules are not installed. JSDOM is listed in package.json but must be installed before tests can run.
+
+**Pattern to follow:**
+
+```javascript
+/**
+ * Tests for Canvas defensive edge rendering
+ */
+
+import { JSDOM } from 'jsdom';
+
+// Setup global DOM BEFORE importing modules that use DOM APIs
+const dom = new JSDOM('<!DOCTYPE html><div id="canvas-container"></div>');
+global.window = dom.window;
+global.document = dom.window.document;
+global.SVGElement = dom.window.SVGElement;
+global.requestAnimationFrame = (cb) => setTimeout(cb, 0);
+
+// NOW import Canvas after globals are set
+const { Canvas } = await import('../src/canvas_chat/static/js/canvas.js');
+
+// Test using actual DOM APIs
+test('Canvas creates SVG elements', () => {
+    const container = document.getElementById('canvas-container');
+    const canvas = new Canvas(container);
+
+    // Canvas is real, DOM is real, test behavior is real
+    assertTrue(canvas.svg !== null);
+});
+```
+
+**Why this pattern?**
+
+1. **Tests real code** - Not mocks, not stubs, actual Canvas class with actual DOM
+2. **Catches regressions** - DOM API changes, SVG issues, element creation problems
+3. **Fast execution** - JSDOM is fast enough for unit tests
+4. **No browser needed** - Runs in CI/CD, on any machine
+
+**Existing examples to follow:**
+
+- `tests/test_ui.js` - DOM manipulation tests
+- `tests/test_canvas_output_panel_animation.js` - Canvas-specific tests
+- `tests/test_canvas_edge_positioning.js` - SVG edge rendering
+- `tests/test_find_scrollable_container.js` - DOM traversal
+
+**What to test with JSDOM:**
+
+- ✅ Canvas rendering (nodes, edges, SVG elements)
+- ✅ DOM manipulation (createElement, appendChild, setAttribute)
+- ✅ Event listeners (click, mousemove, etc.)
+- ✅ CSS class manipulation
+- ✅ Element queries (querySelector, getElementById)
+
+**What NOT to test with JSDOM:**
+
+- ❌ Visual layout (getBoundingClientRect is mocked, not real)
+- ❌ CSS styling (JSDOM doesn't compute styles)
+- ❌ Animation timing (requestAnimationFrame is mocked)
+- ❌ Actual rendering to screen
+
+**Anti-pattern to avoid:**
+
+```javascript
+// WRONG: Mock DOM instead of using JSDOM
+global.document = {
+    createElement: () => ({ setAttribute: () => {} }),  // Fake!
+    getElementById: () => null,                          // Broken!
+};
+
+// This "test" passes but doesn't test real behavior
+```
+
+**If you're tempted to mock the DOM, use JSDOM instead.**
 
 ### When NOT to write unit tests
 

@@ -71,6 +71,10 @@ class MockCanvas extends Canvas {
             appendChild: () => {},
         };
         this.edgeElements = new Map();
+
+        // Mock defensive edge rendering infrastructure
+        this.deferredEdges = new Map();
+        this.nodeRenderCallbacks = new Map();
     }
 
     // Override calculateBezierPath to capture positions
@@ -112,6 +116,13 @@ try {
     const targetNode = { id: 'target', position: { x: 100, y: 100 } };
     graph.setNode('source', sourceNode);
     graph.setNode('target', targetNode);
+
+    // IMPORTANT: Mock node wrappers so defensive edge rendering doesn't defer
+    const mockWrapper = {
+        getAttribute: (attr) => (attr === 'width' ? '420' : '100'),
+    };
+    canvas.nodeElements.set('source', mockWrapper);
+    canvas.nodeElements.set('target', mockWrapper);
 
     const edge = { id: 'edge1', source: 'source', target: 'target' };
 
