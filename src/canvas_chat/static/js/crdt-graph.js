@@ -604,7 +604,30 @@ class CRDTGraph extends EventEmitter {
             // This is simpler than tracking individual changes
             this._rebuildIndexes();
 
-            // Notify for remote changes
+            // Emit granular events for both local and remote changes
+            // This allows the UI to be fully event-driven
+            event.changes.added.forEach((item) => {
+                item.content.getContent().forEach((yEdge) => {
+                    const edge = this._extractEdge(yEdge);
+                    this.emit('edgeAdded', edge);
+                });
+            });
+
+            event.changes.deleted.forEach((item) => {
+                item.content.getContent().forEach((yEdge) => {
+                    // We can't extract the edge fully because it's deleted,
+                    // but we can try to get the ID if it was preserved,
+                    // or we might have to rely on the fact that yEdges is an array.
+                    // Y.Array deletions are tricky because we only get the index/length.
+                    // However, we rebuilt indexes, so we know what's currently in the graph.
+                    // For deleted edges, Yjs usually gives us the deleted content if we ask right,
+                    // but item.content is available.
+                    const edge = this._extractEdge(yEdge);
+                    this.emit('edgeRemoved', edge.id);
+                });
+            });
+
+            // Notify for remote changes (legacy callback)
             if (transaction.origin !== null && transaction.origin !== 'local') {
                 console.log('[CRDTGraph] Remote edge change detected');
                 this._notifyChange('edges', event);

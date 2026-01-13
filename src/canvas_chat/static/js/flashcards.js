@@ -236,10 +236,6 @@ ${nodeContent}`;
             const edge = createEdge(sourceNodeId, flashcardNode.id, EdgeType.GENERATES);
             this.graph.addEdge(edge);
 
-            // Render
-            this.canvas.renderNode(flashcardNode);
-            this.canvas.renderEdge(edge, sourceNode.position, flashcardNode.position);
-
             createdNodes.push(flashcardNode);
         });
 

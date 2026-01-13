@@ -182,7 +182,6 @@ class ResearchFeature extends FeaturePlugin {
                 // Edge from search to result
                 const edge = createEdge(searchNode.id, resultNode.id, EdgeType.SEARCH_RESULT);
                 this.graph.addEdge(edge);
-                this.canvas.renderEdge(edge, searchNode.position, resultNode.position);
 
                 offsetY += 200; // Space between result nodes
             }

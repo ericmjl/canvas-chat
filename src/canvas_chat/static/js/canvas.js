@@ -3459,9 +3459,37 @@ class Canvas {
     // --- Edge Rendering ---
 
     /**
-     * Render an edge as a bezier curve
+     * Render an edge as a bezier curve.
+     * Supports two signatures:
+     * 1. renderEdge(edge, graph) - Automatically fetches fresh positions (Recommended)
+     * 2. renderEdge(edge, sourcePos, targetPos) - Uses explicit positions (Legacy/Internal)
+     *
+     * @param {Object} edge - The edge object
+     * @param {Object|Graph} sourcePosOrGraph - Source position {x,y} OR Graph instance
+     * @param {Object} [targetPos] - Target position {x,y} (only for legacy signature)
      */
-    renderEdge(edge, sourcePos, targetPos) {
+    renderEdge(edge, sourcePosOrGraph, targetPos) {
+        let sourcePos, finalTargetPos;
+
+        // Signature 1: renderEdge(edge, graph)
+        // Detect graph by checking for getNode method
+        if (sourcePosOrGraph && typeof sourcePosOrGraph.getNode === 'function') {
+            const graph = sourcePosOrGraph;
+            const sourceNode = graph.getNode(edge.source);
+            const targetNode = graph.getNode(edge.target);
+
+            if (!sourceNode || !targetNode) {
+                console.warn(`[Canvas] Cannot render edge ${edge.id}: nodes not found in graph`);
+                return null;
+            }
+            sourcePos = sourceNode.position;
+            finalTargetPos = targetNode.position;
+        } else {
+            // Signature 2: renderEdge(edge, sourcePos, targetPos)
+            sourcePos = sourcePosOrGraph;
+            finalTargetPos = targetPos;
+        }
+
         // Remove existing
         this.removeEdge(edge.id);
 
@@ -3481,7 +3509,7 @@ class Canvas {
         const targetHeight = targetWrapper ? parseFloat(targetWrapper.getAttribute('height')) || 100 : 100;
 
         // Calculate bezier curve with dynamic connection points
-        const d = this.calculateBezierPath(sourcePos, { width: sourceWidth, height: sourceHeight }, targetPos, {
+        const d = this.calculateBezierPath(sourcePos, { width: sourceWidth, height: sourceHeight }, finalTargetPos, {
             width: targetWidth,
             height: targetHeight,
         });

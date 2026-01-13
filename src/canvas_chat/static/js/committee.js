@@ -510,8 +510,6 @@ ${question}`;
         for (const parentId of selectedIds) {
             const edge = createEdge(parentId, humanNode.id, EdgeType.REPLY);
             this.graph.addEdge(edge);
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, humanNode.position);
         }
 
         // Calculate positions for opinion nodes (fan layout)
@@ -540,12 +538,10 @@ ${question}`;
             });
 
             this.graph.addNode(opinionNode);
-            this.canvas.renderNode(opinionNode);
 
             // Edge from human to opinion
             const edge = createEdge(humanNode.id, opinionNode.id, EdgeType.OPINION);
             this.graph.addEdge(edge);
-            this.canvas.renderEdge(edge, humanNode.position, opinionNode.position);
 
             opinionNodes.push(opinionNode);
             opinionNodeMap[i] = opinionNode.id;
@@ -558,7 +554,6 @@ ${question}`;
             model: chairmanModel,
         });
         this.graph.addNode(synthesisNode);
-        this.canvas.renderNode(synthesisNode);
 
         // Review nodes (if enabled) - will be created when review starts
         const reviewNodes = [];
@@ -761,14 +756,12 @@ ${question}`;
         });
 
         this.graph.addNode(reviewNode);
-        this.canvas.renderNode(reviewNode);
         reviewNodes.push(reviewNode);
         reviewNodeMap[reviewerIndex] = reviewNode.id;
 
         // Edge from opinion to review
         const reviewEdge = createEdge(opinionNode.id, reviewNode.id, EdgeType.REVIEW);
         this.graph.addEdge(reviewEdge);
-        this.canvas.renderEdge(reviewEdge, opinionNode.position, reviewNode.position);
 
         // Track this review node
         this._activeCommittee.reviewNodeIds.push(reviewNode.id);
@@ -883,10 +876,6 @@ ${question}`;
         for (const sourceNode of sourceNodes) {
             const synthEdge = createEdge(sourceNode.id, synthesisNode.id, EdgeType.SYNTHESIS);
             this.graph.addEdge(synthEdge);
-            // Get fresh positions from graph (in case layout changed after node creation)
-            const freshSourceNode = this.graph.getNode(sourceNode.id);
-            const freshSynthesisNode = this.graph.getNode(synthesisNode.id);
-            this.canvas.renderEdge(synthEdge, freshSourceNode.position, freshSynthesisNode.position);
         }
 
         // Create abort controller for synthesis

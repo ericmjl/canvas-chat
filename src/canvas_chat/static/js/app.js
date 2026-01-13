@@ -156,7 +156,14 @@ class App {
                 this.canvas.renderNode(node);
                 this.updateEmptyState();
             })
-            .on('nodeRemoved', () => this.updateEmptyState());
+            .on('nodeRemoved', () => this.updateEmptyState())
+            .on('edgeAdded', (edge) => {
+                // Use safe renderer that fetches fresh positions to prevent stale edges
+                this.canvas.renderEdge(edge, this.graph);
+            })
+            .on('edgeRemoved', (edgeId) => {
+                this.canvas.removeEdge(edgeId);
+            });
 
         // Setup UI event listeners
         this.setupEventListeners();
@@ -1397,9 +1404,6 @@ class App {
             const edge = createEdge(parentId, humanNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
             this.graph.addEdge(edge);
 
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, humanNode.position);
-
             // Update collapse button for parent (now has children)
             this.updateCollapseButtonForNode(parentId);
         }
@@ -1425,7 +1429,6 @@ class App {
         // Create edge from human to AI
         const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
         this.graph.addEdge(aiEdge);
-        this.canvas.renderEdge(aiEdge, humanNode.position, aiNode.position);
 
         // Update collapse button for human node (now has AI child)
         this.updateCollapseButtonForNode(humanNode.id);
@@ -1534,15 +1537,11 @@ class App {
             });
 
             this.graph.addNode(noteNode);
-            this.canvas.renderNode(noteNode); // Render the node visually
 
             // Create edges from parents (if replying to selected nodes)
             for (const parentId of parentIds) {
                 const edge = createEdge(parentId, noteNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
                 this.graph.addEdge(edge);
-
-                const parentNode = this.graph.getNode(parentId);
-                this.canvas.renderEdge(edge, parentNode.position, noteNode.position);
             }
 
             // Clear input and save
@@ -1580,15 +1579,11 @@ class App {
         });
 
         this.graph.addNode(fetchNode);
-        this.canvas.renderNode(fetchNode); // Render the node visually
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
             const edge = createEdge(parentId, fetchNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
             this.graph.addEdge(edge);
-
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, fetchNode.position);
         }
 
         // Clear input
@@ -1654,15 +1649,11 @@ class App {
         });
 
         this.graph.addNode(pdfNode);
-        this.canvas.renderNode(pdfNode); // Render the node visually
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
             const edge = createEdge(parentId, pdfNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
             this.graph.addEdge(edge);
-
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, pdfNode.position);
         }
 
         // Clear input
@@ -2111,7 +2102,6 @@ class App {
             // Create edge from parent
             const edge = createEdge(parentNodeId, imageNode.id, EdgeType.HIGHLIGHT);
             this.graph.addEdge(edge);
-            this.canvas.renderEdge(edge, parentNode.position, imageNode.position);
 
             // Select the new image node
             this.canvas.clearSelection();
@@ -2922,7 +2912,6 @@ df.head()
             // Create highlight edge (dashed connection)
             const edge = createEdge(nodeId, highlightNode.id, EdgeType.HIGHLIGHT);
             this.graph.addEdge(edge);
-            this.canvas.renderEdge(edge, sourceNode.position, highlightNode.position);
 
             // Update collapse button for source node (now has children)
             this.updateCollapseButtonForNode(nodeId);
@@ -2953,7 +2942,6 @@ df.head()
                 // Edge from highlight to user message
                 const humanEdge = createEdge(highlightNode.id, humanNode.id, EdgeType.REPLY);
                 this.graph.addEdge(humanEdge);
-                this.canvas.renderEdge(humanEdge, highlightNode.position, humanNode.position);
 
                 // Update collapse button for highlight node (now has children)
                 this.updateCollapseButtonForNode(highlightNode.id);
@@ -2971,7 +2959,6 @@ df.head()
 
                 const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
                 this.graph.addEdge(aiEdge);
-                this.canvas.renderEdge(aiEdge, humanNode.position, aiNode.position);
 
                 // Update collapse button for human node (now has AI child)
                 this.updateCollapseButtonForNode(humanNode.id);
@@ -3070,7 +3057,6 @@ df.head()
 
         const edge = createEdge(nodeId, summaryNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(edge);
-        this.canvas.renderEdge(edge, parentNode.position, summaryNode.position);
 
         // Update collapse button for parent node (now has children)
         this.updateCollapseButtonForNode(nodeId);
@@ -3129,7 +3115,6 @@ df.head()
 
         const fetchEdge = createEdge(nodeId, fetchResultNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(fetchEdge);
-        this.canvas.renderEdge(fetchEdge, node.position, fetchResultNode.position);
 
         // Update collapse button for source node (now has children)
         this.updateCollapseButtonForNode(nodeId);
@@ -3211,7 +3196,6 @@ df.head()
 
             const summaryEdge = createEdge(fetchResultNode.id, summaryNode.id, EdgeType.REFERENCE);
             this.graph.addEdge(summaryEdge);
-            this.canvas.renderEdge(summaryEdge, fetchResultNode.position, summaryNode.position);
 
             // Update collapse button for fetch result node (now has children)
             this.updateCollapseButtonForNode(fetchResultNode.id);
@@ -3798,9 +3782,6 @@ df.head()
         this.graph.addNode(summaryNode);
         const edge = createEdge(nodeId, summaryNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(edge);
-
-        this.canvas.renderNode(summaryNode);
-        this.canvas.renderEdge(edge, fetchNode.position, summaryNode.position);
 
         // Pan to new node
         this.canvas.centerOnAnimated(summaryNode.position.x + 200, summaryNode.position.y + 100, 300);
