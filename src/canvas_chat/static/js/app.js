@@ -537,12 +537,8 @@ class App {
             this.updateEmptyState();
         }
 
-        // Auto-enable multiplayer to sync with host
         if (autoMultiplayer) {
-            // Small delay to ensure graph is ready
-            setTimeout(() => {
-                this.toggleMultiplayer();
-            }, 500);
+            this.showToast('Multiplayer is currently disabled.');
         }
     }
 
@@ -4404,15 +4400,7 @@ df.head()
      * If in MP mode: copy the share link (don't disable).
      */
     handleMultiplayerClick() {
-        const status = this.graph.getMultiplayerStatus?.();
-
-        if (status?.enabled) {
-            // Already in MP mode - copy the link
-            this.copyMultiplayerLink();
-        } else {
-            // Not in MP mode - enable it
-            this.enableMultiplayer();
-        }
+        this.showToast('Multiplayer is currently disabled.');
     }
 
     /**
@@ -4431,79 +4419,14 @@ df.head()
      * Enable multiplayer sync
      */
     enableMultiplayer() {
-        // Check if CRDT graph with multiplayer support
-        if (!this.graph.enableMultiplayer) {
-            console.warn('Multiplayer requires CRDT graph mode');
-            alert('Multiplayer requires CRDT mode. Please refresh the page.');
-            return;
-        }
-
-        // Ensure we have a session
-        if (!this.session || !this.session.id) {
-            console.warn('No session loaded');
-            alert('Please wait for session to load.');
-            return;
-        }
-
-        // Enable multiplayer using session ID as room
-        this.multiplayerBtn.classList.add('connecting');
-        this.multiplayerBtn.title = 'Connecting...';
-
-        const roomId = this.session.id;
-        const provider = this.graph.enableMultiplayer(roomId);
-
-        if (provider) {
-            // Set up remote change handler to re-render canvas
-            this.graph.onRemoteChange((type, events) => {
-                console.log('[App] Remote change received:', type);
-                this.handleRemoteChange(type, events);
-            });
-
-            // Set up lock change handler for visual indicators
-            this.graph.onLocksChange?.((lockedNodes) => {
-                this.handleLocksChange(lockedNodes);
-            });
-
-            // Set up peer count updates
-            provider.on('peers', ({ webrtcPeers, bcPeers }) => {
-                const peerCount = webrtcPeers.length + bcPeers.length;
-                this.updatePeerCount(peerCount);
-            });
-
-            // Update UI when synced
-            provider.on('synced', ({ synced }) => {
-                this.multiplayerBtn.classList.remove('connecting');
-                this.updateMultiplayerUI(true);
-                console.log('Multiplayer synced:', synced);
-            });
-
-            // Initial UI update
-            setTimeout(() => {
-                this.multiplayerBtn.classList.remove('connecting');
-                this.updateMultiplayerUI(true);
-            }, 1000);
-
-            // Copy shareable link to clipboard
-            this.copyMultiplayerLink();
-
-            console.log('Multiplayer enabled for room:', roomId);
-        } else {
-            this.multiplayerBtn.classList.remove('connecting');
-            console.error('Failed to enable multiplayer');
-        }
+        this.showToast('Multiplayer is currently disabled.');
     }
 
     /**
      * Toggle multiplayer sync on/off (legacy, kept for keyboard shortcut)
      */
     toggleMultiplayer() {
-        const status = this.graph.getMultiplayerStatus?.();
-
-        if (status?.enabled) {
-            this.leaveMultiplayer();
-        } else {
-            this.enableMultiplayer();
-        }
+        this.showToast('Multiplayer is currently disabled.');
     }
 
     /**
