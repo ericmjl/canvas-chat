@@ -12,6 +12,44 @@ import { readSSEStream } from './sse.js';
 import { apiUrl } from './utils.js';
 
 /**
+ * Static persona presets for quick selection
+ */
+const PERSONA_PRESETS = [
+    {
+        label: 'Skeptical Scientist',
+        value: 'You are a skeptical scientist who demands evidence, questions assumptions, and looks for methodological flaws.',
+    },
+    {
+        label: 'Optimistic Entrepreneur',
+        value: 'You are an optimistic entrepreneur who sees opportunities, thinks about market potential, and focuses on what could go right.',
+    },
+    {
+        label: 'Cautious Risk Analyst',
+        value: 'You are a cautious risk analyst who identifies potential problems, worst-case scenarios, and recommends safeguards.',
+    },
+    {
+        label: 'Creative Brainstormer',
+        value: 'You are a creative brainstormer who thinks outside the box, makes unexpected connections, and proposes novel ideas.',
+    },
+    {
+        label: "Devil's Advocate",
+        value: "You are a devil's advocate who argues the opposing position, challenges the premise, and tests the strength of arguments.",
+    },
+    {
+        label: 'Pragmatic Engineer',
+        value: 'You are a pragmatic engineer who focuses on feasibility, implementation details, and practical constraints.',
+    },
+    {
+        label: 'User Experience Advocate',
+        value: 'You are a user experience advocate who thinks from the end-user perspective, focusing on usability and accessibility.',
+    },
+    {
+        label: 'Ethical Reviewer',
+        value: 'You are an ethical reviewer who considers moral implications, fairness, and potential harms.',
+    },
+];
+
+/**
  * CommitteeFeature class manages committee consultation functionality.
  * Extends FeaturePlugin to integrate with the plugin architecture.
  */
@@ -61,18 +99,14 @@ class CommitteeFeature extends FeaturePlugin {
             members: [], // Array of { model: string, persona: string }
             chairmanModel: this.modelPicker.value,
             includeReview: false,
+            personaSuggestions: null,
         };
 
         // Get the question textarea and populate it
         const questionTextarea = document.getElementById('committee-question');
         questionTextarea.value = question;
 
-        // Populate model checkboxes
-        const modelsGrid = document.getElementById('committee-models-grid');
-        modelsGrid.innerHTML = '';
-
-        // Get recently used models for pre-selection
-        const recentModels = storage.getRecentModels();
+        // Get current model
         const currentModel = this.modelPicker.value;
 
         // Get all available models from the model picker
@@ -80,47 +114,6 @@ class CommitteeFeature extends FeaturePlugin {
             id: opt.value,
             name: opt.textContent,
         }));
-
-        // Pre-select up to 3 models: current + 2 most recent (excluding current)
-        const preSelected = new Set();
-        preSelected.add(currentModel);
-        for (const modelId of recentModels) {
-            if (preSelected.size >= 3) break;
-            if (availableModels.some((m) => m.id === modelId)) {
-                preSelected.add(modelId);
-            }
-        }
-
-        // Create checkboxes for each model
-        for (const model of availableModels) {
-            const item = document.createElement('label');
-            item.className = 'committee-model-item';
-            if (preSelected.has(model.id)) {
-                item.classList.add('selected');
-            }
-
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = model.id;
-            checkbox.checked = preSelected.has(model.id);
-            checkbox.addEventListener('change', () => this.updateCommitteeSelection());
-
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'model-name';
-            nameSpan.textContent = model.name;
-
-            item.appendChild(checkbox);
-            item.appendChild(nameSpan);
-            modelsGrid.appendChild(item);
-
-            // Click on label toggles checkbox
-            item.addEventListener('click', (e) => {
-                if (e.target !== checkbox) {
-                    checkbox.checked = !checkbox.checked;
-                    checkbox.dispatchEvent(new Event('change'));
-                }
-            });
-        }
 
         // Populate chairman dropdown
         const chairmanSelect = document.getElementById('committee-chairman');
@@ -136,46 +129,329 @@ class CommitteeFeature extends FeaturePlugin {
         // Reset review checkbox
         document.getElementById('committee-include-review').checked = false;
 
-        // Update selection state
-        this.updateCommitteeSelection();
+        // Clear members list
+        this.renderMembersList();
+
+        // Update count
+        this.updateMemberCount();
 
         // Show modal
         document.getElementById('committee-modal').style.display = 'flex';
+
+        // Generate persona suggestions automatically
+        await this.generatePersonaSuggestions(question);
+
+        // Setup event listeners (do this once)
+        this.setupCommitteeModalEventListeners();
     }
 
     /**
-     * Update committee selection UI and validation.
+     * Setup event listeners for committee modal (one-time setup).
      */
-    updateCommitteeSelection() {
-        const checkboxes = document.querySelectorAll('#committee-models-grid input[type="checkbox"]');
-        const selectedModels = [];
+    setupCommitteeModalEventListeners() {
+        // Prevent duplicate listeners
+        if (this._modalListenersSetup) return;
+        this._modalListenersSetup = true;
 
-        checkboxes.forEach((cb) => {
-            const item = cb.closest('.committee-model-item');
-            if (cb.checked) {
-                selectedModels.push(cb.value);
-                item.classList.add('selected');
-            } else {
-                item.classList.remove('selected');
+        const addMemberBtn = document.getElementById('committee-add-member-btn');
+        addMemberBtn.addEventListener('click', () => this.addMember());
+
+        const regenerateBtn = document.getElementById('committee-regenerate-btn');
+        regenerateBtn.addEventListener('click', () => this.generatePersonaSuggestions(this._committeeData.question));
+    }
+
+    /**
+     * Generate persona suggestions using LLM.
+     */
+    async generatePersonaSuggestions(question) {
+        const container = document.getElementById('committee-suggestions-container');
+        const regenerateBtn = document.getElementById('committee-regenerate-btn');
+
+        // Show loading state
+        container.innerHTML = `
+            <div class="committee-suggestions-loading">
+                <span class="spinner">⟳</span> Generating persona suggestions...
+            </div>
+        `;
+        regenerateBtn.style.display = 'none';
+
+        const model = this.modelPicker.value;
+
+        // Build prompt
+        const prompt = `Based on the following question, suggest 3 diverse personas that would provide valuable perspectives for analyzing this problem. Each persona should bring a unique viewpoint that helps explore different angles.
+
+Return ONLY a JSON array with no additional text:
+[
+  {"title": "short title (2-4 words)", "description": "1-2 sentence description of how this persona approaches problems"},
+  ...
+]
+
+Question:
+${question}`;
+
+        try {
+            let fullResponse = '';
+
+            await new Promise((resolve, reject) => {
+                this.chat.sendMessage(
+                    [{ role: 'user', content: prompt }],
+                    model,
+                    (chunk) => {
+                        fullResponse += chunk;
+                    },
+                    () => resolve(),
+                    (err) => reject(err)
+                );
+            });
+
+            // Parse JSON response
+            let suggestions;
+            try {
+                const jsonMatch = fullResponse.match(/\[[\s\S]*\]/);
+                if (jsonMatch) {
+                    suggestions = JSON.parse(jsonMatch[0]);
+                } else {
+                    throw new Error('No JSON array found in response');
+                }
+            } catch (parseError) {
+                console.error('Failed to parse persona suggestions:', parseError, fullResponse);
+                throw new Error('Failed to parse suggestions');
             }
+
+            if (!Array.isArray(suggestions) || suggestions.length === 0) {
+                throw new Error('No suggestions generated');
+            }
+
+            // Store suggestions
+            this._committeeData.personaSuggestions = suggestions;
+
+            // Render suggestions
+            this.renderPersonaSuggestions(suggestions);
+            regenerateBtn.style.display = 'inline-block';
+        } catch (error) {
+            console.error('Failed to generate persona suggestions:', error);
+            container.innerHTML = `
+                <div class="committee-suggestions-error">
+                    ⚠️ Couldn't generate suggestions. Add members manually or try again.
+                </div>
+            `;
+            regenerateBtn.style.display = 'inline-block';
+            regenerateBtn.textContent = 'Try Again';
+        }
+    }
+
+    /**
+     * Render persona suggestions as cards.
+     */
+    renderPersonaSuggestions(suggestions) {
+        const container = document.getElementById('committee-suggestions-container');
+        const grid = document.createElement('div');
+        grid.className = 'committee-suggestions-grid';
+
+        for (let i = 0; i < suggestions.length; i++) {
+            const suggestion = suggestions[i];
+            const card = document.createElement('div');
+            card.className = 'committee-suggestion-card';
+            card.dataset.index = i;
+
+            card.innerHTML = `
+                <div class="committee-suggestion-content">
+                    <div class="committee-suggestion-title">${this.escapeHtml(suggestion.title)}</div>
+                    <div class="committee-suggestion-description">${this.escapeHtml(suggestion.description)}</div>
+                </div>
+                <button class="committee-suggestion-add-btn" data-index="${i}">Add</button>
+            `;
+
+            // Add button click handler
+            const addBtn = card.querySelector('.committee-suggestion-add-btn');
+            addBtn.addEventListener('click', () => {
+                this.addMemberFromSuggestion(i);
+                card.classList.add('added');
+                addBtn.disabled = true;
+                addBtn.textContent = 'Added';
+            });
+
+            grid.appendChild(card);
+        }
+
+        container.innerHTML = '';
+        container.appendChild(grid);
+    }
+
+    /**
+     * Add a member from a suggestion.
+     */
+    addMemberFromSuggestion(index) {
+        const suggestion = this._committeeData.personaSuggestions[index];
+        const currentModel = this.modelPicker.value;
+
+        this._committeeData.members.push({
+            model: currentModel,
+            persona: suggestion.description,
         });
 
-        // Update count display
-        const countEl = document.getElementById('committee-models-count');
-        const count = selectedModels.length;
+        this.renderMembersList();
+        this.updateMemberCount();
+    }
+
+    /**
+     * Add an empty member to the list.
+     */
+    addMember() {
+        const currentModel = this.modelPicker.value;
+
+        this._committeeData.members.push({
+            model: currentModel,
+            persona: '',
+        });
+
+        this.renderMembersList();
+        this.updateMemberCount();
+    }
+
+    /**
+     * Remove a member from the list.
+     */
+    removeMember(index) {
+        this._committeeData.members.splice(index, 1);
+        this.renderMembersList();
+        this.updateMemberCount();
+    }
+
+    /**
+     * Render the members list.
+     */
+    renderMembersList() {
+        const list = document.getElementById('committee-members-list');
+        list.innerHTML = '';
+
+        const availableModels = Array.from(this.modelPicker.options).map((opt) => ({
+            id: opt.value,
+            name: opt.textContent,
+        }));
+
+        for (let i = 0; i < this._committeeData.members.length; i++) {
+            const member = this._committeeData.members[i];
+            const row = document.createElement('div');
+            row.className = 'committee-member-row';
+            row.dataset.index = i;
+
+            // Model selector
+            const modelSelect = document.createElement('div');
+            modelSelect.className = 'committee-member-model';
+            modelSelect.innerHTML = `<label>Model</label>`;
+            const select = document.createElement('select');
+            select.dataset.index = i;
+            for (const model of availableModels) {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.name;
+                if (model.id === member.model) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            }
+            select.addEventListener('change', (e) => {
+                this._committeeData.members[i].model = e.target.value;
+            });
+            modelSelect.appendChild(select);
+
+            // Persona input with preset dropdown
+            const personaDiv = document.createElement('div');
+            personaDiv.className = 'committee-member-persona';
+            personaDiv.innerHTML = `
+                <label>Persona (optional)</label>
+                <div class="committee-member-persona-input-wrapper">
+                    <input type="text"
+                           placeholder="e.g., You are a skeptical scientist who..."
+                           value="${this.escapeHtml(member.persona)}"
+                           data-index="${i}">
+                    <button class="committee-member-persona-preset-btn" data-index="${i}" title="Choose preset">▼</button>
+                    <div class="committee-member-persona-presets" style="display: none;" data-index="${i}">
+                        ${PERSONA_PRESETS.map(
+                            (preset) =>
+                                `<div class="committee-member-persona-preset-item" data-value="${this.escapeHtml(preset.value)}">${this.escapeHtml(preset.label)}</div>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+
+            const input = personaDiv.querySelector('input');
+            input.addEventListener('input', (e) => {
+                this._committeeData.members[i].persona = e.target.value;
+            });
+
+            const presetBtn = personaDiv.querySelector('.committee-member-persona-preset-btn');
+            const presetsDiv = personaDiv.querySelector('.committee-member-persona-presets');
+
+            presetBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Close all other preset dropdowns
+                document.querySelectorAll('.committee-member-persona-presets').forEach((div) => {
+                    if (div !== presetsDiv) div.style.display = 'none';
+                });
+                presetsDiv.style.display = presetsDiv.style.display === 'none' ? 'block' : 'none';
+            });
+
+            presetsDiv.querySelectorAll('.committee-member-persona-preset-item').forEach((item) => {
+                item.addEventListener('click', (e) => {
+                    const value = e.target.dataset.value;
+                    input.value = value;
+                    this._committeeData.members[i].persona = value;
+                    presetsDiv.style.display = 'none';
+                });
+            });
+
+            // Remove button
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'committee-member-remove';
+            removeBtn.innerHTML = '×';
+            removeBtn.title = 'Remove member';
+            removeBtn.dataset.index = i;
+            removeBtn.disabled = this._committeeData.members.length <= 2;
+            removeBtn.addEventListener('click', () => {
+                this.removeMember(i);
+            });
+
+            row.appendChild(modelSelect);
+            row.appendChild(personaDiv);
+            row.appendChild(removeBtn);
+            list.appendChild(row);
+        }
+
+        // Close preset dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.committee-member-persona-input-wrapper')) {
+                document.querySelectorAll('.committee-member-persona-presets').forEach((div) => {
+                    div.style.display = 'none';
+                });
+            }
+        });
+    }
+
+    /**
+     * Update member count display and validation.
+     */
+    updateMemberCount() {
+        const count = this._committeeData.members.length;
         const isValid = count >= 2 && count <= 5;
 
-        countEl.textContent = `${count} selected (2-5 required)`;
+        const countEl = document.getElementById('committee-members-count');
+        countEl.textContent = `${count} of 2-5 members`;
         countEl.classList.toggle('valid', isValid);
         countEl.classList.toggle('invalid', !isValid);
 
         // Enable/disable execute button
         document.getElementById('committee-execute-btn').disabled = !isValid;
+    }
 
-        // Store selected models
-        if (this._committeeData) {
-            this._committeeData.selectedModels = selectedModels;
-        }
+    /**
+     * Escape HTML to prevent XSS.
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     /**

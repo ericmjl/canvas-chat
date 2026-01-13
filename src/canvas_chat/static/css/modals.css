@@ -195,7 +195,9 @@
     font-weight: 500;
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition:
+        background 0.15s,
+        color 0.15s;
 }
 
 .secondary-btn:hover {
@@ -209,7 +211,7 @@
 }
 
 .custom-models-list:empty::before {
-    content: "No custom models configured";
+    content: 'No custom models configured';
     display: block;
     padding: 12px;
     background: var(--bg-secondary);
@@ -275,7 +277,9 @@
     cursor: pointer;
     border-radius: var(--radius-sm);
     opacity: 0;
-    transition: opacity 0.15s, background 0.15s;
+    transition:
+        opacity 0.15s,
+        background 0.15s;
     flex-shrink: 0;
     margin-left: 8px;
 }
@@ -354,7 +358,9 @@
     cursor: pointer;
     border-radius: var(--radius-sm);
     opacity: 0;
-    transition: opacity 0.15s, background 0.15s;
+    transition:
+        opacity 0.15s,
+        background 0.15s;
 }
 
 .session-item:hover .session-item-delete {
@@ -369,7 +375,7 @@
 
 /* Loading state for nodes */
 .node.loading .node-content::after {
-    content: "";
+    content: '';
     display: inline-block;
     width: 16px;
     height: 16px;
@@ -382,7 +388,9 @@
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Empty state */
@@ -572,8 +580,8 @@ kbd {
     padding: 12px;
     border: 1px solid var(--bg-secondary);
     border-radius: var(--radius-sm);
-    background: #272822;  /* Monokai background */
-    color: #f8f8f2;  /* Monokai foreground */
+    background: #272822; /* Monokai background */
+    color: #f8f8f2; /* Monokai foreground */
     resize: none;
     outline: none;
     tab-size: 4;
@@ -968,7 +976,7 @@ kbd {
     background: var(--selection-bg);
 }
 
-.committee-model-item input[type="checkbox"] {
+.committee-model-item input[type='checkbox'] {
     width: 16px;
     height: 16px;
     cursor: pointer;
@@ -1030,7 +1038,7 @@ kbd {
     background: var(--bg-secondary);
 }
 
-.committee-checkbox-label input[type="checkbox"] {
+.committee-checkbox-label input[type='checkbox'] {
     width: 18px;
     height: 18px;
     margin-top: 2px;
@@ -1050,6 +1058,316 @@ kbd {
     font-size: 12px;
     color: var(--text-muted);
     margin-top: 2px;
+}
+
+/* Persona Suggestions */
+.committee-suggestions-group {
+    margin-bottom: 20px;
+}
+
+.committee-suggestions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.committee-suggestions-header label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.committee-suggestions-container {
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    padding: 12px;
+}
+
+.committee-suggestions-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.committee-suggestions-loading .spinner {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.committee-suggestions-error {
+    padding: 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+.committee-suggestions-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.committee-suggestion-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    transition: all 0.15s;
+}
+
+.committee-suggestion-card:hover {
+    border-color: var(--accent);
+}
+
+.committee-suggestion-card.added {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.committee-suggestion-content {
+    flex: 1;
+}
+
+.committee-suggestion-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.committee-suggestion-description {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.committee-suggestion-add-btn {
+    padding: 6px 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+}
+
+.committee-suggestion-add-btn:hover {
+    opacity: 0.9;
+}
+
+.committee-suggestion-add-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Committee Members List */
+.committee-members-group {
+    margin-bottom: 20px;
+}
+
+.committee-members-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.committee-members-header label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.committee-members-count {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.committee-members-count.valid {
+    color: var(--success);
+}
+
+.committee-members-count.invalid {
+    color: var(--danger);
+}
+
+.committee-members-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.committee-member-row {
+    display: grid;
+    grid-template-columns: 200px 1fr auto;
+    gap: 12px;
+    align-items: start;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+.committee-member-model {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.committee-member-model label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.committee-member-model select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.committee-member-model select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.committee-member-persona {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.committee-member-persona label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.committee-member-persona-input-wrapper {
+    position: relative;
+}
+
+.committee-member-persona input {
+    width: 100%;
+    padding: 8px 30px 8px 10px;
+    border: 1px solid var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.committee-member-persona input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.committee-member-persona input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+
+.committee-member-persona-preset-btn {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 4px 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+}
+
+.committee-member-persona-preset-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.committee-member-persona-presets {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+.committee-member-persona-preset-item {
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.committee-member-persona-preset-item:hover {
+    background: var(--bg-secondary);
+}
+
+.committee-member-remove {
+    padding: 8px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all 0.15s;
+    margin-top: 18px;
+}
+
+.committee-member-remove:hover {
+    background: var(--bg-tertiary);
+    color: var(--danger);
+}
+
+.committee-member-remove:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.committee-add-member-btn {
+    width: 100%;
+    padding: 10px;
+    font-size: 13px;
 }
 
 .modal-actions {
