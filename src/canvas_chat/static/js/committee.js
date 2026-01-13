@@ -58,7 +58,7 @@ class CommitteeFeature extends FeaturePlugin {
         this._committeeData = {
             question: question,
             context: contextText,
-            selectedModels: [],
+            members: [], // Array of { model: string, persona: string }
             chairmanModel: this.modelPicker.value,
             includeReview: false,
         };
@@ -192,7 +192,7 @@ class CommitteeFeature extends FeaturePlugin {
     async executeCommittee() {
         if (!this._committeeData) return;
 
-        const { question, context: _context, selectedModels } = this._committeeData;
+        const { question, context: _context, members } = this._committeeData;
         const chairmanModel = document.getElementById('committee-chairman').value;
         const includeReview = document.getElementById('committee-include-review').checked;
 
@@ -200,8 +200,8 @@ class CommitteeFeature extends FeaturePlugin {
         document.getElementById('committee-modal').style.display = 'none';
 
         // Track recently used models
-        for (const modelId of selectedModels) {
-            storage.addRecentModel(modelId);
+        for (const member of members) {
+            storage.addRecentModel(member.model);
         }
         storage.addRecentModel(chairmanModel);
 
@@ -242,23 +242,25 @@ class CommitteeFeature extends FeaturePlugin {
         const basePos = humanNode.position;
         const spacing = 380;
         const verticalOffset = 200;
-        const totalWidth = (selectedModels.length - 1) * spacing;
+        const totalWidth = (members.length - 1) * spacing;
         const startX = basePos.x - totalWidth / 2;
 
-        // Create opinion nodes for each model
+        // Create opinion nodes for each member
         const opinionNodes = [];
         const opinionNodeMap = {}; // index -> nodeId
 
-        for (let i = 0; i < selectedModels.length; i++) {
-            const modelId = selectedModels[i];
-            const modelName = this.getModelDisplayName(modelId);
+        for (let i = 0; i < members.length; i++) {
+            const member = members[i];
+            const modelName = this.getModelDisplayName(member.model);
+            const label = member.persona ? `${member.persona} (${modelName})` : modelName;
 
-            const opinionNode = createNode(NodeType.OPINION, `*Waiting for ${modelName}...*`, {
+            const opinionNode = createNode(NodeType.OPINION, `*Waiting for ${label}...*`, {
                 position: {
                     x: startX + i * spacing,
                     y: basePos.y + verticalOffset,
                 },
-                model: modelId,
+                model: member.model,
+                persona: member.persona,
             });
 
             this.graph.addNode(opinionNode);
@@ -306,7 +308,8 @@ class CommitteeFeature extends FeaturePlugin {
 
         // Generate opinions in parallel (like matrix cell fills)
         const opinionPromises = opinionNodes.map((node, index) => {
-            return this.generateOpinion(node, selectedModels[index], messages, index);
+            const member = members[index];
+            return this.generateOpinion(node, member.model, messages, index, member.persona);
         });
 
         try {
@@ -316,9 +319,10 @@ class CommitteeFeature extends FeaturePlugin {
             // If includeReview, generate reviews in parallel
             if (includeReview) {
                 const reviewPromises = opinionNodes.map((opinionNode, index) => {
+                    const member = members[index];
                     return this.generateReview(
                         opinionNode,
-                        selectedModels[index],
+                        member.model,
                         messages,
                         opinions,
                         index,
@@ -327,7 +331,8 @@ class CommitteeFeature extends FeaturePlugin {
                         spacing,
                         verticalOffset,
                         reviewNodes,
-                        reviewNodeMap
+                        reviewNodeMap,
+                        member.persona
                     );
                 });
 
@@ -365,11 +370,15 @@ class CommitteeFeature extends FeaturePlugin {
      * @param {string} model - Model ID
      * @param {Array} messages - Conversation context
      * @param {number} index - Opinion index
+     * @param {string} persona - Optional persona system prompt
      * @returns {Promise<string>} - The opinion content
      */
-    async generateOpinion(opinionNode, model, messages, index) {
+    async generateOpinion(opinionNode, model, messages, index, persona = '') {
         const modelName = this.getModelDisplayName(model);
         const nodeId = opinionNode.id;
+
+        // Inject persona as system prompt if provided
+        const messagesWithPersona = persona ? [{ role: 'system', content: persona }, ...messages] : messages;
 
         // Create abort controller for this opinion
         const abortController = new AbortController();
@@ -379,29 +388,32 @@ class CommitteeFeature extends FeaturePlugin {
         this.streamingManager.register(nodeId, {
             abortController,
             featureId: 'committee',
-            context: { model, modelName, messages, index, nodeId },
+            context: { model, modelName, messages: messagesWithPersona, index, nodeId, persona },
             onContinue: async (nodeId, state) => {
                 // Continue opinion generation from where it left off
                 await this.continueOpinion(nodeId, state.context);
             },
         });
 
+        // Build label with persona if provided
+        const label = persona ? `${persona} (${modelName})` : modelName;
+
         return new Promise((resolve, reject) => {
             let fullContent = '';
 
             this.chat.sendMessage(
-                messages,
+                messagesWithPersona,
                 model,
                 // onChunk
                 (chunk, accumulated) => {
                     fullContent = accumulated;
-                    this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${accumulated}`, true);
+                    this.canvas.updateNodeContent(nodeId, `**${label}**\n\n${accumulated}`, true);
                 },
                 // onDone
                 (finalContent) => {
                     fullContent = finalContent;
-                    this.canvas.updateNodeContent(nodeId, `**${modelName}**\n\n${finalContent}`, false);
-                    this.graph.updateNode(nodeId, { content: `**${modelName}**\n\n${finalContent}` });
+                    this.canvas.updateNodeContent(nodeId, `**${label}**\n\n${finalContent}`, false);
+                    this.graph.updateNode(nodeId, { content: `**${label}**\n\n${finalContent}` });
                     this.streamingManager.unregister(nodeId); // Auto-hides stop button
                     this._activeCommittee.abortControllers.delete(nodeId);
                     this.saveSession();
@@ -441,6 +453,7 @@ class CommitteeFeature extends FeaturePlugin {
      * @param {number} verticalOffset - Vertical offset
      * @param {Array} reviewNodes - Array to push review node to
      * @param {Object} reviewNodeMap - Map of reviewer index to node ID
+     * @param {string} persona - Optional persona system prompt
      * @returns {Promise<string>} - The review content
      */
     async generateReview(
@@ -454,18 +467,21 @@ class CommitteeFeature extends FeaturePlugin {
         spacing,
         verticalOffset,
         reviewNodes,
-        reviewNodeMap
+        reviewNodeMap,
+        persona = ''
     ) {
         const modelName = this.getModelDisplayName(model);
+        const label = persona ? `${persona} (${modelName})` : modelName;
 
         // Create review node
         const reviewY = basePos.y + verticalOffset * 2;
-        const reviewNode = createNode(NodeType.REVIEW, `**${modelName} Review**\n\n*Reviewing other opinions...*`, {
+        const reviewNode = createNode(NodeType.REVIEW, `**${label} Review**\n\n*Reviewing other opinions...*`, {
             position: {
                 x: startX + reviewerIndex * spacing,
                 y: reviewY,
             },
             model: model,
+            persona: persona,
         });
 
         this.graph.addNode(reviewNode);
@@ -496,6 +512,7 @@ class CommitteeFeature extends FeaturePlugin {
                 opinions,
                 reviewerIndex,
                 nodeId: reviewNode.id,
+                persona,
             },
             onContinue: async (nodeId, state) => {
                 // Continue review generation from where it left off
@@ -504,17 +521,33 @@ class CommitteeFeature extends FeaturePlugin {
         });
 
         // Build review prompt with all opinions
-        const reviewMessages = [
-            ...messages,
-            {
-                role: 'assistant',
-                content: `Here are opinions from multiple models:\n\n${opinions.map((op, i) => `Opinion ${i + 1}:\n${op}`).join('\n\n')}`,
-            },
-            {
-                role: 'user',
-                content: 'Please review these opinions, identifying strengths, weaknesses, and areas of disagreement.',
-            },
-        ];
+        // Inject persona as system prompt if provided
+        const reviewMessages = persona
+            ? [
+                  { role: 'system', content: persona },
+                  ...messages,
+                  {
+                      role: 'assistant',
+                      content: `Here are opinions from multiple models:\n\n${opinions.map((op, i) => `Opinion ${i + 1}:\n${op}`).join('\n\n')}`,
+                  },
+                  {
+                      role: 'user',
+                      content:
+                          'Please review these opinions, identifying strengths, weaknesses, and areas of disagreement.',
+                  },
+              ]
+            : [
+                  ...messages,
+                  {
+                      role: 'assistant',
+                      content: `Here are opinions from multiple models:\n\n${opinions.map((op, i) => `Opinion ${i + 1}:\n${op}`).join('\n\n')}`,
+                  },
+                  {
+                      role: 'user',
+                      content:
+                          'Please review these opinions, identifying strengths, weaknesses, and areas of disagreement.',
+                  },
+              ];
 
         return new Promise((resolve, reject) => {
             let fullContent = '';
@@ -525,13 +558,13 @@ class CommitteeFeature extends FeaturePlugin {
                 // onChunk
                 (chunk, accumulated) => {
                     fullContent = accumulated;
-                    this.canvas.updateNodeContent(reviewNode.id, `**${modelName} Review**\n\n${accumulated}`, true);
+                    this.canvas.updateNodeContent(reviewNode.id, `**${label} Review**\n\n${accumulated}`, true);
                 },
                 // onDone
                 (finalContent) => {
                     fullContent = finalContent;
-                    this.canvas.updateNodeContent(reviewNode.id, `**${modelName} Review**\n\n${finalContent}`, false);
-                    this.graph.updateNode(reviewNode.id, { content: `**${modelName} Review**\n\n${finalContent}` });
+                    this.canvas.updateNodeContent(reviewNode.id, `**${label} Review**\n\n${finalContent}`, false);
+                    this.graph.updateNode(reviewNode.id, { content: `**${label} Review**\n\n${finalContent}` });
                     this.streamingManager.unregister(reviewNode.id); // Auto-hides stop button
                     this._activeCommittee.abortControllers.delete(reviewNode.id);
                     this.saveSession();
@@ -598,12 +631,21 @@ class CommitteeFeature extends FeaturePlugin {
             },
         });
 
-        // Build synthesis prompt
+        // Build synthesis prompt with persona labels
+        // Format each opinion with persona context if available
+        const opinionTexts = opinions.map((op, i) => {
+            const sourceNode = sourceNodes[i];
+            const persona = sourceNode.persona || '';
+            const modelName = this.getModelDisplayName(sourceNode.model);
+            const label = persona ? `"${persona}" (${modelName})` : modelName;
+            return `Opinion from ${label}:\n${op}`;
+        });
+
         const synthesisMessages = [
             ...messages,
             {
                 role: 'assistant',
-                content: `Here are opinions from multiple models:\n\n${opinions.map((op, i) => `Opinion ${i + 1}:\n${op}`).join('\n\n')}`,
+                content: `Here are opinions from multiple models:\n\n${opinionTexts.join('\n\n')}`,
             },
             {
                 role: 'user',
