@@ -883,7 +883,10 @@ ${question}`;
         for (const sourceNode of sourceNodes) {
             const synthEdge = createEdge(sourceNode.id, synthesisNode.id, EdgeType.SYNTHESIS);
             this.graph.addEdge(synthEdge);
-            this.canvas.renderEdge(synthEdge, sourceNode.position, synthesisNode.position);
+            // Get fresh positions from graph (in case layout changed after node creation)
+            const freshSourceNode = this.graph.getNode(sourceNode.id);
+            const freshSynthesisNode = this.graph.getNode(synthesisNode.id);
+            this.canvas.renderEdge(synthEdge, freshSourceNode.position, freshSynthesisNode.position);
         }
 
         // Create abort controller for synthesis
