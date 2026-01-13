@@ -157,7 +157,7 @@ jobs:
                   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
               run: |
                   llamabot configure default-model --model-name="gpt-4.1-mini"
-                  llamabot git write-release-notes --release-notes-dir docs/releases/posts
+                  llamabot git write-release-notes --release-notes-dir docs/releases/posts --version "${{ env.version_number }}"
                   # Verify the release notes file was created
                   if [ ! -f "docs/releases/posts/v${{ env.version_number }}.md" ]; then
                     echo "Error: llamabot git write-release-notes did not create docs/releases/posts/v${{ env.version_number }}.md"
