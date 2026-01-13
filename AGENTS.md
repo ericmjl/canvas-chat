@@ -550,6 +550,77 @@ this.streamingNodes.get(nodeId).abortController.abort();
 this.streamingNodes.delete(nodeId);
 ```
 
+### Edge rendering with fresh positions
+
+**CRITICAL:** When rendering edges after async operations (LLM calls, fetches, etc.), **always fetch fresh node positions from the graph** to avoid stale position bugs.
+
+**The problem:** If you cache node positions and then render edges after an async operation, the positions may be stale if layout changed in the meantime.
+
+**The pattern:** Use `canvas.renderEdgeWithFreshPositions(edge, graph)` or manually fetch fresh positions.
+
+```javascript
+// WRONG: Using cached positions after async operation
+const searchNode = createNode(...);
+this.graph.addNode(searchNode);
+
+// ... async search operation happens here ...
+const results = await fetch(...);
+
+for (const result of results) {
+    const resultNode = createNode(...);
+    this.graph.addNode(resultNode);
+    const edge = createEdge(searchNode.id, resultNode.id, EdgeType.SEARCH_RESULT);
+    this.graph.addEdge(edge);
+
+    // BUG: searchNode.position may be stale if layout changed during search
+    this.canvas.renderEdge(edge, searchNode.position, resultNode.position);
+}
+
+// CORRECT: Use renderEdgeWithFreshPositions (preferred)
+const edge = createEdge(searchNode.id, resultNode.id, EdgeType.SEARCH_RESULT);
+this.graph.addEdge(edge);
+this.canvas.renderEdgeWithFreshPositions(edge, this.graph);
+
+// CORRECT: Manually fetch fresh positions
+const edge = createEdge(searchNode.id, resultNode.id, EdgeType.SEARCH_RESULT);
+this.graph.addEdge(edge);
+const currentSearchNode = this.graph.getNode(searchNode.id);
+const currentResultNode = this.graph.getNode(resultNode.id);
+this.canvas.renderEdge(edge, currentSearchNode.position, currentResultNode.position);
+```
+
+**When to use this pattern:**
+
+- Edges rendered after any async operation (LLM streaming, API calls, fetches)
+- Edges rendered in loops that process results from async operations
+- Edges connecting nodes created at different times
+
+**Safe cases (no need for fresh positions):**
+
+- Edges rendered immediately after both nodes are created (synchronous)
+- Edges where both nodes are created in the same function before any async calls
+
+**Example of safe synchronous pattern:**
+
+```javascript
+// Safe: Both nodes created, edge rendered immediately (no async gap)
+const humanNode = createNode(NodeType.HUMAN, content, {...});
+this.graph.addNode(humanNode);
+this.canvas.renderNode(humanNode);
+
+const aiNode = createNode(NodeType.AI, '', {...});
+this.graph.addNode(aiNode);
+this.canvas.renderNode(aiNode);
+
+const edge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
+this.graph.addEdge(edge);
+// Safe to use cached positions - no async operation happened
+this.canvas.renderEdge(edge, humanNode.position, aiNode.position);
+
+// NOW async operation starts (won't affect already-rendered edge)
+await this.chat.sendMessage(...);
+```
+
 ### Feature instance access (plugin architecture)
 
 **CRITICAL:** All feature instances MUST be accessed through the FeatureRegistry, never instantiated directly.
