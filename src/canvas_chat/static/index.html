@@ -748,16 +748,38 @@
                         ></textarea>
                     </div>
 
-                    <div class="committee-models-group">
-                        <div class="committee-models-header">
-                            <label>Committee Members</label>
-                            <span class="committee-models-count" id="committee-models-count"
-                                >0 selected (2-5 required)</span
+                    <!-- Persona Suggestions Section -->
+                    <div class="committee-suggestions-group">
+                        <div class="committee-suggestions-header">
+                            <label>✨ Suggested Personas</label>
+                            <button
+                                id="committee-regenerate-btn"
+                                class="icon-btn"
+                                title="Regenerate suggestions"
+                                style="display: none"
                             >
+                                ↻
+                            </button>
                         </div>
-                        <div class="committee-models-grid" id="committee-models-grid">
-                            <!-- Model checkboxes will be populated by JS -->
+                        <div class="committee-suggestions-container" id="committee-suggestions-container">
+                            <div class="committee-suggestions-loading">
+                                <span class="spinner">⟳</span> Generating persona suggestions...
+                            </div>
                         </div>
+                    </div>
+
+                    <!-- Committee Members Section -->
+                    <div class="committee-members-group">
+                        <div class="committee-members-header">
+                            <label>Committee Members</label>
+                            <span class="committee-members-count" id="committee-members-count">0 of 2-5 members</span>
+                        </div>
+                        <div class="committee-members-list" id="committee-members-list">
+                            <!-- Member rows will be added dynamically -->
+                        </div>
+                        <button id="committee-add-member-btn" class="secondary-btn committee-add-member-btn">
+                            + Add Member
+                        </button>
                     </div>
 
                     <div class="committee-chairman-group">
