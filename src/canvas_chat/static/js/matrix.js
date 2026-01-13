@@ -321,13 +321,11 @@ class MatrixFeature extends FeaturePlugin {
         const matrixNode = createMatrixNode(context, contextNodeIds, rowItems, colItems, { position });
 
         this.graph.addNode(matrixNode);
-        this.canvas.renderNode(matrixNode);
 
         // Create edges from context nodes to matrix (only if context nodes exist)
         for (const contextNode of contextNodes) {
             const edge = createEdge(contextNode.id, matrixNode.id, EdgeType.REPLY);
             this.graph.addEdge(edge);
-            this.canvas.renderEdge(edge, contextNode.position, matrixNode.position);
         }
 
         // Close modal and clean up
@@ -747,12 +745,10 @@ class MatrixFeature extends FeaturePlugin {
         });
 
         this.graph.addNode(cellNode);
-        this.canvas.renderNode(cellNode);
 
         // Create edge from matrix to cell (arrow points to the pinned cell)
         const edge = createEdge(matrixId, cellNode.id, EdgeType.MATRIX_CELL);
         this.graph.addEdge(edge);
-        this.canvas.renderEdge(edge, matrixNode.position, cellNode.position);
 
         // Close modal
         document.getElementById('cell-modal').style.display = 'none';
@@ -885,12 +881,10 @@ class MatrixFeature extends FeaturePlugin {
         }
 
         this.graph.addNode(sliceNode);
-        this.canvas.renderNode(sliceNode);
 
         // Create edge from matrix to slice node
         const edge = createEdge(matrixId, sliceNode.id, EdgeType.MATRIX_CELL);
         this.graph.addEdge(edge);
-        this.canvas.renderEdge(edge, matrixNode.position, sliceNode.position);
 
         // Close modal
         document.getElementById('slice-modal').style.display = 'none';

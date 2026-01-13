@@ -78,14 +78,11 @@ class FactcheckFeature extends FeaturePlugin {
             position: this.graph.autoPosition(parentIds.length > 0 ? parentIds : []),
         });
         this.graph.addNode(loadingNode);
-        this.canvas.renderNode(loadingNode);
 
         // Connect to parent nodes only if they exist
         for (const parentId of parentIds) {
             const edge = createEdge(parentId, loadingNode.id, EdgeType.REFERENCE);
             this.graph.addEdge(edge);
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, loadingNode.position);
         }
 
         this.canvas.clearSelection();
@@ -365,14 +362,11 @@ class FactcheckFeature extends FeaturePlugin {
             });
 
             this.graph.addNode(factcheckNode);
-            this.canvas.renderNode(factcheckNode);
 
             // Connect to parent nodes
             for (const parentId of parentIds) {
                 const edge = createEdge(parentId, factcheckNode.id, EdgeType.REFERENCE);
                 this.graph.addEdge(edge);
-                const parentNode = this.graph.getNode(parentId);
-                this.canvas.renderEdge(edge, parentNode.position, factcheckNode.position);
             }
 
             this.canvas.panToNodeAnimated(factcheckNode.id);
