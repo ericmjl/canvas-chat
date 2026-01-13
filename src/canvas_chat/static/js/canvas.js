@@ -94,6 +94,10 @@ class Canvas {
         // EventEmitter for new event-based API
         this.events = new EventEmitter();
 
+        // Deferred edge rendering (defensive pattern for async node rendering)
+        this.deferredEdges = new Map(); // edgeId -> { edge, sourcePosOrGraph, targetPos }
+        this.nodeRenderCallbacks = new Map(); // nodeId -> [callbacks]
+
         // Reply tooltip state
         this.branchTooltip = null;
         this.activeSelectionNodeId = null;
@@ -1882,6 +1886,9 @@ class Canvas {
             div.classList.add('selected');
         }
 
+        // Notify any edges waiting for this node to finish rendering
+        this._notifyNodeRendered(node.id);
+
         return wrapper;
     }
 
@@ -3470,10 +3477,12 @@ class Canvas {
      */
     renderEdge(edge, sourcePosOrGraph, targetPos) {
         let sourcePos, finalTargetPos;
+        let usingGraphSignature = false;
 
         // Signature 1: renderEdge(edge, graph)
         // Detect graph by checking for getNode method
         if (sourcePosOrGraph && typeof sourcePosOrGraph.getNode === 'function') {
+            usingGraphSignature = true;
             const graph = sourcePosOrGraph;
             const sourceNode = graph.getNode(edge.source);
             const targetNode = graph.getNode(edge.target);
@@ -3484,13 +3493,38 @@ class Canvas {
             }
             sourcePos = sourceNode.position;
             finalTargetPos = targetNode.position;
+
+            // DEFENSIVE: When using graph signature, check if nodes are rendered in DOM
+            // This prevents race conditions where edges are added before nodes finish rendering
+            const sourceWrapper = this.nodeElements.get(edge.source);
+            const targetWrapper = this.nodeElements.get(edge.target);
+
+            if (!sourceWrapper || !targetWrapper) {
+                // One or both nodes not rendered yet - defer this edge
+                console.log(
+                    `[Canvas] Deferring edge ${edge.id} until nodes render (source: ${!!sourceWrapper}, target: ${!!targetWrapper})`
+                );
+                this.deferredEdges.set(edge.id, { edge, sourcePosOrGraph, targetPos });
+
+                // Register callbacks for missing nodes
+                if (!sourceWrapper) {
+                    this._addNodeRenderCallback(edge.source, () => this._retryDeferredEdge(edge.id));
+                }
+                if (!targetWrapper) {
+                    this._addNodeRenderCallback(edge.target, () => this._retryDeferredEdge(edge.id));
+                }
+
+                return null;
+            }
         } else {
             // Signature 2: renderEdge(edge, sourcePos, targetPos)
+            // Legacy signature - caller provides explicit positions, skip defensive check
             sourcePos = sourcePosOrGraph;
             finalTargetPos = targetPos;
         }
 
-        // Remove existing
+        // Both nodes exist - proceed with normal rendering
+        // Remove existing edge if present
         this.removeEdge(edge.id);
 
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -3523,6 +3557,55 @@ class Canvas {
         this.edgeElements.set(edge.id, path);
 
         return path;
+    }
+
+    /**
+     * Register callback to fire when a node finishes rendering
+     * @private
+     */
+    _addNodeRenderCallback(nodeId, callback) {
+        if (!this.nodeRenderCallbacks.has(nodeId)) {
+            this.nodeRenderCallbacks.set(nodeId, []);
+        }
+        this.nodeRenderCallbacks.get(nodeId).push(callback);
+    }
+
+    /**
+     * Retry rendering a deferred edge
+     * @private
+     */
+    _retryDeferredEdge(edgeId) {
+        const deferred = this.deferredEdges.get(edgeId);
+        if (!deferred) return;
+
+        const { edge, sourcePosOrGraph, targetPos } = deferred;
+
+        // Try rendering again (will defer again if still missing nodes)
+        const result = this.renderEdge(edge, sourcePosOrGraph, targetPos);
+
+        // If successful, remove from deferred queue
+        if (result) {
+            this.deferredEdges.delete(edgeId);
+            console.log(`[Canvas] Successfully rendered deferred edge ${edgeId}`);
+        }
+    }
+
+    /**
+     * Notify that a node has finished rendering
+     * Called at end of renderNode()
+     * @private
+     */
+    _notifyNodeRendered(nodeId) {
+        const callbacks = this.nodeRenderCallbacks.get(nodeId);
+        if (!callbacks) return;
+
+        // Fire all callbacks waiting for this node
+        for (const callback of callbacks) {
+            callback();
+        }
+
+        // Clean up
+        this.nodeRenderCallbacks.delete(nodeId);
     }
 
     /**
