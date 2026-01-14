@@ -493,21 +493,9 @@ class ColumnNode extends BaseNode {
 }
 
 /**
- * PDF node (imported PDF document)
- * Note: FetchResultNode is now a plugin (fetch-result-node.js)
+ * Note: PdfNode has been moved to pdf-node.js plugin (built-in)
+ * This allows the PDF node type to be loaded as a plugin.
  */
-class PdfNode extends BaseNode {
-    getTypeLabel() {
-        return 'PDF';
-    }
-    getTypeIcon() {
-        return '📑';
-    }
-
-    getActions() {
-        return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
-    }
-}
 
 /**
  * CSV node (uploaded CSV data for analysis)
@@ -1055,7 +1043,7 @@ function wrapNode(node) {
         [NodeType.ROW]: RowNode,
         [NodeType.COLUMN]: ColumnNode,
         // Note: FetchResultNode is now a plugin (fetch-result-node.js)
-        [NodeType.PDF]: PdfNode,
+        // Note: PdfNode is now a plugin (pdf-node.js)
         [NodeType.OPINION]: OpinionNode,
         [NodeType.SYNTHESIS]: SynthesisNode,
         [NodeType.REVIEW]: ReviewNode,
@@ -1143,7 +1131,7 @@ function validateNodeProtocol(NodeClass) {
     else if (className.includes('Research')) nodeType = NodeType.RESEARCH;
     else if (className.includes('Row')) nodeType = NodeType.ROW;
     else if (className.includes('Column')) nodeType = NodeType.COLUMN;
-    else if (className.includes('Pdf')) nodeType = NodeType.PDF;
+    // Note: PdfNode is now a plugin (pdf-node.js)
     else if (className.includes('Opinion')) nodeType = NodeType.OPINION;
     else if (className.includes('Synthesis')) nodeType = NodeType.SYNTHESIS;
     else if (className.includes('Review')) nodeType = NodeType.REVIEW;
@@ -1204,7 +1192,7 @@ function registerBuiltinNodeTypes() {
         { type: 'cell', protocol: CellNode },
         { type: 'row', protocol: RowNode },
         { type: 'column', protocol: ColumnNode },
-        { type: 'pdf', protocol: PdfNode },
+        // Note: 'pdf' is now a plugin (pdf-node.js)
         { type: 'opinion', protocol: OpinionNode },
         { type: 'synthesis', protocol: SynthesisNode },
         { type: 'review', protocol: ReviewNode },
@@ -1265,7 +1253,7 @@ export {
     CellNode,
     RowNode,
     ColumnNode,
-    PdfNode,
+    // PdfNode is now exported from pdf-node.js plugin
     CsvNode,
     CodeNode,
     OpinionNode,

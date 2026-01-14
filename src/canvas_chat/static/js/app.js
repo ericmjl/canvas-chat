@@ -25,6 +25,7 @@ import './summary.js'; // Side-effect import for SummaryNode plugin registration
 import './human-node.js'; // Side-effect import for HumanNode plugin registration
 import './ai-node.js'; // Side-effect import for AINode plugin registration
 import './reference.js'; // Side-effect import for ReferenceNode plugin registration
+import './pdf-node.js'; // Side-effect import for PdfNode plugin registration
 import './search-node.js'; // Side-effect import for SearchNode plugin registration
 import './highlight-node.js'; // Side-effect import for HighlightNode plugin registration
 import './fetch-result-node.js'; // Side-effect import for FetchResultNode plugin registration
