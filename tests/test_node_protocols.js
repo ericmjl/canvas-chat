@@ -33,8 +33,8 @@ const {
     // SummaryNode is now a plugin - import from summary.js
     // ReferenceNode is now a plugin - import from reference.js
     // SearchNode is now a plugin - import from search-node.js
+    // HighlightNode is now a plugin - import from highlight-node.js
     ResearchNode,
-    HighlightNode,
     MatrixNode,
     CellNode,
     RowNode,
@@ -129,9 +129,10 @@ test('validateNodeProtocol: ResearchNode implements all methods', () => {
     assertTrue(validateNodeProtocol(ResearchNode));
 });
 
-test('validateNodeProtocol: HighlightNode implements all methods', () => {
-    assertTrue(validateNodeProtocol(HighlightNode));
-});
+// Note: HighlightNode is now a plugin (highlight-node.js) - test via wrapNode instead
+// test('validateNodeProtocol: HighlightNode implements all methods', () => {
+//     assertTrue(validateNodeProtocol(HighlightNode));
+// });
 
 test('validateNodeProtocol: MatrixNode implements all methods', () => {
     assertTrue(validateNodeProtocol(MatrixNode));

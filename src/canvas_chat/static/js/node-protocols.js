@@ -275,28 +275,8 @@ class ResearchNode extends BaseNode {
 }
 
 /**
- * Highlight node (excerpted text or image from another node)
- */
-class HighlightNode extends BaseNode {
-    getTypeLabel() {
-        return 'Highlight';
-    }
-    getTypeIcon() {
-        return '✨';
-    }
-
-    renderContent(canvas) {
-        // If has image data, render image; otherwise render markdown
-        if (this.node.imageData) {
-            const imgSrc = `data:${this.node.mimeType || 'image/png'};base64,${this.node.imageData}`;
-            return `<div class="image-node-content"><img src="${imgSrc}" class="node-image" alt="Image"></div>`;
-        }
-        return canvas.renderMarkdown(this.node.content || '');
-    }
-}
-
-/**
  * Matrix node (cross-product evaluation table)
+ * Note: HighlightNode is now a plugin (highlight-node.js)
  */
 class MatrixNode extends BaseNode {
     getTypeLabel() {
@@ -1119,7 +1099,7 @@ function wrapNode(node) {
         // Note: ReferenceNode is now a plugin (reference.js)
         // Note: SearchNode is now a plugin (search-node.js)
         [NodeType.RESEARCH]: ResearchNode,
-        [NodeType.HIGHLIGHT]: HighlightNode,
+        // Note: HighlightNode is now a plugin (highlight-node.js)
         [NodeType.MATRIX]: MatrixNode,
         [NodeType.CELL]: CellNode,
         [NodeType.ROW]: RowNode,
@@ -1208,8 +1188,8 @@ function validateNodeProtocol(NodeClass) {
     else if (className.includes('Summary')) nodeType = NodeType.SUMMARY;
     // Note: ReferenceNode is now a plugin (reference.js)
     // Note: SearchNode is now a plugin (search-node.js)
+    // Note: HighlightNode is now a plugin (highlight-node.js)
     else if (className.includes('Research')) nodeType = NodeType.RESEARCH;
-    else if (className.includes('Highlight')) nodeType = NodeType.HIGHLIGHT;
     else if (className.includes('Row')) nodeType = NodeType.ROW;
     else if (className.includes('Column')) nodeType = NodeType.COLUMN;
     else if (className.includes('FetchResult')) nodeType = NodeType.FETCH_RESULT;
@@ -1236,10 +1216,12 @@ function validateNodeProtocol(NodeClass) {
 }
 
 // Export for use in other modules
-window.wrapNode = wrapNode;
-window.validateNodeProtocol = validateNodeProtocol;
-window.Actions = Actions;
-window.HeaderButtons = HeaderButtons;
+if (typeof window !== 'undefined') {
+    window.wrapNode = wrapNode;
+    window.validateNodeProtocol = validateNodeProtocol;
+    window.Actions = Actions;
+    window.HeaderButtons = HeaderButtons;
+}
 
 // Export classes for testing
 // =============================================================================
@@ -1265,8 +1247,8 @@ function registerBuiltinNodeTypes() {
         // Note: 'summary' is now a plugin (summary.js)
         // Note: 'reference' is now a plugin (reference.js)
         // Note: 'search' is now a plugin (search-node.js)
+        // Note: 'highlight' is now a plugin (highlight-node.js)
         { type: 'research', protocol: ResearchNode },
-        { type: 'highlight', protocol: HighlightNode },
         { type: 'matrix', protocol: MatrixNode },
         { type: 'cell', protocol: CellNode },
         { type: 'row', protocol: RowNode },
@@ -1326,8 +1308,8 @@ export {
     // SummaryNode is now exported from summary.js plugin
     // ReferenceNode is now exported from reference.js plugin
     // SearchNode is now exported from search-node.js plugin
+    // HighlightNode is now exported from highlight-node.js plugin
     ResearchNode,
-    HighlightNode,
     MatrixNode,
     CellNode,
     RowNode,
