@@ -29,7 +29,7 @@ const {
     BaseNode,
     HumanNode,
     AINode,
-    NoteNode,
+    // NoteNode is now a plugin - import from note.js
     SummaryNode,
     ReferenceNode,
     SearchNode,
@@ -105,9 +105,10 @@ test('validateNodeProtocol: AINode implements all methods', () => {
     assertTrue(validateNodeProtocol(AINode));
 });
 
-test('validateNodeProtocol: NoteNode implements all methods', () => {
-    assertTrue(validateNodeProtocol(NoteNode));
-});
+// Note: NoteNode is now a plugin (note.js), test it separately
+// test('validateNodeProtocol: NoteNode implements all methods', () => {
+//     assertTrue(validateNodeProtocol(NoteNode));
+// });
 
 test('validateNodeProtocol: SummaryNode implements all methods', () => {
     assertTrue(validateNodeProtocol(SummaryNode));
@@ -185,10 +186,16 @@ test('wrapNode: returns AINode for AI type', () => {
     assertTrue(wrapped instanceof AINode);
 });
 
-test('wrapNode: returns NoteNode for NOTE type', () => {
+// Note: NoteNode is now a plugin - test via NodeRegistry
+test('wrapNode: returns NoteNode for NOTE type (via plugin)', async () => {
+    // Import note.js to register the plugin
+    await import('../src/canvas_chat/static/js/note.js');
+
     const node = { type: NodeType.NOTE, content: 'Note' };
     const wrapped = wrapNode(node);
-    assertTrue(wrapped instanceof NoteNode);
+    // NoteNode is now loaded as plugin, so we check protocol methods instead of instanceof
+    assertTrue(wrapped.getTypeLabel() === 'Note', 'Should return Note node protocol');
+    assertTrue(wrapped.getTypeIcon() === '📝', 'Should have note icon');
 });
 
 test('wrapNode: returns ImageNode for IMAGE type with imageData', () => {
@@ -347,7 +354,10 @@ test('getActions: FetchResultNode includes EDIT_CONTENT and RESUMMARIZE', () => 
     assertIncludes(actions, Actions.RESUMMARIZE);
 });
 
-test('getActions: NoteNode includes EDIT_CONTENT', () => {
+// Note: NoteNode is now a plugin - test via NodeRegistry
+test('getActions: NoteNode includes EDIT_CONTENT (via plugin)', async () => {
+    // Import note.js to register the plugin
+    await import('../src/canvas_chat/static/js/note.js');
     const node = { type: NodeType.NOTE, content: 'Note' };
     const wrapped = wrapNode(node);
     const actions = wrapped.getActions();

@@ -235,20 +235,9 @@ class AINode extends BaseNode {
 }
 
 /**
- * Note node
+ * Note: NoteNode has been moved to note.js plugin (built-in)
+ * This allows the note node type to be loaded as a plugin.
  */
-class NoteNode extends BaseNode {
-    getTypeLabel() {
-        return 'Note';
-    }
-    getTypeIcon() {
-        return '📝';
-    }
-
-    getActions() {
-        return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.CREATE_FLASHCARDS, Actions.COPY];
-    }
-}
 
 /**
  * Summary node
@@ -1163,7 +1152,7 @@ function wrapNode(node) {
     const classMap = {
         [NodeType.HUMAN]: HumanNode,
         [NodeType.AI]: AINode,
-        [NodeType.NOTE]: NoteNode,
+        // Note: NoteNode is now a plugin (note.js)
         [NodeType.SUMMARY]: SummaryNode,
         [NodeType.REFERENCE]: ReferenceNode,
         [NodeType.SEARCH]: SearchNode,
@@ -1310,7 +1299,7 @@ function registerBuiltinNodeTypes() {
     const builtinTypes = [
         { type: 'human', protocol: HumanNode },
         { type: 'ai', protocol: AINode },
-        { type: 'note', protocol: NoteNode },
+        // Note: 'note' is now a plugin (note.js)
         { type: 'summary', protocol: SummaryNode },
         { type: 'reference', protocol: ReferenceNode },
         { type: 'search', protocol: SearchNode },
@@ -1371,7 +1360,7 @@ export {
     // Node type classes
     HumanNode,
     AINode,
-    NoteNode,
+    // NoteNode is now exported from note.js plugin
     SummaryNode,
     ReferenceNode,
     SearchNode,
