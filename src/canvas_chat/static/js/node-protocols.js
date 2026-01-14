@@ -686,37 +686,9 @@ class CodeNode extends BaseNode {
 }
 
 /**
- * Opinion node (committee member's opinion)
+ * Note: OpinionNode has been moved to opinion-node.js plugin (built-in)
+ * This allows the opinion node type to be loaded as a plugin.
  */
-class OpinionNode extends BaseNode {
-    getTypeLabel() {
-        return 'Opinion';
-    }
-    getTypeIcon() {
-        return '🗣️';
-    }
-
-    getActions() {
-        return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
-    }
-
-    supportsStopContinue() {
-        return true;
-    }
-
-    getHeaderButtons() {
-        return [
-            HeaderButtons.NAV_PARENT,
-            HeaderButtons.NAV_CHILD,
-            HeaderButtons.COLLAPSE,
-            HeaderButtons.STOP,
-            HeaderButtons.CONTINUE,
-            HeaderButtons.RESET_SIZE,
-            HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE,
-        ];
-    }
-}
 
 /**
  * Synthesis node (chairman's synthesized answer)
@@ -1019,7 +991,7 @@ function wrapNode(node) {
         [NodeType.COLUMN]: ColumnNode,
         // Note: FetchResultNode is now a plugin (fetch-result-node.js)
         // Note: PdfNode is now a plugin (pdf-node.js)
-        [NodeType.OPINION]: OpinionNode,
+        // Note: OpinionNode is now a plugin (opinion-node.js)
         [NodeType.SYNTHESIS]: SynthesisNode,
         [NodeType.REVIEW]: ReviewNode,
         [NodeType.FACTCHECK]: FactcheckNode,
@@ -1107,7 +1079,7 @@ function validateNodeProtocol(NodeClass) {
     else if (className.includes('Row')) nodeType = NodeType.ROW;
     else if (className.includes('Column')) nodeType = NodeType.COLUMN;
     // Note: PdfNode is now a plugin (pdf-node.js)
-    else if (className.includes('Opinion')) nodeType = NodeType.OPINION;
+    // Note: OpinionNode is now a plugin (opinion-node.js)
     else if (className.includes('Synthesis')) nodeType = NodeType.SYNTHESIS;
     else if (className.includes('Review')) nodeType = NodeType.REVIEW;
     else if (className.includes('Factcheck')) nodeType = NodeType.FACTCHECK;
@@ -1168,7 +1140,7 @@ function registerBuiltinNodeTypes() {
         { type: 'row', protocol: RowNode },
         { type: 'column', protocol: ColumnNode },
         // Note: 'pdf' is now a plugin (pdf-node.js)
-        { type: 'opinion', protocol: OpinionNode },
+        // Note: 'opinion' is now a plugin (opinion-node.js)
         { type: 'synthesis', protocol: SynthesisNode },
         { type: 'review', protocol: ReviewNode },
         { type: 'factcheck', protocol: FactcheckNode },
@@ -1229,9 +1201,9 @@ export {
     RowNode,
     ColumnNode,
     // PdfNode is now exported from pdf-node.js plugin
+    // OpinionNode is now exported from opinion-node.js plugin
     CsvNode,
     CodeNode,
-    OpinionNode,
     SynthesisNode,
     ReviewNode,
     FactcheckNode,
