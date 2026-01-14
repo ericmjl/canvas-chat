@@ -240,20 +240,9 @@ class AINode extends BaseNode {
  */
 
 /**
- * Summary node
+ * Note: SummaryNode has been moved to summary.js plugin (built-in)
+ * This allows the summary node type to be loaded as a plugin.
  */
-class SummaryNode extends BaseNode {
-    getTypeLabel() {
-        return 'Summary';
-    }
-    getTypeIcon() {
-        return '📋';
-    }
-
-    getActions() {
-        return [Actions.REPLY, Actions.CREATE_FLASHCARDS, Actions.COPY];
-    }
-}
 
 /**
  * Reference node (link to external content)
@@ -1153,7 +1142,7 @@ function wrapNode(node) {
         [NodeType.HUMAN]: HumanNode,
         [NodeType.AI]: AINode,
         // Note: NoteNode is now a plugin (note.js)
-        [NodeType.SUMMARY]: SummaryNode,
+        // Note: SummaryNode is now a plugin (summary.js)
         [NodeType.REFERENCE]: ReferenceNode,
         [NodeType.SEARCH]: SearchNode,
         [NodeType.RESEARCH]: ResearchNode,
@@ -1300,7 +1289,7 @@ function registerBuiltinNodeTypes() {
         { type: 'human', protocol: HumanNode },
         { type: 'ai', protocol: AINode },
         // Note: 'note' is now a plugin (note.js)
-        { type: 'summary', protocol: SummaryNode },
+        // Note: 'summary' is now a plugin (summary.js)
         { type: 'reference', protocol: ReferenceNode },
         { type: 'search', protocol: SearchNode },
         { type: 'research', protocol: ResearchNode },
@@ -1361,7 +1350,7 @@ export {
     HumanNode,
     AINode,
     // NoteNode is now exported from note.js plugin
-    SummaryNode,
+    // SummaryNode is now exported from summary.js plugin
     ReferenceNode,
     SearchNode,
     ResearchNode,
