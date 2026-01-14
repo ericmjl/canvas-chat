@@ -559,7 +559,7 @@ class MyFeature extends FeaturePlugin {
 - Automatic registration/unregistration during plugin lifecycle
 - Cleaner architecture (handlers live with plugin code)
 
-**Example:** See `poll-feature.js` for a complete implementation with LLM generation and event handling.
+**Example:** See `poll.js` for a complete implementation with LLM generation and event handling.
 
 ### Slash commands
 

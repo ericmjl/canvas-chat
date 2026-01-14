@@ -49,7 +49,7 @@ import { assertTrue, assertEqual } from './test_helpers/assertions.js';
 import { createNode } from '../src/canvas_chat/static/js/graph-types.js';
 
 // Import PollFeature class
-const { PollFeature } = await import('../src/canvas_chat/static/js/poll-feature.js');
+const { PollFeature } = await import('../src/canvas_chat/static/js/example-plugins/poll.js');
 
 async function asyncTest(description, fn) {
     try {

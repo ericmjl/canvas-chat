@@ -11,7 +11,7 @@ import { MatrixFeature } from './matrix.js';
 import { FactcheckFeature } from './factcheck.js';
 import { ResearchFeature } from './research.js';
 import { CodeFeature } from './code-feature.js';
-import { PollFeature } from './poll-feature.js';
+import { NoteFeature } from './note.js';
 
 /**
  * Priority levels for slash command resolution
@@ -123,11 +123,11 @@ class FeatureRegistry {
                 priority: PRIORITY.BUILTIN,
             },
             {
-                id: 'poll',
-                feature: PollFeature,
+                id: 'note',
+                feature: NoteFeature,
                 slashCommands: [
                     {
-                        command: '/poll',
+                        command: '/note',
                         handler: 'handleCommand',
                     },
                 ],

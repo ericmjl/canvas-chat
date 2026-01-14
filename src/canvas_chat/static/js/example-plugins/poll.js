@@ -1,13 +1,237 @@
 /**
- * Poll Feature Plugin
+ * Poll Plugin (External/Example)
  *
- * Provides LLM-powered poll generation from natural language prompts
- * and handles poll node interactions (voting, adding options, resetting votes).
+ * Provides poll nodes with LLM-powered generation and interactive voting.
+ * This is a self-contained plugin that combines:
+ * - PollNode protocol (custom node rendering)
+ * - PollFeature (slash command and event handling)
+ *
+ * To use this plugin:
+ * 1. Add plugin path to config.yaml:
+ *      plugins:
+ *        - path: ./src/canvas_chat/static/js/example-plugins/poll.js
+ * 2. Run with: uvx canvas-chat launch --config config.yaml
+ * 3. Use /poll command to generate polls from natural language
  */
 
+import { BaseNode, Actions } from './node-protocols.js';
+import { NodeRegistry } from './node-registry.js';
 import { FeaturePlugin } from './feature-plugin.js';
 import { createNode } from './graph-types.js';
 
+// =============================================================================
+// Poll Node Protocol
+// =============================================================================
+
+/**
+ * Poll Node Protocol Class
+ * Defines how poll nodes are rendered and what actions they support.
+ */
+class PollNode extends BaseNode {
+    /**
+     * Display label shown in node header
+     */
+    getTypeLabel() {
+        return 'Poll';
+    }
+
+    /**
+     * Emoji icon for the node type
+     */
+    getTypeIcon() {
+        return '📊';
+    }
+
+    /**
+     * Summary text for semantic zoom (shown when zoomed out)
+     */
+    getSummaryText(canvas) {
+        // Show question as summary
+        const question = this.node.question || 'Poll';
+        return canvas.truncate(question, 50);
+    }
+
+    /**
+     * Render the HTML content for the poll
+     */
+    renderContent(canvas) {
+        const question = this.node.question || 'No question set';
+        const options = this.node.options || [];
+        const votes = this.node.votes || {};
+
+        // Calculate total votes
+        const totalVotes = Object.values(votes).reduce((a, b) => a + b, 0);
+
+        let html = `<div class="poll-content">`;
+        html += `<div class="poll-question">${canvas.escapeHtml(question)}</div>`;
+        html += `<div class="poll-options">`;
+
+        for (let i = 0; i < options.length; i++) {
+            const option = options[i];
+            const voteCount = votes[i] || 0;
+            const percentage = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
+
+            html += `
+                <div class="poll-option" data-index="${i}">
+                    <div class="poll-option-bar" style="width: ${percentage}%"></div>
+                    <span class="poll-option-text">${canvas.escapeHtml(option)}</span>
+                    <span class="poll-option-votes">${voteCount} (${percentage}%)</span>
+                </div>
+            `;
+        }
+
+        html += `</div>`;
+        html += `<div class="poll-total">Total votes: ${totalVotes}</div>`;
+        html += `</div>`;
+
+        return html;
+    }
+
+    /**
+     * Action buttons for the poll node
+     */
+    getActions() {
+        return [
+            { id: 'add-option', label: '➕ Add Option', title: 'Add a new option' },
+            { id: 'reset-votes', label: '🔄 Reset', title: 'Reset all votes' },
+            Actions.COPY,
+        ];
+    }
+
+    /**
+     * Custom event bindings for poll interactions
+     */
+    getEventBindings() {
+        return [
+            // Click on option to vote
+            {
+                selector: '.poll-option',
+                multiple: true,
+                handler: (nodeId, e, canvas) => {
+                    const index = parseInt(e.currentTarget.dataset.index);
+                    canvas.emit('pollVote', nodeId, index);
+                },
+            },
+            // Add option button
+            {
+                selector: '.add-option-btn',
+                handler: 'pollAddOption',
+            },
+            // Reset votes button
+            {
+                selector: '.reset-votes-btn',
+                handler: 'pollResetVotes',
+            },
+        ];
+    }
+
+    /**
+     * Copy poll results to clipboard
+     */
+    async copyToClipboard(canvas, _app) {
+        const question = this.node.question || 'Poll';
+        const options = this.node.options || [];
+        const votes = this.node.votes || {};
+
+        let text = `${question}\n\n`;
+        for (let i = 0; i < options.length; i++) {
+            const voteCount = votes[i] || 0;
+            text += `${options[i]}: ${voteCount} votes\n`;
+        }
+
+        await navigator.clipboard.writeText(text);
+        canvas.showCopyFeedback(this.node.id);
+    }
+}
+
+// Register the poll node type
+NodeRegistry.register({
+    type: 'poll',
+    protocol: PollNode,
+    defaultSize: { width: 400, height: 300 },
+    css: `
+        .poll-content {
+            padding: 12px;
+        }
+
+        .poll-question {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-color);
+        }
+
+        .poll-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .poll-option {
+            position: relative;
+            padding: 10px;
+            background: var(--node-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            overflow: hidden;
+            transition: all 0.15s ease;
+        }
+
+        .poll-option:hover {
+            background: var(--hover-bg);
+            border-color: var(--primary-color);
+        }
+
+        .poll-option-bar {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: var(--primary-color);
+            opacity: 0.1;
+            transition: width 0.3s ease;
+            pointer-events: none;
+        }
+
+        .poll-option-text {
+            position: relative;
+            z-index: 1;
+            font-size: 14px;
+            color: var(--text-color);
+        }
+
+        .poll-option-votes {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .poll-total {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-align: right;
+        }
+    `,
+    cssVariables: {
+        '--node-poll-bg': 'var(--node-bg)',
+    },
+});
+
+// =============================================================================
+// Poll Feature Plugin
+// =============================================================================
+
+/**
+ * Poll Feature Plugin
+ * Provides LLM-powered poll generation from natural language prompts
+ * and handles poll node interactions (voting, adding options, resetting votes).
+ */
 export class PollFeature extends FeaturePlugin {
     getSlashCommands() {
         return [
@@ -26,10 +250,8 @@ export class PollFeature extends FeaturePlugin {
      * @param {Object} contextObj - Additional context (e.g., { text: selectedNodesContent })
      */
     async handleCommand(command, args, contextObj) {
-        console.log('[PollFeature] handleCommand called', { command, args, contextObj });
         const input = args.trim();
         if (!input) {
-            console.log('[PollFeature] No input provided, showing toast');
             this.showToast?.('Please provide a poll question or description', 'warning');
             return;
         }
@@ -39,7 +261,6 @@ export class PollFeature extends FeaturePlugin {
 
         // Check for API key
         const apiKey = this.chat.getApiKeyForModel(model);
-        console.log('[PollFeature] API key check:', { hasApiKey: !!apiKey, adminMode: this.adminMode, model });
         if (!apiKey && !this.adminMode) {
             this.showToast?.('Please configure an API key in Settings', 'warning');
             return;
@@ -53,45 +274,7 @@ export class PollFeature extends FeaturePlugin {
             options: [],
             votes: {},
         });
-        console.log('[PollFeature] Creating loading node:', {
-            id: loadingNode.id,
-            question: loadingNode.question,
-            options: loadingNode.options,
-        });
         this.graph.addNode(loadingNode);
-
-        // Verify node was added correctly
-        const addedNode = this.graph.getNode(loadingNode.id);
-        console.log('[PollFeature] Node after addNode:', {
-            question: addedNode?.question,
-            options: addedNode?.options,
-            hasQuestion: addedNode?.hasOwnProperty('question'),
-        });
-
-        // Ensure node is rendered (event-driven rendering should handle this, but ensure it happens)
-        // Get fresh node from graph to ensure we have the latest data
-        const nodeToRender = this.graph.getNode(loadingNode.id);
-        console.log('[PollFeature] Node to render:', {
-            id: nodeToRender?.id,
-            type: nodeToRender?.type,
-            question: nodeToRender?.question,
-            options: nodeToRender?.options,
-            hasQuestion: nodeToRender?.hasOwnProperty('question'),
-            allKeys: nodeToRender ? Object.keys(nodeToRender) : [],
-        });
-
-        if (nodeToRender) {
-            this.canvas.renderNode(nodeToRender);
-
-            // Verify node was rendered by checking if wrapper exists
-            setTimeout(() => {
-                const wrapper = this.canvas.nodeElements?.get(loadingNode.id);
-                console.log('[PollFeature] Node wrapper after render:', {
-                    exists: !!wrapper,
-                    hasContent: wrapper ? !!wrapper.querySelector('.node-content') : false,
-                });
-            }, 100);
-        }
 
         this.canvas.clearSelection();
         this.canvas.panToNodeAnimated(loadingNode.id);
@@ -102,7 +285,6 @@ export class PollFeature extends FeaturePlugin {
             abortController,
             featureId: this.id,
             onStop: (nodeId) => {
-                console.log('[PollFeature] Poll generation stopped');
                 this.streamingManager.unregister(nodeId);
             },
             onContinue: async (nodeId, state) => {
@@ -112,14 +294,11 @@ export class PollFeature extends FeaturePlugin {
         });
 
         // Show stop button (after node is rendered)
-        // Use setTimeout to ensure DOM is ready
         setTimeout(() => {
             this.canvas.showStopButton(loadingNode.id);
         }, 0);
 
         try {
-            console.log('[PollFeature] Starting LLM call for poll generation');
-
             // Build prompt for LLM
             const prompt = `Generate a poll based on this request: "${input}"
 
@@ -141,8 +320,7 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
                 // onChunk - accumulate response for JSON parsing
                 (chunk, accumulated) => {
                     fullResponse = accumulated;
-                    // Show streaming progress - update question with a simple indicator
-                    // The protocol will render this, showing the user that generation is in progress
+                    // Show streaming progress
                     const progressText = accumulated.length > 50
                         ? `🔄 Generating poll... (${accumulated.length} chars)`
                         : '🔄 Generating poll...';
@@ -153,7 +331,7 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
                         options: [], // Keep options empty during streaming
                     });
 
-                    // Re-render to show progress (always fetch fresh node from graph)
+                    // Re-render to show progress
                     const currentNode = this.graph.getNode(loadingNode.id);
                     if (currentNode) {
                         this.canvas.renderNode(currentNode);
@@ -161,14 +339,10 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
                 },
                 // onDone - parse JSON and update node
                 () => {
-                    console.log('[PollFeature] LLM response received, length:', fullResponse?.length || 0);
-                    console.log('[PollFeature] LLM response preview:', fullResponse?.substring(0, 200));
-
                     // Parse JSON response
                     let pollData;
                     try {
                         // Try to find JSON object in the response (handle markdown code blocks)
-                        // First try to find JSON in code blocks
                         const codeBlockMatch = fullResponse.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
                         if (codeBlockMatch) {
                             pollData = JSON.parse(codeBlockMatch[1]);
@@ -181,7 +355,6 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
                                 throw new Error('No JSON object found in response');
                             }
                         }
-                        console.log('[PollFeature] Parsed poll data:', pollData);
 
                         // Validate poll data
                         if (!pollData.question || !Array.isArray(pollData.options) || pollData.options.length === 0) {
@@ -189,13 +362,6 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
                         }
 
                         // Update node with generated poll data
-                        console.log('[PollFeature] Updating node with:', {
-                            question: pollData.question,
-                            options: pollData.options,
-                            optionsLength: pollData.options.length,
-                        });
-
-                        // For poll nodes, don't set content - the protocol's renderContent handles rendering
                         this.graph.updateNode(loadingNode.id, {
                             question: pollData.question,
                             options: pollData.options,
@@ -213,7 +379,6 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
                         this.showToast?.('Poll generated successfully', 'success');
                     } catch (parseError) {
                         console.error('[PollFeature] Failed to parse poll JSON:', parseError);
-                        console.error('[PollFeature] LLM response was:', fullResponse);
                         this.graph.updateNode(loadingNode.id, {
                             question: input,
                             options: ['Option A', 'Option B', 'Option C'],
@@ -245,7 +410,6 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
             );
         } catch (error) {
             console.error('[PollFeature] Poll generation error:', error);
-            console.error('[PollFeature] Error stack:', error.stack);
 
             // Update with fallback data
             this.graph.updateNode(loadingNode.id, {
@@ -273,11 +437,6 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
         };
     }
 
-    /**
-     * Handle voting on a poll option
-     * @param {string} nodeId - Poll node ID
-     * @param {number} optionIndex - Index of the option being voted for
-     */
     handlePollVote(nodeId, optionIndex) {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
@@ -296,10 +455,6 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
         this.saveSession?.();
     }
 
-    /**
-     * Handle adding a new option to a poll
-     * @param {string} nodeId - Poll node ID
-     */
     handlePollAddOption(nodeId) {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
@@ -365,11 +520,6 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
         });
     }
 
-    /**
-     * Add an option to a poll node
-     * @param {string} nodeId - Poll node ID
-     * @param {string} option - Option text to add
-     */
     addOptionToPoll(nodeId, option) {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
@@ -388,10 +538,6 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
         this.saveSession?.();
     }
 
-    /**
-     * Handle resetting all poll votes
-     * @param {string} nodeId - Poll node ID
-     */
     handlePollResetVotes(nodeId) {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
@@ -435,10 +581,6 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
         });
     }
 
-    /**
-     * Reset all votes for a poll node
-     * @param {string} nodeId - Poll node ID
-     */
     resetPollVotes(nodeId) {
         // Clear all votes
         this.graph.updateNode(nodeId, { votes: {} });
@@ -446,3 +588,40 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
         this.saveSession?.();
     }
 }
+
+// Auto-register PollFeature when plugin loads
+// This allows the plugin to be self-contained (node protocol + feature)
+// Plugins are loaded after app.js, so we wait for the plugin system to be ready
+if (typeof window !== 'undefined') {
+    const registerFeature = (app) => {
+        if (app && app.featureRegistry && app.featureRegistry._appContext) {
+            app.featureRegistry.register({
+                id: 'poll',
+                feature: PollFeature,
+                slashCommands: [
+                    {
+                        command: '/poll',
+                        handler: 'handleCommand',
+                    },
+                ],
+                priority: 500, // OFFICIAL priority for external plugins
+            }).then(() => {
+                console.log('[Poll Plugin] PollFeature registered successfully');
+            }).catch((err) => {
+                console.error('[Poll Plugin] Failed to register PollFeature:', err);
+            });
+        }
+    };
+
+    // Try immediate registration if app is already available
+    if (window.app) {
+        registerFeature(window.app);
+    }
+
+    // Also listen for the plugin system ready event
+    window.addEventListener('app-plugin-system-ready', (event) => {
+        registerFeature(event.detail.app);
+    });
+}
+
+console.log('Poll plugin loaded (node protocol + feature)');
