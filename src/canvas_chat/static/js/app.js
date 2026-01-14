@@ -1375,34 +1375,27 @@ class App {
             return;
         }
 
-        // Get selected nodes or use last node
+        // Get selected nodes - if none selected, create a new root node
         let parentIds = this.canvas.getSelectedNodeIds();
-
-        if (parentIds.length === 0) {
-            // If no selection, use the latest leaf node
-            const leaves = this.graph.getLeafNodes();
-            if (leaves.length > 0) {
-                // Sort by created_at and use the most recent
-                leaves.sort((a, b) => b.created_at - a.created_at);
-                parentIds = [leaves[0].id];
-            }
-        }
 
         // Create human node
         const humanNode = createNode(NodeType.HUMAN, content, {
-            position: this.graph.autoPosition(parentIds),
+            position: this.graph.autoPosition(parentIds.length > 0 ? parentIds : []),
         });
 
         this.graph.addNode(humanNode);
 
-        // Create edges from parents
-        for (const parentId of parentIds) {
-            const edge = createEdge(parentId, humanNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
-            this.graph.addEdge(edge);
+        // Create edges from parents (only if nodes are selected)
+        if (parentIds.length > 0) {
+            for (const parentId of parentIds) {
+                const edge = createEdge(parentId, humanNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
+                this.graph.addEdge(edge);
 
-            // Update collapse button for parent (now has children)
-            this.updateCollapseButtonForNode(parentId);
+                // Update collapse button for parent (now has children)
+                this.updateCollapseButtonForNode(parentId);
+            }
         }
+        // If no parentIds, humanNode is a root node (no edges created)
 
         // Clear input and selection
         this.chatInput.value = '';
@@ -3051,6 +3044,13 @@ df.head()
 
         // Clear any previous source text highlights
         this.canvas.clearSourceTextHighlights();
+
+        // Don't auto-focus chat input when selecting nodes - user must explicitly
+        // type 'r' or click the text box to focus. This allows other shortcuts
+        // (like 'c' for copy, 'e' for edit) to work when nodes are selected.
+        if (document.activeElement === this.chatInput) {
+            this.chatInput.blur();
+        }
 
         // If a cell node is selected, highlight its source cell in the matrix
         if (selectedIds.length === 1) {
