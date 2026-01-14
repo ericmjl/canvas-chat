@@ -195,6 +195,10 @@ It's fine if there's nothing to refactor, but if improvements exist, address the
 
 ## Git workflow
 
+### Committing changes
+
+**ALWAYS wait for user approval before committing.** Do not commit changes automatically. Ask the user if they want to commit, or wait for explicit instruction to commit.
+
 ### Branching strategy
 
 **NEVER push directly to main.** All changes must be made via pull request.
