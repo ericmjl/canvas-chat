@@ -53,6 +53,15 @@ class PollNode extends BaseNode {
      * Render the HTML content for the poll
      */
     renderContent(canvas) {
+        // Debug: Log what we're rendering
+        console.log('[PollNode] renderContent called', {
+            nodeId: this.node.id,
+            question: this.node.question,
+            options: this.node.options,
+            hasQuestion: this.node.hasOwnProperty('question'),
+            allKeys: Object.keys(this.node),
+        });
+
         const question = this.node.question || 'No question set';
         const options = this.node.options || [];
         const votes = this.node.votes || {};
@@ -219,27 +228,8 @@ NodeRegistry.register({
     cssVariables: {
         '--node-poll-bg': 'var(--node-bg)',
     },
-    slashCommand: {
-        command: '/poll',
-        description: 'Create an interactive poll',
-        placeholder: 'question',
-        handler: (app, args) => {
-            // Parse arguments: /poll question | option1 | option2 | option3
-            const parts = args.split('|').map((s) => s.trim());
-            const question = parts[0] || 'What do you think?';
-            const options = parts.slice(1).filter((o) => o.length > 0);
-
-            // Default options if none provided
-            const finalOptions = options.length > 0 ? options : ['Option A', 'Option B', 'Option C'];
-
-            app.createAndAddNode('poll', '', {
-                data: {
-                    question: question,
-                    options: finalOptions,
-                },
-            });
-        },
-    },
+    // Note: Slash command removed - now handled by PollFeature plugin
+    // Use /poll "natural language question" to generate polls with LLM
 });
 
 console.log('Poll node plugin loaded');

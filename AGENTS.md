@@ -299,38 +299,45 @@ Canvas-Chat uses a **three-level plugin architecture** for extensibility:
 
 1. **Create plugin file** in `src/canvas_chat/static/js/my-feature.js`:
 
-    ```javascript
-    import { FeaturePlugin } from './feature-plugin.js';
+ ```javascript
+ import { FeaturePlugin } from './feature-plugin.js';
 
-    export class MyFeature extends FeaturePlugin {
-        constructor(context) {
-            super(context);
-            this.graph = context.graph;
-            this.canvas = context.canvas;
-            this.chat = context.chat;
-        }
+ export class MyFeature extends FeaturePlugin {
+ constructor(context) {
+ super(context);
+ this.graph = context.graph;
+ this.canvas = context.canvas;
+ this.chat = context.chat;
+ }
 
-        getSlashCommands() {
-            return [
-                {
-                    command: '/mycommand',
-                    description: 'Does something cool',
-                    placeholder: 'Enter input...',
-                },
-            ];
-        }
+ getSlashCommands() {
+ return [
+ {
+ command: '/mycommand',
+ description: 'Does something cool',
+ placeholder: 'Enter input...',
+ },
+ ];
+ }
 
-        async handleCommand(command, args, context) {
-            // Implement command logic
-        }
+ async handleCommand(command, args, context) {
+ // Implement command logic
+ }
 
-        async onLoad() {
-            console.log('[MyFeature] Loaded');
-        }
-    }
-    ```
+ getCanvasEventHandlers() {
+ // Optional: Handle canvas events from custom nodes
+ return {
+ 'myCustomEvent': this.handleMyEvent.bind(this),
+ };
+ }
 
-2. **Register in FeatureRegistry** (`feature-registry.js`):
+ async onLoad() {
+ console.log('[MyFeature] Loaded');
+ }
+ }
+ ```
+
+1. **Register in FeatureRegistry** (`feature-registry.js`):
 
     ```javascript
     static registerBuiltInFeatures(app) {
@@ -340,7 +347,7 @@ Canvas-Chat uses a **three-level plugin architecture** for extensibility:
     }
     ```
 
-3. **Add getter in App** (`app.js`):
+2. **Add getter in App** (`app.js`):
 
     ```javascript
     get myFeature() {
@@ -348,7 +355,7 @@ Canvas-Chat uses a **three-level plugin architecture** for extensibility:
     }
     ```
 
-4. **Write tests** (`tests/test_my_feature.js`):
+3. **Write tests** (`tests/test_my_feature.js`):
 
     ```javascript
     import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
@@ -520,6 +527,39 @@ To add a new node action:
 3. Add event listener in `setupNodeEvents()` that calls `this.onNodeXxx`
 4. Bind handler in `app.js`: `this.canvas.onNodeXxx = this.handleNodeXxx.bind(this);`
 5. Implement `handleNodeXxx(nodeId)` method in App class
+
+**Note:** For plugin-scoped event handlers (recommended for new plugins), use `getCanvasEventHandlers()` in your FeaturePlugin instead of modifying `app.js`. See [Plugin-scoped event handlers](#plugin-scoped-event-handlers) below.
+
+### Plugin-scoped event handlers
+
+**NEW:** Plugins can now register canvas event handlers directly without modifying `app.js`.
+
+**Pattern:** Use `getCanvasEventHandlers()` in your FeaturePlugin:
+
+```javascript
+class MyFeature extends FeaturePlugin {
+    getCanvasEventHandlers() {
+        return {
+            'myCustomEvent': this.handleMyEvent.bind(this),
+            'anotherEvent': this.handleAnother.bind(this),
+        };
+    }
+
+    handleMyEvent(nodeId, ...args) {
+        // Handle event - receives arguments directly from canvas.emit()
+        const node = this.graph.getNode(nodeId);
+        // Update node, re-render, etc.
+    }
+}
+```
+
+**Benefits:**
+
+- Self-contained plugins (no `app.js` modifications needed)
+- Automatic registration/unregistration during plugin lifecycle
+- Cleaner architecture (handlers live with plugin code)
+
+**Example:** See `poll-feature.js` for a complete implementation with LLM generation and event handling.
 
 ### Slash commands
 
