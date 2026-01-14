@@ -210,6 +210,27 @@ class FeaturePlugin {
     }
 
     /**
+     * Return canvas event handlers for this plugin.
+     * Override in subclasses to handle canvas events emitted by custom nodes.
+     *
+     * Example:
+     *   getCanvasEventHandlers() {
+     *       return {
+     *           'pollVote': this.handlePollVote.bind(this),
+     *           'pollAddOption': this.handlePollAddOption.bind(this),
+     *       };
+     *   }
+     *
+     * These handlers will be automatically registered on the canvas when the plugin loads
+     * and unregistered when the plugin unloads.
+     *
+     * @returns {Object<string, Function>} Map of event names to handler functions
+     */
+    getCanvasEventHandlers() {
+        return {};
+    }
+
+    /**
      * Emit an event through the feature registry.
      * Convenience method for plugins to emit custom events.
      *

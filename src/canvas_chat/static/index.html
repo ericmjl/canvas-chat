@@ -958,6 +958,45 @@
             </div>
         </div>
 
+        <!-- Poll Add Option Modal -->
+        <div id="poll-add-option-modal" class="modal" style="display: none">
+            <div class="modal-content modal-narrow">
+                <div class="modal-header">
+                    <h2>Add Poll Option</h2>
+                    <button class="modal-close" id="poll-option-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input
+                        type="text"
+                        id="poll-option-input"
+                        class="modal-text-input"
+                        placeholder="Enter new poll option..."
+                    />
+                </div>
+                <div class="modal-actions">
+                    <button class="secondary-btn" id="poll-option-cancel">Cancel</button>
+                    <button class="primary-btn" id="poll-option-add">Add</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Poll Reset Votes Confirmation Modal -->
+        <div id="poll-reset-confirm-modal" class="modal" style="display: none">
+            <div class="modal-content modal-narrow">
+                <div class="modal-header">
+                    <h2>Reset Poll Votes</h2>
+                    <button class="modal-close" id="poll-reset-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to reset all votes for this poll? This action cannot be undone.</p>
+                </div>
+                <div class="modal-actions">
+                    <button class="secondary-btn" id="poll-reset-cancel">Cancel</button>
+                    <button class="primary-btn" id="poll-reset-confirm">Reset Votes</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Yjs CRDT library for collaborative editing -->
         <!-- Use import map to ensure single Yjs instance (y-indexeddb must use same Yjs) -->
         <script type="importmap">

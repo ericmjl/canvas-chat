@@ -735,6 +735,16 @@ class CRDTGraph extends EventEmitter {
             // Flatten in case of nested arrays (Y.Array extraction edge case)
             node.tags = node.tags.flat();
         }
+
+        // Flatten other arrays that might be nested (options, rowItems, colItems, etc.)
+        // Y.Array.push(array) creates nested arrays, so we need to flatten on extraction
+        const arrayFields = ['options', 'rowItems', 'colItems', 'contextNodeIds'];
+        for (const field of arrayFields) {
+            if (node[field] && Array.isArray(node[field])) {
+                node[field] = node[field].flat();
+            }
+        }
+
         if (!node.position) node.position = { x: 0, y: 0 };
 
         return node;
@@ -822,6 +832,22 @@ class CRDTGraph extends EventEmitter {
                     }
                     if (value.length > 0) {
                         yTags.push(value);
+                    }
+                } else if (Array.isArray(value)) {
+                    // Other arrays (options, rowItems, colItems, contextNodeIds, etc.)
+                    let yArr = yNode.get(key);
+                    if (!isYArray(yArr)) {
+                        yArr = new Y.Array();
+                        yNode.set(key, yArr);
+                    }
+                    // Replace array contents
+                    while (yArr.length > 0) {
+                        yArr.delete(0);
+                    }
+                    if (value.length > 0) {
+                        // Push array as single element (Y.Array will store it nested)
+                        // We'll flatten it when extracting (similar to tags)
+                        yArr.push(value);
                     }
                 } else if (key === 'cells' && value) {
                     // Matrix cells update

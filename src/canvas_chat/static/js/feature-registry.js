@@ -11,6 +11,7 @@ import { MatrixFeature } from './matrix.js';
 import { FactcheckFeature } from './factcheck.js';
 import { ResearchFeature } from './research.js';
 import { CodeFeature } from './code-feature.js';
+import { PollFeature } from './poll-feature.js';
 
 /**
  * Priority levels for slash command resolution
@@ -121,10 +122,25 @@ class FeatureRegistry {
                 slashCommands: [], // Event-driven, no slash commands
                 priority: PRIORITY.BUILTIN,
             },
+            {
+                id: 'poll',
+                feature: PollFeature,
+                slashCommands: [
+                    {
+                        command: '/poll',
+                        handler: 'handleCommand',
+                    },
+                ],
+                priority: PRIORITY.BUILTIN,
+            },
         ];
 
         console.log('[FeatureRegistry] Registering built-in features...');
         for (const config of features) {
+            console.log(`[FeatureRegistry] Registering feature: ${config.id}`, {
+                hasSlashCommands: config.slashCommands?.length > 0,
+                slashCommands: config.slashCommands,
+            });
             await this.register(config);
         }
         console.log('[FeatureRegistry] All built-in features registered');
@@ -163,6 +179,19 @@ class FeatureRegistry {
         const subscriptions = instance.getEventSubscriptions?.() || {};
         for (const [eventName, handler] of Object.entries(subscriptions)) {
             this._eventBus.on(eventName, handler);
+        }
+
+        // Register canvas event handlers
+        const canvasHandlers = instance.getCanvasEventHandlers?.() || {};
+        if (!instance._canvasHandlers) {
+            instance._canvasHandlers = [];
+        }
+        for (const [eventName, handler] of Object.entries(canvasHandlers)) {
+            if (this._appContext && this._appContext.canvas) {
+                this._appContext.canvas.on(eventName, handler);
+                // Track handlers for cleanup
+                instance._canvasHandlers.push({ eventName, handler });
+            }
         }
 
         // Call lifecycle hook
@@ -233,8 +262,10 @@ class FeatureRegistry {
     async handleSlashCommand(command, args, context) {
         const cmd = this._slashCommands.get(command);
         if (!cmd) {
+            console.log(`[FeatureRegistry] Command "${command}" not found in registry. Available commands:`, Array.from(this._slashCommands.keys()));
             return false; // Command not found
         }
+        console.log(`[FeatureRegistry] Handling command "${command}" with args: "${args}"`, { featureId: cmd.featureId, handler: cmd.handler });
 
         // Emit before event (cancellable)
         const beforeEvent = new CancellableEvent('command:before', { command, args, context });
@@ -277,11 +308,35 @@ class FeatureRegistry {
     }
 
     /**
-     * Get all registered slash commands
+     * Get all registered slash commands (just command strings)
      * @returns {Array<string>} Array of command strings
      */
     getSlashCommands() {
         return Array.from(this._slashCommands.keys());
+    }
+
+    /**
+     * Get all registered slash commands with full metadata (description, placeholder)
+     * @returns {Array<Object>} Array of command objects with command, description, placeholder
+     */
+    getSlashCommandsWithMetadata() {
+        const commands = [];
+
+        // Get commands from all registered features
+        for (const [featureId, feature] of this._features.entries()) {
+            if (typeof feature.getSlashCommands === 'function') {
+                const featureCommands = feature.getSlashCommands();
+                for (const cmd of featureCommands) {
+                    // Only include if this feature actually owns the command in registry
+                    const registeredCmd = this._slashCommands.get(cmd.command);
+                    if (registeredCmd && registeredCmd.featureId === featureId) {
+                        commands.push(cmd);
+                    }
+                }
+            }
+        }
+
+        return commands;
     }
 
     /**
@@ -324,6 +379,16 @@ class FeatureRegistry {
 
         // Call lifecycle hook
         await feature.onUnload?.();
+
+        // Unregister canvas event handlers
+        if (feature._canvasHandlers) {
+            for (const { eventName, handler } of feature._canvasHandlers) {
+                if (this._appContext && this._appContext.canvas) {
+                    this._appContext.canvas.off(eventName, handler);
+                }
+            }
+            feature._canvasHandlers = [];
+        }
 
         // Remove slash commands owned by this feature
         for (const [command, cmd] of this._slashCommands.entries()) {

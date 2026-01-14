@@ -128,7 +128,7 @@ async onUnload() {
 getEventSubscriptions(): Object<string, Function>
 ```
 
-Returns an object mapping event names to handler functions.
+Returns an object mapping event names to handler functions for feature registry events.
 
 **Returns:**
 
@@ -147,7 +147,51 @@ getEventSubscriptions() {
         'selfheal:before': this.onSelfHealBefore.bind(this),
     };
 }
+```
 
+### getCanvasEventHandlers()
+
+```javascript
+getCanvasEventHandlers(): Object<string, Function>
+```
+
+Returns an object mapping canvas event names to handler functions. These handlers are automatically registered on the canvas when the plugin loads and unregistered when the plugin unloads.
+
+**When to use:**
+
+- Your plugin creates custom node types that emit canvas events (e.g., `canvas.emit('myCustomEvent', nodeId, ...args)`)
+- You need to handle interactions with custom nodes (clicks, votes, etc.)
+- You want to keep event handling logic within your plugin (self-contained)
+
+**Returns:**
+
+Object where:
+
+- Key: Canvas event name (string)
+- Value: Handler function (receives event arguments directly, not wrapped in an event object)
+
+**Example:**
+
+```javascript
+getCanvasEventHandlers() {
+    return {
+        'pollVote': this.handlePollVote.bind(this),
+        'pollAddOption': this.handlePollAddOption.bind(this),
+        'pollResetVotes': this.handlePollResetVotes.bind(this),
+    };
+}
+
+handlePollVote(nodeId, optionIndex) {
+    const node = this.graph.getNode(nodeId);
+    // Update votes...
+    this.graph.updateNode(nodeId, { votes: node.votes });
+    this.canvas.renderNode(node);
+}
+```
+
+**Note:** Canvas event handlers receive arguments directly from `canvas.emit()`, unlike feature registry events which wrap data in event objects.
+
+```javascript
 onNodeCreated(event) {
     const { nodeId, nodeType } = event.data;
     console.log('Node created:', nodeId, nodeType);
@@ -160,6 +204,7 @@ onSelfHealBefore(event) {
         console.log('Prevented self-healing after 2 attempts');
     }
 }
+
 ```
 
 **Available events:**

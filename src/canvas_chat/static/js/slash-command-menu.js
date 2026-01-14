@@ -5,6 +5,17 @@
 import { storage } from './storage.js';
 import { NodeRegistry } from './node-registry.js';
 
+// FeatureRegistry will be injected at runtime (after app initialization)
+let featureRegistry = null;
+
+/**
+ * Set the FeatureRegistry instance (called from app.js after initialization)
+ * @param {FeatureRegistry} registry - FeatureRegistry instance
+ */
+export function setFeatureRegistry(registry) {
+    featureRegistry = registry;
+}
+
 // Built-in slash command definitions
 const BUILTIN_SLASH_COMMANDS = [
     { command: '/note', description: 'Add a note or fetch URL content', placeholder: 'markdown or https://...' },
@@ -26,12 +37,13 @@ const BUILTIN_SLASH_COMMANDS = [
 ];
 
 /**
- * Get all available slash commands (built-in + plugin-registered)
+ * Get all available slash commands (built-in + node plugins + feature plugins)
  * @returns {Array} Combined array of all slash commands
  */
 function getAllSlashCommands() {
-    const pluginCommands = NodeRegistry.getSlashCommands();
-    return [...BUILTIN_SLASH_COMMANDS, ...pluginCommands];
+    const nodePluginCommands = NodeRegistry.getSlashCommands();
+    const featurePluginCommands = featureRegistry?.getSlashCommandsWithMetadata() || [];
+    return [...BUILTIN_SLASH_COMMANDS, ...nodePluginCommands, ...featurePluginCommands];
 }
 
 // Export for backwards compatibility
