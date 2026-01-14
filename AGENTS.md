@@ -173,6 +173,8 @@ gh pr create --title "Fix: Description" --body "Summary of changes"
 ```
 
 - Keep PR descriptions aligned with the actual diff before review.
+- Use a detailed PR description template (Summary, Root Cause, Solution, Changes breakdown, Tests, Manual Testing if needed).
+- Include concrete file references and test counts when available, and call out any doc/lockfile updates.
 
 ### Closing issues
 
