@@ -190,16 +190,9 @@ class BaseNode {
 }
 
 /**
- * Human message node
+ * Note: HumanNode has been moved to human-node.js plugin (built-in)
+ * This allows the human node type to be loaded as a plugin.
  */
-class HumanNode extends BaseNode {
-    getTypeLabel() {
-        return 'You';
-    }
-    getTypeIcon() {
-        return '💬';
-    }
-}
 
 /**
  * AI response node
@@ -1077,7 +1070,7 @@ function wrapNode(node) {
 
     // Fallback: hardcoded map for built-in types (backwards compatibility)
     const classMap = {
-        [NodeType.HUMAN]: HumanNode,
+        // Note: HumanNode is now a plugin (human-node.js)
         [NodeType.AI]: AINode,
         // Note: NoteNode is now a plugin (note.js)
         // Note: SummaryNode is now a plugin (summary.js)
@@ -1167,7 +1160,7 @@ function validateNodeProtocol(NodeClass) {
     if (className.includes('Image')) nodeType = NodeType.IMAGE;
     else if (className.includes('Matrix')) nodeType = NodeType.MATRIX;
     else if (className.includes('Cell')) nodeType = NodeType.CELL;
-    else if (className.includes('Human')) nodeType = NodeType.HUMAN;
+    // Note: HumanNode is now a plugin (human-node.js)
     else if (className.includes('AI') && !className.includes('Human')) nodeType = NodeType.AI;
     else if (className.includes('Note')) nodeType = NodeType.NOTE;
     else if (className.includes('Summary')) nodeType = NodeType.SUMMARY;
@@ -1226,7 +1219,7 @@ function registerBuiltinNodeTypes() {
     // Built-in type configurations
     // Note: CSS is not included here because built-in styles are in nodes.css
     const builtinTypes = [
-        { type: 'human', protocol: HumanNode },
+        // Note: 'human' is now a plugin (human-node.js)
         { type: 'ai', protocol: AINode },
         // Note: 'note' is now a plugin (note.js)
         // Note: 'summary' is now a plugin (summary.js)
@@ -1287,7 +1280,7 @@ export {
     // Base class
     BaseNode,
     // Node type classes
-    HumanNode,
+    // HumanNode is now exported from human-node.js plugin
     AINode,
     // NoteNode is now exported from note.js plugin
     // SummaryNode is now exported from summary.js plugin
