@@ -4,6 +4,7 @@
  */
 
 import { JSDOM } from 'jsdom';
+import { assertEqual, assertTrue } from './test_helpers/assertions.js';
 
 // Setup global DOM before importing Canvas
 const dom = new JSDOM(`
@@ -44,18 +45,6 @@ function test(name, fn) {
             console.log(`  ${err.stack.split('\n').slice(1, 3).join('\n  ')}`);
         }
         failed++;
-    }
-}
-
-function assertTrue(actual, message = '') {
-    if (actual !== true) {
-        throw new Error(message || `Expected true, got ${actual}`);
-    }
-}
-
-function assertEqual(actual, expected, message = '') {
-    if (actual !== expected) {
-        throw new Error(message || `Expected ${expected}, got ${actual}`);
     }
 }
 
@@ -151,7 +140,43 @@ test('renderEdge defers edge when nodes not in DOM', () => {
     assertTrue(!canvas.edgeElements.has('edge1'), 'Edge should not be in edgeElements');
 });
 
-// Test 6: Edge renders immediately when nodes exist
+// Test 6: Deferred edges cleaned up when removed
+test('removeEdge clears deferred edge entries', () => {
+    const canvas = new Canvas('canvas-container', 'canvas-svg');
+    const graph = new MockGraph();
+
+    graph.setNode('source', { id: 'source', position: { x: 0, y: 0 } });
+    graph.setNode('target', { id: 'target', position: { x: 100, y: 100 } });
+
+    const edge = { id: 'edge1', source: 'source', target: 'target', type: 'reply' };
+    canvas.renderEdge(edge, graph);
+
+    assertTrue(canvas.deferredEdges.has('edge1'), 'Edge should be deferred');
+    canvas.removeEdge('edge1');
+    assertTrue(!canvas.deferredEdges.has('edge1'), 'Deferred edge should be cleared');
+});
+
+test('removeNode clears deferred edges and callbacks', () => {
+    const canvas = new Canvas('canvas-container', 'canvas-svg');
+    const graph = new MockGraph();
+
+    graph.setNode('source', { id: 'source', position: { x: 0, y: 0 } });
+    graph.setNode('target', { id: 'target', position: { x: 100, y: 100 } });
+
+    const edge = { id: 'edge2', source: 'source', target: 'target', type: 'reply' };
+    canvas.renderEdge(edge, graph);
+    canvas._addNodeRenderCallback('source', () => {});
+
+    assertTrue(canvas.deferredEdges.has('edge2'), 'Edge should be deferred');
+    assertTrue(canvas.nodeRenderCallbacks.has('source'), 'Callback should be registered');
+
+    canvas.removeNode('source');
+
+    assertTrue(!canvas.deferredEdges.has('edge2'), 'Deferred edges should be cleared');
+    assertTrue(!canvas.nodeRenderCallbacks.has('source'), 'Callbacks should be cleared');
+});
+
+// Test 7: Edge renders immediately when nodes exist
 test('renderEdge renders immediately when nodes in DOM', () => {
     const canvas = new Canvas('canvas-container', 'canvas-svg');
     const graph = new MockGraph();
