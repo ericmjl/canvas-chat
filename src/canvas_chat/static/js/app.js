@@ -22,6 +22,7 @@ import { ResearchFeature } from './research.js';
 import './code-feature.js'; // Side-effect import for CodeFeature registration
 import './note.js'; // Side-effect import for NoteNode plugin registration (NoteFeature imported by feature-registry.js) - consolidated plugin
 import './summary.js'; // Side-effect import for SummaryNode plugin registration
+import './reference.js'; // Side-effect import for ReferenceNode plugin registration
 // Note: poll.js is an external plugin - load via config.yaml
 import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { wrapNode } from './node-protocols.js';

@@ -245,23 +245,8 @@ class AINode extends BaseNode {
  */
 
 /**
- * Reference node (link to external content)
- */
-class ReferenceNode extends BaseNode {
-    getTypeLabel() {
-        return 'Reference';
-    }
-    getTypeIcon() {
-        return '🔗';
-    }
-
-    getActions() {
-        return [Actions.REPLY, Actions.FETCH_SUMMARIZE, Actions.COPY];
-    }
-}
-
-/**
  * Search query node
+ * Note: ReferenceNode is now a plugin (reference.js)
  */
 class SearchNode extends BaseNode {
     getTypeLabel() {
@@ -1143,7 +1128,7 @@ function wrapNode(node) {
         [NodeType.AI]: AINode,
         // Note: NoteNode is now a plugin (note.js)
         // Note: SummaryNode is now a plugin (summary.js)
-        [NodeType.REFERENCE]: ReferenceNode,
+        // Note: ReferenceNode is now a plugin (reference.js)
         [NodeType.SEARCH]: SearchNode,
         [NodeType.RESEARCH]: ResearchNode,
         [NodeType.HIGHLIGHT]: HighlightNode,
@@ -1233,7 +1218,7 @@ function validateNodeProtocol(NodeClass) {
     else if (className.includes('AI') && !className.includes('Human')) nodeType = NodeType.AI;
     else if (className.includes('Note')) nodeType = NodeType.NOTE;
     else if (className.includes('Summary')) nodeType = NodeType.SUMMARY;
-    else if (className.includes('Reference')) nodeType = NodeType.REFERENCE;
+    // Note: ReferenceNode is now a plugin (reference.js)
     else if (className.includes('Search')) nodeType = NodeType.SEARCH;
     else if (className.includes('Research')) nodeType = NodeType.RESEARCH;
     else if (className.includes('Highlight')) nodeType = NodeType.HIGHLIGHT;
@@ -1290,7 +1275,7 @@ function registerBuiltinNodeTypes() {
         { type: 'ai', protocol: AINode },
         // Note: 'note' is now a plugin (note.js)
         // Note: 'summary' is now a plugin (summary.js)
-        { type: 'reference', protocol: ReferenceNode },
+        // Note: 'reference' is now a plugin (reference.js)
         { type: 'search', protocol: SearchNode },
         { type: 'research', protocol: ResearchNode },
         { type: 'highlight', protocol: HighlightNode },
@@ -1351,7 +1336,7 @@ export {
     AINode,
     // NoteNode is now exported from note.js plugin
     // SummaryNode is now exported from summary.js plugin
-    ReferenceNode,
+    // ReferenceNode is now exported from reference.js plugin
     SearchNode,
     ResearchNode,
     HighlightNode,
