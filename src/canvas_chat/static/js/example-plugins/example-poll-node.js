@@ -7,7 +7,7 @@
  * To use this plugin:
  * 1. Add plugin path to config.yaml:
  *      plugins:
- *        - path: ./src/canvas_chat/static/js/plugins/example-poll-node.js
+ *        - path: ./src/canvas_chat/static/js/example-plugins/example-poll-node.js
  * 2. Run with: uvx canvas-chat launch --config config.yaml
  * 3. Open browser console and create a poll:
  *      app.createAndAddNode('poll', '', {

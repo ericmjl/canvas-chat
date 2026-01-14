@@ -350,7 +350,7 @@ Actions.ANALYZE; // Analyze CSV data
 
 ## Example: Complete Poll Node
 
-See `/static/js/plugins/example-poll-node.js` for a complete example with:
+See `/static/js/example-plugins/example-poll-node.js` for a complete example with:
 
 - Custom rendering
 - Interactive voting
@@ -383,5 +383,5 @@ Check the server logs for:
 ## Next Steps
 
 - Read the [Node Protocol Reference](../reference/node-protocols.md)
-- See [example-poll-node.js](../../src/canvas_chat/static/js/plugins/example-poll-node.js) for a complete implementation
+- See [example-poll-node.js](../../src/canvas_chat/static/js/example-plugins/example-poll-node.js) for a complete implementation
 - Learn about [Admin Mode Configuration](./deploy-admin-mode.md)

@@ -6,7 +6,7 @@
 import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
 import { FeaturePlugin } from '../src/canvas_chat/static/js/feature-plugin.js';
 import { CancellableEvent } from '../src/canvas_chat/static/js/plugin-events.js';
-import { SmartFixPlugin } from '../src/canvas_chat/static/js/smart-fix-plugin.js';
+import { SmartFixPlugin } from '../src/canvas_chat/static/js/example-plugins/smart-fix-plugin.js';
 import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
 import { assertEqual, assertTrue } from './test_helpers/assertions.js';
 

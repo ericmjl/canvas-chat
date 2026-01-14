@@ -103,7 +103,7 @@ models:
 
 plugins:
     # Built-in example: Interactive poll node
-    - path: ./src/canvas_chat/static/js/plugins/example-poll-node.js
+    - path: ./src/canvas_chat/static/js/example-plugins/example-poll-node.js
 
     # Add your custom plugins here:
     # - path: ./plugins/my-custom-node.js

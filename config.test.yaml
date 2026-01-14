@@ -7,4 +7,4 @@ models:
       contextWindow: 200000
 
 plugins:
-    - path: ./src/canvas_chat/static/js/plugins/example-poll-node.js
+    - path: ./src/canvas_chat/static/js/example-plugins/example-poll-node.js
