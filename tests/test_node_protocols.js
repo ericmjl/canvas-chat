@@ -32,7 +32,7 @@ const {
     // NoteNode is now a plugin - import from note.js
     // SummaryNode is now a plugin - import from summary.js
     // ReferenceNode is now a plugin - import from reference.js
-    SearchNode,
+    // SearchNode is now a plugin - import from search-node.js
     ResearchNode,
     HighlightNode,
     MatrixNode,
@@ -120,9 +120,10 @@ test('validateNodeProtocol: AINode implements all methods', () => {
 //     assertTrue(validateNodeProtocol(ReferenceNode));
 // });
 
-test('validateNodeProtocol: SearchNode implements all methods', () => {
-    assertTrue(validateNodeProtocol(SearchNode));
-});
+// Note: SearchNode is now a plugin (search-node.js) - test via wrapNode instead
+// test('validateNodeProtocol: SearchNode implements all methods', () => {
+//     assertTrue(validateNodeProtocol(SearchNode));
+// });
 
 test('validateNodeProtocol: ResearchNode implements all methods', () => {
     assertTrue(validateNodeProtocol(ResearchNode));
