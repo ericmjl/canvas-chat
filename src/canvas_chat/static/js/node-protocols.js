@@ -528,23 +528,8 @@ class ColumnNode extends BaseNode {
 }
 
 /**
- * Fetch result node (fetched content from URL via Exa)
- */
-class FetchResultNode extends BaseNode {
-    getTypeLabel() {
-        return 'Fetched Content';
-    }
-    getTypeIcon() {
-        return '📄';
-    }
-
-    getActions() {
-        return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.RESUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
-    }
-}
-
-/**
  * PDF node (imported PDF document)
+ * Note: FetchResultNode is now a plugin (fetch-result-node.js)
  */
 class PdfNode extends BaseNode {
     getTypeLabel() {
@@ -1104,7 +1089,7 @@ function wrapNode(node) {
         [NodeType.CELL]: CellNode,
         [NodeType.ROW]: RowNode,
         [NodeType.COLUMN]: ColumnNode,
-        [NodeType.FETCH_RESULT]: FetchResultNode,
+        // Note: FetchResultNode is now a plugin (fetch-result-node.js)
         [NodeType.PDF]: PdfNode,
         [NodeType.OPINION]: OpinionNode,
         [NodeType.SYNTHESIS]: SynthesisNode,
@@ -1189,10 +1174,10 @@ function validateNodeProtocol(NodeClass) {
     // Note: ReferenceNode is now a plugin (reference.js)
     // Note: SearchNode is now a plugin (search-node.js)
     // Note: HighlightNode is now a plugin (highlight-node.js)
+    // Note: FetchResultNode is now a plugin (fetch-result-node.js)
     else if (className.includes('Research')) nodeType = NodeType.RESEARCH;
     else if (className.includes('Row')) nodeType = NodeType.ROW;
     else if (className.includes('Column')) nodeType = NodeType.COLUMN;
-    else if (className.includes('FetchResult')) nodeType = NodeType.FETCH_RESULT;
     else if (className.includes('Pdf')) nodeType = NodeType.PDF;
     else if (className.includes('Opinion')) nodeType = NodeType.OPINION;
     else if (className.includes('Synthesis')) nodeType = NodeType.SYNTHESIS;
@@ -1248,12 +1233,12 @@ function registerBuiltinNodeTypes() {
         // Note: 'reference' is now a plugin (reference.js)
         // Note: 'search' is now a plugin (search-node.js)
         // Note: 'highlight' is now a plugin (highlight-node.js)
+        // Note: 'fetch_result' is now a plugin (fetch-result-node.js)
         { type: 'research', protocol: ResearchNode },
         { type: 'matrix', protocol: MatrixNode },
         { type: 'cell', protocol: CellNode },
         { type: 'row', protocol: RowNode },
         { type: 'column', protocol: ColumnNode },
-        { type: 'fetch_result', protocol: FetchResultNode },
         { type: 'pdf', protocol: PdfNode },
         { type: 'opinion', protocol: OpinionNode },
         { type: 'synthesis', protocol: SynthesisNode },
@@ -1309,12 +1294,12 @@ export {
     // ReferenceNode is now exported from reference.js plugin
     // SearchNode is now exported from search-node.js plugin
     // HighlightNode is now exported from highlight-node.js plugin
+    // FetchResultNode is now exported from fetch-result-node.js plugin
     ResearchNode,
     MatrixNode,
     CellNode,
     RowNode,
     ColumnNode,
-    FetchResultNode,
     PdfNode,
     CsvNode,
     CodeNode,

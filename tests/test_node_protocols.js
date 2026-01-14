@@ -34,6 +34,7 @@ const {
     // ReferenceNode is now a plugin - import from reference.js
     // SearchNode is now a plugin - import from search-node.js
     // HighlightNode is now a plugin - import from highlight-node.js
+    // FetchResultNode is now a plugin - import from fetch-result-node.js
     ResearchNode,
     MatrixNode,
     CellNode,
@@ -150,9 +151,10 @@ test('validateNodeProtocol: ColumnNode implements all methods', () => {
     assertTrue(validateNodeProtocol(ColumnNode));
 });
 
-test('validateNodeProtocol: FetchResultNode implements all methods', () => {
-    assertTrue(validateNodeProtocol(FetchResultNode));
-});
+// Note: FetchResultNode is now a plugin (fetch-result-node.js) - test via wrapNode instead
+// test('validateNodeProtocol: FetchResultNode implements all methods', () => {
+//     assertTrue(validateNodeProtocol(FetchResultNode));
+// });
 
 test('validateNodeProtocol: PdfNode implements all methods', () => {
     assertTrue(validateNodeProtocol(PdfNode));
