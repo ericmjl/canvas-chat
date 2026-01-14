@@ -195,37 +195,9 @@ class BaseNode {
  */
 
 /**
- * AI response node
+ * Note: AINode has been moved to ai-node.js plugin (built-in)
+ * This allows the AI node type to be loaded as a plugin.
  */
-class AINode extends BaseNode {
-    getTypeLabel() {
-        return 'AI';
-    }
-    getTypeIcon() {
-        return '🤖';
-    }
-
-    getActions() {
-        return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
-    }
-
-    supportsStopContinue() {
-        return true;
-    }
-
-    getHeaderButtons() {
-        return [
-            HeaderButtons.NAV_PARENT,
-            HeaderButtons.NAV_CHILD,
-            HeaderButtons.COLLAPSE,
-            HeaderButtons.STOP,
-            HeaderButtons.CONTINUE,
-            HeaderButtons.RESET_SIZE,
-            HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE,
-        ];
-    }
-}
 
 /**
  * Note: NoteNode has been moved to note.js plugin (built-in)
@@ -1071,7 +1043,7 @@ function wrapNode(node) {
     // Fallback: hardcoded map for built-in types (backwards compatibility)
     const classMap = {
         // Note: HumanNode is now a plugin (human-node.js)
-        [NodeType.AI]: AINode,
+        // Note: AINode is now a plugin (ai-node.js)
         // Note: NoteNode is now a plugin (note.js)
         // Note: SummaryNode is now a plugin (summary.js)
         // Note: ReferenceNode is now a plugin (reference.js)
@@ -1161,7 +1133,7 @@ function validateNodeProtocol(NodeClass) {
     else if (className.includes('Matrix')) nodeType = NodeType.MATRIX;
     else if (className.includes('Cell')) nodeType = NodeType.CELL;
     // Note: HumanNode is now a plugin (human-node.js)
-    else if (className.includes('AI') && !className.includes('Human')) nodeType = NodeType.AI;
+    // Note: AINode is now a plugin (ai-node.js)
     else if (className.includes('Note')) nodeType = NodeType.NOTE;
     else if (className.includes('Summary')) nodeType = NodeType.SUMMARY;
     // Note: ReferenceNode is now a plugin (reference.js)
@@ -1220,7 +1192,7 @@ function registerBuiltinNodeTypes() {
     // Note: CSS is not included here because built-in styles are in nodes.css
     const builtinTypes = [
         // Note: 'human' is now a plugin (human-node.js)
-        { type: 'ai', protocol: AINode },
+        // Note: 'ai' is now a plugin (ai-node.js)
         // Note: 'note' is now a plugin (note.js)
         // Note: 'summary' is now a plugin (summary.js)
         // Note: 'reference' is now a plugin (reference.js)
@@ -1281,7 +1253,7 @@ export {
     BaseNode,
     // Node type classes
     // HumanNode is now exported from human-node.js plugin
-    AINode,
+    // AINode is now exported from ai-node.js plugin
     // NoteNode is now exported from note.js plugin
     // SummaryNode is now exported from summary.js plugin
     // ReferenceNode is now exported from reference.js plugin
