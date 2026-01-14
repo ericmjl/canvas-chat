@@ -5,9 +5,23 @@ function assertTrue(actual, message = '') {
 }
 
 function assertEqual(actual, expected, message = '') {
-    if (actual !== expected) {
-        throw new Error(message || `Expected ${expected}, got ${actual}`);
+    if (Object.is(actual, expected)) {
+        return;
     }
+
+    const bothObjects =
+        actual !== null && expected !== null && typeof actual === 'object' && typeof expected === 'object';
+
+    if (bothObjects) {
+        const actualStr = JSON.stringify(actual);
+        const expectedStr = JSON.stringify(expected);
+        if (actualStr === expectedStr) {
+            return;
+        }
+        throw new Error(message || `Expected ${expectedStr}, got ${actualStr}`);
+    }
+
+    throw new Error(message || `Expected ${expected}, got ${actual}`);
 }
 
 function assertFalse(actual, message = '') {
