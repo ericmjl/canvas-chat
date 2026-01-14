@@ -50,6 +50,7 @@ const { NoteFeature } = await import('../src/canvas_chat/static/js/note.js');
 
 // Import node types for testing
 const { NodeType, createNode } = await import('../src/canvas_chat/static/js/graph-types.js');
+const { wrapNode } = await import('../src/canvas_chat/static/js/node-protocols.js');
 
 async function asyncTest(description, fn) {
     try {
@@ -218,6 +219,39 @@ await asyncTest('Note node plugin is registered', async () => {
     const nodeInstance = new protocol(testNode);
     assertEqual(nodeInstance.getTypeLabel(), 'Note', 'Type label should be Note');
     assertEqual(nodeInstance.getTypeIcon(), '📝', 'Type icon should be 📝');
+});
+
+// Test: NoteNode getActions
+await asyncTest('NoteNode getActions returns correct actions', async () => {
+    // Import note.js to register the plugin
+    await import('../src/canvas_chat/static/js/note.js');
+
+    const node = createNode(NodeType.NOTE, 'Test note', {});
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getActions();
+
+    assertTrue(Array.isArray(actions), 'Actions should be an array');
+    assertTrue(actions.length > 0, 'Should have at least one action');
+
+    // Check for expected actions
+    const actionIds = actions.map((a) => a.id);
+    assertTrue(actionIds.includes('reply'), 'Should include REPLY action');
+    assertTrue(actionIds.includes('edit-content'), 'Should include EDIT_CONTENT action');
+    assertTrue(actionIds.includes('create-flashcards'), 'Should include CREATE_FLASHCARDS action');
+    assertTrue(actionIds.includes('copy'), 'Should include COPY action');
+});
+
+// Test: NoteNode wrapNode integration
+await asyncTest('wrapNode returns NoteNode for NOTE type', async () => {
+    // Import note.js to register the plugin
+    await import('../src/canvas_chat/static/js/note.js');
+
+    const node = { type: NodeType.NOTE, content: 'Note content' };
+    const wrapped = wrapNode(node);
+
+    // Verify it's wrapped correctly (not BaseNode)
+    assertTrue(wrapped.getTypeLabel() === 'Note', 'Should return Note node protocol');
+    assertTrue(wrapped.getTypeIcon() === '📝', 'Should have note icon');
 });
 
 console.log('\n✅ All NoteFeature tests passed!\n');
