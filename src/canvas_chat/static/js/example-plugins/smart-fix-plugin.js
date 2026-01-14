@@ -10,7 +10,7 @@
  * - Skip self-healing for specific error patterns
  */
 
-import { FeaturePlugin } from './feature-plugin.js';
+import { FeaturePlugin } from '../feature-plugin.js';
 
 class SmartFixPlugin extends FeaturePlugin {
     constructor(context) {
