@@ -17,8 +17,9 @@ export function setFeatureRegistry(registry) {
 }
 
 // Built-in slash command definitions
+// Note: /note is now handled by NoteFeature plugin, but kept here for backwards compatibility
+// until all commands are migrated to plugins
 const BUILTIN_SLASH_COMMANDS = [
-    { command: '/note', description: 'Add a note or fetch URL content', placeholder: 'markdown or https://...' },
     { command: '/search', description: 'Search the web', placeholder: 'query' },
     { command: '/research', description: 'Deep research', placeholder: 'topic' },
     { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
