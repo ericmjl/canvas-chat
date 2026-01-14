@@ -30,6 +30,7 @@ await import('../src/canvas_chat/static/js/fetch-result-node.js');
 await import('../src/canvas_chat/static/js/highlight-node.js');
 await import('../src/canvas_chat/static/js/pdf-node.js');
 await import('../src/canvas_chat/static/js/research-node.js');
+await import('../src/canvas_chat/static/js/opinion-node.js');
 
 const { NodeType, createNode } = await import('../src/canvas_chat/static/js/graph-types.js');
 const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -46,6 +47,7 @@ const {
     // FetchResultNode is now a plugin - import from fetch-result-node.js
     // PdfNode is now a plugin - import from pdf-node.js
     // ResearchNode is now a plugin - import from research-node.js
+    // OpinionNode is now a plugin - import from opinion-node.js
     MatrixNode,
     CellNode,
     RowNode,
@@ -53,7 +55,6 @@ const {
     FetchResultNode,
     CsvNode,
     CodeNode,
-    OpinionNode,
     SynthesisNode,
     ReviewNode,
     FactcheckNode,
@@ -173,9 +174,10 @@ test('validateNodeProtocol: ColumnNode implements all methods', () => {
 //     assertTrue(validateNodeProtocol(PdfNode));
 // });
 
-test('validateNodeProtocol: OpinionNode implements all methods', () => {
-    assertTrue(validateNodeProtocol(OpinionNode));
-});
+// Note: OpinionNode is now a plugin (opinion-node.js), test it separately
+// test('validateNodeProtocol: OpinionNode implements all methods', () => {
+//     assertTrue(validateNodeProtocol(OpinionNode));
+// });
 
 test('validateNodeProtocol: SynthesisNode implements all methods', () => {
     assertTrue(validateNodeProtocol(SynthesisNode));
