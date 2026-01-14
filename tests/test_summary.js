@@ -88,7 +88,7 @@ await asyncTest('SummaryNode implements protocol methods', async () => {
 });
 
 // Test: SummaryNode getActions
-await asyncTest('SummaryNode getActions returns correct actions', async () => {
+await asyncTest('SummaryNode getActions returns correct actions in expected order', async () => {
     // Import summary.js to register the plugin
     await import('../src/canvas_chat/static/js/summary.js');
 
@@ -97,13 +97,17 @@ await asyncTest('SummaryNode getActions returns correct actions', async () => {
     const actions = wrapped.getActions();
 
     assertTrue(Array.isArray(actions), 'Actions should be an array');
-    assertTrue(actions.length > 0, 'Should have at least one action');
+    assertTrue(actions.length === 3, 'Should have exactly 3 actions');
 
-    // Check for expected actions
+    // Check for expected actions in expected order
     const actionIds = actions.map((a) => a.id);
     assertTrue(actionIds.includes('reply'), 'Should include REPLY action');
     assertTrue(actionIds.includes('create-flashcards'), 'Should include CREATE_FLASHCARDS action');
     assertTrue(actionIds.includes('copy'), 'Should include COPY action');
+
+    // Verify no duplicates
+    const uniqueIds = new Set(actionIds);
+    assertTrue(uniqueIds.size === actions.length, 'Actions should not have duplicates');
 });
 
 // Test: SummaryNode isScrollable

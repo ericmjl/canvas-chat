@@ -94,7 +94,7 @@ await asyncTest('ReferenceNode implements protocol methods', async () => {
 });
 
 // Test: ReferenceNode getActions
-await asyncTest('ReferenceNode getActions returns correct actions', async () => {
+await asyncTest('ReferenceNode getActions returns correct actions in expected order', async () => {
     // Import reference.js to register the plugin
     await import('../src/canvas_chat/static/js/reference.js');
 
@@ -103,12 +103,17 @@ await asyncTest('ReferenceNode getActions returns correct actions', async () => 
     const actions = wrapped.getActions();
 
     assertTrue(Array.isArray(actions), 'Actions should be an array');
-    assertTrue(actions.length === 3, 'Should have 3 actions');
+    assertTrue(actions.length === 3, 'Should have exactly 3 actions');
 
-    // Check for expected actions
-    assertIncludes(actions, Actions.REPLY);
-    assertIncludes(actions, Actions.FETCH_SUMMARIZE);
-    assertIncludes(actions, Actions.COPY);
+    // Check for expected actions in expected order
+    assertEqual(actions[0], Actions.REPLY, 'First action should be REPLY');
+    assertEqual(actions[1], Actions.FETCH_SUMMARIZE, 'Second action should be FETCH_SUMMARIZE');
+    assertEqual(actions[2], Actions.COPY, 'Third action should be COPY');
+
+    // Verify no duplicates
+    const actionIds = actions.map((a) => a.id);
+    const uniqueIds = new Set(actionIds);
+    assertTrue(uniqueIds.size === actions.length, 'Actions should not have duplicates');
 });
 
 // Test: ReferenceNode isScrollable

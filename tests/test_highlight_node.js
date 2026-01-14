@@ -104,6 +104,19 @@ await asyncTest('HighlightNode renderContent renders markdown for text content',
     assertTrue(html.includes('**Bold text**'), 'Should include original content');
 });
 
+// Test: HighlightNode renderContent with empty content
+await asyncTest('HighlightNode renderContent handles empty content', async () => {
+    // Import highlight-node.js to register the plugin
+    await import('../src/canvas_chat/static/js/highlight-node.js');
+
+    const node = { type: NodeType.HIGHLIGHT, content: '', id: 'test', position: { x: 0, y: 0 }, width: 420, height: 200, created_at: Date.now(), tags: [] };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+
+    // Should not throw and should return some HTML (even if empty)
+    assertTrue(typeof html === 'string', 'Should return a string');
+});
+
 // Test: HighlightNode renderContent with image
 await asyncTest('HighlightNode renderContent renders image for imageData', async () => {
     // Import highlight-node.js to register the plugin
@@ -127,6 +140,29 @@ await asyncTest('HighlightNode renderContent renders image for imageData', async
     assertTrue(html.includes('data:image/png;base64'), 'Should render image data URL');
     assertTrue(html.includes('node-image'), 'Should include image class');
     assertTrue(html.includes('image-node-content'), 'Should include image container');
+});
+
+// Test: HighlightNode renderContent with image but no mimeType (should default to image/png)
+await asyncTest('HighlightNode renderContent defaults mimeType to image/png when missing', async () => {
+    // Import highlight-node.js to register the plugin
+    await import('../src/canvas_chat/static/js/highlight-node.js');
+
+    const node = {
+        id: 'test-highlight',
+        type: NodeType.HIGHLIGHT,
+        content: '',
+        imageData: 'base64imagedata',
+        // mimeType missing - should default to image/png
+        position: { x: 0, y: 0 },
+        width: 420,
+        height: 200,
+        created_at: Date.now(),
+        tags: [],
+    };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderContent(mockCanvas);
+
+    assertTrue(html.includes('data:image/png;base64'), 'Should default to image/png when mimeType is missing');
 });
 
 // Test: HighlightNode isScrollable
