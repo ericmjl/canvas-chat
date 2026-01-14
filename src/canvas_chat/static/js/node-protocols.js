@@ -245,20 +245,8 @@ class AINode extends BaseNode {
  */
 
 /**
- * Search query node
- * Note: ReferenceNode is now a plugin (reference.js)
- */
-class SearchNode extends BaseNode {
-    getTypeLabel() {
-        return 'Search';
-    }
-    getTypeIcon() {
-        return '🔍';
-    }
-}
-
-/**
  * Research node (deep research with multiple sources)
+ * Note: SearchNode is now a plugin (search-node.js)
  */
 class ResearchNode extends BaseNode {
     getTypeLabel() {
@@ -1129,7 +1117,7 @@ function wrapNode(node) {
         // Note: NoteNode is now a plugin (note.js)
         // Note: SummaryNode is now a plugin (summary.js)
         // Note: ReferenceNode is now a plugin (reference.js)
-        [NodeType.SEARCH]: SearchNode,
+        // Note: SearchNode is now a plugin (search-node.js)
         [NodeType.RESEARCH]: ResearchNode,
         [NodeType.HIGHLIGHT]: HighlightNode,
         [NodeType.MATRIX]: MatrixNode,
@@ -1219,7 +1207,7 @@ function validateNodeProtocol(NodeClass) {
     else if (className.includes('Note')) nodeType = NodeType.NOTE;
     else if (className.includes('Summary')) nodeType = NodeType.SUMMARY;
     // Note: ReferenceNode is now a plugin (reference.js)
-    else if (className.includes('Search')) nodeType = NodeType.SEARCH;
+    // Note: SearchNode is now a plugin (search-node.js)
     else if (className.includes('Research')) nodeType = NodeType.RESEARCH;
     else if (className.includes('Highlight')) nodeType = NodeType.HIGHLIGHT;
     else if (className.includes('Row')) nodeType = NodeType.ROW;
@@ -1276,7 +1264,7 @@ function registerBuiltinNodeTypes() {
         // Note: 'note' is now a plugin (note.js)
         // Note: 'summary' is now a plugin (summary.js)
         // Note: 'reference' is now a plugin (reference.js)
-        { type: 'search', protocol: SearchNode },
+        // Note: 'search' is now a plugin (search-node.js)
         { type: 'research', protocol: ResearchNode },
         { type: 'highlight', protocol: HighlightNode },
         { type: 'matrix', protocol: MatrixNode },
@@ -1337,7 +1325,7 @@ export {
     // NoteNode is now exported from note.js plugin
     // SummaryNode is now exported from summary.js plugin
     // ReferenceNode is now exported from reference.js plugin
-    SearchNode,
+    // SearchNode is now exported from search-node.js plugin
     ResearchNode,
     HighlightNode,
     MatrixNode,
