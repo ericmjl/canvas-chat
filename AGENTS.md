@@ -980,6 +980,7 @@ Refactor to extract pure functions that can be imported and tested directly.
 The project has JSDOM as a dependency specifically for this purpose. Many tests already use this pattern successfully.
 
 **IMPORTANT:** Before running tests that use JSDOM, ensure jsdom is installed via npm:
+
 ```bash
 npm install  # or pixi run npm install
 ```
