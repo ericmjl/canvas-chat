@@ -3,7 +3,7 @@
  */
 
 import { FeatureRegistry, PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
-import { SimpleTestPlugin, ComplexTestPlugin } from '../src/canvas_chat/static/js/example-test-plugin.js';
+import { SimpleTestPlugin, ComplexTestPlugin } from '../src/canvas_chat/static/js/example-plugins/example-test-plugin.js';
 import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
 import { assertEqual, assertTrue } from './test_helpers/assertions.js';
 

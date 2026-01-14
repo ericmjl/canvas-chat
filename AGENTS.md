@@ -27,7 +27,39 @@ This includes:
 
 ## Codebase map
 
-Quick reference for which files to edit for common tasks:
+Quick reference for which files to edit for common tasks.
+
+### Directory structure
+
+```text
+canvas-chat/
+├── src/canvas_chat/          # Main Python package
+│   ├── app.py                # FastAPI backend routes
+│   ├── config.py             # Configuration management
+│   ├── __main__.py           # CLI entry point
+│   └── static/               # Frontend assets
+│       ├── index.html        # Main HTML
+│       ├── css/              # Stylesheets (9 files)
+│       └── js/               # JavaScript modules
+│           ├── app.js        # Main application orchestrator
+│           ├── canvas.js    # SVG canvas rendering
+│           ├── crdt-graph.js # Graph data model
+│           ├── chat.js      # LLM API integration
+│           ├── feature-*.js # Feature plugins
+│           └── example-plugins/ # Example plugins (test, smart-fix, poll node)
+├── tests/                    # Test files
+├── docs/                     # Documentation (Diataxis)
+├── modal_app.py              # Modal deployment config
+└── pyproject.toml            # Project config (pixi)
+```
+
+### File organization principles
+
+- **Frontend**: Vanilla JavaScript (ES modules), no frameworks
+- **Backend**: Python with FastAPI
+- **Styling**: Modular CSS files imported by `style.css`
+- **Plugins**: Three-level architecture (node types → features → extensions)
+- **Tests**: Mirror source structure in `tests/` directory
 
 ### Frontend (Vanilla JS)
 
@@ -70,10 +102,11 @@ Quick reference for which files to edit for common tasks:
 
 #### Example plugins
 
-| File                                               | Purpose                                | Edit for...                 |
-| -------------------------------------------------- | -------------------------------------- | --------------------------- |
-| `src/canvas_chat/static/js/smart-fix-plugin.js`    | SmartFixPlugin - Enhanced self-healing | Example of extension hooks  |
-| `src/canvas_chat/static/js/example-test-plugin.js` | Simple test plugin                     | Plugin development examples |
+| File                                                           | Purpose                                | Edit for...                 |
+| -------------------------------------------------------------- | -------------------------------------- | --------------------------- |
+| `src/canvas_chat/static/js/example-plugins/smart-fix-plugin.js` | SmartFixPlugin - Enhanced self-healing | Example of extension hooks  |
+| `src/canvas_chat/static/js/example-plugins/example-test-plugin.js` | Simple test plugin                     | Plugin development examples |
+| `src/canvas_chat/static/js/example-plugins/example-poll-node.js` | Example poll node custom node type     | Custom node type examples   |
 
 #### Support modules
 
@@ -86,6 +119,7 @@ Quick reference for which files to edit for common tasks:
 | `src/canvas_chat/static/js/slash-command-menu.js`  | Slash command autocomplete UI         | Command menu behavior              |
 | `src/canvas_chat/static/js/pyodide-runner.js`      | Python code execution (Pyodide)       | Code execution, environment setup  |
 | `src/canvas_chat/static/js/highlight-utils.js`     | Text highlighting utilities           | Text selection, excerpt extraction |
+| `src/canvas_chat/static/js/scroll-utils.js`        | Scroll container detection            | Scroll event handling, DOM traversal |
 | `src/canvas_chat/static/js/event-emitter.js`       | Event emitter pattern                 | Event-driven architecture          |
 
 ### Frontend (HTML/CSS)
@@ -93,13 +127,24 @@ Quick reference for which files to edit for common tasks:
 | File                                   | Purpose                      | Edit for...                                 |
 | -------------------------------------- | ---------------------------- | ------------------------------------------- |
 | `src/canvas_chat/static/index.html`    | Main HTML, modals, templates | New modals, toolbar buttons, HTML structure |
-| `src/canvas_chat/static/css/style.css` | All styles                   | Colors, layout, node styling, animations    |
+| `src/canvas_chat/static/css/style.css` | Main stylesheet (imports all) | Main CSS entry point, CSS variables         |
+| `src/canvas_chat/static/css/base.css` | Base styles, resets          | Global resets, base typography              |
+| `src/canvas_chat/static/css/canvas.css` | Canvas-specific styles       | SVG canvas, pan/zoom, viewport              |
+| `src/canvas_chat/static/css/components.css` | Reusable components          | Buttons, inputs, tooltips, shared components |
+| `src/canvas_chat/static/css/input.css` | Input area styles            | Chat input, textarea, input controls        |
+| `src/canvas_chat/static/css/matrix.css` | Matrix node styles           | Matrix table, cell styling                  |
+| `src/canvas_chat/static/css/modals.css` | Modal styles                 | Modal dialogs, overlays, forms              |
+| `src/canvas_chat/static/css/nodes.css` | Node-specific styles         | Node containers, content, headers           |
+| `src/canvas_chat/static/css/toolbar.css` | Toolbar styles               | Top toolbar, buttons, controls              |
 
 ### Backend (Python/FastAPI)
 
 | File                     | Purpose                   | Edit for...                  |
 | ------------------------ | ------------------------- | ---------------------------- |
 | `src/canvas_chat/app.py` | FastAPI routes, LLM proxy | API endpoints, backend logic |
+| `src/canvas_chat/config.py` | Configuration management | Model definitions, plugins, admin mode |
+| `src/canvas_chat/__main__.py` | CLI entry point | Command-line interface, dev server |
+| `src/canvas_chat/__init__.py` | Package initialization | Package metadata, version |
 | `modal_app.py`           | Modal deployment config   | Deployment settings          |
 
 ### Key constants and their locations
