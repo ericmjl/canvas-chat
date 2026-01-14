@@ -5,6 +5,7 @@
 import { FeaturePlugin } from '../src/canvas_chat/static/js/feature-plugin.js';
 import { CanvasEvent, CancellableEvent } from '../src/canvas_chat/static/js/plugin-events.js';
 import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
+import { assertEqual, assertTrue } from './test_helpers/assertions.js';
 
 function test(description, fn) {
     try {
@@ -31,18 +32,6 @@ async function asyncTest(description, fn) {
             console.error(error.stack.split('\n').slice(1, 4).join('\n'));
         }
         process.exit(1);
-    }
-}
-
-function assertEqual(actual, expected, message) {
-    if (actual !== expected) {
-        throw new Error(`${message}: expected ${expected}, got ${actual}`);
-    }
-}
-
-function assertTrue(value, message) {
-    if (!value) {
-        throw new Error(message || 'Expected true, got false');
     }
 }
 

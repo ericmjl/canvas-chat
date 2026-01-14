@@ -5,6 +5,8 @@
  * Tests protocol compliance, factory dispatch, and method return values.
  */
 
+import { assertEqual, assertFalse, assertTrue } from './test_helpers/assertions.js';
+
 // Mock browser globals before importing modules
 global.window = global;
 global.document = {
@@ -64,24 +66,6 @@ function test(name, fn) {
         console.log(`✗ ${name}`);
         console.log(`  Error: ${err.message}`);
         failed++;
-    }
-}
-
-function assertEqual(actual, expected) {
-    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-        throw new Error(`Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
-    }
-}
-
-function assertTrue(actual, message = '') {
-    if (actual !== true) {
-        throw new Error(message || `Expected true, got ${actual}`);
-    }
-}
-
-function assertFalse(actual, message = '') {
-    if (actual !== false) {
-        throw new Error(message || `Expected false, got ${actual}`);
     }
 }
 

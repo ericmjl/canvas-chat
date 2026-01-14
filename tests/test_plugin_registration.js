@@ -5,6 +5,8 @@
  * Tests custom plugin registration, protocol compliance, and node creation.
  */
 
+import { assertEqual } from './test_helpers/assertions.js';
+
 // Mock browser globals before importing modules
 global.window = global;
 global.document = {
@@ -62,12 +64,6 @@ async function runTests() {
 function assert(condition, message) {
     if (!condition) {
         throw new Error(message || 'Assertion failed');
-    }
-}
-
-function assertEqual(actual, expected, message) {
-    if (actual !== expected) {
-        throw new Error(message || `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
     }
 }
 

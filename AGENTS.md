@@ -33,18 +33,18 @@ Quick reference for which files to edit for common tasks:
 
 #### Core modules
 
-| File                                       | Purpose                                     | Edit for...                                                         |
-| ------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------- |
-| `src/canvas_chat/static/js/app.js`         | Main application, orchestrates everything   | Slash commands, keyboard shortcuts, App class methods               |
+| File                                       | Purpose                                                                | Edit for...                                                                                              |
+| ------------------------------------------ | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `src/canvas_chat/static/js/app.js`         | Main application, orchestrates everything                              | Slash commands, keyboard shortcuts, App class methods                                                    |
 | `src/canvas_chat/static/js/canvas.js`      | SVG canvas, pan/zoom, node/edge rendering with defensive edge deferral | Node appearance, drag behavior, viewport logic, node event handlers, edge rendering, deferred edge queue |
-| `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions          | Node types, edge types, createNode/createEdge utilities             |
-| `src/canvas_chat/static/js/crdt-graph.js`  | CRDT-backed graph (Yjs), graph traversal    | Graph data model, node positioning, graph traversal                 |
-| `src/canvas_chat/static/js/layout.js`      | Pure layout functions for overlap detection | Overlap detection, overlap resolution, node positioning algorithms  |
-| `src/canvas_chat/static/js/chat.js`        | LLM API calls, streaming                    | API integration, message formatting, token estimation               |
-| `src/canvas_chat/static/js/storage.js`     | localStorage persistence                    | Session storage, API key storage, settings                          |
-| `src/canvas_chat/static/js/search.js`      | Node search functionality                   | Search UI, filtering logic                                          |
-| `src/canvas_chat/static/js/sse.js`         | Server-sent events utilities                | Streaming connection handling                                       |
-| `src/canvas_chat/static/js/utils.js`       | Pure utility functions                      | Image resizing, error formatting, text processing                   |
+| `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions                                     | Node types, edge types, createNode/createEdge utilities                                                  |
+| `src/canvas_chat/static/js/crdt-graph.js`  | CRDT-backed graph (Yjs), graph traversal                               | Graph data model, node positioning, graph traversal                                                      |
+| `src/canvas_chat/static/js/layout.js`      | Pure layout functions for overlap detection                            | Overlap detection, overlap resolution, node positioning algorithms                                       |
+| `src/canvas_chat/static/js/chat.js`        | LLM API calls, streaming                                               | API integration, message formatting, token estimation                                                    |
+| `src/canvas_chat/static/js/storage.js`     | localStorage persistence                                               | Session storage, API key storage, settings                                                               |
+| `src/canvas_chat/static/js/search.js`      | Node search functionality                                              | Search UI, filtering logic                                                                               |
+| `src/canvas_chat/static/js/sse.js`         | Server-sent events utilities                                           | Streaming connection handling                                                                            |
+| `src/canvas_chat/static/js/utils.js`       | Pure utility functions                                                 | Image resizing, error formatting, text processing                                                        |
 
 #### Plugin architecture modules
 
@@ -171,6 +171,8 @@ git push -u origin fix/descriptive-name
 # Create PR
 gh pr create --title "Fix: Description" --body "Summary of changes"
 ```
+
+- Keep PR descriptions aligned with the actual diff before review.
 
 ### Closing issues
 
@@ -630,11 +632,11 @@ await this.chat.sendMessage(...);
 ```javascript
 // In app.js (lines 154-166), event listeners automatically render:
 graph.on('nodeAdded', (node) => {
-    canvas.renderNode(node);  // Automatic!
+    canvas.renderNode(node); // Automatic!
 });
 
 graph.on('edgeAdded', (edge) => {
-    canvas.renderEdge(edge, graph);  // Automatic!
+    canvas.renderEdge(edge, graph); // Automatic!
 });
 ```
 
@@ -643,10 +645,10 @@ graph.on('edgeAdded', (edge) => {
 ```javascript
 // CORRECT: Let events handle rendering
 const node = createNode('human', 'Hello', { position: { x: 0, y: 0 } });
-graph.addNode(node);  // Event fires → canvas.renderNode() called automatically
+graph.addNode(node); // Event fires → canvas.renderNode() called automatically
 
 const edge = createEdge(node1.id, node2.id, 'reply');
-graph.addEdge(edge);  // Event fires → canvas.renderEdge() called automatically
+graph.addEdge(edge); // Event fires → canvas.renderEdge() called automatically
 ```
 
 **Defensive edge rendering:**
@@ -723,15 +725,15 @@ canvas.renderEdge(edge, { x: 10, y: 10 }, { x: 100, y: 100 });
 ```javascript
 // Create human node
 const humanNode = createNode('human', question, { position });
-graph.addNode(humanNode);  // Event → renderNode() → node in DOM
+graph.addNode(humanNode); // Event → renderNode() → node in DOM
 
 // Create opinion nodes + edges rapidly
 for (const member of members) {
     const opinionNode = createNode('opinion', 'Waiting...', { position });
-    graph.addNode(opinionNode);  // Event → renderNode() → node in DOM
+    graph.addNode(opinionNode); // Event → renderNode() → node in DOM
 
     const edge = createEdge(humanNode.id, opinionNode.id, 'opinion');
-    graph.addEdge(edge);  // Event → renderEdge() → might defer if node not ready yet
+    graph.addEdge(edge); // Event → renderEdge() → might defer if node not ready yet
 }
 
 // Result: All nodes appear immediately, edges render as soon as nodes are ready
@@ -1050,8 +1052,8 @@ test('Canvas creates SVG elements', () => {
 ```javascript
 // WRONG: Mock DOM instead of using JSDOM
 global.document = {
-    createElement: () => ({ setAttribute: () => {} }),  // Fake!
-    getElementById: () => null,                          // Broken!
+    createElement: () => ({ setAttribute: () => {} }), // Fake!
+    getElementById: () => null, // Broken!
 };
 
 // This "test" passes but doesn't test real behavior

@@ -51,6 +51,7 @@ if (!global.indexedDB) {
 
 import { StreamingManager } from '../src/canvas_chat/static/js/streaming-manager.js';
 import { createNode, NodeType } from './test_setup.js';
+import { assertEqual } from './test_helpers/assertions.js';
 
 function test(description, fn) {
     try {
@@ -66,12 +67,6 @@ function test(description, fn) {
 function assert(condition, message) {
     if (!condition) {
         throw new Error(message || 'Assertion failed');
-    }
-}
-
-function assertEqual(actual, expected, message) {
-    if (actual !== expected) {
-        throw new Error(message || `Expected ${expected} but got ${actual}`);
     }
 }
 

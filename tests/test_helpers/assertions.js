@@ -10,4 +10,10 @@ function assertEqual(actual, expected, message = '') {
     }
 }
 
-export { assertTrue, assertEqual };
+function assertFalse(actual, message = '') {
+    if (actual !== false) {
+        throw new Error(message || `Expected false, got ${actual}`);
+    }
+}
+
+export { assertTrue, assertEqual, assertFalse };

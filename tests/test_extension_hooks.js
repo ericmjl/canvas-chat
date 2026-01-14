@@ -8,6 +8,7 @@ import { FeaturePlugin } from '../src/canvas_chat/static/js/feature-plugin.js';
 import { CancellableEvent } from '../src/canvas_chat/static/js/plugin-events.js';
 import { SmartFixPlugin } from '../src/canvas_chat/static/js/smart-fix-plugin.js';
 import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
+import { assertEqual, assertTrue } from './test_helpers/assertions.js';
 
 async function asyncTest(description, fn) {
     try {
@@ -20,18 +21,6 @@ async function asyncTest(description, fn) {
             console.error(error.stack.split('\n').slice(1, 4).join('\n'));
         }
         process.exit(1);
-    }
-}
-
-function assertEqual(actual, expected, message) {
-    if (actual !== expected) {
-        throw new Error(`${message}: expected ${expected}, got ${actual}`);
-    }
-}
-
-function assertTrue(value, message) {
-    if (!value) {
-        throw new Error(message || 'Expected true, got false');
     }
 }
 

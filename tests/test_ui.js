@@ -6,6 +6,7 @@
  */
 
 import { JSDOM } from 'jsdom';
+import { assertEqual, assertTrue } from './test_helpers/assertions.js';
 
 // Import ES modules
 const { highlightTextInHtml, extractExcerptText, normalizeKatexDuplication, alignStart, alignEnd, findMatchRegion } =
@@ -24,18 +25,6 @@ function test(name, fn) {
         console.log(`✗ ${name}`);
         console.log(`  Error: ${err.message}`);
         failed++;
-    }
-}
-
-function assertEqual(actual, expected) {
-    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-        throw new Error(`Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
-    }
-}
-
-function assertTrue(actual, message = '') {
-    if (actual !== true) {
-        throw new Error(message || `Expected true, got ${actual}`);
     }
 }
 

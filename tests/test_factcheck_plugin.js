@@ -45,6 +45,7 @@ if (!global.indexedDB) {
 // Now import modules (storage.js will use the mocked indexedDB)
 import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
 import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
+import { assertTrue } from './test_helpers/assertions.js';
 
 // Import FactcheckFeature class
 const { FactcheckFeature } = await import('../src/canvas_chat/static/js/factcheck.js');
@@ -60,12 +61,6 @@ async function asyncTest(description, fn) {
             console.error(error.stack.split('\n').slice(1, 4).join('\n'));
         }
         process.exit(1);
-    }
-}
-
-function assertTrue(value, message) {
-    if (!value) {
-        throw new Error(message || 'Expected true, got false');
     }
 }
 
