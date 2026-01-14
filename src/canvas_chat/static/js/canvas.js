@@ -3288,6 +3288,7 @@ class Canvas {
             this.outputPanels.delete(nodeId);
         }
 
+        this._removeDeferredEdgesForNode(nodeId);
         this.selectedNodes.delete(nodeId);
     }
 
@@ -3608,6 +3609,18 @@ class Canvas {
         this.nodeRenderCallbacks.delete(nodeId);
     }
 
+    _removeDeferredEdgesForNode(nodeId) {
+        if (this.nodeRenderCallbacks.has(nodeId)) {
+            this.nodeRenderCallbacks.delete(nodeId);
+        }
+
+        for (const [edgeId, deferred] of this.deferredEdges) {
+            if (deferred.edge?.source === nodeId || deferred.edge?.target === nodeId) {
+                this.deferredEdges.delete(edgeId);
+            }
+        }
+    }
+
     /**
      * Render or update a virtual collapsed-path edge from a collapsed node to a visible descendant.
      * These edges are dashed and show the connection through hidden nodes.
@@ -3914,6 +3927,7 @@ class Canvas {
             path.remove();
             this.edgeElements.delete(edgeId);
         }
+        this.deferredEdges.delete(edgeId);
     }
 
     // --- Utilities ---
