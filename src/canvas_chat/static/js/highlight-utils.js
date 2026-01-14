@@ -248,12 +248,36 @@ function highlightTextInHtml(document, html, text) {
 
     // Preprocess the search text to remove KaTeX duplication artifacts
     const cleanedSearch = normalizeKatexDuplication(text);
+    const trimmedSearch = cleanedSearch.trim();
 
-    // Use alignment to find where the query matches in the target
-    const matchRegion = findMatchRegion(cleanedSearch, fullText);
+    // Use Smith-Waterman alignment to find match region
+    // This is essential for crossing HTML block boundaries (selections that span paragraphs, headings, lists)
+    let matchRegion = findMatchRegion(cleanedSearch, fullText);
     if (!matchRegion) return html;
 
-    const { start: origStart, end: origEnd } = matchRegion;
+    let { start: origStart, end: origEnd } = matchRegion;
+
+    // Constraint: limit match region to reasonable size to prevent over-matching
+    // If the match region is more than 2x the search text length, it's probably too broad
+    // This prevents the alignment from expanding to include unrelated content
+    // while still preserving Smith-Waterman's ability to cross boundaries
+    const maxMatchLength = trimmedSearch.length * 2;
+    if (origEnd - origStart > maxMatchLength) {
+        // Match region is too large - try to find a tighter match within the region
+        // First try exact match within the fuzzy region
+        const normalizedSearch = trimmedSearch.toLowerCase();
+        const normalizedFullText = fullText.toLowerCase();
+        const tighterMatch = normalizedFullText.indexOf(normalizedSearch, origStart);
+        if (tighterMatch !== -1 && tighterMatch < origEnd) {
+            // Found a tighter exact match within the fuzzy region - use it
+            origStart = tighterMatch;
+            origEnd = tighterMatch + trimmedSearch.length;
+        } else {
+            // If we can't find a tighter match, just cap the region
+            // This preserves Smith-Waterman's ability to cross boundaries while preventing over-expansion
+            origEnd = Math.min(origEnd, origStart + maxMatchLength);
+        }
+    }
 
     // Find which text nodes overlap with [origStart, origEnd)
     const nodesToProcess = [];
