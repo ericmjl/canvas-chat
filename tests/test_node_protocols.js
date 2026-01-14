@@ -5,7 +5,7 @@
  * Tests protocol compliance, factory dispatch, and method return values.
  */
 
-import { assertEqual, assertFalse, assertTrue } from './test_helpers/assertions.js';
+import { assertEqual, assertTrue } from './test_helpers/assertions.js';
 
 // Mock browser globals before importing modules
 global.window = global;
@@ -29,6 +29,7 @@ await import('../src/canvas_chat/static/js/reference.js');
 await import('../src/canvas_chat/static/js/fetch-result-node.js');
 await import('../src/canvas_chat/static/js/highlight-node.js');
 await import('../src/canvas_chat/static/js/pdf-node.js');
+await import('../src/canvas_chat/static/js/research-node.js');
 
 const { NodeType, createNode } = await import('../src/canvas_chat/static/js/graph-types.js');
 const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -44,7 +45,7 @@ const {
     // HighlightNode is now a plugin - import from highlight-node.js
     // FetchResultNode is now a plugin - import from fetch-result-node.js
     // PdfNode is now a plugin - import from pdf-node.js
-    ResearchNode,
+    // ResearchNode is now a plugin - import from research-node.js
     MatrixNode,
     CellNode,
     RowNode,
@@ -136,9 +137,10 @@ test('validateNodeProtocol: BaseNode implements all methods', () => {
 //     assertTrue(validateNodeProtocol(SearchNode));
 // });
 
-test('validateNodeProtocol: ResearchNode implements all methods', () => {
-    assertTrue(validateNodeProtocol(ResearchNode));
-});
+// Note: ResearchNode is now a plugin (research-node.js), test it separately
+// test('validateNodeProtocol: ResearchNode implements all methods', () => {
+//     assertTrue(validateNodeProtocol(ResearchNode));
+// });
 
 // Note: HighlightNode is now a plugin (highlight-node.js) - test via wrapNode instead
 // test('validateNodeProtocol: HighlightNode implements all methods', () => {

@@ -210,34 +210,9 @@ class BaseNode {
  */
 
 /**
- * Research node (deep research with multiple sources)
- * Note: SearchNode is now a plugin (search-node.js)
+ * Note: ResearchNode has been moved to research-node.js plugin (built-in)
+ * This allows the research node type to be loaded as a plugin.
  */
-class ResearchNode extends BaseNode {
-    getTypeLabel() {
-        return 'Research';
-    }
-    getTypeIcon() {
-        return '📚';
-    }
-
-    getHeaderButtons() {
-        return [
-            HeaderButtons.NAV_PARENT,
-            HeaderButtons.NAV_CHILD,
-            HeaderButtons.COLLAPSE,
-            HeaderButtons.STOP, // For stopping research generation
-            HeaderButtons.CONTINUE, // For continuing stopped research
-            HeaderButtons.RESET_SIZE,
-            HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE,
-        ];
-    }
-
-    getActions() {
-        return [Actions.REPLY, Actions.CREATE_FLASHCARDS, Actions.COPY];
-    }
-}
 
 /**
  * Matrix node (cross-product evaluation table)
@@ -1036,7 +1011,7 @@ function wrapNode(node) {
         // Note: SummaryNode is now a plugin (summary.js)
         // Note: ReferenceNode is now a plugin (reference.js)
         // Note: SearchNode is now a plugin (search-node.js)
-        [NodeType.RESEARCH]: ResearchNode,
+        // Note: ResearchNode is now a plugin (research-node.js)
         // Note: HighlightNode is now a plugin (highlight-node.js)
         [NodeType.MATRIX]: MatrixNode,
         [NodeType.CELL]: CellNode,
@@ -1128,7 +1103,7 @@ function validateNodeProtocol(NodeClass) {
     // Note: SearchNode is now a plugin (search-node.js)
     // Note: HighlightNode is now a plugin (highlight-node.js)
     // Note: FetchResultNode is now a plugin (fetch-result-node.js)
-    else if (className.includes('Research')) nodeType = NodeType.RESEARCH;
+    // Note: ResearchNode is now a plugin (research-node.js)
     else if (className.includes('Row')) nodeType = NodeType.ROW;
     else if (className.includes('Column')) nodeType = NodeType.COLUMN;
     // Note: PdfNode is now a plugin (pdf-node.js)
@@ -1187,7 +1162,7 @@ function registerBuiltinNodeTypes() {
         // Note: 'search' is now a plugin (search-node.js)
         // Note: 'highlight' is now a plugin (highlight-node.js)
         // Note: 'fetch_result' is now a plugin (fetch-result-node.js)
-        { type: 'research', protocol: ResearchNode },
+        // Note: 'research' is now a plugin (research-node.js)
         { type: 'matrix', protocol: MatrixNode },
         { type: 'cell', protocol: CellNode },
         { type: 'row', protocol: RowNode },
@@ -1248,7 +1223,7 @@ export {
     // SearchNode is now exported from search-node.js plugin
     // HighlightNode is now exported from highlight-node.js plugin
     // FetchResultNode is now exported from fetch-result-node.js plugin
-    ResearchNode,
+    // ResearchNode is now exported from research-node.js plugin
     MatrixNode,
     CellNode,
     RowNode,
