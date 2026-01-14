@@ -20,6 +20,8 @@ import { MatrixFeature } from './matrix.js';
 import { FactcheckFeature } from './factcheck.js';
 import { ResearchFeature } from './research.js';
 import './code-feature.js'; // Side-effect import for CodeFeature registration
+import './note.js'; // Side-effect import for NoteNode plugin registration (NoteFeature imported by feature-registry.js) - consolidated plugin
+// Note: poll.js is an external plugin - load via config.yaml
 import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { wrapNode } from './node-protocols.js';
 import {
@@ -1281,14 +1283,7 @@ class App {
         }
 
         // Fall through to built-in commands that haven't been migrated yet
-        // Check for /note command
-        if (content.startsWith('/note ')) {
-            const noteContent = content.slice(6).trim();
-            if (noteContent) {
-                await this.handleNote(noteContent);
-                return true;
-            }
-        }
+        // Note: /note command is now handled by NoteFeature plugin
 
         // Check for /code command
         if (content.startsWith('/code')) {
@@ -1494,203 +1489,8 @@ class App {
         return this.researchFeature.handleSearch(query, context);
     }
 
-    /**
-     * Handle /note command - creates a NOTE node without triggering LLM
-     * Notes are standalone by default (no automatic attachment to existing nodes)
-     *
-     * Supports three modes:
-     * - `/note <markdown content>` - Creates a note with the provided markdown
-     * - `/note <url>` - Fetches the URL content and creates a note with the markdown
-     * - `/note <pdf-url>` - Downloads PDF and extracts text
-     *
-     * @param {string} content - The markdown note content or URL to fetch
-     */
-    async handleNote(content) {
-        // Detect if content is a URL
-        const isUrl = isUrlContent(content);
-
-        if (isUrl) {
-            const url = content.trim();
-            // Check if URL ends with .pdf (case insensitive, ignore query params)
-            const isPdfUrl = /\.pdf(\?.*)?$/i.test(url);
-
-            if (isPdfUrl) {
-                // Fetch PDF and extract text
-                await this.handleNoteFromPdfUrl(url);
-            } else {
-                // Fetch URL content and create a FETCH_RESULT node
-                await this.handleNoteFromUrl(url);
-            }
-        } else {
-            // Get selected nodes (if any) to link the note to
-            const parentIds = this.canvas.getSelectedNodeIds();
-
-            // Create NOTE node with the provided content
-            const noteNode = createNode(NodeType.NOTE, content, {
-                position: this.graph.autoPosition(parentIds),
-            });
-
-            this.graph.addNode(noteNode);
-
-            // Create edges from parents (if replying to selected nodes)
-            for (const parentId of parentIds) {
-                const edge = createEdge(parentId, noteNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
-                this.graph.addEdge(edge);
-            }
-
-            // Clear input and save
-            this.chatInput.value = '';
-            this.chatInput.style.height = 'auto';
-            this.canvas.clearSelection();
-            this.saveSession();
-            this.updateEmptyState();
-
-            // Pan to the new note
-            this.canvas.centerOnAnimated(noteNode.position.x + 160, noteNode.position.y + 100, 300);
-        }
-    }
-
-    /**
-     * Fetch URL content and create a FETCH_RESULT node.
-     *
-     * This uses Jina Reader API (/api/fetch-url) which is free and requires no API key.
-     * This is intentionally separate from handleNodeFetchSummarize which uses Exa API.
-     *
-     * Design rationale (see docs/explanation/url-fetching.md):
-     * - /note <url> should "just work" without any API configuration (zero-friction)
-     * - Exa API (used by fetch+summarize) offers higher quality but requires API key
-     * - Both create FETCH_RESULT nodes with the same structure for consistency
-     *
-     * @param {string} url - The URL to fetch
-     */
-    async handleNoteFromUrl(url) {
-        // Get selected nodes (if any) to link the fetched content to
-        const parentIds = this.canvas.getSelectedNodeIds();
-
-        // Create a placeholder node while fetching
-        const fetchNode = createNode(NodeType.FETCH_RESULT, `Fetching content from:\n${url}...`, {
-            position: this.graph.autoPosition(parentIds),
-        });
-
-        this.graph.addNode(fetchNode);
-
-        // Create edges from parents (if replying to selected nodes)
-        for (const parentId of parentIds) {
-            const edge = createEdge(parentId, fetchNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
-            this.graph.addEdge(edge);
-        }
-
-        // Clear input
-        this.chatInput.value = '';
-        this.chatInput.style.height = 'auto';
-        this.canvas.clearSelection();
-        this.saveSession();
-        this.updateEmptyState();
-
-        // Pan to the new node
-        this.canvas.centerOnAnimated(fetchNode.position.x + 160, fetchNode.position.y + 100, 300);
-
-        try {
-            // Fetch URL content via backend
-            const response = await fetch(apiUrl('/api/fetch-url'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to fetch URL');
-            }
-
-            const data = await response.json();
-
-            // Update the node with the fetched content
-            const fetchedContent = `**[${data.title}](${url})**\n\n${data.content}`;
-            this.canvas.updateNodeContent(fetchNode.id, fetchedContent, false);
-            this.graph.updateNode(fetchNode.id, {
-                content: fetchedContent,
-                versions: [
-                    {
-                        content: fetchedContent,
-                        timestamp: Date.now(),
-                        reason: 'fetched',
-                    },
-                ],
-            });
-            this.saveSession();
-        } catch (err) {
-            // Update node with error message
-            const errorContent = `**Failed to fetch URL**\n\n${url}\n\n*Error: ${err.message}*`;
-            this.canvas.updateNodeContent(fetchNode.id, errorContent, false);
-            this.graph.updateNode(fetchNode.id, { content: errorContent });
-            this.saveSession();
-        }
-    }
-
-    /**
-     * Fetch a PDF from URL and create a PDF node with extracted text.
-     *
-     * @param {string} url - The URL of the PDF to fetch
-     */
-    async handleNoteFromPdfUrl(url) {
-        // Get selected nodes (if any) to link the PDF to
-        const parentIds = this.canvas.getSelectedNodeIds();
-
-        // Create a placeholder node while fetching
-        const pdfNode = createNode(NodeType.PDF, `Fetching PDF from:\n${url}...`, {
-            position: this.graph.autoPosition(parentIds),
-        });
-
-        this.graph.addNode(pdfNode);
-
-        // Create edges from parents (if replying to selected nodes)
-        for (const parentId of parentIds) {
-            const edge = createEdge(parentId, pdfNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
-            this.graph.addEdge(edge);
-        }
-
-        // Clear input
-        this.chatInput.value = '';
-        this.chatInput.style.height = 'auto';
-        this.canvas.clearSelection();
-        this.saveSession();
-        this.updateEmptyState();
-
-        // Pan to the new node
-        this.canvas.centerOnAnimated(pdfNode.position.x + 160, pdfNode.position.y + 100, 300);
-
-        try {
-            // Fetch PDF content via backend
-            const response = await fetch(apiUrl('/api/fetch-pdf'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to fetch PDF');
-            }
-
-            const data = await response.json();
-
-            // Update the node with the extracted content
-            this.canvas.updateNodeContent(pdfNode.id, data.content, false);
-            this.graph.updateNode(pdfNode.id, {
-                content: data.content,
-                title: data.title,
-                page_count: data.page_count,
-            });
-            this.saveSession();
-        } catch (err) {
-            // Update node with error message
-            const errorContent = `**Failed to fetch PDF**\n\n${url}\n\n*Error: ${err.message}*`;
-            this.canvas.updateNodeContent(pdfNode.id, errorContent, false);
-            this.graph.updateNode(pdfNode.id, { content: errorContent });
-            this.saveSession();
-        }
-    }
+    // Note: Note handling has been moved to NoteFeature plugin
+    // See src/canvas_chat/static/js/note.js
 
     // File upload handlers moved to file-upload-handler.js
 
@@ -2705,6 +2505,11 @@ df.head()
 
         // TODO (Task 4.3): Load additional plugins from config file
         // await this.featureRegistry.loadPluginsFromConfig();
+
+        // Dispatch event so external plugins can register features
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('app-plugin-system-ready', { detail: { app: this } }));
+        }
 
         console.log('[App] Plugin system initialized');
     }
@@ -3893,7 +3698,7 @@ df.head()
      * Handle voting on a poll option (plugin event)
      */
     // Poll event handlers have been moved to PollFeature plugin
-    // See src/canvas_chat/static/js/poll-feature.js
+    // See src/canvas_chat/static/js/poll.js
 
     /**
      * Highlight the source text in the parent node when a highlight excerpt is selected

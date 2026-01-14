@@ -102,8 +102,8 @@ models:
 # 4. In browser console: app.createAndAddNode('poll', '', {data: {question: 'Favorite?', options: ['A', 'B']}})
 
 plugins:
-    # Built-in example: Interactive poll node
-    - path: ./src/canvas_chat/static/js/example-plugins/example-poll-node.js
+    # Example: Self-contained poll plugin (node protocol + feature)
+    # - path: ./src/canvas_chat/static/js/example-plugins/poll.js
 
     # Add your custom plugins here:
     # - path: ./plugins/my-custom-node.js
