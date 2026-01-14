@@ -122,7 +122,7 @@ const {
     HumanNode,
     AINode,
     NoteNode,
-    SummaryNode,
+    // SummaryNode is now a plugin - import from summary.js if needed
     ReferenceNode,
     SearchNode,
     ResearchNode,
@@ -305,7 +305,7 @@ export {
     HumanNode,
     AINode,
     NoteNode,
-    SummaryNode,
+    // SummaryNode is now a plugin - import from summary.js if needed
     ReferenceNode,
     SearchNode,
     ResearchNode,

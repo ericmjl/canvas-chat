@@ -30,7 +30,7 @@ const {
     HumanNode,
     AINode,
     // NoteNode is now a plugin - import from note.js
-    SummaryNode,
+    // SummaryNode is now a plugin - import from summary.js
     ReferenceNode,
     SearchNode,
     ResearchNode,
@@ -110,9 +110,10 @@ test('validateNodeProtocol: AINode implements all methods', () => {
 //     assertTrue(validateNodeProtocol(NoteNode));
 // });
 
-test('validateNodeProtocol: SummaryNode implements all methods', () => {
-    assertTrue(validateNodeProtocol(SummaryNode));
-});
+// Note: SummaryNode is now a plugin (summary.js), test it separately
+// test('validateNodeProtocol: SummaryNode implements all methods', () => {
+//     assertTrue(validateNodeProtocol(SummaryNode));
+// });
 
 test('validateNodeProtocol: ReferenceNode implements all methods', () => {
     assertTrue(validateNodeProtocol(ReferenceNode));
@@ -416,7 +417,10 @@ test('isScrollable: AINode returns true', () => {
     assertTrue(wrapped.isScrollable());
 });
 
-test('isScrollable: SummaryNode returns true', () => {
+// Note: SummaryNode is now a plugin (summary.js), test it separately
+test('isScrollable: SummaryNode returns true (via plugin)', async () => {
+    // Import summary.js to register the plugin
+    await import('../src/canvas_chat/static/js/summary.js');
     const node = { type: NodeType.SUMMARY, content: 'Summary' };
     const wrapped = wrapNode(node);
     assertTrue(wrapped.isScrollable());
