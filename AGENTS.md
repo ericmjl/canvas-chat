@@ -80,14 +80,16 @@ canvas-chat/
 
 #### Plugin architecture modules
 
-| File                                               | Purpose                                 | Edit for...                                       |
-| -------------------------------------------------- | --------------------------------------- | ------------------------------------------------- |
-| `src/canvas_chat/static/js/feature-plugin.js`      | FeaturePlugin base class, AppContext    | Plugin base class, dependency injection           |
-| `src/canvas_chat/static/js/feature-registry.js`    | Plugin registration and lifecycle       | Registering plugins, slash command routing        |
-| `src/canvas_chat/static/js/plugin-events.js`       | Event system for plugin communication   | Event types, cancellable events                   |
-| `src/canvas_chat/static/js/node-registry.js`       | Custom node type registration           | Registering custom node types                     |
-| `src/canvas_chat/static/js/node-protocols.js`      | Node protocol classes, wrapNode utility | Node rendering, actions, protocol implementations |
-| `src/canvas_chat/static/js/plugin-test-harness.js` | Testing utilities for plugins           | Writing plugin tests                              |
+| File                                                      | Purpose                                 | Edit for...                                       |
+| --------------------------------------------------------- | --------------------------------------- | ------------------------------------------------- |
+| `src/canvas_chat/static/js/feature-plugin.js`            | FeaturePlugin base class, AppContext    | Plugin base class, dependency injection           |
+| `src/canvas_chat/static/js/feature-registry.js`           | Plugin registration and lifecycle       | Registering plugins, slash command routing        |
+| `src/canvas_chat/static/js/plugin-events.js`              | Event system for plugin communication   | Event types, cancellable events                   |
+| `src/canvas_chat/static/js/node-registry.js`              | Custom node type registration           | Registering custom node types                     |
+| `src/canvas_chat/static/js/node-protocols.js`             | Node protocol classes, wrapNode utility | Node rendering, actions, protocol implementations |
+| `src/canvas_chat/static/js/plugin-test-harness.js`        | Testing utilities for plugins           | Writing plugin tests                              |
+| `src/canvas_chat/static/js/file-upload-handler-plugin.js` | FileUploadHandlerPlugin base class      | File upload handler plugin base class             |
+| `src/canvas_chat/static/js/file-upload-registry.js`       | File upload handler registration        | Registering file upload handlers                  |
 
 #### Feature plugins (built-in)
 
@@ -114,7 +116,7 @@ canvas-chat/
 | -------------------------------------------------- | ------------------------------------- | ---------------------------------- |
 | `src/canvas_chat/static/js/streaming-manager.js`   | Concurrent streaming state management | Managing multiple LLM streams      |
 | `src/canvas_chat/static/js/modal-manager.js`       | Modal lifecycle management            | Modal creation, event handling     |
-| `src/canvas_chat/static/js/file-upload-handler.js` | File upload processing                | PDF, CSV, image upload handling    |
+| `src/canvas_chat/static/js/file-upload-handler.js` | File upload dispatcher                | Routes uploads to registered handlers    |
 | `src/canvas_chat/static/js/undo-manager.js`        | Undo/redo functionality               | Action history, undo operations    |
 | `src/canvas_chat/static/js/slash-command-menu.js`  | Slash command autocomplete UI         | Command menu behavior              |
 | `src/canvas_chat/static/js/pyodide-runner.js`      | Python code execution (Pyodide)       | Code execution, environment setup  |
@@ -139,13 +141,16 @@ canvas-chat/
 
 ### Backend (Python/FastAPI)
 
-| File                     | Purpose                   | Edit for...                  |
-| ------------------------ | ------------------------- | ---------------------------- |
-| `src/canvas_chat/app.py` | FastAPI routes, LLM proxy | API endpoints, backend logic |
-| `src/canvas_chat/config.py` | Configuration management | Model definitions, plugins, admin mode |
-| `src/canvas_chat/__main__.py` | CLI entry point | Command-line interface, dev server |
-| `src/canvas_chat/__init__.py` | Package initialization | Package metadata, version |
-| `modal_app.py`           | Modal deployment config   | Deployment settings          |
+| File                                          | Purpose                              | Edit for...                                    |
+| --------------------------------------------- | ------------------------------------ | ---------------------------------------------- |
+| `src/canvas_chat/app.py`                      | FastAPI routes, LLM proxy            | API endpoints, backend logic                   |
+| `src/canvas_chat/config.py`                   | Configuration management             | Model definitions, plugins, admin mode        |
+| `src/canvas_chat/__main__.py`                 | CLI entry point                      | Command-line interface, dev server             |
+| `src/canvas_chat/__init__.py`                 | Package initialization               | Package metadata, version                      |
+| `src/canvas_chat/file_upload_registry.py`     | File upload handler registration     | Registering Python file upload handlers       |
+| `src/canvas_chat/file_upload_handler_plugin.py` | FileUploadHandlerPlugin base class | File upload handler plugin base class          |
+| `src/canvas_chat/plugins/`                    | Python plugin modules                | Backend plugins (e.g., pdf_handler.py)         |
+| `modal_app.py`                                | Modal deployment config              | Deployment settings                            |
 
 ### Key constants and their locations
 
@@ -155,6 +160,7 @@ canvas-chat/
 | `EdgeType`           | `graph-types.js:82-94`     | All edge type definitions                               |
 | `DEFAULT_NODE_SIZES` | `graph-types.js:40-68`     | Default dimensions by node type                         |
 | `PRIORITY`           | `feature-registry.js:8-12` | Plugin priority levels (BUILTIN > OFFICIAL > COMMUNITY) |
+| `PluginConfig`       | `config.py:78-197`         | Plugin configuration dataclass (JS/PY/paired plugins)  |
 | CSS variables        | `style.css:10-75`          | Colors, sizing, theming                                 |
 
 ### Zoom levels (semantic zoom)
@@ -171,6 +177,9 @@ All documentation must follow the [Diataxis framework](https://diataxis.fr/):
 
 - **docs/explanation/**: Design decisions, architecture rationale, "why" documents
 - **docs/how-to/**: Task-oriented guides for accomplishing specific goals
+  - **build-plugins.md**: Comprehensive guide for building JavaScript-only, Python-only, and paired plugins with detailed prompt templates
+  - **create-feature-plugins.md**: Step-by-step guide for creating feature plugins
+  - **create-custom-node-plugins.md**: Guide for creating custom node types
 - **docs/reference/**: Technical descriptions of APIs, configuration options, data structures
 
 Do not mix documentation types. Each document should serve one purpose.
@@ -275,8 +284,19 @@ Canvas-Chat uses a **three-level plugin architecture** for extensibility:
 **For detailed information**, see:
 
 - [Plugin Architecture Explanation](docs/explanation/plugin-architecture.md) - Design decisions and rationale
+- [How to Build Plugins](docs/how-to/build-plugins.md) - Comprehensive guide with prompt templates for all plugin types
 - [Create Feature Plugins Guide](docs/how-to/create-feature-plugins.md) - Step-by-step plugin development
 - [Feature Plugin API](docs/reference/feature-plugin-api.md) - Complete API reference
+
+**Plugin Configuration:**
+
+Plugins can be configured in `config.yaml` with three formats:
+
+- **JavaScript-only**: `- path: ./plugins/my-plugin.js` or `- js: ./plugins/my-plugin.js`
+- **Python-only**: `- py: ./plugins/my_handler.py`
+- **Paired (JS + Python)**: `- js: ./plugins/my-plugin.js, py: ./plugins/my_handler.py, id: my-plugin`
+
+Python plugins are loaded dynamically at startup via `importlib`. JavaScript plugins are served via `/api/plugins/{name}` and injected into HTML.
 
 #### When to use each level
 
