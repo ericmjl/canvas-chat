@@ -636,7 +636,9 @@ class App {
             .on('reviewCard', this.reviewSingleCard.bind(this))
             .on('flipCard', this.handleFlipCard.bind(this))
             // Poll plugin events are now handled by PollFeature plugin
-            // File drop events
+            // File drop events (plugin-based system)
+            .on('fileDrop', (file, position) => this.fileUploadHandler.handleFileUpload(file, position))
+            // Legacy file drop events (for backwards compatibility)
             .on('pdfDrop', (file, position) => this.fileUploadHandler.handlePdfDrop(file, position))
             .on('imageDrop', (file, position) => this.fileUploadHandler.handleImageDrop(file, position))
             .on('csvDrop', (file, position) => this.fileUploadHandler.handleCsvDrop(file, position))
@@ -860,14 +862,8 @@ class App {
             if (e.target.files.length > 0) {
                 const file = e.target.files[0];
 
-                // Route to appropriate handler based on file type
-                if (file.type === 'application/pdf') {
-                    await this.fileUploadHandler.handlePdfUpload(file);
-                } else if (file.type.startsWith('image/')) {
-                    await this.fileUploadHandler.handleImageUpload(file);
-                } else {
-                    alert('Please select a PDF or image file.');
-                }
+                // Use plugin-based file upload handler
+                await this.fileUploadHandler.handleFileUpload(file);
 
                 e.target.value = ''; // Reset for next upload
             }
@@ -1227,7 +1223,7 @@ class App {
             }
         });
 
-        // Clipboard paste handler for images
+        // Clipboard paste handler for images (uses plugin-based file upload system)
         document.addEventListener('paste', async (e) => {
             // Don't intercept if user is focused on an input/textarea
             if (e.target.matches('input, textarea')) {
@@ -1243,7 +1239,7 @@ class App {
                     e.preventDefault();
                     const file = item.getAsFile();
                     if (file) {
-                        await this.fileUploadHandler.handleImageUpload(file, null, true); // showHint=true
+                        await this.fileUploadHandler.handleFileUpload(file, null, { showHint: true });
                     }
                     return;
                 }
@@ -2545,6 +2541,22 @@ df.head()
 
         // Inject FeatureRegistry into slash command menu so it can show feature plugin commands
         setFeatureRegistry(this.featureRegistry);
+
+        // Update file input accept attribute based on registered file upload handlers
+        this.updateFileInputAcceptAttribute();
+    }
+
+    /**
+     * Update the file input accept attribute based on registered file upload handlers
+     */
+    async updateFileInputAcceptAttribute() {
+        const { FileUploadRegistry } = await import('./file-upload-registry.js');
+        const fileInput = document.getElementById('pdf-file-input');
+        if (fileInput) {
+            const acceptAttr = FileUploadRegistry.getAcceptAttribute();
+            fileInput.setAttribute('accept', acceptAttr);
+            console.log('[App] Updated file input accept attribute:', acceptAttr);
+        }
 
         // TODO (Task 4.3): Load additional plugins from config file
         // await this.featureRegistry.loadPluginsFromConfig();

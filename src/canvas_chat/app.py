@@ -25,7 +25,6 @@ from typing import TypeVar
 
 import httpx
 import litellm
-import pymupdf
 from exa_py import Exa
 from fastapi import (
     FastAPI,
@@ -43,6 +42,11 @@ from sse_starlette.sse import EventSourceResponse
 
 from canvas_chat import __version__
 from canvas_chat.config import AppConfig
+from canvas_chat.file_upload_registry import FileUploadRegistry
+
+# Import built-in file upload handler plugins (registers them)
+from canvas_chat.plugins import pdf_handler  # noqa: F401
+from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -2249,43 +2253,26 @@ class PdfResult(BaseModel):
     page_count: int
 
 
-# Maximum PDF file size (25 MB)
-MAX_PDF_SIZE = 25 * 1024 * 1024
-
-# Warning banner prepended to PDF content
-PDF_WARNING_BANNER = (
-    """> 📄 **PDF Import** — Text was extracted automatically and may contain errors.
-> Consider sourcing the original if precision is critical. Edit this note to """
-    """correct any issues.
-
----
-
-"""
-)
+# PDF processing moved to plugins/pdf_handler.py
+# Import constants for backwards compatibility
 
 
+# Legacy function for backwards compatibility (fetch-pdf endpoint)
 def extract_text_from_pdf(pdf_bytes: bytes) -> tuple[str, int]:
     """
-    Extract text from PDF bytes using pymupdf.
+    Extract text from PDF bytes using pymupdf (legacy function).
+
+    This function is maintained for backwards compatibility with fetch-pdf endpoint.
+    New code should use the PdfFileUploadHandler plugin instead.
 
     Returns:
         tuple: (extracted_text, page_count)
     """
-    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-    page_count = len(doc)
+    from canvas_chat.plugins.pdf_handler import PdfFileUploadHandler
 
-    text_parts = []
-    for page_num, page in enumerate(doc, start=1):
-        page_text = page.get_text()
-        if page_text.strip():
-            text_parts.append(f"## Page {page_num}\n\n{page_text.strip()}")
-
-    doc.close()
-
-    full_text = (
-        "\n\n".join(text_parts) if text_parts else "(No text content found in PDF)"
-    )
-    return full_text, page_count
+    handler = PdfFileUploadHandler()
+    # Use the handler's method
+    return handler.extract_text_from_pdf(pdf_bytes)
 
 
 async def fetch_url_via_jina(url: str, client: httpx.AsyncClient) -> tuple[str, str]:
@@ -2406,13 +2393,78 @@ async def fetch_url(request: FetchUrlRequest):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# --- PDF Upload/Fetch Endpoints ---
+# --- File Upload Endpoints (Plugin-based) ---
+
+
+@app.post("/api/upload-file")
+async def upload_file(file: UploadFile = File(...)):  # noqa: B008
+    """
+    Upload a file and process it using registered file upload handlers.
+
+    This is a generic endpoint that routes to plugin-based handlers.
+    Handlers are registered via FileUploadRegistry.
+
+    Returns:
+        Dictionary with processed file data (structure depends on handler)
+    """
+    logger.info(
+        f"File upload request: filename='{file.filename}', type='{file.content_type}'"
+    )
+
+    # Read file content
+    try:
+        file_bytes = await file.read()
+    except Exception as e:
+        logger.error(f"Failed to read uploaded file: {e}")
+        raise HTTPException(
+            status_code=400, detail="Failed to read uploaded file"
+        ) from e
+
+    # Find handler for this file type
+    handler_config = FileUploadRegistry.find_handler(
+        filename=file.filename, mime_type=file.content_type
+    )
+    if not handler_config:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unsupported file type: {file.filename} "
+                f"({file.content_type or 'unknown type'})"
+            ),
+        )
+
+    # Create handler instance and process file
+    try:
+        handler_class = handler_config["handler"]
+        handler = handler_class()
+        result = await handler.process_file(file_bytes, file.filename or "unknown")
+        logger.info(
+            f"Successfully processed file: {file.filename} "
+            f"(handler: {handler_config['id']})"
+        )
+        return result
+    except ValueError as e:
+        # Validation errors (e.g., file too large)
+        logger.warning(f"File validation failed for {file.filename}: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.error(f"Failed to process file {file.filename}: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500, detail=f"Failed to process file: {str(e)}"
+        ) from e
+
+
+# --- PDF Upload/Fetch Endpoints (Legacy - for backwards compatibility) ---
 
 
 @app.post("/api/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):  # noqa: B008
     """
-    Upload a PDF file and extract its text content.
+    Upload a PDF file and extract its text content (legacy endpoint).
+
+    This endpoint is maintained for backwards compatibility.
+    New code should use /api/upload-file instead.
 
     The extracted text is returned as markdown with a warning banner
     about potential extraction errors.
@@ -2421,7 +2473,7 @@ async def upload_pdf(file: UploadFile = File(...)):  # noqa: B008
     - Maximum file size: 25 MB
     - Only PDF files are accepted
     """
-    logger.info(f"PDF upload request: filename='{file.filename}'")
+    logger.info(f"PDF upload request (legacy): filename='{file.filename}'")
 
     # Validate file type
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -2436,23 +2488,27 @@ async def upload_pdf(file: UploadFile = File(...)):  # noqa: B008
             status_code=400, detail="Failed to read uploaded file"
         ) from e
 
-    # Validate file size
-    if len(pdf_bytes) > MAX_PDF_SIZE:
-        max_size_mb = MAX_PDF_SIZE // (1024 * 1024)
-        raise HTTPException(
-            status_code=413,
-            detail=f"PDF file is too large. Maximum size is {max_size_mb} MB",
-        )
+    # Find PDF handler
+    handler_config = FileUploadRegistry.find_handler(
+        filename=file.filename, mime_type="application/pdf"
+    )
+    if not handler_config:
+        raise HTTPException(status_code=400, detail="PDF handler not available")
 
-    # Extract text from PDF
+    # Process using handler
     try:
-        text, page_count = extract_text_from_pdf(pdf_bytes)
-        content = PDF_WARNING_BANNER + text
-        logger.info(
-            f"Successfully extracted text from PDF: {file.filename} "
-            f"({page_count} pages)"
+        handler_class = handler_config["handler"]
+        handler = handler_class()
+        result = await handler.process_file(pdf_bytes, file.filename or "unknown.pdf")
+        # Convert to legacy format
+        return PdfResult(
+            filename=file.filename or "unknown.pdf",
+            content=result["content"],
+            page_count=result.get("page_count", 0),
         )
-        return PdfResult(filename=file.filename, content=content, page_count=page_count)
+    except ValueError as e:
+        logger.warning(f"PDF validation failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Failed to extract text from PDF: {e}")
         logger.error(traceback.format_exc())
@@ -2526,13 +2582,32 @@ async def fetch_pdf(request: FetchPdfRequest):
                             ),
                         )
 
-        # Extract text from PDF
-        text, page_count = extract_text_from_pdf(pdf_bytes)
-        content = PDF_WARNING_BANNER + text
-        logger.info(
-            f"Successfully fetched and extracted PDF: {filename} ({page_count} pages)"
+        # Process using PDF handler
+        handler_config = FileUploadRegistry.find_handler(
+            filename=filename, mime_type="application/pdf"
         )
-        return PdfResult(filename=filename, content=content, page_count=page_count)
+        if not handler_config:
+            raise HTTPException(status_code=400, detail="PDF handler not available")
+
+        try:
+            handler_class = handler_config["handler"]
+            handler = handler_class()
+            result = await handler.process_file(pdf_bytes, filename)
+            # Convert to legacy format
+            return PdfResult(
+                filename=filename,
+                content=result["content"],
+                page_count=result.get("page_count", 0),
+            )
+        except ValueError as e:
+            logger.warning(f"PDF validation failed: {e}")
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            logger.error(f"Failed to extract text from PDF: {e}")
+            logger.error(traceback.format_exc())
+            raise HTTPException(
+                status_code=500, detail=f"Failed to extract text from PDF: {str(e)}"
+            ) from e
 
     except HTTPException:
         raise

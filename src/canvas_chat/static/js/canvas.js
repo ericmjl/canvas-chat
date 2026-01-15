@@ -734,9 +734,9 @@ class Canvas {
     }
 
     /**
-     * Handle drop event for PDF and image files
+     * Handle drop event for files (uses FileUploadRegistry to find handlers)
      */
-    handleDrop(e) {
+    async handleDrop(e) {
         e.preventDefault();
         this.hideDropZone();
 
@@ -747,26 +747,21 @@ class Canvas {
         // Convert drop position to SVG coordinates
         const position = this.clientToSvg(e.clientX, e.clientY);
 
-        // Check for PDF file first
-        const pdfFile = Array.from(files).find((f) => f.type === 'application/pdf');
-        if (pdfFile) {
-            this.emit('pdfDrop', pdfFile, position);
-            return;
+        // Import FileUploadRegistry (dynamic import to avoid circular dependencies during module load)
+        const { FileUploadRegistry } = await import('./file-upload-registry.js');
+
+        // Process first file that has a registered handler
+        for (const file of Array.from(files)) {
+            const handlerConfig = FileUploadRegistry.findHandler(file);
+            if (handlerConfig) {
+                // Emit generic fileDrop event with handler info
+                this.emit('fileDrop', file, position);
+                return;
+            }
         }
 
-        // Check for CSV file
-        const csvFile = Array.from(files).find((f) => f.name.endsWith('.csv') || f.type === 'text/csv');
-        if (csvFile) {
-            this.emit('csvDrop', csvFile, position);
-            return;
-        }
-
-        // Check for image file
-        const imageFile = Array.from(files).find((f) => f.type.startsWith('image/'));
-        if (imageFile) {
-            this.emit('imageDrop', imageFile, position);
-            return;
-        }
+        // No handler found for any file
+        alert(`Unsupported file type. Supported types: ${FileUploadRegistry.getAcceptAttribute()}`);
     }
 
     /**

@@ -7,6 +7,10 @@
  */
 import { BaseNode, Actions } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
+import { NodeType, createNode } from '../graph-types.js';
+import { FileUploadHandlerPlugin } from '../file-upload-handler-plugin.js';
+import { FileUploadRegistry, PRIORITY } from '../file-upload-registry.js';
+import { apiUrl } from '../utils.js';
 
 class PdfNode extends BaseNode {
     getTypeLabel() {
@@ -28,5 +32,80 @@ NodeRegistry.register({
     defaultSize: { width: 640, height: 480 },
 });
 
-export { PdfNode };
+// =============================================================================
+// PDF File Upload Handler
+// =============================================================================
+
+/**
+ * PDF File Upload Handler Plugin
+ * Handles PDF file uploads and creates PDF nodes
+ */
+class PdfFileUploadHandler extends FileUploadHandlerPlugin {
+    /**
+     * Handle PDF file upload
+     * @param {File} file - The PDF file to upload
+     * @param {Object|null} position - Optional position for the node
+     * @param {Object} context - Additional context
+     * @returns {Promise<Object>} The created PDF node
+     */
+    async handleUpload(file, position = null, context = {}) {
+        // Validate file type
+        if (file.type !== 'application/pdf') {
+            throw new Error('Please select a PDF file.');
+        }
+
+        // Validate file size (25 MB limit)
+        const MAX_SIZE = 25 * 1024 * 1024;
+        this.validateFile(file, MAX_SIZE, 'PDF');
+
+        // Create a placeholder node while processing
+        const nodePosition = position || this.graph.autoPosition([]);
+        const pdfNode = createNode(NodeType.PDF, `Processing PDF: ${file.name}...`, {
+            position: nodePosition,
+        });
+
+        this.addNodeToCanvas(pdfNode);
+
+        try {
+            // Upload PDF via FormData
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Use generic upload-file endpoint (plugin-based)
+            const response = await fetch(apiUrl('/api/upload-file'), {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to process PDF');
+            }
+
+            const data = await response.json();
+
+            // Update the node with the extracted content
+            this.updateNodeAfterProcessing(pdfNode.id, data.content, {
+                title: data.title,
+                page_count: data.page_count,
+            });
+
+            return pdfNode;
+        } catch (err) {
+            this.handleError(pdfNode.id, file, err);
+            throw err;
+        }
+    }
+}
+
+// Register PDF file upload handler
+FileUploadRegistry.register({
+    id: 'pdf',
+    mimeTypes: ['application/pdf'],
+    extensions: ['.pdf'],
+    handler: PdfFileUploadHandler,
+    priority: PRIORITY.BUILTIN,
+});
+
+export { PdfNode, PdfFileUploadHandler };
 console.log('PDF node plugin loaded');
