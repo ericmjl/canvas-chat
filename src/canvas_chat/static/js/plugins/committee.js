@@ -5,11 +5,11 @@
  * and synthesizes their responses.
  */
 
-import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
-import { FeaturePlugin } from './feature-plugin.js';
-import { storage } from './storage.js';
-import { readSSEStream } from './sse.js';
-import { apiUrl } from './utils.js';
+import { NodeType, EdgeType, createNode, createEdge } from '../graph-types.js';
+import { FeaturePlugin } from '../feature-plugin.js';
+import { storage } from '../storage.js';
+import { readSSEStream } from '../sse.js';
+import { apiUrl } from '../utils.js';
 
 /**
  * Static persona presets for quick selection

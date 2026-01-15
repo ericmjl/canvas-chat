@@ -5,8 +5,8 @@
  * CSV nodes show filename, row/column counts, column names, and
  * a markdown table preview of the data.
  */
-import { BaseNode, Actions } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode, Actions } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
 class CsvNode extends BaseNode {
     getTypeLabel() {

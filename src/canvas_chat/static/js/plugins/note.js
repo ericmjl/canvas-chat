@@ -7,12 +7,12 @@
  * - NoteFeature (slash command and event handling)
  */
 
-import { BaseNode, Actions } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
-import { FeaturePlugin } from './feature-plugin.js';
-import { createNode, NodeType } from './graph-types.js';
-import { createEdge, EdgeType } from './graph-types.js';
-import { isUrlContent, apiUrl } from './utils.js';
+import { BaseNode, Actions } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+import { FeaturePlugin } from '../feature-plugin.js';
+import { createNode, NodeType } from '../graph-types.js';
+import { createEdge, EdgeType } from '../graph-types.js';
+import { isUrlContent, apiUrl } from '../utils.js';
 
 // =============================================================================
 // Note Node Protocol

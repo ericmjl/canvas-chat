@@ -5,8 +5,8 @@
  * Fetch result nodes display the raw fetched content and support actions like
  * resummarizing, editing, and creating flashcards.
  */
-import { BaseNode, Actions } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode, Actions } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
 class FetchResultNode extends BaseNode {
     getTypeLabel() {

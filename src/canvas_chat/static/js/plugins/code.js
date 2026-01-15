@@ -1,7 +1,350 @@
 /**
- * Code self-healing feature
+ * Code Plugin (Built-in)
  *
- * Handles automatic code error detection and fixing through LLM-guided iterations.
+ * Provides code nodes for Python code execution with Pyodide.
+ * This is a self-contained plugin that combines:
+ * - CodeNode protocol (custom node rendering)
+ * - CodeFeature (self-healing and error recovery)
+ */
+
+import { BaseNode, Actions, HeaderButtons } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+import { NodeType, DEFAULT_NODE_SIZES } from '../graph-types.js';
+import { FeaturePlugin } from '../feature-plugin.js';
+import { CancellableEvent } from '../plugin-events.js';
+import { EdgeType, createNode, createEdge } from '../graph-types.js';
+import { readSSEStream } from '../sse.js';
+import { wrapNode } from '../node-protocols.js';
+
+// =============================================================================
+// Code Node Protocol
+// =============================================================================
+
+/**
+ * Code Node Protocol Class
+ * Defines how code nodes are rendered and what actions they support.
+ */
+class CodeNode extends BaseNode {
+    getTypeLabel() {
+        return 'Code';
+    }
+
+    getTypeIcon() {
+        return '🐍';
+    }
+
+    getSummaryText(canvas) {
+        if (this.node.title) return this.node.title;
+        // Show first meaningful line of code
+        const code = this.node.code || this.node.content || '';
+        const firstLine = code.split('\n').find((line) => line.trim() && !line.trim().startsWith('#')) || 'Python code';
+        return canvas.truncate(firstLine.trim(), 50);
+    }
+
+    renderContent(canvas) {
+        const code = this.node.code || this.node.content || '';
+        const executionState = this.node.executionState || 'idle';
+        const csvNodeIds = this.node.csvNodeIds || [];
+
+        // Build header comment showing available data
+        let dataHint = '';
+        if (csvNodeIds.length === 1) {
+            dataHint = `<div class="code-data-hint"># Data available as: df</div>`;
+        } else if (csvNodeIds.length > 1) {
+            const vars = csvNodeIds.map((_, i) => `df${i + 1}`).join(', ');
+            dataHint = `<div class="code-data-hint"># Data available as: ${vars}</div>`;
+        }
+
+        // Execution state indicator
+        let stateClass = '';
+        let stateIndicator = '';
+        const selfHealingStatus = this.node.selfHealingStatus;
+        const selfHealingAttempt = this.node.selfHealingAttempt;
+
+        if (executionState === 'running') {
+            stateClass = 'code-running';
+            if (selfHealingAttempt) {
+                stateIndicator = `<div class="code-state-indicator code-self-healing">${selfHealingStatus === 'verifying' ? '🔍 Verifying' : '🔧 Self-healing'} (attempt ${selfHealingAttempt}/3)...</div>`;
+            } else {
+                stateIndicator = '<div class="code-state-indicator">Running...</div>';
+            }
+        } else if (executionState === 'error') {
+            stateClass = 'code-error';
+        } else if (selfHealingStatus === 'fixed') {
+            // Show success badge if code was self-healed
+            stateIndicator = '<div class="code-state-indicator code-self-healed">✅ Self-healed</div>';
+        } else if (selfHealingStatus === 'failed') {
+            // Show failure badge if self-healing gave up
+            stateIndicator = '<div class="code-state-indicator code-self-heal-failed">⚠️ Self-healing failed</div>';
+        }
+
+        // Syntax-highlighted read-only code display (click to edit opens modal)
+        // Escape HTML to prevent XSS, highlight.js will handle the rest
+        const escapedCode = canvas.escapeHtml(code) || '# Click Edit to add code...';
+
+        let html = `<div class="code-node-content ${stateClass}">`;
+        html += dataHint;
+        html += `<div class="code-display" data-node-id="${this.node.id}">`;
+        html += `<pre><code class="language-python">${escapedCode}</code></pre>`;
+        html += `</div>`;
+        html += stateIndicator;
+
+        // Show inline error if present
+        if (this.node.lastError) {
+            html += `<div class="code-error-output">${canvas.escapeHtml(this.node.lastError)}</div>`;
+        }
+
+        html += `</div>`;
+        return html;
+    }
+
+    /**
+     * Check if this code node has output to display
+     * @returns {boolean}
+     */
+    hasOutput() {
+        return !!(
+            this.node.outputHtml ||
+            this.node.outputText ||
+            this.node.outputStdout ||
+            (this.node.installProgress && this.node.installProgress.length > 0)
+        );
+    }
+
+    /**
+     * Render the output panel content (called by canvas for the slide-out panel)
+     * @param {Canvas} canvas - Canvas instance for helper methods
+     * @returns {string} HTML string
+     */
+    renderOutputPanel(canvas) {
+        const outputHtml = this.node.outputHtml || null;
+        const outputText = this.node.outputText || null;
+        const outputStdout = this.node.outputStdout || null;
+        const installProgress = this.node.installProgress || null;
+
+        let html = `<div class="code-output-panel-content">`;
+
+        // Show installation progress if present (during running state)
+        if (installProgress && installProgress.length > 0) {
+            html += `<div class="code-install-progress">`;
+            for (const msg of installProgress) {
+                html += `<div class="install-progress-line">${canvas.escapeHtml(msg)}</div>`;
+            }
+            html += `</div>`;
+        }
+
+        // Show stdout first if present
+        if (outputStdout) {
+            html += `<pre class="code-output-stdout">${canvas.escapeHtml(outputStdout)}</pre>`;
+        }
+
+        // Show result (HTML or text)
+        if (outputHtml) {
+            html += `<div class="code-output-result code-output-html">${outputHtml}</div>`;
+        } else if (outputText) {
+            html += `<pre class="code-output-result code-output-text">${canvas.escapeHtml(outputText)}</pre>`;
+        }
+
+        html += `</div>`;
+        return html;
+    }
+
+    /**
+     * Update code content in-place (for streaming updates)
+     * @param {string} nodeId - The node ID
+     * @param {string} content - New code content
+     * @param {boolean} isStreaming - Whether this is a streaming update
+     * @param {Canvas} canvas - Canvas instance for DOM manipulation
+     * @returns {boolean}
+     */
+    updateContent(nodeId, content, isStreaming, canvas) {
+        // Update the code display in-place
+        const wrapper = canvas.nodeElements.get(nodeId);
+        if (!wrapper) return false;
+
+        const codeEl = wrapper.querySelector('.code-display code');
+        if (codeEl && window.hljs) {
+            codeEl.textContent = content;
+            codeEl.className = 'language-python';
+            delete codeEl.dataset.highlighted;
+            window.hljs.highlightElement(codeEl);
+        }
+        return true;
+    }
+
+    getActions() {
+        return [Actions.EDIT_CODE, Actions.GENERATE, Actions.RUN_CODE, Actions.COPY];
+    }
+
+    supportsStopContinue() {
+        return true;
+    }
+
+    getHeaderButtons() {
+        return [
+            HeaderButtons.NAV_PARENT,
+            HeaderButtons.NAV_CHILD,
+            HeaderButtons.STOP,
+            HeaderButtons.CONTINUE,
+            HeaderButtons.COLLAPSE,
+            HeaderButtons.RESET_SIZE,
+            HeaderButtons.FIT_VIEWPORT,
+            HeaderButtons.DELETE,
+        ];
+    }
+
+    /**
+     * Check if this node supports code execution operations
+     * @returns {boolean}
+     */
+    supportsCodeExecution() {
+        return true;
+    }
+
+    /**
+     * Get the code content from this node
+     * @returns {string|null}
+     */
+    getCode() {
+        return this.node.code || this.node.content || null;
+    }
+
+    /**
+     * Show generate UI for AI code generation
+     * @param {string} nodeId - The node ID
+     * @param {Array<Object>} models - Available model options with {id, name}
+     * @param {string} currentModel - Currently selected model ID
+     * @param {Canvas} canvas - Canvas instance for DOM manipulation
+     * @param {App} app - App instance for event emission
+     * @returns {boolean}
+     */
+    showGenerateUI(nodeId, models, currentModel, canvas, app) {
+        const wrapper = canvas.nodeElements.get(nodeId);
+        if (!wrapper) return false;
+
+        // Don't add if already present
+        if (wrapper.querySelector('.code-generate-input')) return false;
+
+        const div = wrapper.querySelector('.node');
+        const codeContent = div.querySelector('.code-node-content');
+        if (!codeContent) return false;
+
+        // Create input container with model dropdown defaulting to current model
+        const inputHtml = `
+            <div class="code-generate-input">
+                <input type="text" placeholder="Describe the code to generate..." class="generate-prompt-input" />
+                <select class="generate-model-select">
+                    ${models
+                        .map((m) => {
+                            const selected = m.id === currentModel ? 'selected' : '';
+                            return `<option value="${canvas.escapeHtml(m.id)}" ${selected}>${canvas.escapeHtml(m.name)}</option>`;
+                        })
+                        .join('')}
+                </select>
+                <button class="generate-submit-btn" title="Generate code">→</button>
+                <button class="generate-cancel-btn" title="Cancel">×</button>
+            </div>
+        `;
+
+        // Insert at the beginning of code-node-content (before data hint or editor)
+        codeContent.insertAdjacentHTML('afterbegin', inputHtml);
+
+        // Setup event listeners
+        const input = codeContent.querySelector('.generate-prompt-input');
+        const modelSelect = codeContent.querySelector('.generate-model-select');
+        const submitBtn = codeContent.querySelector('.generate-submit-btn');
+        const cancelBtn = codeContent.querySelector('.generate-cancel-btn');
+
+        const submit = () => {
+            const prompt = input.value.trim();
+            const model = modelSelect.value;
+            if (prompt) {
+                // Emit event through canvas (app listens to this event)
+                canvas.emit('nodeGenerateSubmit', nodeId, prompt, model);
+            }
+        };
+
+        submitBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            submit();
+        });
+
+        cancelBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.hideGenerateUI(nodeId, canvas);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.hideGenerateUI(nodeId, canvas);
+            }
+        });
+
+        // Focus the input
+        input.focus();
+        return true;
+    }
+
+    /**
+     * Hide generate UI
+     * @param {string} nodeId - The node ID
+     * @param {Canvas} canvas - Canvas instance for DOM manipulation
+     * @returns {boolean}
+     */
+    hideGenerateUI(nodeId, canvas) {
+        const wrapper = canvas.nodeElements.get(nodeId);
+        if (!wrapper) return false;
+
+        const input = wrapper.querySelector('.code-generate-input');
+        if (input) {
+            input.remove();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Code-specific event bindings for syntax highlighting initialization
+     */
+    getEventBindings() {
+        return [
+            // Initialize syntax highlighting after render
+            {
+                selector: '.code-display',
+                event: 'init', // Special event: called after render, not a DOM event
+                handler: (nodeId, e, canvas) => {
+                    if (window.hljs) {
+                        const codeEl = e.currentTarget.querySelector('code');
+                        if (codeEl) {
+                            window.hljs.highlightElement(codeEl);
+                        }
+                    }
+                },
+            },
+        ];
+    }
+}
+
+// Register with NodeRegistry
+NodeRegistry.register({
+    type: NodeType.CODE,
+    protocol: CodeNode,
+    defaultSize: DEFAULT_NODE_SIZES[NodeType.CODE],
+});
+
+// Export CodeNode for testing
+export { CodeNode };
+
+// =============================================================================
+// Code Feature Plugin
+// =============================================================================
+
+/**
+ * CodeFeature - Manages code self-healing and error recovery
  *
  * Extension hooks:
  * - selfheal:before - Before self-healing starts (CancellableEvent)
@@ -9,16 +352,6 @@
  * - selfheal:failed - When max retries are exhausted
  * - selfheal:success - When code executes successfully after fixing
  * - selfheal:fix - Before generating fix prompt (CancellableEvent, can customize prompt)
- */
-
-import { FeaturePlugin } from './feature-plugin.js';
-import { CancellableEvent } from './plugin-events.js';
-import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
-import { readSSEStream } from './sse.js';
-import { wrapNode } from './node-protocols.js';
-
-/**
- * CodeFeature - Manages code self-healing and error recovery
  */
 export class CodeFeature extends FeaturePlugin {
     constructor(context) {
@@ -346,7 +679,11 @@ Output ONLY the corrected Python code, no explanations.`;
         try {
             // Show placeholder
             const placeholderCode = `# Fixing error (attempt ${attemptNum + 1}/${maxAttempts})...\n`;
-            this.canvas.updateCodeContent(nodeId, placeholderCode, true);
+            const codeNode = this.graph.getNode(nodeId);
+            if (codeNode) {
+                const codeWrapped = wrapNode(codeNode);
+                codeWrapped.updateContent(nodeId, placeholderCode, true, this.canvas);
+            }
             this.graph.updateNode(nodeId, {
                 content: placeholderCode,
                 executionState: 'idle', // Clear running state
@@ -388,7 +725,11 @@ Output ONLY the corrected Python code, no explanations.`;
                 onEvent: (eventType, data) => {
                     if (eventType === 'message' && data) {
                         fixedCode += data;
-                        this.canvas.updateCodeContent(nodeId, fixedCode, true);
+                        const codeNode = this.graph.getNode(nodeId);
+                        if (codeNode) {
+                            const codeWrapped = wrapNode(codeNode);
+                            codeWrapped.updateContent(nodeId, fixedCode, true, this.canvas);
+                        }
                     }
                 },
                 onDone: async () => {
@@ -396,7 +737,11 @@ Output ONLY the corrected Python code, no explanations.`;
                     this.streamingManager.unregister(nodeId);
 
                     // Final update
-                    this.canvas.updateCodeContent(nodeId, fixedCode, false);
+                    const codeNode = this.graph.getNode(nodeId);
+                    if (codeNode) {
+                        const codeWrapped = wrapNode(codeNode);
+                        codeWrapped.updateContent(nodeId, fixedCode, false, this.canvas);
+                    }
                     this.graph.updateNode(nodeId, { content: fixedCode, code: fixedCode });
                     this.saveSession();
 
@@ -419,7 +764,11 @@ Output ONLY the corrected Python code, no explanations.`;
             // Show error
             console.error('Code fix generation failed:', error);
             const errorCode = `# Code fix generation failed: ${error.message}\n`;
-            this.canvas.updateCodeContent(nodeId, errorCode, false);
+            const codeNode = this.graph.getNode(nodeId);
+            if (codeNode) {
+                const codeWrapped = wrapNode(codeNode);
+                codeWrapped.updateContent(nodeId, errorCode, false, this.canvas);
+            }
             this.graph.updateNode(nodeId, {
                 content: errorCode,
                 selfHealingStatus: 'failed',
@@ -427,12 +776,4 @@ Output ONLY the corrected Python code, no explanations.`;
             this.saveSession();
         }
     }
-}
-
-// ES module export
-export { CodeFeature as default };
-
-// Global scope export for backwards compatibility
-if (typeof window !== 'undefined') {
-    window.CodeFeature = CodeFeature;
 }

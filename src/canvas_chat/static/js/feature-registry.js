@@ -5,13 +5,13 @@
 
 import { EventEmitter } from './event-emitter.js';
 import { CanvasEvent, CancellableEvent } from './plugin-events.js';
-import { CommitteeFeature } from './committee.js';
-import { FlashcardFeature } from './flashcards.js';
-import { MatrixFeature } from './matrix.js';
-import { FactcheckFeature } from './factcheck.js';
-import { ResearchFeature } from './research.js';
-import { CodeFeature } from './code-feature.js';
-import { NoteFeature } from './note.js';
+import { CommitteeFeature } from './plugins/committee.js';
+import { FlashcardFeature } from './plugins/flashcards.js';
+import { MatrixFeature } from './plugins/matrix.js';
+import { FactcheckFeature } from './plugins/factcheck.js';
+import { ResearchFeature } from './plugins/research.js';
+import { CodeFeature } from './plugins/code.js';
+import { NoteFeature } from './plugins/note.js';
 
 /**
  * Priority levels for slash command resolution

@@ -5,8 +5,8 @@
  * Research nodes represent Exa deep research operations that can be
  * stopped and continued. They support creating flashcards from research results.
  */
-import { BaseNode, Actions, HeaderButtons } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode, Actions, HeaderButtons } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
 class ResearchNode extends BaseNode {
     getTypeLabel() {

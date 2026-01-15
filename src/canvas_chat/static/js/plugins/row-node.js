@@ -4,9 +4,9 @@
  * Provides row nodes for extracted matrix rows.
  * Row nodes display a single row extracted from a matrix.
  */
-import { BaseNode } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
-import { NodeType, DEFAULT_NODE_SIZES } from './graph-types.js';
+import { BaseNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+import { NodeType, DEFAULT_NODE_SIZES } from '../graph-types.js';
 
 class RowNode extends BaseNode {
     getTypeLabel() {

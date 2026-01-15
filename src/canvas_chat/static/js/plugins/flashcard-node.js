@@ -5,8 +5,8 @@
  * Flashcard nodes display question/answer pairs with SRS (Spaced Repetition System)
  * status indicators showing when cards are due for review.
  */
-import { BaseNode, Actions } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode, Actions } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
 class FlashcardNode extends BaseNode {
     getTypeLabel() {

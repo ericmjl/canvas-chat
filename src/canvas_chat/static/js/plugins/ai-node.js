@@ -1,21 +1,21 @@
 /**
- * Review Node Plugin (Built-in)
+ * AI Node Plugin (Built-in)
  *
- * Provides review nodes for committee member reviews of other opinions.
- * Review nodes represent a committee member's review of other members'
- * opinions. They support stop/continue controls for streaming responses
- * and include actions for summarizing and creating flashcards.
+ * Provides AI response nodes in conversations.
+ * AI nodes represent LLM-generated responses in the chat canvas.
+ * They support stop/continue controls for streaming responses and include
+ * actions for summarizing and creating flashcards.
  */
-import { BaseNode, Actions, HeaderButtons } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode, Actions, HeaderButtons } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
-class ReviewNode extends BaseNode {
+class AINode extends BaseNode {
     getTypeLabel() {
-        return 'Review';
+        return 'AI';
     }
 
     getTypeIcon() {
-        return '🔍';
+        return '🤖';
     }
 
     getActions() {
@@ -41,10 +41,10 @@ class ReviewNode extends BaseNode {
 }
 
 NodeRegistry.register({
-    type: 'review',
-    protocol: ReviewNode,
+    type: 'ai',
+    protocol: AINode,
     defaultSize: { width: 640, height: 480 },
 });
 
-export { ReviewNode };
-console.log('Review node plugin loaded');
+export { AINode };
+console.log('AI node plugin loaded');

@@ -6,8 +6,8 @@
  * - Text content (rendered as markdown)
  * - Image data (rendered as base64 image)
  */
-import { BaseNode } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
 class HighlightNode extends BaseNode {
     getTypeLabel() {

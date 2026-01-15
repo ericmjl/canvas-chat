@@ -5,8 +5,8 @@
  * Human nodes represent user input in the chat canvas.
  * They use default actions (REPLY, COPY) from BaseNode.
  */
-import { BaseNode } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
 class HumanNode extends BaseNode {
     getTypeLabel() {

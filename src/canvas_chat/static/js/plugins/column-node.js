@@ -4,9 +4,9 @@
  * Provides column nodes for extracted matrix columns.
  * Column nodes display a single column extracted from a matrix.
  */
-import { BaseNode } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
-import { NodeType, DEFAULT_NODE_SIZES } from './graph-types.js';
+import { BaseNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+import { NodeType, DEFAULT_NODE_SIZES } from '../graph-types.js';
 
 class ColumnNode extends BaseNode {
     getTypeLabel() {

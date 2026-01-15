@@ -6,8 +6,8 @@
  * multiple committee member opinions. They support stop/continue controls
  * for streaming responses and include actions for summarizing and creating flashcards.
  */
-import { BaseNode, Actions, HeaderButtons } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode, Actions, HeaderButtons } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
 class SynthesisNode extends BaseNode {
     getTypeLabel() {
