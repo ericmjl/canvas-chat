@@ -193,6 +193,8 @@ NodeRegistry.register({
 // =============================================================================
 
 export class PollFeature extends FeaturePlugin {
+    // Pattern 2: Implement getSlashCommands() for command menu metadata
+    // This provides description and placeholder for the slash command menu UI
     getSlashCommands() {
         return [
             {
@@ -312,6 +314,53 @@ Or use the new format:
 plugins:
   - js: ./plugins/my-poll.js
 ```
+
+### External Plugin Auto-Registration
+
+When a plugin is loaded from `config.yaml`, it needs to register itself with the plugin system. The poll plugin demonstrates the pattern:
+
+```javascript
+// At the end of poll.js
+if (typeof window !== 'undefined') {
+    const registerFeature = (app) => {
+        if (app && app.featureRegistry && app.featureRegistry._appContext) {
+            app.featureRegistry.register({
+                id: 'poll',
+                feature: PollFeature,
+                slashCommands: [
+                    {
+                        command: '/poll',
+                        handler: 'handleCommand',
+                    },
+                ],
+                priority: 500, // OFFICIAL priority for external plugins
+            }).then(() => {
+                console.log('[Poll Plugin] PollFeature registered successfully');
+            }).catch((err) => {
+                console.error('[Poll Plugin] Failed to register PollFeature:', err);
+            });
+        }
+    };
+
+    // Try immediate registration if app is already available
+    if (window.app) {
+        registerFeature(window.app);
+    }
+
+    // Also listen for the plugin system ready event
+    window.addEventListener('app-plugin-system-ready', (event) => {
+        registerFeature(event.detail.app);
+    });
+}
+```
+
+**Key points:**
+
+1. **Check for window**: Only run in browser environment (not in tests)
+2. **Check plugin system ready**: Verify `app.featureRegistry._appContext` exists before registering
+3. **Try immediate registration**: If `window.app` exists, register immediately
+4. **Listen for ready event**: Also listen for `app-plugin-system-ready` event in case plugin loads before app is ready
+5. **Priority**: Use `PRIORITY.OFFICIAL` (500) or `PRIORITY.COMMUNITY` (100) for external plugins, not `PRIORITY.BUILTIN` (1000)
 
 ### How to Request This Plugin
 

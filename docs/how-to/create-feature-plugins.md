@@ -160,7 +160,11 @@ async onUnload() {
 
 ## Step 3: Register slash commands
 
-Slash commands are registered when loading the plugin:
+Slash commands can be registered in two ways:
+
+### Pattern 1: Register via FeatureRegistry (for built-in features)
+
+When registering a plugin, provide slash commands in the registration config:
 
 ```javascript
 // In your plugin file
@@ -179,6 +183,37 @@ await featureRegistry.register({
     priority: PRIORITY.COMMUNITY, // or PRIORITY.BUILTIN, PRIORITY.OFFICIAL
 });
 ```
+
+This pattern is used by built-in features registered in `FeatureRegistry.registerBuiltInFeatures()`.
+
+### Pattern 2: Implement getSlashCommands() method (for command menu metadata)
+
+For external plugins or when you need to provide command metadata (description, placeholder) for the slash command menu, implement `getSlashCommands()`:
+
+```javascript
+export class MyFeature extends FeaturePlugin {
+    getSlashCommands() {
+        return [
+            {
+                command: '/mycommand',
+                description: 'Does something cool',
+                placeholder: 'Enter input...',
+            },
+        ];
+    }
+
+    async handleMyCommand(command, args, context) {
+        // Handler implementation
+    }
+}
+```
+
+**Note:** You can use both patterns together:
+
+- Register commands via `FeatureRegistry.register()` for routing
+- Implement `getSlashCommands()` for UI metadata (description, placeholder)
+
+The `FeatureRegistry.getSlashCommandsWithMetadata()` method calls `getSlashCommands()` on each feature to populate the slash command menu.
 
 ### Implementing command handlers
 
