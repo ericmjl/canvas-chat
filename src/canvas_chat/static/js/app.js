@@ -30,6 +30,8 @@ import './research-node.js'; // Side-effect import for ResearchNode plugin regis
 import './opinion-node.js'; // Side-effect import for OpinionNode plugin registration
 import './synthesis-node.js'; // Side-effect import for SynthesisNode plugin registration
 import './review-node.js'; // Side-effect import for ReviewNode plugin registration
+import './image-node.js'; // Side-effect import for ImageNode plugin registration
+import './csv-node.js'; // Side-effect import for CsvNode plugin registration
 import './search-node.js'; // Side-effect import for SearchNode plugin registration
 import './highlight-node.js'; // Side-effect import for HighlightNode plugin registration
 import './fetch-result-node.js'; // Side-effect import for FetchResultNode plugin registration
