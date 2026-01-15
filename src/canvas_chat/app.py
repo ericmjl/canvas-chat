@@ -16,9 +16,11 @@ merging, and exploration of topics as a DAG.
 """
 
 import asyncio
+import importlib.util
 import json
 import logging
 import os
+import sys
 import traceback
 from pathlib import Path
 from typing import TypeVar
@@ -94,12 +96,52 @@ def get_admin_config() -> AppConfig:
 
                 if _app_config.plugins:
                     logger.info(f"Loaded {len(_app_config.plugins)} plugin(s)")
+                    # Load Python plugins dynamically
+                    load_python_plugins(_app_config)
             except Exception as e:
                 logger.error(f"Failed to load config: {e}")
                 _app_config = AppConfig.empty()
         else:
             _app_config = AppConfig.empty()
     return _app_config
+
+
+def load_python_plugins(config: AppConfig) -> None:
+    """Load Python plugins from config dynamically.
+
+    Python plugins are imported as modules, which triggers their registration
+    with registries (e.g., FileUploadRegistry) via side-effect imports.
+
+    Args:
+        config: AppConfig with plugins to load
+    """
+    for plugin in config.plugins:
+        if plugin.py_path:
+            try:
+                # Load the Python module dynamically
+                spec = importlib.util.spec_from_file_location(
+                    plugin.plugin_id, plugin.py_path
+                )
+                if spec is None or spec.loader is None:
+                    logger.warning(
+                        f"Failed to create spec for Python plugin: {plugin.py_path}"
+                    )
+                    continue
+
+                module = importlib.util.module_from_spec(spec)
+                # Add to sys.modules so imports within the plugin work correctly
+                sys.modules[plugin.plugin_id] = module
+                spec.loader.exec_module(module)
+
+                logger.info(
+                    f"Loaded Python plugin: {plugin.py_path.name} "
+                    f"(id: {plugin.plugin_id})"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to load Python plugin {plugin.py_path}: {e}",
+                    exc_info=True,
+                )
 
 
 # Mount static files
@@ -769,17 +811,21 @@ async def root():
     config = get_admin_config()
     if config.plugins:
         plugin_scripts = []
-        for plugin_path in config.plugins:
-            plugin_url = f"/api/plugins/{plugin_path.name}"
-            plugin_scripts.append(
-                f'        <script type="module" src="{plugin_url}"></script>'
-            )
+        for plugin in config.plugins:
+            # Only inject JS plugins (Python plugins are loaded on backend)
+            if plugin.js_path:
+                plugin_url = f"/api/plugins/{plugin.js_path.name}"
+                plugin_scripts.append(
+                    f'        <script type="module" src="{plugin_url}"></script>'
+                )
 
         # Inject before the closing </body> tag
-        plugin_html = "\n".join(plugin_scripts)
-        html = html.replace(
-            "</body>", f"\n        <!-- Custom plugins -->\n{plugin_html}\n    </body>"
-        )
+        if plugin_scripts:
+            plugin_html = "\n".join(plugin_scripts)
+            html = html.replace(
+                "</body>",
+                f"\n        <!-- Custom plugins -->\n{plugin_html}\n    </body>",
+            )
 
     return HTMLResponse(content=html)
 
@@ -803,17 +849,24 @@ async def get_config():
 async def list_plugins():
     """List available plugin files.
 
-    Returns plugin information for plugins configured in config.yaml.
+    Returns plugin information for JavaScript plugins configured in config.yaml.
+    Python-only plugins are not listed (they're backend-only).
     """
     config = get_admin_config()
     if not config.plugins:
         return {"plugins": []}
 
     plugins_info = []
-    for plugin_path in config.plugins:
-        plugins_info.append(
-            {"name": plugin_path.name, "url": f"/api/plugins/{plugin_path.name}"}
-        )
+    for plugin in config.plugins:
+        # Only list JS plugins (Python plugins are backend-only)
+        if plugin.js_path:
+            plugins_info.append(
+                {
+                    "name": plugin.js_path.name,
+                    "url": f"/api/plugins/{plugin.js_path.name}",
+                    "id": plugin.plugin_id,
+                }
+            )
 
     return {"plugins": plugins_info}
 
@@ -829,25 +882,25 @@ async def serve_plugin(plugin_name: str):
         The plugin file contents as JavaScript
 
     Raises:
-        HTTPException: If plugin not found or admin mode disabled
+        HTTPException: If plugin not found
     """
     config = get_admin_config()
 
     if not config.plugins:
         raise HTTPException(status_code=404, detail="Plugins not configured")
 
-    # Find the plugin by name
-    plugin_path = None
-    for path in config.plugins:
-        if path.name == plugin_name:
-            plugin_path = path
+    # Find the plugin by JS filename
+    plugin = None
+    for p in config.plugins:
+        if p.js_path and p.js_path.name == plugin_name:
+            plugin = p
             break
 
-    if plugin_path is None:
+    if plugin is None or not plugin.js_path:
         raise HTTPException(status_code=404, detail=f"Plugin '{plugin_name}' not found")
 
     try:
-        content = plugin_path.read_text()
+        content = plugin.js_path.read_text()
         return HTMLResponse(content=content, media_type="application/javascript")
     except Exception as e:
         logger.error(f"Error serving plugin {plugin_name}: {e}")
