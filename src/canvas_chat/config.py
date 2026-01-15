@@ -75,6 +75,127 @@ class ModelConfig:
 
 
 @dataclass
+class PluginConfig:
+    """Configuration for a plugin (JavaScript, Python, or both).
+
+    Supports three formats:
+    1. JavaScript-only: js_path set, py_path None
+    2. Python-only: py_path set, js_path None
+    3. Paired: Both js_path and py_path set (same plugin_id)
+    """
+
+    js_path: Path | None = None
+    py_path: Path | None = None
+    id: str | None = None  # Explicit plugin ID (for pairing JS and PY)
+
+    @property
+    def plugin_id(self) -> str:
+        """Get plugin identifier (for pairing JS and PY).
+
+        Uses explicit id if provided, otherwise derives from filename.
+        """
+        if self.id:
+            return self.id
+        # Derive from JS or PY filename
+        if self.js_path:
+            return self.js_path.stem
+        if self.py_path:
+            return self.py_path.stem
+        raise ValueError("Plugin must have at least js_path or py_path")
+
+    @classmethod
+    def from_dict(cls, data: dict | str, config_dir: Path) -> "PluginConfig | None":
+        """Create PluginConfig from YAML entry.
+
+        Supports:
+        - String: "./plugins/my-plugin.js" (JS-only, backwards compatible)
+        - Dict with "path": {"path": "./plugins/my-plugin.js"}
+          (JS-only, backwards compatible)
+        - Dict with "js"/"py": {"js": "./plugins/my-plugin.js",
+          "py": "./plugins/my_plugin.py", "id": "my-plugin"}
+
+        Args:
+            data: Plugin entry from YAML (string or dict)
+            config_dir: Directory containing config.yaml (for resolving relative paths)
+
+        Returns:
+            PluginConfig if valid, None if invalid/not found
+        """
+        js_path = None
+        py_path = None
+        plugin_id = None
+
+        # Handle string format (backwards compatible)
+        if isinstance(data, str):
+            plugin_path = Path(data)
+            if not plugin_path.is_absolute():
+                plugin_path = config_dir / plugin_path
+            if not plugin_path.exists():
+                logger.warning(f"Plugin file not found: {plugin_path}")
+                return None
+            # Determine if it's JS or PY by extension
+            if plugin_path.suffix == ".js":
+                js_path = plugin_path.resolve()
+            elif plugin_path.suffix == ".py":
+                py_path = plugin_path.resolve()
+            else:
+                logger.warning(f"Plugin file must be .js or .py: {plugin_path}")
+                return None
+
+        # Handle dict format
+        elif isinstance(data, dict):
+            # Backwards compatible: "path" field
+            if "path" in data:
+                plugin_path = Path(data["path"])
+                if not plugin_path.is_absolute():
+                    plugin_path = config_dir / plugin_path
+                if not plugin_path.exists():
+                    logger.warning(f"Plugin file not found: {plugin_path}")
+                    return None
+                if plugin_path.suffix == ".js":
+                    js_path = plugin_path.resolve()
+                elif plugin_path.suffix == ".py":
+                    py_path = plugin_path.resolve()
+                else:
+                    logger.warning(f"Plugin file must be .js or .py: {plugin_path}")
+                    return None
+
+            # New format: "js" and/or "py" fields
+            if "js" in data:
+                js_plugin_path = Path(data["js"])
+                if not js_plugin_path.is_absolute():
+                    js_plugin_path = config_dir / js_plugin_path
+                if not js_plugin_path.exists():
+                    logger.warning(f"Plugin JS file not found: {js_plugin_path}")
+                    return None
+                js_path = js_plugin_path.resolve()
+
+            if "py" in data:
+                py_plugin_path = Path(data["py"])
+                if not py_plugin_path.is_absolute():
+                    py_plugin_path = config_dir / py_plugin_path
+                if not py_plugin_path.exists():
+                    logger.warning(f"Plugin Python file not found: {py_plugin_path}")
+                    return None
+                py_path = py_plugin_path.resolve()
+
+            # Explicit plugin ID (for pairing)
+            if "id" in data:
+                plugin_id = data["id"]
+
+            # Must have at least one path
+            if not js_path and not py_path:
+                logger.warning(f"Plugin entry must have 'js' or 'py' field: {data}")
+                return None
+
+        else:
+            logger.warning(f"Invalid plugin entry: {data}")
+            return None
+
+        return cls(js_path=js_path, py_path=py_path, id=plugin_id)
+
+
+@dataclass
 class AppConfig:
     """Application configuration for models, plugins, and admin mode.
 
@@ -90,7 +211,7 @@ class AppConfig:
     """
 
     models: list[ModelConfig] = field(default_factory=list)
-    plugins: list[Path] = field(default_factory=list)
+    plugins: list[PluginConfig] = field(default_factory=list)
     admin_mode: bool = False
     _config_path: Path | None = None
 
@@ -140,24 +261,23 @@ class AppConfig:
         if "plugins" in data and data["plugins"]:
             config_dir = config_path.parent
             for plugin_entry in data["plugins"]:
-                if isinstance(plugin_entry, dict) and "path" in plugin_entry:
-                    plugin_path = Path(plugin_entry["path"])
-                elif isinstance(plugin_entry, str):
-                    plugin_path = Path(plugin_entry)
-                else:
-                    logger.warning(f"Invalid plugin entry: {plugin_entry}")
-                    continue
-
-                # Resolve relative paths from config file directory
-                if not plugin_path.is_absolute():
-                    plugin_path = config_dir / plugin_path
-
-                if not plugin_path.exists():
-                    logger.warning(f"Plugin file not found: {plugin_path}")
-                    continue
-
-                plugins.append(plugin_path.resolve())
-                logger.info(f"Registered plugin: {plugin_path}")
+                plugin_config = PluginConfig.from_dict(plugin_entry, config_dir)
+                if plugin_config:
+                    plugins.append(plugin_config)
+                    if plugin_config.js_path and plugin_config.py_path:
+                        logger.info(
+                            f"Registered paired plugin: {plugin_config.plugin_id} "
+                            f"(JS: {plugin_config.js_path.name}, "
+                            f"PY: {plugin_config.py_path.name})"
+                        )
+                    elif plugin_config.js_path:
+                        logger.info(
+                            f"Registered JS plugin: {plugin_config.js_path.name}"
+                        )
+                    elif plugin_config.py_path:
+                        logger.info(
+                            f"Registered Python plugin: {plugin_config.py_path.name}"
+                        )
 
         config = cls(
             models=models,
