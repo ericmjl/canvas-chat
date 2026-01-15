@@ -64,7 +64,7 @@ console.log('\n=== AI Node Plugin Tests ===\n');
 // Test: AI node plugin is registered
 await asyncTest('AI node plugin is registered', async () => {
     // Import ai-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/ai-node.js');
+    await import('../src/canvas_chat/static/js/plugins/ai-node.js');
 
     // Check if NodeRegistry has the ai type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('AI node plugin is registered', async () => {
 // Test: AINode protocol methods
 await asyncTest('AINode implements protocol methods', async () => {
     // Import ai-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/ai-node.js');
+    await import('../src/canvas_chat/static/js/plugins/ai-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.AI, 'Hello, I am an AI assistant.', {});
@@ -90,7 +90,7 @@ await asyncTest('AINode implements protocol methods', async () => {
 // Test: AINode getActions (should return custom actions)
 await asyncTest('AINode getActions returns correct actions in order', async () => {
     // Import ai-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/ai-node.js');
+    await import('../src/canvas_chat/static/js/plugins/ai-node.js');
 
     const node = createNode(NodeType.AI, 'Hello, I am an AI assistant.', {});
     const wrapped = wrapNode(node);
@@ -113,7 +113,7 @@ await asyncTest('AINode getActions returns correct actions in order', async () =
 // Test: AINode supportsStopContinue
 await asyncTest('AINode supportsStopContinue returns true', async () => {
     // Import ai-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/ai-node.js');
+    await import('../src/canvas_chat/static/js/plugins/ai-node.js');
 
     const node = createNode(NodeType.AI, 'Hello, I am an AI assistant.', {});
     const wrapped = wrapNode(node);
@@ -123,7 +123,7 @@ await asyncTest('AINode supportsStopContinue returns true', async () => {
 // Test: AINode getHeaderButtons (should include STOP and CONTINUE)
 await asyncTest('AINode getHeaderButtons includes STOP and CONTINUE', async () => {
     // Import ai-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/ai-node.js');
+    await import('../src/canvas_chat/static/js/plugins/ai-node.js');
 
     const node = createNode(NodeType.AI, 'Hello, I am an AI assistant.', {});
     const wrapped = wrapNode(node);
@@ -146,7 +146,7 @@ await asyncTest('AINode getHeaderButtons includes STOP and CONTINUE', async () =
 // Test: AINode isScrollable
 await asyncTest('AINode isScrollable returns true', async () => {
     // Import ai-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/ai-node.js');
+    await import('../src/canvas_chat/static/js/plugins/ai-node.js');
 
     const node = { type: NodeType.AI, content: 'Hello, I am an AI assistant.' };
     const wrapped = wrapNode(node);
@@ -156,7 +156,7 @@ await asyncTest('AINode isScrollable returns true', async () => {
 // Test: AINode wrapNode integration
 await asyncTest('wrapNode returns AINode for AI type', async () => {
     // Import ai-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/ai-node.js');
+    await import('../src/canvas_chat/static/js/plugins/ai-node.js');
 
     const node = { type: NodeType.AI, content: 'Hello, I am an AI assistant.' };
     const wrapped = wrapNode(node);

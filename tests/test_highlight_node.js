@@ -68,7 +68,7 @@ console.log('\n=== Highlight Node Plugin Tests ===\n');
 // Test: Highlight node plugin is registered
 await asyncTest('Highlight node plugin is registered', async () => {
     // Import highlight-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/highlight-node.js');
+    await import('../src/canvas_chat/static/js/plugins/highlight-node.js');
 
     // Check if NodeRegistry has the highlight type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -81,7 +81,7 @@ await asyncTest('Highlight node plugin is registered', async () => {
 // Test: HighlightNode protocol methods
 await asyncTest('HighlightNode implements protocol methods', async () => {
     // Import highlight-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/highlight-node.js');
+    await import('../src/canvas_chat/static/js/plugins/highlight-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.HIGHLIGHT, 'Highlighted text', {});
@@ -94,7 +94,7 @@ await asyncTest('HighlightNode implements protocol methods', async () => {
 // Test: HighlightNode renderContent with text
 await asyncTest('HighlightNode renderContent renders markdown for text content', async () => {
     // Import highlight-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/highlight-node.js');
+    await import('../src/canvas_chat/static/js/plugins/highlight-node.js');
 
     const node = createNode(NodeType.HIGHLIGHT, '**Bold text**', {});
     const wrapped = wrapNode(node);
@@ -107,7 +107,7 @@ await asyncTest('HighlightNode renderContent renders markdown for text content',
 // Test: HighlightNode renderContent with empty content
 await asyncTest('HighlightNode renderContent handles empty content', async () => {
     // Import highlight-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/highlight-node.js');
+    await import('../src/canvas_chat/static/js/plugins/highlight-node.js');
 
     const node = { type: NodeType.HIGHLIGHT, content: '', id: 'test', position: { x: 0, y: 0 }, width: 420, height: 200, created_at: Date.now(), tags: [] };
     const wrapped = wrapNode(node);
@@ -120,7 +120,7 @@ await asyncTest('HighlightNode renderContent handles empty content', async () =>
 // Test: HighlightNode renderContent with image
 await asyncTest('HighlightNode renderContent renders image for imageData', async () => {
     // Import highlight-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/highlight-node.js');
+    await import('../src/canvas_chat/static/js/plugins/highlight-node.js');
 
     const node = {
         id: 'test-highlight',
@@ -145,7 +145,7 @@ await asyncTest('HighlightNode renderContent renders image for imageData', async
 // Test: HighlightNode renderContent with image but no mimeType (should default to image/png)
 await asyncTest('HighlightNode renderContent defaults mimeType to image/png when missing', async () => {
     // Import highlight-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/highlight-node.js');
+    await import('../src/canvas_chat/static/js/plugins/highlight-node.js');
 
     const node = {
         id: 'test-highlight',
@@ -168,7 +168,7 @@ await asyncTest('HighlightNode renderContent defaults mimeType to image/png when
 // Test: HighlightNode isScrollable
 await asyncTest('HighlightNode isScrollable returns true', async () => {
     // Import highlight-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/highlight-node.js');
+    await import('../src/canvas_chat/static/js/plugins/highlight-node.js');
 
     const node = { type: NodeType.HIGHLIGHT, content: 'Highlighted text' };
     const wrapped = wrapNode(node);
@@ -178,7 +178,7 @@ await asyncTest('HighlightNode isScrollable returns true', async () => {
 // Test: HighlightNode wrapNode integration
 await asyncTest('wrapNode returns HighlightNode for HIGHLIGHT type', async () => {
     // Import highlight-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/highlight-node.js');
+    await import('../src/canvas_chat/static/js/plugins/highlight-node.js');
 
     const node = { type: NodeType.HIGHLIGHT, content: 'Highlighted text' };
     const wrapped = wrapNode(node);

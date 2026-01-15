@@ -23,24 +23,25 @@ global.indexedDB = {
 
 // Import ES modules
 // Load plugins first (side-effect imports to register them)
-await import('../src/canvas_chat/static/js/human-node.js');
-await import('../src/canvas_chat/static/js/ai-node.js');
-await import('../src/canvas_chat/static/js/reference.js');
-await import('../src/canvas_chat/static/js/fetch-result-node.js');
-await import('../src/canvas_chat/static/js/highlight-node.js');
-await import('../src/canvas_chat/static/js/pdf-node.js');
-await import('../src/canvas_chat/static/js/research-node.js');
-await import('../src/canvas_chat/static/js/opinion-node.js');
-await import('../src/canvas_chat/static/js/synthesis-node.js');
-await import('../src/canvas_chat/static/js/review-node.js');
-await import('../src/canvas_chat/static/js/image-node.js');
-await import('../src/canvas_chat/static/js/csv-node.js');
-await import('../src/canvas_chat/static/js/flashcard-node.js');
-await import('../src/canvas_chat/static/js/factcheck-node.js');
-await import('../src/canvas_chat/static/js/matrix-node.js');
-await import('../src/canvas_chat/static/js/cell-node.js');
-await import('../src/canvas_chat/static/js/row-node.js');
-await import('../src/canvas_chat/static/js/column-node.js');
+await import('../src/canvas_chat/static/js/plugins/human-node.js');
+await import('../src/canvas_chat/static/js/plugins/ai-node.js');
+await import('../src/canvas_chat/static/js/plugins/reference.js');
+await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
+await import('../src/canvas_chat/static/js/plugins/highlight-node.js');
+await import('../src/canvas_chat/static/js/plugins/pdf-node.js');
+await import('../src/canvas_chat/static/js/plugins/research-node.js');
+await import('../src/canvas_chat/static/js/plugins/opinion-node.js');
+await import('../src/canvas_chat/static/js/plugins/synthesis-node.js');
+await import('../src/canvas_chat/static/js/plugins/review-node.js');
+await import('../src/canvas_chat/static/js/plugins/image-node.js');
+await import('../src/canvas_chat/static/js/plugins/csv-node.js');
+await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
+await import('../src/canvas_chat/static/js/plugins/factcheck.js');
+await import('../src/canvas_chat/static/js/plugins/matrix.js');
+await import('../src/canvas_chat/static/js/plugins/code.js');
+await import('../src/canvas_chat/static/js/plugins/cell-node.js');
+await import('../src/canvas_chat/static/js/plugins/row-node.js');
+await import('../src/canvas_chat/static/js/plugins/column-node.js');
 
 const { NodeType, createNode } = await import('../src/canvas_chat/static/js/graph-types.js');
 const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -69,10 +70,13 @@ const {
     // RowNode is now a plugin - import from row-node.js
     // ColumnNode is now a plugin - import from column-node.js
     FetchResultNode,
-    CodeNode,
+    // CodeNode is now a plugin - import from code.js
     wrapNode,
     validateNodeProtocol,
 } = await import('../src/canvas_chat/static/js/node-protocols.js');
+
+// Import CodeNode from plugin
+const { CodeNode } = await import('../src/canvas_chat/static/js/plugins/code.js');
 
 // Simple test runner
 let passed = 0;
@@ -231,7 +235,7 @@ test('validateNodeProtocol: BaseNode implements all methods', () => {
 // Note: NoteNode is now a plugin - test via NodeRegistry
 test('wrapNode: returns NoteNode for NOTE type (via plugin)', async () => {
     // Import note.js to register the plugin
-    await import('../src/canvas_chat/static/js/note.js');
+    await import('../src/canvas_chat/static/js/plugins/note.js');
 
     const node = { type: NodeType.NOTE, content: 'Note' };
     const wrapped = wrapNode(node);
@@ -406,7 +410,7 @@ test('getActions: FetchResultNode includes EDIT_CONTENT and RESUMMARIZE', () => 
 // Note: NoteNode is now a plugin - test via NodeRegistry
 test('getActions: NoteNode includes EDIT_CONTENT (via plugin)', async () => {
     // Import note.js to register the plugin
-    await import('../src/canvas_chat/static/js/note.js');
+    await import('../src/canvas_chat/static/js/plugins/note.js');
     const node = { type: NodeType.NOTE, content: 'Note' };
     const wrapped = wrapNode(node);
     const actions = wrapped.getActions();
@@ -468,7 +472,7 @@ test('isScrollable: AINode returns true', () => {
 // Note: SummaryNode is now a plugin (summary.js), test it separately
 test('isScrollable: SummaryNode returns true (via plugin)', async () => {
     // Import summary.js to register the plugin
-    await import('../src/canvas_chat/static/js/summary.js');
+    await import('../src/canvas_chat/static/js/plugins/summary.js');
     const node = { type: NodeType.SUMMARY, content: 'Summary' };
     const wrapped = wrapNode(node);
     assertTrue(wrapped.isScrollable());

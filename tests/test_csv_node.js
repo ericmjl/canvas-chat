@@ -64,7 +64,7 @@ console.log('\n=== CSV Node Plugin Tests ===\n');
 // Test: CSV node plugin is registered
 await asyncTest('CSV node plugin is registered', async () => {
     // Import csv-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     // Check if NodeRegistry has the csv type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('CSV node plugin is registered', async () => {
 // Test: CsvNode protocol methods
 await asyncTest('CsvNode implements protocol methods', async () => {
     // Import csv-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.CSV, '', {
@@ -94,7 +94,7 @@ await asyncTest('CsvNode implements protocol methods', async () => {
 // Test: CsvNode getSummaryText with title
 await asyncTest('CsvNode getSummaryText returns title when available', async () => {
     // Import csv-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     const node = createNode(NodeType.CSV, '', {
         title: 'My CSV File',
@@ -112,7 +112,7 @@ await asyncTest('CsvNode getSummaryText returns title when available', async () 
 // Test: CsvNode getSummaryText without title
 await asyncTest('CsvNode getSummaryText returns filename and row count when no title', async () => {
     // Import csv-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     const node = createNode(NodeType.CSV, '', {
         filename: 'data.csv',
@@ -129,7 +129,7 @@ await asyncTest('CsvNode getSummaryText returns filename and row count when no t
 // Test: CsvNode getSummaryText with defaults
 await asyncTest('CsvNode getSummaryText uses defaults when data missing', async () => {
     // Import csv-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     const node = createNode(NodeType.CSV, '', {});
     const wrapped = wrapNode(node);
@@ -143,7 +143,7 @@ await asyncTest('CsvNode getSummaryText uses defaults when data missing', async 
 // Test: CsvNode renderContent
 await asyncTest('CsvNode renderContent generates correct HTML', async () => {
     // Import csv-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     const node = createNode(NodeType.CSV, '', {
         filename: 'test.csv',
@@ -172,7 +172,7 @@ await asyncTest('CsvNode renderContent generates correct HTML', async () => {
 // Test: CsvNode renderContent without columns
 await asyncTest('CsvNode renderContent handles missing columns', async () => {
     // Import csv-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     const node = createNode(NodeType.CSV, '', {
         filename: 'test.csv',
@@ -195,7 +195,7 @@ await asyncTest('CsvNode renderContent handles missing columns', async () => {
 // Test: CsvNode renderContent without content
 await asyncTest('CsvNode renderContent handles missing content', async () => {
     // Import csv-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     const node = createNode(NodeType.CSV, '', {
         filename: 'test.csv',
@@ -218,7 +218,7 @@ await asyncTest('CsvNode renderContent handles missing content', async () => {
 // Test: CsvNode getActions
 await asyncTest('CsvNode getActions returns correct actions in expected order', async () => {
     // Import csv-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     const node = createNode(NodeType.CSV, '', {
         filename: 'test.csv',
@@ -246,7 +246,7 @@ await asyncTest('CsvNode getActions returns correct actions in expected order', 
 // Test: CsvNode isScrollable
 await asyncTest('CsvNode isScrollable returns true', async () => {
     // Import csv-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     const node = { type: NodeType.CSV, filename: 'test.csv' };
     const wrapped = wrapNode(node);
@@ -256,7 +256,7 @@ await asyncTest('CsvNode isScrollable returns true', async () => {
 // Test: CsvNode wrapNode integration
 await asyncTest('wrapNode returns CsvNode for CSV type', async () => {
     // Import csv-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     const node = {
         type: NodeType.CSV,
@@ -275,7 +275,7 @@ await asyncTest('wrapNode returns CsvNode for CSV type', async () => {
 // Test: CsvNode handles edge cases
 await asyncTest('CsvNode handles empty data', async () => {
     // Import csv-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/csv-node.js');
+    await import('../src/canvas_chat/static/js/plugins/csv-node.js');
 
     const node = {
         type: NodeType.CSV,

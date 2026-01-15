@@ -64,7 +64,7 @@ console.log('\n=== Cell Node Plugin Tests ===\n');
 // Test: Cell node plugin is registered
 await asyncTest('Cell node plugin is registered', async () => {
     // Import cell-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/cell-node.js');
+    await import('../src/canvas_chat/static/js/plugins/cell-node.js');
 
     // Check if NodeRegistry has the cell type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Cell node plugin is registered', async () => {
 // Test: CellNode protocol methods
 await asyncTest('CellNode implements protocol methods', async () => {
     // Import cell-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/cell-node.js');
+    await import('../src/canvas_chat/static/js/plugins/cell-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.CELL, 'Content', {
@@ -91,7 +91,7 @@ await asyncTest('CellNode implements protocol methods', async () => {
 
 // Test: CellNode getTypeLabel with title
 await asyncTest('CellNode getTypeLabel returns title when present', async () => {
-    await import('../src/canvas_chat/static/js/cell-node.js');
+    await import('../src/canvas_chat/static/js/plugins/cell-node.js');
 
     const node = createNode(NodeType.CELL, 'Content', {
         title: 'GPT-4 × Accuracy',
@@ -103,7 +103,7 @@ await asyncTest('CellNode getTypeLabel returns title when present', async () => 
 
 // Test: CellNode getTypeLabel without title
 await asyncTest('CellNode getTypeLabel returns "Cell" when no title', async () => {
-    await import('../src/canvas_chat/static/js/cell-node.js');
+    await import('../src/canvas_chat/static/js/plugins/cell-node.js');
 
     const node = createNode(NodeType.CELL, 'Content', {});
     const wrapped = wrapNode(node);
@@ -113,7 +113,7 @@ await asyncTest('CellNode getTypeLabel returns "Cell" when no title', async () =
 
 // Test: CellNode isScrollable
 await asyncTest('CellNode isScrollable returns true', async () => {
-    await import('../src/canvas_chat/static/js/cell-node.js');
+    await import('../src/canvas_chat/static/js/plugins/cell-node.js');
 
     const node = { type: NodeType.CELL, content: 'Content' };
     const wrapped = wrapNode(node);
@@ -122,7 +122,7 @@ await asyncTest('CellNode isScrollable returns true', async () => {
 
 // Test: CellNode wrapNode integration
 await asyncTest('wrapNode returns CellNode for CELL type', async () => {
-    await import('../src/canvas_chat/static/js/cell-node.js');
+    await import('../src/canvas_chat/static/js/plugins/cell-node.js');
 
     const node = {
         type: NodeType.CELL,

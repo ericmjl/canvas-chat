@@ -64,7 +64,7 @@ console.log('\n=== Image Node Plugin Tests ===\n');
 // Test: Image node plugin is registered
 await asyncTest('Image node plugin is registered', async () => {
     // Import image-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/image-node.js');
+    await import('../src/canvas_chat/static/js/plugins/image-node.js');
 
     // Check if NodeRegistry has the image type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Image node plugin is registered', async () => {
 // Test: ImageNode protocol methods
 await asyncTest('ImageNode implements protocol methods', async () => {
     // Import image-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/image-node.js');
+    await import('../src/canvas_chat/static/js/plugins/image-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.IMAGE, '', {
@@ -93,7 +93,7 @@ await asyncTest('ImageNode implements protocol methods', async () => {
 // Test: ImageNode getSummaryText
 await asyncTest('ImageNode getSummaryText returns "Image"', async () => {
     // Import image-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/image-node.js');
+    await import('../src/canvas_chat/static/js/plugins/image-node.js');
 
     const node = createNode(NodeType.IMAGE, '', {
         imageData: 'test',
@@ -110,7 +110,7 @@ await asyncTest('ImageNode getSummaryText returns "Image"', async () => {
 // Test: ImageNode renderContent
 await asyncTest('ImageNode renderContent generates correct HTML', async () => {
     // Import image-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/image-node.js');
+    await import('../src/canvas_chat/static/js/plugins/image-node.js');
 
     const imageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
     const mimeType = 'image/png';
@@ -129,7 +129,7 @@ await asyncTest('ImageNode renderContent generates correct HTML', async () => {
 // Test: ImageNode renderContent with default mimeType
 await asyncTest('ImageNode renderContent uses default mimeType when not provided', async () => {
     // Import image-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/image-node.js');
+    await import('../src/canvas_chat/static/js/plugins/image-node.js');
 
     const imageData = 'test';
     const node = createNode(NodeType.IMAGE, '', { imageData });
@@ -145,7 +145,7 @@ await asyncTest('ImageNode renderContent uses default mimeType when not provided
 // Test: ImageNode copyToClipboard
 await asyncTest('ImageNode copyToClipboard calls canvas method', async () => {
     // Import image-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/image-node.js');
+    await import('../src/canvas_chat/static/js/plugins/image-node.js');
 
     const imageData = 'test';
     const mimeType = 'image/png';
@@ -183,7 +183,7 @@ await asyncTest('ImageNode copyToClipboard calls canvas method', async () => {
 // Test: ImageNode copyToClipboard handles missing canvas method
 await asyncTest('ImageNode copyToClipboard handles missing canvas method gracefully', async () => {
     // Import image-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/image-node.js');
+    await import('../src/canvas_chat/static/js/plugins/image-node.js');
 
     const node = createNode(NodeType.IMAGE, '', { imageData: 'test', mimeType: 'image/png' });
     const wrapped = wrapNode(node);
@@ -199,7 +199,7 @@ await asyncTest('ImageNode copyToClipboard handles missing canvas method gracefu
 // Test: ImageNode isScrollable
 await asyncTest('ImageNode isScrollable returns true', async () => {
     // Import image-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/image-node.js');
+    await import('../src/canvas_chat/static/js/plugins/image-node.js');
 
     const node = { type: NodeType.IMAGE, imageData: 'test', mimeType: 'image/png' };
     const wrapped = wrapNode(node);
@@ -209,7 +209,7 @@ await asyncTest('ImageNode isScrollable returns true', async () => {
 // Test: ImageNode wrapNode integration
 await asyncTest('wrapNode returns ImageNode for IMAGE type', async () => {
     // Import image-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/image-node.js');
+    await import('../src/canvas_chat/static/js/plugins/image-node.js');
 
     const node = {
         type: NodeType.IMAGE,
@@ -226,7 +226,7 @@ await asyncTest('wrapNode returns ImageNode for IMAGE type', async () => {
 // Test: ImageNode handles edge cases
 await asyncTest('ImageNode handles missing imageData', async () => {
     // Import image-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/image-node.js');
+    await import('../src/canvas_chat/static/js/plugins/image-node.js');
 
     const node = {
         type: NodeType.IMAGE,

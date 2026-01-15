@@ -64,7 +64,7 @@ console.log('\n=== Research Node Plugin Tests ===\n');
 // Test: Research node plugin is registered
 await asyncTest('Research node plugin is registered', async () => {
     // Import research-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/research-node.js');
+    await import('../src/canvas_chat/static/js/plugins/research-node.js');
 
     // Check if NodeRegistry has the research type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Research node plugin is registered', async () => {
 // Test: ResearchNode protocol methods
 await asyncTest('ResearchNode implements protocol methods', async () => {
     // Import research-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/research-node.js');
+    await import('../src/canvas_chat/static/js/plugins/research-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.RESEARCH, 'Researching topic...', {});
@@ -90,7 +90,7 @@ await asyncTest('ResearchNode implements protocol methods', async () => {
 // Test: ResearchNode getActions
 await asyncTest('ResearchNode getActions returns correct actions in expected order', async () => {
     // Import research-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/research-node.js');
+    await import('../src/canvas_chat/static/js/plugins/research-node.js');
 
     const node = createNode(NodeType.RESEARCH, 'Researching topic...', {});
     const wrapped = wrapNode(node);
@@ -114,7 +114,7 @@ await asyncTest('ResearchNode getActions returns correct actions in expected ord
 // Test: ResearchNode getHeaderButtons (should include STOP and CONTINUE)
 await asyncTest('ResearchNode getHeaderButtons includes STOP and CONTINUE', async () => {
     // Import research-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/research-node.js');
+    await import('../src/canvas_chat/static/js/plugins/research-node.js');
 
     const node = createNode(NodeType.RESEARCH, 'Researching topic...', {});
     const wrapped = wrapNode(node);
@@ -137,7 +137,7 @@ await asyncTest('ResearchNode getHeaderButtons includes STOP and CONTINUE', asyn
 // Test: ResearchNode isScrollable
 await asyncTest('ResearchNode isScrollable returns true', async () => {
     // Import research-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/research-node.js');
+    await import('../src/canvas_chat/static/js/plugins/research-node.js');
 
     const node = { type: NodeType.RESEARCH, content: 'Researching topic...' };
     const wrapped = wrapNode(node);
@@ -147,7 +147,7 @@ await asyncTest('ResearchNode isScrollable returns true', async () => {
 // Test: ResearchNode wrapNode integration
 await asyncTest('wrapNode returns ResearchNode for RESEARCH type', async () => {
     // Import research-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/research-node.js');
+    await import('../src/canvas_chat/static/js/plugins/research-node.js');
 
     const node = { type: NodeType.RESEARCH, content: 'Researching topic...' };
     const wrapped = wrapNode(node);
@@ -160,7 +160,7 @@ await asyncTest('wrapNode returns ResearchNode for RESEARCH type', async () => {
 // Test: ResearchNode handles edge cases
 await asyncTest('ResearchNode handles empty content', async () => {
     // Import research-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/research-node.js');
+    await import('../src/canvas_chat/static/js/plugins/research-node.js');
 
     const node = {
         type: NodeType.RESEARCH,

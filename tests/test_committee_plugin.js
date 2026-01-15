@@ -48,7 +48,7 @@ import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
 import { assertTrue } from './test_helpers/assertions.js';
 
 // Import CommitteeFeature class only (not the module)
-const { CommitteeFeature } = await import('../src/canvas_chat/static/js/committee.js');
+const { CommitteeFeature } = await import('../src/canvas_chat/static/js/plugins/committee.js');
 
 async function asyncTest(description, fn) {
     try {
@@ -396,7 +396,7 @@ await asyncTest('Synthesis prompt includes persona labels for attribution', asyn
 // Test: Persona presets are defined
 await asyncTest('PERSONA_PRESETS constant is defined and valid', async () => {
     // Import PERSONA_PRESETS from the committee module
-    const committeeModule = await import('../src/canvas_chat/static/js/committee.js');
+    const committeeModule = await import('../src/canvas_chat/static/js/plugins/committee.js');
 
     // Access the module's exports - PERSONA_PRESETS should be there
     // Note: We can't access it directly since it's not exported, but we can verify

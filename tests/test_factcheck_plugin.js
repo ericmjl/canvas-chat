@@ -48,7 +48,7 @@ import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
 import { assertTrue } from './test_helpers/assertions.js';
 
 // Import FactcheckFeature class
-const { FactcheckFeature } = await import('../src/canvas_chat/static/js/factcheck.js');
+const { FactcheckFeature } = await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
 async function asyncTest(description, fn) {
     try {

@@ -48,7 +48,7 @@ import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
 import { assertTrue } from './test_helpers/assertions.js';
 
 // Import FlashcardFeature class
-const { FlashcardFeature } = await import('../src/canvas_chat/static/js/flashcards.js');
+const { FlashcardFeature } = await import('../src/canvas_chat/static/js/plugins/flashcards.js');
 
 async function asyncTest(description, fn) {
     try {

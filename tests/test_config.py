@@ -445,8 +445,8 @@ plugins:
     config = AppConfig.load(config_file, admin_mode=True)
 
     assert len(config.plugins) == 1
-    assert config.plugins[0] == tmp_path / "my-plugin.js"
-    assert config.plugins[0].exists()
+    assert config.plugins[0].js_path == (tmp_path / "my-plugin.js").resolve()
+    assert config.plugins[0].js_path.exists()
 
 
 def test_admin_config_load_multiple_plugins(tmp_path):
@@ -469,8 +469,8 @@ plugins:
     config = AppConfig.load(config_file, admin_mode=True)
 
     assert len(config.plugins) == 2
-    assert config.plugins[0] == tmp_path / "plugin1.js"
-    assert config.plugins[1] == tmp_path / "plugin2.js"
+    assert config.plugins[0].js_path == (tmp_path / "plugin1.js").resolve()
+    assert config.plugins[1].js_path == (tmp_path / "plugin2.js").resolve()
 
 
 def test_admin_config_load_plugin_absolute_path(tmp_path):
@@ -490,8 +490,8 @@ plugins:
     config = AppConfig.load(config_file, admin_mode=True)
 
     assert len(config.plugins) == 1
-    assert config.plugins[0] == plugin_file
-    assert config.plugins[0].is_absolute()
+    assert config.plugins[0].js_path == plugin_file.resolve()
+    assert config.plugins[0].js_path.is_absolute()
 
 
 def test_admin_config_load_plugin_nested_path(tmp_path):
@@ -513,8 +513,8 @@ plugins:
     config = AppConfig.load(config_file, admin_mode=True)
 
     assert len(config.plugins) == 1
-    assert config.plugins[0] == plugin_file
-    assert config.plugins[0].exists()
+    assert config.plugins[0].js_path == plugin_file.resolve()
+    assert config.plugins[0].js_path.exists()
 
 
 def test_admin_config_load_plugin_missing_file_warns(tmp_path, caplog):
@@ -561,7 +561,7 @@ plugins:
     assert len(config.plugins) == 0
 
     # Warning was logged
-    assert "Invalid plugin entry" in caplog.text
+    assert "Plugin entry must have 'js' or 'py' field" in caplog.text
 
 
 def test_admin_config_load_plugins_not_list(tmp_path, caplog):

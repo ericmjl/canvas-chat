@@ -64,7 +64,7 @@ console.log('\n=== Row Node Plugin Tests ===\n');
 // Test: Row node plugin is registered
 await asyncTest('Row node plugin is registered', async () => {
     // Import row-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/row-node.js');
+    await import('../src/canvas_chat/static/js/plugins/row-node.js');
 
     // Check if NodeRegistry has the row type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Row node plugin is registered', async () => {
 // Test: RowNode protocol methods
 await asyncTest('RowNode implements protocol methods', async () => {
     // Import row-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/row-node.js');
+    await import('../src/canvas_chat/static/js/plugins/row-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.ROW, 'Content', {});
@@ -89,7 +89,7 @@ await asyncTest('RowNode implements protocol methods', async () => {
 
 // Test: RowNode isScrollable
 await asyncTest('RowNode isScrollable returns true', async () => {
-    await import('../src/canvas_chat/static/js/row-node.js');
+    await import('../src/canvas_chat/static/js/plugins/row-node.js');
 
     const node = { type: NodeType.ROW, content: 'Content' };
     const wrapped = wrapNode(node);
@@ -98,7 +98,7 @@ await asyncTest('RowNode isScrollable returns true', async () => {
 
 // Test: RowNode wrapNode integration
 await asyncTest('wrapNode returns RowNode for ROW type', async () => {
-    await import('../src/canvas_chat/static/js/row-node.js');
+    await import('../src/canvas_chat/static/js/plugins/row-node.js');
 
     const node = {
         type: NodeType.ROW,

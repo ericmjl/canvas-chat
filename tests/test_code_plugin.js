@@ -60,7 +60,7 @@ import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
 import { assertTrue } from './test_helpers/assertions.js';
 
 // Import CodeFeature class
-const { CodeFeature } = await import('../src/canvas_chat/static/js/code-feature.js');
+const { CodeFeature } = await import('../src/canvas_chat/static/js/plugins/code.js');
 
 async function asyncTest(description, fn) {
     try {

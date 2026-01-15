@@ -64,7 +64,7 @@ console.log('\n=== Synthesis Node Plugin Tests ===\n');
 // Test: Synthesis node plugin is registered
 await asyncTest('Synthesis node plugin is registered', async () => {
     // Import synthesis-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/synthesis-node.js');
+    await import('../src/canvas_chat/static/js/plugins/synthesis-node.js');
 
     // Check if NodeRegistry has the synthesis type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Synthesis node plugin is registered', async () => {
 // Test: SynthesisNode protocol methods
 await asyncTest('SynthesisNode implements protocol methods', async () => {
     // Import synthesis-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/synthesis-node.js');
+    await import('../src/canvas_chat/static/js/plugins/synthesis-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.SYNTHESIS, 'Synthesized answer...', {});
@@ -90,7 +90,7 @@ await asyncTest('SynthesisNode implements protocol methods', async () => {
 // Test: SynthesisNode getActions
 await asyncTest('SynthesisNode getActions returns correct actions in expected order', async () => {
     // Import synthesis-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/synthesis-node.js');
+    await import('../src/canvas_chat/static/js/plugins/synthesis-node.js');
 
     const node = createNode(NodeType.SYNTHESIS, 'Synthesized answer...', {});
     const wrapped = wrapNode(node);
@@ -115,7 +115,7 @@ await asyncTest('SynthesisNode getActions returns correct actions in expected or
 // Test: SynthesisNode supportsStopContinue
 await asyncTest('SynthesisNode supportsStopContinue returns true', async () => {
     // Import synthesis-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/synthesis-node.js');
+    await import('../src/canvas_chat/static/js/plugins/synthesis-node.js');
 
     const node = createNode(NodeType.SYNTHESIS, 'Synthesized answer...', {});
     const wrapped = wrapNode(node);
@@ -125,7 +125,7 @@ await asyncTest('SynthesisNode supportsStopContinue returns true', async () => {
 // Test: SynthesisNode getHeaderButtons (should include STOP and CONTINUE)
 await asyncTest('SynthesisNode getHeaderButtons includes STOP and CONTINUE', async () => {
     // Import synthesis-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/synthesis-node.js');
+    await import('../src/canvas_chat/static/js/plugins/synthesis-node.js');
 
     const node = createNode(NodeType.SYNTHESIS, 'Synthesized answer...', {});
     const wrapped = wrapNode(node);
@@ -148,7 +148,7 @@ await asyncTest('SynthesisNode getHeaderButtons includes STOP and CONTINUE', asy
 // Test: SynthesisNode isScrollable
 await asyncTest('SynthesisNode isScrollable returns true', async () => {
     // Import synthesis-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/synthesis-node.js');
+    await import('../src/canvas_chat/static/js/plugins/synthesis-node.js');
 
     const node = { type: NodeType.SYNTHESIS, content: 'Synthesized answer...' };
     const wrapped = wrapNode(node);
@@ -158,7 +158,7 @@ await asyncTest('SynthesisNode isScrollable returns true', async () => {
 // Test: SynthesisNode wrapNode integration
 await asyncTest('wrapNode returns SynthesisNode for SYNTHESIS type', async () => {
     // Import synthesis-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/synthesis-node.js');
+    await import('../src/canvas_chat/static/js/plugins/synthesis-node.js');
 
     const node = { type: NodeType.SYNTHESIS, content: 'Synthesized answer...' };
     const wrapped = wrapNode(node);
@@ -172,7 +172,7 @@ await asyncTest('wrapNode returns SynthesisNode for SYNTHESIS type', async () =>
 // Test: SynthesisNode handles edge cases
 await asyncTest('SynthesisNode handles empty content', async () => {
     // Import synthesis-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/synthesis-node.js');
+    await import('../src/canvas_chat/static/js/plugins/synthesis-node.js');
 
     const node = {
         type: NodeType.SYNTHESIS,

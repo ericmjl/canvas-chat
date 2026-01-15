@@ -64,7 +64,7 @@ console.log('\n=== Summary Node Plugin Tests ===\n');
 // Test: Summary node plugin is registered
 await asyncTest('Summary node plugin is registered', async () => {
     // Import summary.js to trigger registration
-    await import('../src/canvas_chat/static/js/summary.js');
+    await import('../src/canvas_chat/static/js/plugins/summary.js');
 
     // Check if NodeRegistry has the summary type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Summary node plugin is registered', async () => {
 // Test: SummaryNode protocol methods
 await asyncTest('SummaryNode implements protocol methods', async () => {
     // Import summary.js to register the plugin
-    await import('../src/canvas_chat/static/js/summary.js');
+    await import('../src/canvas_chat/static/js/plugins/summary.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.SUMMARY, 'Test summary', {});
@@ -90,7 +90,7 @@ await asyncTest('SummaryNode implements protocol methods', async () => {
 // Test: SummaryNode getActions
 await asyncTest('SummaryNode getActions returns correct actions in expected order', async () => {
     // Import summary.js to register the plugin
-    await import('../src/canvas_chat/static/js/summary.js');
+    await import('../src/canvas_chat/static/js/plugins/summary.js');
 
     const node = createNode(NodeType.SUMMARY, 'Test summary', {});
     const wrapped = wrapNode(node);
@@ -113,7 +113,7 @@ await asyncTest('SummaryNode getActions returns correct actions in expected orde
 // Test: SummaryNode isScrollable
 await asyncTest('SummaryNode isScrollable returns true', async () => {
     // Import summary.js to register the plugin
-    await import('../src/canvas_chat/static/js/summary.js');
+    await import('../src/canvas_chat/static/js/plugins/summary.js');
 
     const node = { type: NodeType.SUMMARY, content: 'Summary' };
     const wrapped = wrapNode(node);
@@ -123,7 +123,7 @@ await asyncTest('SummaryNode isScrollable returns true', async () => {
 // Test: SummaryNode wrapNode integration
 await asyncTest('wrapNode returns SummaryNode for SUMMARY type', async () => {
     // Import summary.js to register the plugin
-    await import('../src/canvas_chat/static/js/summary.js');
+    await import('../src/canvas_chat/static/js/plugins/summary.js');
 
     const node = { type: NodeType.SUMMARY, content: 'Summary content' };
     const wrapped = wrapNode(node);

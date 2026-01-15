@@ -41,12 +41,12 @@ if (!global.indexedDB) {
 }
 
 // Now import modules
-import { PluginTestHarness } from './test_helpers/plugin-test-harness.js';
+import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
 import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
 import { assertEqual, assertTrue, assertFalse } from './test_helpers/assertions.js';
 
 // Import NoteFeature class
-const { NoteFeature } = await import('../src/canvas_chat/static/js/note.js');
+const { NoteFeature } = await import('../src/canvas_chat/static/js/plugins/note.js');
 
 // Import node types for testing
 const { NodeType, createNode } = await import('../src/canvas_chat/static/js/graph-types.js');
@@ -136,7 +136,7 @@ await asyncTest('NoteFeature creates note node from markdown content', async () 
         priority: PRIORITY.BUILTIN,
     });
 
-    const result = await harness.executeCommand('/note', 'This is a test note');
+    const result = await harness.executeSlashCommand('/note', 'This is a test note');
 
     assertTrue(result, 'Command should be handled');
     assertEqual(harness.createdNodes.length, 1, 'Should create one node');
@@ -160,12 +160,12 @@ await asyncTest('NoteFeature shows warning for empty content', async () => {
         priority: PRIORITY.BUILTIN,
     });
 
-    const result = await harness.executeCommand('/note', '');
+    const result = await harness.executeSlashCommand('/note', '');
 
     assertTrue(result, 'Command should be handled');
     assertEqual(harness.createdNodes.length, 0, 'Should not create node');
     assertTrue(
-        harness.toasts.some((t) => t.message.includes('Please provide note content')),
+        harness.toasts.some((t) => t.message.includes('Please provide note content') || t.message.includes('Please provide note content or a URL')),
         'Should show warning toast'
     );
 });
@@ -195,7 +195,7 @@ await asyncTest('NoteFeature handles URL in /note command', async () => {
         }),
     });
 
-    const result = await harness.executeCommand('/note', 'https://example.com');
+    const result = await harness.executeSlashCommand('/note', 'https://example.com');
 
     assertTrue(result, 'Command should be handled');
     // Note: URL handling creates FETCH_RESULT node, not NOTE node
@@ -205,7 +205,7 @@ await asyncTest('NoteFeature handles URL in /note command', async () => {
 // Test: Note node plugin is registered
 await asyncTest('Note node plugin is registered', async () => {
     // Import note.js to trigger registration
-    await import('../src/canvas_chat/static/js/note.js');
+    await import('../src/canvas_chat/static/js/plugins/note.js');
 
     // Check if NodeRegistry has the note type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -224,7 +224,7 @@ await asyncTest('Note node plugin is registered', async () => {
 // Test: NoteNode getActions
 await asyncTest('NoteNode getActions returns correct actions', async () => {
     // Import note.js to register the plugin
-    await import('../src/canvas_chat/static/js/note.js');
+    await import('../src/canvas_chat/static/js/plugins/note.js');
 
     const node = createNode(NodeType.NOTE, 'Test note', {});
     const wrapped = wrapNode(node);
@@ -244,7 +244,7 @@ await asyncTest('NoteNode getActions returns correct actions', async () => {
 // Test: NoteNode wrapNode integration
 await asyncTest('wrapNode returns NoteNode for NOTE type', async () => {
     // Import note.js to register the plugin
-    await import('../src/canvas_chat/static/js/note.js');
+    await import('../src/canvas_chat/static/js/plugins/note.js');
 
     const node = { type: NodeType.NOTE, content: 'Note content' };
     const wrapped = wrapNode(node);

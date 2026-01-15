@@ -41,7 +41,7 @@ import { wrapNode, BaseNode } from '../src/canvas_chat/static/js/node-protocols.
 import { NodeType } from '../src/canvas_chat/static/js/graph-types.js';
 
 // Side-effect import to register the plugin
-import '../src/canvas_chat/static/js/code-node.js';
+import '../src/canvas_chat/static/js/plugins/code.js';
 
 function test(description, fn) {
     try {
