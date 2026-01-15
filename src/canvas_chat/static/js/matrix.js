@@ -16,6 +16,7 @@ import { streamSSEContent } from './sse.js';
 import { apiUrl, escapeHtmlText, buildMessagesForApi } from './utils.js';
 import { FeaturePlugin } from './feature-plugin.js';
 import { CancellableEvent } from './plugin-events.js';
+import { wrapNode } from './node-protocols.js';
 
 /**
  * MatrixFeature - Encapsulates all matrix-related functionality.
@@ -474,10 +475,14 @@ class MatrixFeature extends FeaturePlugin {
             let lastStreamSync = 0;
             const streamSyncInterval = 50; // Sync every 50ms during streaming
 
+            // Get protocol instance for cell updates
+            const matrixNode = this.graph.getNode(nodeId);
+            const wrapped = wrapNode(matrixNode);
+
             await streamSSEContent(response, {
                 onContent: (chunk, fullContent) => {
                     cellContent = fullContent;
-                    this.canvas.updateMatrixCell(nodeId, row, col, cellContent, true);
+                    wrapped.updateCellContent(nodeId, cellKey, cellContent, true, this.canvas);
 
                     // Sync streaming content to peers (throttled)
                     const now = Date.now();
@@ -492,7 +497,7 @@ class MatrixFeature extends FeaturePlugin {
                 },
                 onDone: (normalizedContent) => {
                     cellContent = normalizedContent;
-                    this.canvas.updateMatrixCell(nodeId, row, col, cellContent, false);
+                    wrapped.updateCellContent(nodeId, cellKey, cellContent, false, this.canvas);
                 },
                 onError: (err) => {
                     throw err;

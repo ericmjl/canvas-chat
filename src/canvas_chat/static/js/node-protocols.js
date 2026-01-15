@@ -240,6 +240,66 @@ class BaseNode {
         // Base class has no custom bindings - common bindings handled by canvas.js
         return [];
     }
+
+    /**
+     * Update a specific cell's content (for node types with cells, like Matrix).
+     * Override in subclasses that support cell-based content updates.
+     * @param {string} nodeId - The node ID
+     * @param {string} cellKey - Cell identifier (e.g., "row-col" for matrix)
+     * @param {string} content - New cell content
+     * @param {boolean} isStreaming - Whether this is a streaming update
+     * @param {Canvas} canvas - Canvas instance for DOM manipulation
+     * @returns {boolean} True if the update was handled
+     */
+    updateCellContent(nodeId, cellKey, content, isStreaming, canvas) {
+        // Base class doesn't support cell updates
+        return false;
+    }
+
+    /**
+     * Get the matrix ID if this node is associated with a matrix (e.g., CellNode).
+     * Override in subclasses that are linked to matrices.
+     * @returns {string|null} Matrix node ID, or null if not applicable
+     */
+    getMatrixId() {
+        return null;
+    }
+
+    /**
+     * Format node content for summary generation.
+     * Override in subclasses that need custom summary formatting (e.g., Matrix).
+     * @returns {string} Content string to use for LLM summary generation
+     */
+    formatForSummary() {
+        // Default: use node content
+        return this.node.content || '';
+    }
+
+    /**
+     * Update node content from remote changes (for multiplayer sync).
+     * Override in subclasses that need custom remote update handling (e.g., Matrix cells).
+     * @param {Object} node - Updated node object
+     * @param {Canvas} canvas - Canvas instance for DOM manipulation
+     * @returns {boolean} True if the update was handled
+     */
+    updateRemoteContent(node, canvas) {
+        // Base class doesn't need special remote handling
+        return false;
+    }
+
+    /**
+     * Get a specific DOM element within the node (for operations like resize).
+     * Override in subclasses that need to expose internal elements.
+     * @param {string} nodeId - The node ID
+     * @param {string} selector - CSS selector for the element
+     * @param {Canvas} canvas - Canvas instance for DOM access
+     * @returns {HTMLElement|null} The element, or null if not found
+     */
+    getElement(nodeId, selector, canvas) {
+        const wrapper = canvas.nodeElements.get(nodeId);
+        if (!wrapper) return null;
+        return wrapper.querySelector(selector);
+    }
 }
 
 /**
@@ -268,257 +328,11 @@ class BaseNode {
  */
 
 /**
- * Matrix node (cross-product evaluation table)
- * Note: HighlightNode is now a plugin (highlight-node.js)
+ * Note: MatrixNode is now a plugin (matrix-node.js)
+ * Note: CellNode is now a plugin (cell-node.js)
+ * Note: RowNode is now a plugin (row-node.js)
+ * Note: ColumnNode is now a plugin (column-node.js)
  */
-class MatrixNode extends BaseNode {
-    getTypeLabel() {
-        return 'Matrix';
-    }
-    getTypeIcon() {
-        return '📊';
-    }
-
-    getHeaderButtons() {
-        return [
-            HeaderButtons.NAV_PARENT,
-            HeaderButtons.NAV_CHILD,
-            HeaderButtons.COLLAPSE,
-            HeaderButtons.STOP, // For stopping cell fills
-            HeaderButtons.RESET_SIZE,
-            HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE,
-        ];
-    }
-
-    /**
-     * Matrix nodes use internal actions (Edit, Fill All) instead of the standard footer
-     * @returns {Array}
-     */
-    getActions() {
-        return [];
-    }
-
-    /**
-     * Matrix needs special content container styling for the scrollable table
-     * @returns {string}
-     */
-    getContentClasses() {
-        return 'matrix-table-container';
-    }
-
-    getSummaryText(canvas) {
-        // Priority: user-set title > LLM summary > generated fallback
-        if (this.node.title) return this.node.title;
-        if (this.node.summary) return this.node.summary;
-
-        // For matrix nodes, generate from context and dimensions
-        const context = this.node.context || 'Matrix';
-        const rows = this.node.rowItems?.length || 0;
-        const cols = this.node.colItems?.length || 0;
-        return `${context} (${rows}×${cols})`;
-    }
-
-    /**
-     * Render matrix-specific content: context bar, table, and internal actions.
-     * The standard header/summary/resize-handles are rendered by canvas.js.
-     * @param {Canvas} canvas
-     * @returns {string} HTML for the content portion only
-     */
-    renderContent(canvas) {
-        const { context, rowItems, colItems, cells, indexColWidth } = this.node;
-
-        // Build table HTML with optional custom index column width
-        const styleAttr = indexColWidth ? ` style="--index-col-width: ${indexColWidth}"` : '';
-        let tableHtml = `<table class="matrix-table"${styleAttr}><thead><tr>`;
-
-        // Corner cell with context and resize handle
-        tableHtml += `<th class="corner-cell" title="${canvas.escapeHtml(context)}"><span class="matrix-header-text">${canvas.escapeHtml(context)}</span><div class="index-col-resize-handle" title="Drag to resize index column"></div></th>`;
-
-        // Column headers - clickable to extract column
-        for (let c = 0; c < colItems.length; c++) {
-            const colItem = colItems[c];
-            tableHtml += `<th class="col-header" data-col="${c}" title="Click to extract column: ${canvas.escapeHtml(colItem)}">
-                <span class="matrix-header-text">${canvas.escapeHtml(colItem)}</span>
-            </th>`;
-        }
-        tableHtml += '</tr></thead><tbody>';
-
-        // Data rows
-        for (let r = 0; r < rowItems.length; r++) {
-            const rowItem = rowItems[r];
-            tableHtml += '<tr>';
-
-            // Row header - clickable to extract row
-            tableHtml += `<td class="row-header" data-row="${r}" title="Click to extract row: ${canvas.escapeHtml(rowItem)}">
-                <span class="matrix-header-text">${canvas.escapeHtml(rowItem)}</span>
-            </td>`;
-
-            // Cells
-            for (let c = 0; c < colItems.length; c++) {
-                const cellKey = `${r}-${c}`;
-                const cell = cells[cellKey];
-                const isFilled = cell && cell.filled && cell.content;
-
-                if (isFilled) {
-                    tableHtml += `<td class="matrix-cell filled" data-row="${r}" data-col="${c}" title="Click to view details">
-                        <div class="matrix-cell-content">${canvas.escapeHtml(cell.content)}</div>
-                    </td>`;
-                } else {
-                    tableHtml += `<td class="matrix-cell empty" data-row="${r}" data-col="${c}">
-                        <div class="matrix-cell-empty">
-                            <button class="matrix-cell-fill" title="Fill with concise AI evaluation">+</button>
-                        </div>
-                    </td>`;
-                }
-            }
-            tableHtml += '</tr>';
-        }
-        tableHtml += '</tbody></table>';
-
-        // Matrix-specific content: context bar at top, table, and internal actions at bottom
-        return `
-            <div class="matrix-context">
-                <span class="matrix-context-text">${canvas.escapeHtml(context)}</span>
-                <button class="matrix-context-copy" title="Copy context">📋</button>
-            </div>
-            ${tableHtml}
-            <div class="matrix-actions">
-                <button class="matrix-edit-btn" title="Edit rows and columns">Edit</button>
-                <button class="matrix-fill-all-btn" title="Fill all empty cells with concise AI evaluations (2-3 sentences each)">Fill All</button>
-            </div>
-        `;
-    }
-
-    async copyToClipboard(canvas, app) {
-        // Format matrix as markdown table
-        if (!app?.formatMatrixAsText) {
-            console.error('MatrixNode.copyToClipboard: app.formatMatrixAsText is not available');
-            return;
-        }
-        const text = app.formatMatrixAsText(this.node);
-        if (!text) return;
-        await navigator.clipboard.writeText(text);
-        canvas.showCopyFeedback(this.node.id);
-    }
-
-    /**
-     * Matrix-specific event bindings for cells, headers, and actions
-     */
-    getEventBindings() {
-        return [
-            // Matrix cells - view filled or fill empty
-            {
-                selector: '.matrix-cell',
-                multiple: true,
-                handler: (nodeId, e, canvas) => {
-                    const cell = e.currentTarget;
-                    const row = parseInt(cell.dataset.row);
-                    const col = parseInt(cell.dataset.col);
-                    if (cell.classList.contains('filled')) {
-                        canvas.emit('matrixCellView', nodeId, row, col);
-                    } else {
-                        canvas.emit('matrixCellFill', nodeId, row, col);
-                    }
-                },
-            },
-            // Edit button
-            {
-                selector: '.matrix-edit-btn',
-                handler: 'matrixEdit',
-            },
-            // Fill all button
-            {
-                selector: '.matrix-fill-all-btn',
-                handler: 'matrixFillAll',
-            },
-            // Copy context button
-            {
-                selector: '.matrix-context-copy',
-                handler: async (nodeId, e, canvas) => {
-                    const btn = e.currentTarget;
-                    try {
-                        const node = canvas.graph?.getNode(nodeId);
-                        if (node?.context) {
-                            await navigator.clipboard.writeText(node.context);
-                            const originalText = btn.textContent;
-                            btn.textContent = '✓';
-                            setTimeout(() => {
-                                btn.textContent = originalText;
-                            }, 1500);
-                        }
-                    } catch (err) {
-                        console.error('Failed to copy:', err);
-                    }
-                },
-            },
-            // Row headers - extract row
-            {
-                selector: '.row-header[data-row]',
-                multiple: true,
-                handler: (nodeId, e, canvas) => {
-                    const row = parseInt(e.currentTarget.dataset.row);
-                    canvas.emit('matrixRowExtract', nodeId, row);
-                },
-            },
-            // Column headers - extract column
-            {
-                selector: '.col-header[data-col]',
-                multiple: true,
-                handler: (nodeId, e, canvas) => {
-                    const col = parseInt(e.currentTarget.dataset.col);
-                    canvas.emit('matrixColExtract', nodeId, col);
-                },
-            },
-            // Index column resize handle
-            {
-                selector: '.index-col-resize-handle',
-                event: 'mousedown',
-                handler: (nodeId, e, canvas) => {
-                    const div = e.currentTarget.closest('.node');
-                    canvas.startIndexColResize(e, nodeId, div);
-                },
-            },
-        ];
-    }
-}
-
-/**
- * Cell node (pinned cell from a matrix)
- */
-class CellNode extends BaseNode {
-    getTypeLabel() {
-        // For contextual labels like "GPT-4 × Accuracy"
-        return this.node.title || 'Cell';
-    }
-    getTypeIcon() {
-        return '📦';
-    }
-}
-
-/**
- * Row node (extracted row from a matrix)
- */
-class RowNode extends BaseNode {
-    getTypeLabel() {
-        return 'Row';
-    }
-    getTypeIcon() {
-        return '↔️';
-    }
-}
-
-/**
- * Column node (extracted column from a matrix)
- */
-class ColumnNode extends BaseNode {
-    getTypeLabel() {
-        return 'Column';
-    }
-    getTypeIcon() {
-        return '↕️';
-    }
-}
 
 /**
  * Note: PdfNode has been moved to pdf-node.js plugin (built-in)
@@ -763,10 +577,10 @@ function wrapNode(node) {
         // Note: SearchNode is now a plugin (search-node.js)
         // Note: ResearchNode is now a plugin (research-node.js)
         // Note: HighlightNode is now a plugin (highlight-node.js)
-        [NodeType.MATRIX]: MatrixNode,
-        [NodeType.CELL]: CellNode,
-        [NodeType.ROW]: RowNode,
-        [NodeType.COLUMN]: ColumnNode,
+        // Note: MatrixNode is now a plugin (matrix-node.js)
+        // Note: CellNode is now a plugin (cell-node.js)
+        // Note: RowNode is now a plugin (row-node.js)
+        // Note: ColumnNode is now a plugin (column-node.js)
         // Note: FetchResultNode is now a plugin (fetch-result-node.js)
         // Note: PdfNode is now a plugin (pdf-node.js)
         // Note: OpinionNode is now a plugin (opinion-node.js)
@@ -795,18 +609,20 @@ function createMockNodeForType(nodeType) {
     if (nodeType === NodeType.IMAGE) {
         return { ...baseMock, imageData: 'mockImageData', mimeType: 'image/png' };
     }
-    if (nodeType === NodeType.MATRIX) {
-        return {
-            ...baseMock,
-            context: 'Test Context',
-            rowItems: ['Row1'],
-            colItems: ['Col1'],
-            cells: {},
-        };
-    }
-    if (nodeType === NodeType.CELL) {
-        return { ...baseMock, title: 'Test Cell Title' };
-    }
+    // Note: MatrixNode is now a plugin (matrix-node.js)
+    // if (nodeType === NodeType.MATRIX) {
+    //     return {
+    //         ...baseMock,
+    //         context: 'Test Context',
+    //         rowItems: ['Row1'],
+    //         colItems: ['Col1'],
+    //         cells: {},
+    //     };
+    // }
+    // Note: CellNode is now a plugin (cell-node.js)
+    // if (nodeType === NodeType.CELL) {
+    //     return { ...baseMock, title: 'Test Cell Title' };
+    // }
     if (nodeType === NodeType.HIGHLIGHT) {
         // HighlightNode can have imageData or just content
         return baseMock;
@@ -844,19 +660,23 @@ function validateNodeProtocol(NodeClass) {
     const className = NodeClass.name;
     // Note: ImageNode is now a plugin (image-node.js)
     // if (className.includes('Image')) nodeType = NodeType.IMAGE;
-    if (className.includes('Matrix')) nodeType = NodeType.MATRIX;
-    else if (className.includes('Cell')) nodeType = NodeType.CELL;
+    // Note: MatrixNode is now a plugin (matrix-node.js)
+    // if (className.includes('Matrix')) nodeType = NodeType.MATRIX;
+    // Note: CellNode is now a plugin (cell-node.js)
+    // if (className.includes('Cell')) nodeType = NodeType.CELL;
     // Note: HumanNode is now a plugin (human-node.js)
     // Note: AINode is now a plugin (ai-node.js)
-    else if (className.includes('Note')) nodeType = NodeType.NOTE;
+    if (className.includes('Note')) nodeType = NodeType.NOTE;
     else if (className.includes('Summary')) nodeType = NodeType.SUMMARY;
     // Note: ReferenceNode is now a plugin (reference.js)
     // Note: SearchNode is now a plugin (search-node.js)
     // Note: HighlightNode is now a plugin (highlight-node.js)
     // Note: FetchResultNode is now a plugin (fetch-result-node.js)
     // Note: ResearchNode is now a plugin (research-node.js)
-    else if (className.includes('Row')) nodeType = NodeType.ROW;
-    else if (className.includes('Column')) nodeType = NodeType.COLUMN;
+    // Note: RowNode is now a plugin (row-node.js)
+    // else if (className.includes('Row')) nodeType = NodeType.ROW;
+    // Note: ColumnNode is now a plugin (column-node.js)
+    // else if (className.includes('Column')) nodeType = NodeType.COLUMN;
     // Note: PdfNode is now a plugin (pdf-node.js)
     // Note: OpinionNode is now a plugin (opinion-node.js)
     // Note: SynthesisNode is now a plugin (synthesis-node.js)
@@ -917,10 +737,10 @@ function registerBuiltinNodeTypes() {
         // Note: 'highlight' is now a plugin (highlight-node.js)
         // Note: 'fetch_result' is now a plugin (fetch-result-node.js)
         // Note: 'research' is now a plugin (research-node.js)
-        { type: 'matrix', protocol: MatrixNode },
-        { type: 'cell', protocol: CellNode },
-        { type: 'row', protocol: RowNode },
-        { type: 'column', protocol: ColumnNode },
+        // Note: 'matrix' is now a plugin (matrix-node.js)
+        // Note: 'cell' is now a plugin (cell-node.js)
+        // Note: 'row' is now a plugin (row-node.js)
+        // Note: 'column' is now a plugin (column-node.js)
         // Note: 'pdf' is now a plugin (pdf-node.js)
         // Note: 'opinion' is now a plugin (opinion-node.js)
         // Note: 'synthesis' is now a plugin (synthesis-node.js)
@@ -978,10 +798,10 @@ export {
     // HighlightNode is now exported from highlight-node.js plugin
     // FetchResultNode is now exported from fetch-result-node.js plugin
     // ResearchNode is now exported from research-node.js plugin
-    MatrixNode,
-    CellNode,
-    RowNode,
-    ColumnNode,
+    // MatrixNode is now exported from matrix-node.js plugin
+    // CellNode is now exported from cell-node.js plugin
+    // RowNode is now exported from row-node.js plugin
+    // ColumnNode is now exported from column-node.js plugin
     // PdfNode is now exported from pdf-node.js plugin
     // OpinionNode is now exported from opinion-node.js plugin
     // SynthesisNode is now exported from synthesis-node.js plugin

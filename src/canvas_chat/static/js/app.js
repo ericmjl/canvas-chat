@@ -37,6 +37,10 @@ import './factcheck-node.js'; // Side-effect import for FactcheckNode plugin reg
 import './search-node.js'; // Side-effect import for SearchNode plugin registration
 import './highlight-node.js'; // Side-effect import for HighlightNode plugin registration
 import './fetch-result-node.js'; // Side-effect import for FetchResultNode plugin registration
+import './matrix-node.js'; // Side-effect import for MatrixNode plugin registration
+import './cell-node.js'; // Side-effect import for CellNode plugin registration
+import './row-node.js'; // Side-effect import for RowNode plugin registration
+import './column-node.js'; // Side-effect import for ColumnNode plugin registration
 // Note: poll.js is an external plugin - load via config.yaml
 import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { wrapNode } from './node-protocols.js';
@@ -3064,13 +3068,17 @@ df.head()
         // If a cell node is selected, highlight its source cell in the matrix
         if (selectedIds.length === 1) {
             const node = this.graph.getNode(selectedIds[0]);
-            if (node && node.type === NodeType.CELL && node.matrixId) {
-                this.canvas.highlightMatrixCell(node.matrixId, node.rowIndex, node.colIndex);
-            }
+            if (node) {
+                const wrapped = wrapNode(node);
+                const matrixId = wrapped.getMatrixId();
+                if (matrixId && node.rowIndex !== undefined && node.colIndex !== undefined) {
+                    this.canvas.highlightMatrixCell(matrixId, node.rowIndex, node.colIndex);
+                }
 
-            // If a highlight node is selected, highlight the source text in the parent node
-            if (node && node.type === NodeType.HIGHLIGHT) {
-                this.highlightSourceTextInParent(node);
+                // If a highlight node is selected, highlight the source text in the parent node
+                if (node.type === NodeType.HIGHLIGHT) {
+                    this.highlightSourceTextInParent(node);
+                }
             }
         }
 
@@ -3980,24 +3988,14 @@ df.head()
         const supportedTypes = [NodeType.AI, NodeType.RESEARCH, NodeType.CELL, NodeType.MATRIX];
         if (!supportedTypes.includes(node.type)) return;
 
+        // Get protocol instance to check if node has content or uses formatForSummary
+        const wrapped = wrapNode(node);
+        const contentForSummary = wrapped.formatForSummary();
+
         // For non-matrix nodes, require content
-        if (node.type !== NodeType.MATRIX && !node.content) return;
+        if (node.type !== NodeType.MATRIX && !contentForSummary) return;
 
         try {
-            // Build content string based on node type
-            let contentForSummary;
-            if (node.type === NodeType.MATRIX) {
-                // For matrix, describe the structure
-                const filledCells = Object.values(node.cells || {}).filter((c) => c.filled).length;
-                const totalCells = (node.rowItems?.length || 0) * (node.colItems?.length || 0);
-                contentForSummary =
-                    `Matrix evaluation: "${node.context}"\n` +
-                    `Rows: ${node.rowItems?.join(', ')}\n` +
-                    `Columns: ${node.colItems?.join(', ')}\n` +
-                    `Progress: ${filledCells}/${totalCells} cells filled`;
-            } else {
-                contentForSummary = node.content;
-            }
 
             const requestBody = this.buildLLMRequest({
                 content: contentForSummary,
@@ -4310,10 +4308,9 @@ df.head()
                         this.canvas.updateNodeContent(node.id, node.content, false);
                         this.canvas.updateNodeSummary(node.id, node);
 
-                        // Update matrix cells if applicable
-                        if (node.type === NodeType.MATRIX && node.cells) {
-                            this.updateRemoteMatrixCells(node);
-                        }
+                        // Update node content from remote changes (e.g., matrix cells)
+                        const wrapped = wrapNode(node);
+                        wrapped.updateRemoteContent(node, this.canvas);
                     }
                 }
             } else {
@@ -4377,29 +4374,6 @@ df.head()
         return false;
     }
 
-    /**
-     * Update matrix cell contents from remote changes.
-     */
-    updateRemoteMatrixCells(node) {
-        const wrapper = this.canvas.nodeElements.get(node.id);
-        if (!wrapper || !node.cells) return;
-
-        for (const [cellKey, cellData] of Object.entries(node.cells)) {
-            const [row, col] = cellKey.split('-').map(Number);
-            const cellEl = wrapper.querySelector(`.matrix-cell[data-row="${row}"][data-col="${col}"]`);
-            if (cellEl) {
-                const contentEl = cellEl.querySelector('.matrix-cell-content');
-                if (contentEl && cellData.content) {
-                    contentEl.textContent = cellData.content;
-                    cellEl.classList.remove('empty');
-                    cellEl.classList.add('filled');
-                } else if (!cellData.content) {
-                    cellEl.classList.add('empty');
-                    cellEl.classList.remove('filled');
-                }
-            }
-        }
-    }
 
     /**
      * Animate node positions and sizes for remote changes.
@@ -4594,16 +4568,17 @@ df.head()
             case 'FILL_CELL':
                 // Restore old cell state (immutable pattern)
                 const matrixNodeUndo = this.graph.getNode(action.nodeId);
-                if (matrixNodeUndo && matrixNodeUndo.type === NodeType.MATRIX) {
+                if (matrixNodeUndo) {
+                    const wrapped = wrapNode(matrixNodeUndo);
                     const cellKey = `${action.row}-${action.col}`;
                     const updatedCells = { ...matrixNodeUndo.cells, [cellKey]: { ...action.oldCell } };
                     this.graph.updateNode(action.nodeId, { cells: updatedCells });
-                    this.canvas.updateMatrixCell(
+                    wrapped.updateCellContent(
                         action.nodeId,
-                        action.row,
-                        action.col,
-                        action.oldCell.filled ? action.oldCell.content : null,
-                        false
+                        cellKey,
+                        action.oldCell.filled ? action.oldCell.content : '',
+                        false,
+                        this.canvas
                     );
                 }
                 break;
@@ -4689,11 +4664,12 @@ df.head()
             case 'FILL_CELL':
                 // Re-apply cell fill (immutable pattern)
                 const matrixNodeRedo = this.graph.getNode(action.nodeId);
-                if (matrixNodeRedo && matrixNodeRedo.type === NodeType.MATRIX) {
+                if (matrixNodeRedo) {
+                    const wrapped = wrapNode(matrixNodeRedo);
                     const cellKey = `${action.row}-${action.col}`;
                     const updatedCells = { ...matrixNodeRedo.cells, [cellKey]: { ...action.newCell } };
                     this.graph.updateNode(action.nodeId, { cells: updatedCells });
-                    this.canvas.updateMatrixCell(action.nodeId, action.row, action.col, action.newCell.content, false);
+                    wrapped.updateCellContent(action.nodeId, cellKey, action.newCell.content || '', false, this.canvas);
                 }
                 break;
         }
