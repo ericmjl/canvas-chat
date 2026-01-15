@@ -143,6 +143,59 @@ class BaseNode {
     }
 
     /**
+     * Get edit field definitions for the edit content modal.
+     * Plugins can override this to customize edit behavior (e.g., multiple fields).
+     * @returns {Array<{id: string, label: string, value: string, placeholder: string}>}
+     */
+    getEditFields() {
+        // Default: single content field
+        return [
+            {
+                id: 'content',
+                label: 'Markdown',
+                value: this.node.content || '',
+                placeholder: 'Edit the fetched content...',
+            },
+        ];
+    }
+
+    /**
+     * Handle saving edited fields.
+     * Plugins can override this to customize save behavior (e.g., save multiple fields).
+     * @param {Object} fields - Object mapping field IDs to values
+     * @param {Object} app - App instance for graph updates
+     * @returns {Object} Update object to pass to graph.updateNode()
+     */
+    handleEditSave(fields, app) {
+        // Default: save content field
+        return {
+            content: fields.content || '',
+        };
+    }
+
+    /**
+     * Render preview HTML for edit modal.
+     * Plugins can override this to show custom preview (e.g., flashcard format).
+     * @param {Object} fields - Object mapping field IDs to values
+     * @param {Canvas} canvas - Canvas instance for helper methods
+     * @returns {string} HTML string for preview
+     */
+    renderEditPreview(fields, canvas) {
+        // Default: render markdown preview
+        const content = fields.content || '';
+        return canvas.renderMarkdown(content);
+    }
+
+    /**
+     * Get modal title for edit dialog.
+     * Plugins can override this to customize the title.
+     * @returns {string}
+     */
+    getEditModalTitle() {
+        return 'Edit Content';
+    }
+
+    /**
      * Whether this node type has fixed scrollable dimensions.
      * All nodes now have fixed dimensions with scrollable content.
      * @returns {boolean}
@@ -770,68 +823,9 @@ class FactcheckNode extends BaseNode {
  */
 
 /**
- * Flashcard node (spaced repetition Q/A card)
+ * Note: FlashcardNode has been moved to flashcard-node.js plugin (built-in)
+ * This allows the flashcard node type to be loaded as a plugin.
  */
-class FlashcardNode extends BaseNode {
-    getTypeLabel() {
-        return 'Flashcard';
-    }
-    getTypeIcon() {
-        return '🎴';
-    }
-
-    getSummaryText(canvas) {
-        // Priority: user-set title > question content truncated
-        if (this.node.title) return this.node.title;
-        const plainText = (this.node.content || '').replace(/[#*_`>\[\]()!]/g, '').trim();
-        return canvas.truncate(plainText, 60);
-    }
-
-    renderContent(canvas) {
-        const front = canvas.escapeHtml(this.node.content || 'No question');
-        const back = canvas.escapeHtml(this.node.back || 'No answer');
-
-        // Determine SRS status for display
-        let statusClass = 'new';
-        let statusText = 'New';
-        if (this.node.srs) {
-            const { nextReviewDate } = this.node.srs;
-            if (nextReviewDate) {
-                const now = new Date();
-                const reviewDate = new Date(nextReviewDate);
-                if (reviewDate <= now) {
-                    statusClass = 'due';
-                    statusText = 'Due';
-                } else {
-                    // Card has been reviewed and has a future due date
-                    statusClass = 'learning';
-                    const daysUntil = Math.ceil((reviewDate - now) / 86400000);
-                    statusText = daysUntil === 1 ? 'Due tomorrow' : `Due in ${daysUntil} days`;
-                }
-            }
-        }
-
-        return `
-            <div class="flashcard-container">
-                <div class="flashcard-status ${statusClass}">${statusText}</div>
-                <div class="flashcard-card">
-                    <div class="flashcard-front">
-                        <div class="flashcard-label">Question</div>
-                        <div class="flashcard-text">${front}</div>
-                    </div>
-                    <div class="flashcard-back">
-                        <div class="flashcard-label">Answer</div>
-                        <div class="flashcard-text">${back}</div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    getActions() {
-        return [Actions.FLIP_CARD, Actions.REVIEW_CARD, Actions.EDIT_CONTENT, Actions.COPY];
-    }
-}
 
 /**
  * Factory function to wrap a node with its protocol class
@@ -880,7 +874,7 @@ function wrapNode(node) {
         // Note: ReviewNode is now a plugin (review-node.js)
         [NodeType.FACTCHECK]: FactcheckNode,
         // Note: ImageNode is now a plugin (image-node.js)
-        [NodeType.FLASHCARD]: FlashcardNode,
+        // Note: FlashcardNode is now a plugin (flashcard-node.js)
         // Note: CsvNode is now a plugin (csv-node.js)
         [NodeType.CODE]: CodeNode,
     };
@@ -968,7 +962,8 @@ function validateNodeProtocol(NodeClass) {
     // Note: SynthesisNode is now a plugin (synthesis-node.js)
     // Note: ReviewNode is now a plugin (review-node.js)
     else if (className.includes('Factcheck')) nodeType = NodeType.FACTCHECK;
-    else if (className.includes('Flashcard')) nodeType = NodeType.FLASHCARD;
+    // Note: FlashcardNode is now a plugin (flashcard-node.js)
+    // else if (className.includes('Flashcard')) nodeType = NodeType.FLASHCARD;
     // Note: CsvNode is now a plugin (csv-node.js)
     // else if (className.includes('Csv')) nodeType = NodeType.CSV;
     if (className.includes('Code')) nodeType = NodeType.CODE;
@@ -1031,7 +1026,7 @@ function registerBuiltinNodeTypes() {
         // Note: 'review' is now a plugin (review-node.js)
         { type: 'factcheck', protocol: FactcheckNode },
         // Note: 'image' is now a plugin (image-node.js)
-        { type: 'flashcard', protocol: FlashcardNode },
+        // Note: 'flashcard' is now a plugin (flashcard-node.js)
         // Note: 'csv' is now a plugin (csv-node.js)
         { type: 'code', protocol: CodeNode },
     ];
@@ -1092,7 +1087,7 @@ export {
     // ReviewNode is now exported from review-node.js plugin
     // CsvNode is now exported from csv-node.js plugin
     // ImageNode is now exported from image-node.js plugin
+    // FlashcardNode is now exported from flashcard-node.js plugin
     CodeNode,
     FactcheckNode,
-    FlashcardNode,
 };

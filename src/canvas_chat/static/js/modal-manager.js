@@ -14,6 +14,7 @@
 import { storage } from './storage.js';
 import { escapeHtmlText } from './utils.js';
 import { NodeType } from './graph-types.js';
+import { wrapNode } from './node-protocols.js';
 
 class ModalManager {
     /**
@@ -286,22 +287,82 @@ class ModalManager {
             return;
         }
 
-        this.app.editingNodeId = nodeId;
-        const textarea = document.getElementById('edit-content-textarea');
+        // Get protocol instance to access plugin methods
+        const wrapped = wrapNode(node);
+        const editFields = wrapped.getEditFields();
 
-        textarea.value = node.content || '';
+        this.app.editingNodeId = nodeId;
+        this.app.editingNodeProtocol = wrapped; // Store protocol for save/preview
+
+        const modalTitle = document.querySelector('#edit-content-modal .modal-header h2');
+        const editPane = document.querySelector('#edit-content-modal .edit-pane');
+        const preview = document.getElementById('edit-content-preview');
+
+        // Update modal title from protocol
+        if (modalTitle) {
+            modalTitle.textContent = wrapped.getEditModalTitle();
+        }
+
+        // Clear existing fields (except first textarea which we'll reuse)
+        const existingFields = editPane.querySelectorAll('.edit-field-container');
+        existingFields.forEach((field) => field.remove());
+
+        // Render fields dynamically based on protocol
+        const fieldElements = new Map();
+        editFields.forEach((field, index) => {
+            const container = document.createElement('div');
+            container.className = 'edit-field-container';
+            if (index > 0) {
+                container.style.marginTop = '1rem';
+            }
+
+            const label = document.createElement('div');
+            label.className = 'pane-header';
+            label.style.marginBottom = index === 0 ? '0' : '0.5rem';
+            label.textContent = field.label;
+
+            const textarea = document.createElement('textarea');
+            textarea.id = `edit-field-${field.id}`;
+            textarea.placeholder = field.placeholder;
+            textarea.value = field.value;
+
+            // Reuse first textarea (content) if it's the first field
+            if (index === 0 && field.id === 'content') {
+                const existingTextarea = document.getElementById('edit-content-textarea');
+                if (existingTextarea) {
+                    existingTextarea.value = field.value;
+                    existingTextarea.placeholder = field.placeholder;
+                    fieldElements.set(field.id, existingTextarea);
+                    return; // Skip creating new element
+                }
+            }
+
+            container.appendChild(label);
+            container.appendChild(textarea);
+            editPane.appendChild(container);
+            fieldElements.set(field.id, textarea);
+        });
+
+        // Store field elements for preview/save
+        this.app.editingFieldElements = fieldElements;
+
+        // Set up live preview on input for all fields
+        const updatePreview = () => this.updateEditContentPreview();
+        fieldElements.forEach((textarea) => {
+            textarea.oninput = updatePreview;
+        });
 
         // Render initial preview
         this.updateEditContentPreview();
 
-        // Set up live preview on input
-        textarea.oninput = () => this.updateEditContentPreview();
-
         document.getElementById('edit-content-modal').style.display = 'flex';
 
-        // Focus the textarea
+        // Focus the first textarea
         setTimeout(() => {
-            textarea.focus();
+            const firstField = fieldElements.values().next().value;
+            if (firstField) {
+                firstField.focus();
+            }
         }, 100);
     }
 
@@ -309,12 +370,19 @@ class ModalManager {
      * Update the live preview in the edit content modal
      */
     updateEditContentPreview() {
-        const textarea = document.getElementById('edit-content-textarea');
-        const preview = document.getElementById('edit-content-preview');
-        const content = textarea.value || '';
+        if (!this.app.editingNodeProtocol || !this.app.editingFieldElements) return;
 
-        // Use the canvas's renderMarkdown method for consistent styling
-        preview.innerHTML = this.app.canvas.renderMarkdown(content);
+        const preview = document.getElementById('edit-content-preview');
+        const wrapped = this.app.editingNodeProtocol;
+
+        // Collect field values
+        const fields = {};
+        this.app.editingFieldElements.forEach((textarea, fieldId) => {
+            fields[fieldId] = textarea.value;
+        });
+
+        // Use protocol's renderEditPreview method
+        preview.innerHTML = wrapped.renderEditPreview(fields, this.app.canvas);
     }
 
     /**
@@ -326,15 +394,25 @@ class ModalManager {
             this.app.graph.unlockNode?.(this.app.editingNodeId);
         }
         document.getElementById('edit-content-modal').style.display = 'none';
-        document.getElementById('edit-content-textarea').oninput = null;
+
+        // Clear event listeners
+        if (this.app.editingFieldElements) {
+            this.app.editingFieldElements.forEach((textarea) => {
+                textarea.oninput = null;
+            });
+        }
+
+        // Clean up
         this.app.editingNodeId = null;
+        this.app.editingNodeProtocol = null;
+        this.app.editingFieldElements = null;
     }
 
     /**
      * Save edited content with versioning
      */
     handleEditContentSave() {
-        if (!this.app.editingNodeId) return;
+        if (!this.app.editingNodeId || !this.app.editingNodeProtocol || !this.app.editingFieldElements) return;
 
         const node = this.app.graph.getNode(this.app.editingNodeId);
         if (!node) {
@@ -342,44 +420,65 @@ class ModalManager {
             return;
         }
 
-        const newContent = document.getElementById('edit-content-textarea').value;
+        const wrapped = this.app.editingNodeProtocol;
 
-        // Don't save if content hasn't changed
-        if (newContent === node.content) {
+        // Collect field values
+        const fields = {};
+        this.app.editingFieldElements.forEach((textarea, fieldId) => {
+            fields[fieldId] = textarea.value;
+        });
+
+        // Check if anything changed (compare with current node values)
+        const updateData = wrapped.handleEditSave(fields, this.app);
+        let hasChanges = false;
+        for (const [key, value] of Object.entries(updateData)) {
+            if (node[key] !== value) {
+                hasChanges = true;
+                break;
+            }
+        }
+
+        if (!hasChanges) {
             this.hideEditContentModal();
             return;
         }
 
         // Build new versions array (immutable pattern - don't mutate node directly)
         const existingVersions = node.versions || [];
+        const versionData = {};
+        Object.keys(updateData).forEach((key) => {
+            versionData[key] = node[key];
+        });
+
         const newVersions = [
             ...existingVersions,
             // Add initial version if this is the first edit
             ...(existingVersions.length === 0
                 ? [
                       {
-                          content: node.content,
+                          ...versionData,
                           timestamp: node.createdAt || Date.now(),
                           reason: 'initial',
                       },
                   ]
                 : []),
-            // Add current content as version before the edit
+            // Add current values as version before the edit
             {
-                content: node.content,
+                ...versionData,
                 timestamp: Date.now(),
                 reason: 'before edit',
             },
         ];
 
-        // Update content via graph (triggers CRDT sync for multiplayer)
+        // Update node via graph (triggers CRDT sync for multiplayer)
         this.app.graph.updateNode(this.app.editingNodeId, {
-            content: newContent,
+            ...updateData,
             versions: newVersions,
         });
 
-        // Re-render node
-        this.app.canvas.updateNodeContent(this.app.editingNodeId, newContent, false);
+        // Re-render node (full re-render for nodes that might have changed structure)
+        const updatedNode = this.app.graph.getNode(this.app.editingNodeId);
+        this.app.canvas.renderNode(updatedNode);
 
         // Close modal and save
         this.hideEditContentModal();

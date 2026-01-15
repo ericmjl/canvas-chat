@@ -9,6 +9,7 @@ Canvas-Chat's plugin system allows you to create custom node types with:
 - Custom rendering (HTML/CSS)
 - Custom actions (buttons in the node toolbar)
 - Custom event handlers (click, hover, etc.)
+- Custom edit modals (single or multiple fields)
 - Automatic registration and loading
 
 Plugins are JavaScript ES modules that import from Canvas-Chat's core APIs.
@@ -160,9 +161,9 @@ app.canvas.renderNode(node);
 
 ## Node Protocol API Reference
 
-### Required Methods
+### Core Methods (Required)
 
-Every custom node class must extend `BaseNode` and can override these methods:
+Every custom node class must extend `BaseNode` and implement these core methods:
 
 #### `getTypeLabel(): string`
 
@@ -201,7 +202,7 @@ renderContent(canvas) {
 }
 ```
 
-### Optional Methods
+### Display Methods (Optional)
 
 #### `getSummaryText(canvas): string`
 
@@ -288,6 +289,191 @@ isScrollable() {
 }
 ```
 
+#### `getEditFields(): Array<EditField>`
+
+Define custom edit fields for the edit content modal. Override this to provide multiple fields (e.g., question and answer for flashcards).
+
+**Default behavior**: Returns a single `content` field.
+
+**EditField structure:**
+
+```javascript
+{
+    id: string,           // Unique field identifier (e.g., 'content', 'back', 'title')
+    label: string,        // Display label shown above the textarea
+    value: string,        // Initial value from node data
+    placeholder: string   // Placeholder text for the textarea
+}
+```
+
+**Example - Single field (default):**
+
+```javascript
+getEditFields() {
+    return [
+        {
+            id: 'content',
+            label: 'Markdown',
+            value: this.node.content || '',
+            placeholder: 'Edit the fetched content...',
+        },
+    ];
+}
+```
+
+**Example - Multiple fields (flashcard pattern):**
+
+```javascript
+getEditFields() {
+    return [
+        {
+            id: 'content',
+            label: 'Question',
+            value: this.node.content || '',
+            placeholder: 'Edit the question...',
+        },
+        {
+            id: 'back',
+            label: 'Answer',
+            value: this.node.back || '',
+            placeholder: 'Edit the answer...',
+        },
+    ];
+}
+```
+
+#### `handleEditSave(fields, app): Object`
+
+Handle saving edited fields. Override this to customize save behavior (e.g., save multiple fields).
+
+**Parameters:**
+
+- `fields`: Object mapping field IDs to values (e.g., `{ content: '...', back: '...' }`)
+- `app`: App instance for graph updates
+
+**Returns:** Object to pass to `graph.updateNode()` (e.g., `{ content: '...', back: '...' }`)
+
+**Default behavior**: Saves the `content` field.
+
+**Example - Single field (default):**
+
+```javascript
+handleEditSave(fields, app) {
+    return {
+        content: fields.content || '',
+    };
+}
+```
+
+**Example - Multiple fields (flashcard pattern):**
+
+```javascript
+handleEditSave(fields, app) {
+    return {
+        content: fields.content || '',
+        back: fields.back || '',
+    };
+}
+```
+
+#### `renderEditPreview(fields, canvas): string`
+
+Render preview HTML for the edit modal. Override this to show custom preview (e.g., flashcard format with question and answer).
+
+**Parameters:**
+
+- `fields`: Object mapping field IDs to values
+- `canvas`: Canvas instance for helper methods
+
+**Returns:** HTML string for preview
+
+**Default behavior**: Renders markdown preview of the `content` field.
+
+**Example - Markdown preview (default):**
+
+```javascript
+renderEditPreview(fields, canvas) {
+    const content = fields.content || '';
+    return canvas.renderMarkdown(content);
+}
+```
+
+**Example - Custom preview (flashcard pattern):**
+
+```javascript
+renderEditPreview(fields, canvas) {
+    const front = canvas.escapeHtml(fields.content || 'No question');
+    const back = canvas.escapeHtml(fields.back || 'No answer');
+
+    return `
+        <div class="flashcard-container">
+            <div class="flashcard-status new">New</div>
+            <div class="flashcard-card">
+                <div class="flashcard-front">
+                    <div class="flashcard-label">Question</div>
+                    <div class="flashcard-text">${front}</div>
+                </div>
+                <div class="flashcard-back">
+                    <div class="flashcard-label">Answer</div>
+                    <div class="flashcard-text">${back}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+```
+
+#### `getEditModalTitle(): string`
+
+Get modal title for edit dialog. Override this to customize the title.
+
+**Returns:** Modal title string
+
+**Default behavior**: Returns "Edit Content".
+
+**Example:**
+
+```javascript
+getEditModalTitle() {
+    return 'Edit Flashcard';
+}
+```
+
+### Other Optional Methods
+
+#### `copyToClipboard(canvas, app): Promise<void>`
+
+Custom copy behavior. Default copies text content.
+
+```javascript
+async copyToClipboard(canvas, app) {
+    // Custom copy logic (e.g., format as markdown table, copy image)
+    const text = this.formatForCopy();
+    await navigator.clipboard.writeText(text);
+    canvas.showCopyFeedback(this.node.id);
+}
+```
+
+#### `supportsStopContinue(): boolean`
+
+Whether this node type supports stop/continue buttons for streaming. Default returns `false`.
+
+```javascript
+supportsStopContinue() {
+    return true; // For AI nodes that stream responses
+}
+```
+
+#### `getContentClasses(): string`
+
+Additional CSS classes for the node-content wrapper. Default returns empty string.
+
+```javascript
+getContentClasses() {
+    return 'factcheck-content'; // Custom styling
+}
+```
+
 ## NodeRegistry.register() Options
 
 ```javascript
@@ -329,14 +515,25 @@ import { Actions } from '/static/js/node-protocols.js';
 Actions.REPLY; // Reply to node
 Actions.COPY; // Copy content
 Actions.SUMMARIZE; // Generate summary
-Actions.EDIT_CONTENT; // Edit in modal
+Actions.EDIT_CONTENT; // Edit in modal (triggers getEditFields())
 Actions.FETCH_SUMMARIZE; // Fetch and summarize URL
 Actions.RESUMMARIZE; // Regenerate summary
 Actions.EDIT_CODE; // Edit code in modal
 Actions.GENERATE; // Generate code
 Actions.RUN_CODE; // Run Python code
 Actions.ANALYZE; // Analyze CSV data
+Actions.FLIP_CARD; // Flip flashcard
+Actions.REVIEW_CARD; // Review flashcard
+Actions.CREATE_FLASHCARDS; // Generate flashcards
 ```
+
+**Note:** When `Actions.EDIT_CONTENT` is included in `getActions()`, clicking the edit button will:
+
+1. Call `getEditFields()` to get field definitions
+2. Show edit modal with fields dynamically rendered
+3. Call `renderEditPreview()` for live preview
+4. Call `handleEditSave()` when saving
+5. Use `getEditModalTitle()` for the modal title
 
 ## Best Practices
 
@@ -348,7 +545,9 @@ Actions.ANALYZE; // Analyze CSV data
 6. **Use CSS variables**: Follow Canvas-Chat's theme system
 7. **Log plugin loading**: Add `console.log()` at the end for debugging
 
-## Example: Complete Poll Node
+## Complete Plugin Patterns
+
+### Pattern 1: Simple Node with Custom Rendering
 
 See `/static/js/example-plugins/example-poll-node.js` for a complete example with:
 
@@ -357,6 +556,140 @@ See `/static/js/example-plugins/example-poll-node.js` for a complete example wit
 - Event bindings
 - CSS styling
 - Copy to clipboard
+
+### Pattern 2: Node with Custom Edit Fields (Flashcard Pattern)
+
+The flashcard node demonstrates the pattern for nodes that need multiple edit fields:
+
+**File:** `/static/js/flashcard-node.js`
+
+**Key features:**
+
+- Multiple edit fields (question and answer)
+- Custom preview rendering
+- Custom save behavior
+- Custom modal title
+
+**Complete example:**
+
+```javascript
+import { BaseNode, Actions } from './node-protocols.js';
+import { NodeRegistry } from './node-registry.js';
+
+class FlashcardNode extends BaseNode {
+    getTypeLabel() {
+        return 'Flashcard';
+    }
+
+    getTypeIcon() {
+        return '🎴';
+    }
+
+    getSummaryText(canvas) {
+        if (this.node.title) return this.node.title;
+        const plainText = (this.node.content || '').replace(/[#*_`>\[\]()!]/g, '').trim();
+        return canvas.truncate(plainText, 60);
+    }
+
+    renderContent(canvas) {
+        const front = canvas.escapeHtml(this.node.content || 'No question');
+        const back = canvas.escapeHtml(this.node.back || 'No answer');
+
+        // SRS status logic...
+        let statusClass = 'new';
+        let statusText = 'New';
+        // ... (status calculation)
+
+        return `
+            <div class="flashcard-container">
+                <div class="flashcard-status ${statusClass}">${statusText}</div>
+                <div class="flashcard-card">
+                    <div class="flashcard-front">
+                        <div class="flashcard-label">Question</div>
+                        <div class="flashcard-text">${front}</div>
+                    </div>
+                    <div class="flashcard-back">
+                        <div class="flashcard-label">Answer</div>
+                        <div class="flashcard-text">${back}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    getActions() {
+        return [Actions.FLIP_CARD, Actions.REVIEW_CARD, Actions.EDIT_CONTENT, Actions.COPY];
+    }
+
+    // Custom edit fields
+    getEditFields() {
+        return [
+            {
+                id: 'content',
+                label: 'Question',
+                value: this.node.content || '',
+                placeholder: 'Edit the question...',
+            },
+            {
+                id: 'back',
+                label: 'Answer',
+                value: this.node.back || '',
+                placeholder: 'Edit the answer...',
+            },
+        ];
+    }
+
+    // Custom save behavior
+    handleEditSave(fields, app) {
+        return {
+            content: fields.content || '',
+            back: fields.back || '',
+        };
+    }
+
+    // Custom preview
+    renderEditPreview(fields, canvas) {
+        const front = canvas.escapeHtml(fields.content || 'No question');
+        const back = canvas.escapeHtml(fields.back || 'No answer');
+
+        return `
+            <div class="flashcard-container">
+                <div class="flashcard-status new">New</div>
+                <div class="flashcard-card">
+                    <div class="flashcard-front">
+                        <div class="flashcard-label">Question</div>
+                        <div class="flashcard-text">${front}</div>
+                    </div>
+                    <div class="flashcard-back">
+                        <div class="flashcard-label">Answer</div>
+                        <div class="flashcard-text">${back}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Custom modal title
+    getEditModalTitle() {
+        return 'Edit Flashcard';
+    }
+}
+
+NodeRegistry.register({
+    type: 'flashcard',
+    protocol: FlashcardNode,
+    defaultSize: { width: 400, height: 280 },
+});
+
+export { FlashcardNode };
+console.log('Flashcard node plugin loaded');
+```
+
+**When to use this pattern:**
+
+- Node has multiple editable fields (e.g., question/answer, front/back, title/description)
+- Node needs custom preview format in edit modal
+- Node needs custom save logic beyond simple content update
 
 ## Troubleshooting
 

@@ -19,7 +19,7 @@ Implemented sklearn-style protocol classes where each node type defines its beha
 
 ## Protocol Interface
 
-Every node wrapper class implements 8 methods:
+Every node wrapper class implements core methods, with optional methods for advanced customization:
 
 ### `getTypeLabel()` returns string
 
@@ -53,11 +53,62 @@ Handles copying node content to clipboard. For text nodes, copies text. For imag
 
 Whether this node type has fixed scrollable dimensions (nodes with long streaming content).
 
+### `getEditFields()` returns Array of EditField objects
+
+Defines custom edit fields for the edit content modal. Plugins can override this to provide multiple fields (e.g., question and answer for flashcards). Default returns a single `content` field.
+
+**EditField structure:**
+
+```javascript
+{
+    id: string,           // Unique field identifier
+    label: string,        // Display label
+    value: string,        // Initial value from node
+    placeholder: string   // Placeholder text
+}
+```
+
+### `handleEditSave(fields, app)` returns Object
+
+Handles saving edited fields. Plugins can override this to customize save behavior (e.g., save multiple fields). Default saves the `content` field. Returns an object to pass to `graph.updateNode()`.
+
+### `renderEditPreview(fields, canvas)` returns string
+
+Renders preview HTML for the edit modal. Plugins can override this to show custom preview (e.g., flashcard format). Default renders markdown preview of the `content` field.
+
+### `getEditModalTitle()` returns string
+
+Returns modal title for edit dialog. Plugins can override this to customize the title. Default returns "Edit Content".
+
+## Edit Modal Integration
+
+The edit modal system is fully plugin-driven. When a node includes `Actions.EDIT_CONTENT` in its `getActions()`, the modal manager:
+
+1. Calls `getEditFields()` to get field definitions
+2. Dynamically renders textareas for each field
+3. Calls `renderEditPreview()` for live preview updates
+4. Calls `handleEditSave()` when saving
+5. Uses `getEditModalTitle()` for the modal title
+
+This allows plugins to fully control their editing experience without any hardcoded logic in the core system. See the [Flashcard Node](../../src/canvas_chat/static/js/flashcard-node.js) for a complete example of multi-field editing.
+
 ## Implementation
 
 ### BaseNode Class
 
-All node classes extend `BaseNode`, which provides default implementations for all 8 methods. Node-specific classes override only the methods that differ from defaults.
+All node classes extend `BaseNode`, which provides default implementations for all methods. Node-specific classes override only the methods that differ from defaults.
+
+**Core methods** (required for all nodes):
+
+- `getTypeLabel()`, `getTypeIcon()`, `renderContent()`, `getActions()`, `getHeaderButtons()`, `isScrollable()`
+
+**Optional methods** (with sensible defaults):
+
+- `getSummaryText()`, `copyToClipboard()`, `supportsStopContinue()`, `getContentClasses()`, `getEventBindings()`
+
+**Edit modal methods** (for custom editing):
+
+- `getEditFields()`, `handleEditSave()`, `renderEditPreview()`, `getEditModalTitle()`
 
 ### Node Classes
 
@@ -81,6 +132,9 @@ All node classes extend `BaseNode`, which provides default implementations for a
 - `SynthesisNode` - Chairman's synthesized answers (includes Stop/Continue buttons)
 - `ReviewNode` - Committee member reviews (includes Stop/Continue buttons)
 - `ImageNode` - Uploaded images for analysis
+- `CsvNode` - CSV data with metadata
+- `FlashcardNode` - Spaced repetition cards with question/answer (demonstrates multi-field editing)
+- `FactcheckNode` - Claim verification with accordion UI
 
 ### Factory Function
 
