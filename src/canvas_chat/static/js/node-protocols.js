@@ -713,109 +713,9 @@ class CodeNode extends BaseNode {
  */
 
 /**
- * Factcheck node (claim verification with verdicts)
+ * Note: FactcheckNode has been moved to factcheck-node.js plugin (built-in)
+ * This allows the factcheck node type to be loaded as a plugin.
  */
-class FactcheckNode extends BaseNode {
-    getTypeLabel() {
-        return 'Factcheck';
-    }
-    getTypeIcon() {
-        return '🔍';
-    }
-
-    getSummaryText(canvas) {
-        const claims = this.node.claims || [];
-        const count = claims.length;
-        if (count === 0) return 'Fact Check';
-        return `Fact Check · ${count} claim${count !== 1 ? 's' : ''}`;
-    }
-
-    renderContent(canvas) {
-        const claims = this.node.claims || [];
-        if (claims.length === 0) {
-            return canvas.renderMarkdown(this.node.content || 'No claims to verify.');
-        }
-
-        // Render accordion-style claims
-        const claimsHtml = claims
-            .map((claim, index) => {
-                const badge = this.getVerdictBadge(claim.status);
-                const statusClass = claim.status || 'checking';
-                const isChecking = claim.status === 'checking';
-
-                let detailsHtml = '';
-                if (!isChecking && claim.explanation) {
-                    const sourcesHtml = (claim.sources || [])
-                        .map(
-                            (s) =>
-                                `<a href="${canvas.escapeHtml(s.url)}" target="_blank" rel="noopener">${canvas.escapeHtml(s.title || s.url)}</a>`
-                        )
-                        .join(', ');
-
-                    detailsHtml = `
-                    <div class="factcheck-details">
-                        <p>${canvas.escapeHtml(claim.explanation)}</p>
-                        ${sourcesHtml ? `<div class="factcheck-sources"><strong>Sources:</strong> ${sourcesHtml}</div>` : ''}
-                    </div>
-                `;
-                }
-
-                return `
-                <div class="factcheck-claim ${statusClass}" data-claim-index="${index}">
-                    <div class="factcheck-claim-header">
-                        <span class="factcheck-badge">${badge}</span>
-                        <span class="factcheck-claim-text">${canvas.escapeHtml(claim.text)}</span>
-                        ${isChecking ? '<span class="factcheck-spinner">⟳</span>' : '<span class="factcheck-toggle">▼</span>'}
-                    </div>
-                    ${detailsHtml}
-                </div>
-            `;
-            })
-            .join('');
-
-        return `<div class="factcheck-claims">${claimsHtml}</div>`;
-    }
-
-    getVerdictBadge(status) {
-        const badges = {
-            checking: '🔄',
-            verified: '✅',
-            partially_true: '⚠️',
-            misleading: '🔶',
-            false: '❌',
-            unverifiable: '❓',
-            error: '⚠️',
-        };
-        return badges[status] || '❓';
-    }
-
-    getActions() {
-        return [Actions.COPY];
-    }
-
-    getContentClasses() {
-        return 'factcheck-content';
-    }
-
-    /**
-     * Factcheck-specific event bindings for claim accordion
-     */
-    getEventBindings() {
-        return [
-            {
-                selector: '.factcheck-claim-header',
-                multiple: true,
-                handler: (nodeId, e, canvas) => {
-                    const claimEl = e.currentTarget.closest('.factcheck-claim');
-                    if (claimEl && !claimEl.classList.contains('checking')) {
-                        // Toggle expanded state (multiple can be open)
-                        claimEl.classList.toggle('expanded');
-                    }
-                },
-            },
-        ];
-    }
-}
 
 /**
  * Note: ImageNode has been moved to image-node.js plugin (built-in)
@@ -872,7 +772,7 @@ function wrapNode(node) {
         // Note: OpinionNode is now a plugin (opinion-node.js)
         // Note: SynthesisNode is now a plugin (synthesis-node.js)
         // Note: ReviewNode is now a plugin (review-node.js)
-        [NodeType.FACTCHECK]: FactcheckNode,
+        // Note: FactcheckNode is now a plugin (factcheck-node.js)
         // Note: ImageNode is now a plugin (image-node.js)
         // Note: FlashcardNode is now a plugin (flashcard-node.js)
         // Note: CsvNode is now a plugin (csv-node.js)
@@ -961,7 +861,8 @@ function validateNodeProtocol(NodeClass) {
     // Note: OpinionNode is now a plugin (opinion-node.js)
     // Note: SynthesisNode is now a plugin (synthesis-node.js)
     // Note: ReviewNode is now a plugin (review-node.js)
-    else if (className.includes('Factcheck')) nodeType = NodeType.FACTCHECK;
+    // Note: FactcheckNode is now a plugin (factcheck-node.js)
+    // else if (className.includes('Factcheck')) nodeType = NodeType.FACTCHECK;
     // Note: FlashcardNode is now a plugin (flashcard-node.js)
     // else if (className.includes('Flashcard')) nodeType = NodeType.FLASHCARD;
     // Note: CsvNode is now a plugin (csv-node.js)
@@ -1024,7 +925,7 @@ function registerBuiltinNodeTypes() {
         // Note: 'opinion' is now a plugin (opinion-node.js)
         // Note: 'synthesis' is now a plugin (synthesis-node.js)
         // Note: 'review' is now a plugin (review-node.js)
-        { type: 'factcheck', protocol: FactcheckNode },
+        // Note: 'factcheck' is now a plugin (factcheck-node.js)
         // Note: 'image' is now a plugin (image-node.js)
         // Note: 'flashcard' is now a plugin (flashcard-node.js)
         // Note: 'csv' is now a plugin (csv-node.js)
@@ -1088,6 +989,6 @@ export {
     // CsvNode is now exported from csv-node.js plugin
     // ImageNode is now exported from image-node.js plugin
     // FlashcardNode is now exported from flashcard-node.js plugin
+    // FactcheckNode is now exported from factcheck-node.js plugin
     CodeNode,
-    FactcheckNode,
 };

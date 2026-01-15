@@ -92,10 +92,11 @@ Type these in the chat input to trigger special commands:
 | `/note` | Add note or fetch URL | `/note https://example.com` |
 | `/search` | Web search via Exa | `/search quantum computing` |
 | `/research` | Deep research report | `/research CRISPR applications` |
+| `/factcheck` | Verify claims with web search | `/factcheck verify these` |
 | `/matrix` | Create comparison table | `/matrix compare options` |
 | `/committee` | Multi-LLM consultation | `/committee should we use X?` |
 
-See [How to use web search](../how-to/web-search.md), [How to conduct deep research](../how-to/deep-research.md), and [How to use the LLM committee](../how-to/llm-committee.md) for details.
+See [How to use web search](../how-to/web-search.md), [How to conduct deep research](../how-to/deep-research.md), [How to fact-check claims](../how-to/factcheck.md), and [How to use the LLM committee](../how-to/llm-committee.md) for details.
 
 ## Undo/Redo Actions
 

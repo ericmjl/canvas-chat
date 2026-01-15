@@ -31,6 +31,7 @@ Your browser will open automatically to the local server.
 - **LLM Committee**: Use `/committee <question>` to consult multiple LLMs and synthesize answers
 - **Web Research**: Use `/research <topic>` to generate research reports via Exa
 - **Web Search**: Use `/search <query>` to search the web via Exa
+- **Fact-Checking**: Use `/factcheck <claims>` to verify claims with web search and LLM analysis
 - **Image Analysis**: Upload, paste, or drag-and-drop images for multimodal AI analysis
 - **Markdown & Math Rendering**: Full markdown support with LaTeX math rendering (KaTeX) for inline `\(...\)` and display `\[...\]` math
 - **Multiple LLM Providers**: Support for OpenAI, Anthropic, Google, Groq, GitHub Models, and local models via Ollama
@@ -72,11 +73,12 @@ See [Admin Mode Setup](how-to/admin-mode.md) for details.
 5. **Auto-layout**: Click 🔀 to automatically arrange all nodes
 6. **Search the web**: Type `/search <query>` to search via Exa
 7. **Research a topic**: Type `/research <topic>` to generate a research report
-8. **Consult LLM committee**: Type `/committee <question>` to get opinions from multiple LLMs
-9. **Add images**: Upload, paste (Ctrl/Cmd+V), or drag-and-drop images for AI analysis
-10. **Create a matrix**: Select one or more context nodes, type `/matrix <context>` to create an evaluation table
-11. **Navigate**: Drag the handle (⋮⋮) to move nodes, scroll to zoom, double-click canvas to fit content
-12. **Export**: Click 💾 to save your session as a `.canvaschat` file
+8. **Fact-check claims**: Type `/factcheck <claims>` or select a node with claims to verify them
+9. **Consult LLM committee**: Type `/committee <question>` to get opinions from multiple LLMs
+10. **Add images**: Upload, paste (Ctrl/Cmd+V), or drag-and-drop images for AI analysis
+11. **Create a matrix**: Select one or more context nodes, type `/matrix <context>` to create an evaluation table
+12. **Navigate**: Drag the handle (⋮⋮) to move nodes, scroll to zoom, double-click canvas to fit content
+13. **Export**: Click 💾 to save your session as a `.canvaschat` file
 
 ## Development
 
