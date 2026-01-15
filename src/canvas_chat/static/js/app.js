@@ -41,6 +41,7 @@ import './matrix-node.js'; // Side-effect import for MatrixNode plugin registrat
 import './cell-node.js'; // Side-effect import for CellNode plugin registration
 import './row-node.js'; // Side-effect import for RowNode plugin registration
 import './column-node.js'; // Side-effect import for ColumnNode plugin registration
+import './code-node.js'; // Side-effect import for CodeNode plugin registration
 // Note: poll.js is an external plugin - load via config.yaml
 import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { wrapNode } from './node-protocols.js';
@@ -1143,9 +1144,12 @@ class App {
                 const selectedNodeIds = this.canvas.getSelectedNodeIds();
                 if (selectedNodeIds.length === 1) {
                     const node = this.graph.getNode(selectedNodeIds[0]);
-                    if (node && node.type === NodeType.CODE) {
-                        e.preventDefault();
-                        this.handleNodeRunCode(selectedNodeIds[0]);
+                    if (node) {
+                        const wrapped = wrapNode(node);
+                        if (wrapped.supportsCodeExecution && wrapped.supportsCodeExecution()) {
+                            e.preventDefault();
+                            this.handleNodeRunCode(selectedNodeIds[0]);
+                        }
                     }
                 }
             }
@@ -2130,10 +2134,12 @@ df.head()
      */
     async handleNodeRunCode(nodeId) {
         const codeNode = this.graph.getNode(nodeId);
-        if (!codeNode || codeNode.type !== NodeType.CODE) return;
+        if (!codeNode) return;
+        const wrapped = wrapNode(codeNode);
+        if (!wrapped.supportsCodeExecution || !wrapped.supportsCodeExecution()) return;
 
-        // Get code from node (stored via modal editor or AI generation)
-        const code = codeNode.code || codeNode.content || '';
+        // Get code from node via protocol
+        const code = wrapped.getCode() || '';
 
         console.log('🏃 Running code, length:', code.length, 'chars');
 
@@ -2279,7 +2285,9 @@ df.head()
      */
     handleNodeCodeChange(nodeId, code) {
         const node = this.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (!wrapped.supportsCodeExecution || !wrapped.supportsCodeExecution()) return;
 
         this.graph.updateNode(nodeId, { content: code });
         this.saveSession();
@@ -2291,7 +2299,9 @@ df.head()
      */
     handleNodeGenerate(nodeId) {
         const node = this.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (!wrapped.supportsCodeExecution || !wrapped.supportsCodeExecution()) return;
 
         // Get available models for dropdown
         const models = chat.models || [];
@@ -2307,7 +2317,9 @@ df.head()
      */
     async handleNodeGenerateSubmit(nodeId, prompt, model) {
         const node = this.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (!wrapped.supportsCodeExecution || !wrapped.supportsCodeExecution()) return;
 
         // Hide the generate input
         this.canvas.hideGenerateInput(nodeId);
@@ -2486,7 +2498,9 @@ df.head()
      */
     handleNodeOutputToggle(nodeId) {
         const node = this.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (!wrapped.hasOutput || !wrapped.hasOutput()) return;
 
         const currentExpanded = node.outputExpanded !== false;
         const newExpanded = !currentExpanded;
@@ -2533,7 +2547,9 @@ df.head()
      */
     handleNodeOutputClear(nodeId) {
         const node = this.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (!wrapped.hasOutput || !wrapped.hasOutput()) return;
 
         this.graph.updateNode(nodeId, {
             outputStdout: null,
@@ -2553,7 +2569,9 @@ df.head()
      */
     handleNodeOutputResize(nodeId, height) {
         const node = this.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (!wrapped.hasOutput || !wrapped.hasOutput()) return;
 
         this.graph.updateNode(nodeId, { outputPanelHeight: height });
         this.saveSession();

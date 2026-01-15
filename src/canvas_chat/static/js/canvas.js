@@ -1751,18 +1751,9 @@ class Canvas {
         // Create node HTML
         const div = document.createElement('div');
 
-        // Build node classes: base + type + viewport-fitted + execution state for code nodes
+        // Build node classes: base + type + viewport-fitted
+        // Protocol can add additional classes via getContentClasses()
         let nodeClasses = `node ${node.type} viewport-fitted`;
-        if (node.type === 'code' && node.executionState) {
-            if (node.executionState === 'running') {
-                // Check if self-healing to use different styling
-                if (node.selfHealingStatus === 'verifying' || node.selfHealingAttempt) {
-                    nodeClasses += ' code-self-healing';
-                } else {
-                    nodeClasses += ' code-running';
-                }
-            }
-        }
 
         div.className = nodeClasses;
         div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
@@ -1875,8 +1866,8 @@ class Canvas {
         // Setup node event listeners
         this.setupNodeEvents(wrapper, node);
 
-        // Render output panel for code nodes (if they have output)
-        if (node.type === NodeType.CODE) {
+        // Render output panel for nodes that support it (if they have output)
+        if (wrapped.hasOutput && wrapped.hasOutput()) {
             this.renderOutputPanel(node, wrapper);
         }
 
@@ -3073,17 +3064,19 @@ class Canvas {
      * @param {string} code - The code content
      * @param {boolean} isStreaming - Whether still streaming
      */
+    /**
+     * Update code content (for streaming updates)
+     * Delegates to node protocol's updateContent method.
+     * @deprecated Use protocol.updateContent() directly
+     */
     updateCodeContent(nodeId, code, isStreaming) {
-        // Update the code display in-place
-        const wrapper = this.nodeElements.get(nodeId);
-        if (!wrapper) return;
+        const node = this.graph?.getNode(nodeId);
+        if (!node) return;
 
-        const codeEl = wrapper.querySelector('.code-display code');
-        if (codeEl && window.hljs) {
-            codeEl.textContent = code;
-            codeEl.className = 'language-python';
-            delete codeEl.dataset.highlighted;
-            window.hljs.highlightElement(codeEl);
+        const wrapped = wrapNode(node);
+        if (!wrapped.updateContent(nodeId, code, isStreaming, this)) {
+            // Fallback to default updateNodeContent if protocol doesn't handle it
+            this.updateNodeContent(nodeId, code, isStreaming);
         }
     }
 

@@ -15,6 +15,7 @@ import { FeaturePlugin } from './feature-plugin.js';
 import { CancellableEvent } from './plugin-events.js';
 import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
 import { readSSEStream } from './sse.js';
+import { wrapNode } from './node-protocols.js';
 
 /**
  * CodeFeature - Manages code self-healing and error recovery
@@ -49,10 +50,12 @@ export class CodeFeature extends FeaturePlugin {
      */
     async selfHealCode(nodeId, originalPrompt, model, context, attemptNum = 1, maxAttempts = 3) {
         const node = this.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (!wrapped.supportsCodeExecution || !wrapped.supportsCodeExecution()) return;
 
-        // Get the current code
-        const code = node.code || node.content || '';
+        // Get the current code via protocol
+        const code = wrapped.getCode() || '';
         if (!code || code.includes('# Generating')) return;
 
         console.log(`🔧 Self-healing attempt ${attemptNum}/${maxAttempts}...`);
@@ -297,7 +300,9 @@ export class CodeFeature extends FeaturePlugin {
      */
     async fixCodeError(nodeId, originalPrompt, model, context, failedCode, errorMessage, attemptNum, maxAttempts) {
         const node = this.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (!wrapped.supportsCodeExecution || !wrapped.supportsCodeExecution()) return;
 
         console.log(`🩹 Asking LLM to fix error...`);
 

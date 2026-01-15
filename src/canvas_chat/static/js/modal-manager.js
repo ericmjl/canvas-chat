@@ -493,7 +493,9 @@ class ModalManager {
      */
     handleNodeEditCode(nodeId) {
         const node = this.app.graph.getNode(nodeId);
-        if (!node || node.type !== NodeType.CODE) return;
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (!wrapped.supportsCodeExecution || !wrapped.supportsCodeExecution()) return;
         this.showCodeEditorModal(nodeId);
     }
 
@@ -508,8 +510,9 @@ class ModalManager {
         this.app.editingCodeNodeId = nodeId;
         const textarea = document.getElementById('code-editor-textarea');
 
-        // Get code from node (try code first, then content for legacy nodes)
-        const code = node.code || node.content || '';
+        // Get code from node via protocol
+        const wrapped = wrapNode(node);
+        const code = wrapped.getCode() || '';
         textarea.value = code;
 
         // Render initial preview
@@ -565,7 +568,8 @@ class ModalManager {
         const newCode = document.getElementById('code-editor-textarea').value;
 
         // Don't save if code hasn't changed
-        const oldCode = node.code || node.content || '';
+        const wrapped = wrapNode(node);
+        const oldCode = wrapped.getCode() || '';
         if (newCode === oldCode) {
             this.hideCodeEditorModal();
             return;
