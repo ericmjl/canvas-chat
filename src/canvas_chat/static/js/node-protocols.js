@@ -691,70 +691,14 @@ class CodeNode extends BaseNode {
  */
 
 /**
- * Synthesis node (chairman's synthesized answer)
+ * Note: SynthesisNode has been moved to synthesis-node.js plugin (built-in)
+ * This allows the synthesis node type to be loaded as a plugin.
  */
-class SynthesisNode extends BaseNode {
-    getTypeLabel() {
-        return 'Synthesis';
-    }
-    getTypeIcon() {
-        return '⚖️';
-    }
-
-    getActions() {
-        return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
-    }
-
-    supportsStopContinue() {
-        return true;
-    }
-
-    getHeaderButtons() {
-        return [
-            HeaderButtons.NAV_PARENT,
-            HeaderButtons.NAV_CHILD,
-            HeaderButtons.COLLAPSE,
-            HeaderButtons.STOP,
-            HeaderButtons.CONTINUE,
-            HeaderButtons.RESET_SIZE,
-            HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE,
-        ];
-    }
-}
 
 /**
- * Review node (committee member's review of other opinions)
+ * Note: ReviewNode has been moved to review-node.js plugin (built-in)
+ * This allows the review node type to be loaded as a plugin.
  */
-class ReviewNode extends BaseNode {
-    getTypeLabel() {
-        return 'Review';
-    }
-    getTypeIcon() {
-        return '🔍';
-    }
-
-    getActions() {
-        return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
-    }
-
-    supportsStopContinue() {
-        return true;
-    }
-
-    getHeaderButtons() {
-        return [
-            HeaderButtons.NAV_PARENT,
-            HeaderButtons.NAV_CHILD,
-            HeaderButtons.COLLAPSE,
-            HeaderButtons.STOP,
-            HeaderButtons.CONTINUE,
-            HeaderButtons.RESET_SIZE,
-            HeaderButtons.FIT_VIEWPORT,
-            HeaderButtons.DELETE,
-        ];
-    }
-}
 
 /**
  * Factcheck node (claim verification with verdicts)
@@ -992,8 +936,8 @@ function wrapNode(node) {
         // Note: FetchResultNode is now a plugin (fetch-result-node.js)
         // Note: PdfNode is now a plugin (pdf-node.js)
         // Note: OpinionNode is now a plugin (opinion-node.js)
-        [NodeType.SYNTHESIS]: SynthesisNode,
-        [NodeType.REVIEW]: ReviewNode,
+        // Note: SynthesisNode is now a plugin (synthesis-node.js)
+        // Note: ReviewNode is now a plugin (review-node.js)
         [NodeType.FACTCHECK]: FactcheckNode,
         [NodeType.IMAGE]: ImageNode,
         [NodeType.FLASHCARD]: FlashcardNode,
@@ -1080,8 +1024,8 @@ function validateNodeProtocol(NodeClass) {
     else if (className.includes('Column')) nodeType = NodeType.COLUMN;
     // Note: PdfNode is now a plugin (pdf-node.js)
     // Note: OpinionNode is now a plugin (opinion-node.js)
-    else if (className.includes('Synthesis')) nodeType = NodeType.SYNTHESIS;
-    else if (className.includes('Review')) nodeType = NodeType.REVIEW;
+    // Note: SynthesisNode is now a plugin (synthesis-node.js)
+    // Note: ReviewNode is now a plugin (review-node.js)
     else if (className.includes('Factcheck')) nodeType = NodeType.FACTCHECK;
     else if (className.includes('Flashcard')) nodeType = NodeType.FLASHCARD;
     else if (className.includes('Csv')) nodeType = NodeType.CSV;
@@ -1141,8 +1085,8 @@ function registerBuiltinNodeTypes() {
         { type: 'column', protocol: ColumnNode },
         // Note: 'pdf' is now a plugin (pdf-node.js)
         // Note: 'opinion' is now a plugin (opinion-node.js)
-        { type: 'synthesis', protocol: SynthesisNode },
-        { type: 'review', protocol: ReviewNode },
+        // Note: 'synthesis' is now a plugin (synthesis-node.js)
+        // Note: 'review' is now a plugin (review-node.js)
         { type: 'factcheck', protocol: FactcheckNode },
         { type: 'image', protocol: ImageNode },
         { type: 'flashcard', protocol: FlashcardNode },
@@ -1202,10 +1146,10 @@ export {
     ColumnNode,
     // PdfNode is now exported from pdf-node.js plugin
     // OpinionNode is now exported from opinion-node.js plugin
+    // SynthesisNode is now exported from synthesis-node.js plugin
+    // ReviewNode is now exported from review-node.js plugin
     CsvNode,
     CodeNode,
-    SynthesisNode,
-    ReviewNode,
     FactcheckNode,
     ImageNode,
     FlashcardNode,

@@ -31,6 +31,8 @@ await import('../src/canvas_chat/static/js/highlight-node.js');
 await import('../src/canvas_chat/static/js/pdf-node.js');
 await import('../src/canvas_chat/static/js/research-node.js');
 await import('../src/canvas_chat/static/js/opinion-node.js');
+await import('../src/canvas_chat/static/js/synthesis-node.js');
+await import('../src/canvas_chat/static/js/review-node.js');
 
 const { NodeType, createNode } = await import('../src/canvas_chat/static/js/graph-types.js');
 const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -48,6 +50,8 @@ const {
     // PdfNode is now a plugin - import from pdf-node.js
     // ResearchNode is now a plugin - import from research-node.js
     // OpinionNode is now a plugin - import from opinion-node.js
+    // SynthesisNode is now a plugin - import from synthesis-node.js
+    // ReviewNode is now a plugin - import from review-node.js
     MatrixNode,
     CellNode,
     RowNode,
@@ -55,8 +59,6 @@ const {
     FetchResultNode,
     CsvNode,
     CodeNode,
-    SynthesisNode,
-    ReviewNode,
     FactcheckNode,
     ImageNode,
     FlashcardNode,
@@ -179,13 +181,15 @@ test('validateNodeProtocol: ColumnNode implements all methods', () => {
 //     assertTrue(validateNodeProtocol(OpinionNode));
 // });
 
-test('validateNodeProtocol: SynthesisNode implements all methods', () => {
-    assertTrue(validateNodeProtocol(SynthesisNode));
-});
+// Note: SynthesisNode is now a plugin (synthesis-node.js), test it separately
+// test('validateNodeProtocol: SynthesisNode implements all methods', () => {
+//     assertTrue(validateNodeProtocol(SynthesisNode));
+// });
 
-test('validateNodeProtocol: ReviewNode implements all methods', () => {
-    assertTrue(validateNodeProtocol(ReviewNode));
-});
+// Note: ReviewNode is now a plugin (review-node.js), test it separately
+// test('validateNodeProtocol: ReviewNode implements all methods', () => {
+//     assertTrue(validateNodeProtocol(ReviewNode));
+// });
 
 test('validateNodeProtocol: ImageNode implements all methods', () => {
     assertTrue(validateNodeProtocol(ImageNode));
