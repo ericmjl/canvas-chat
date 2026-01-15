@@ -111,7 +111,7 @@ const {
 } = await import('../src/canvas_chat/static/js/utils.js');
 const { SearchIndex, tokenize, calculateIDF, getNodeTypeIcon, NODE_TYPE_ICONS, BM25_K1, BM25_B } =
     await import('../src/canvas_chat/static/js/search.js');
-const { FlashcardFeature } = await import('../src/canvas_chat/static/js/flashcards.js');
+const { FlashcardFeature } = await import('../src/canvas_chat/static/js/plugins/flashcards.js');
 const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
 const {
     wrapNode,

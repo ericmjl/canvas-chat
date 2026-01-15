@@ -14,10 +14,10 @@
  * 3. Use /poll command to generate polls from natural language
  */
 
-import { BaseNode, Actions } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
-import { FeaturePlugin } from './feature-plugin.js';
-import { createNode } from './graph-types.js';
+import { BaseNode, Actions } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+import { FeaturePlugin } from '../feature-plugin.js';
+import { createNode } from '../graph-types.js';
 
 // =============================================================================
 // Poll Node Protocol

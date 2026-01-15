@@ -64,7 +64,7 @@ console.log('\n=== Column Node Plugin Tests ===\n');
 // Test: Column node plugin is registered
 await asyncTest('Column node plugin is registered', async () => {
     // Import column-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/column-node.js');
+    await import('../src/canvas_chat/static/js/plugins/column-node.js');
 
     // Check if NodeRegistry has the column type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Column node plugin is registered', async () => {
 // Test: ColumnNode protocol methods
 await asyncTest('ColumnNode implements protocol methods', async () => {
     // Import column-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/column-node.js');
+    await import('../src/canvas_chat/static/js/plugins/column-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.COLUMN, 'Content', {});
@@ -89,7 +89,7 @@ await asyncTest('ColumnNode implements protocol methods', async () => {
 
 // Test: ColumnNode isScrollable
 await asyncTest('ColumnNode isScrollable returns true', async () => {
-    await import('../src/canvas_chat/static/js/column-node.js');
+    await import('../src/canvas_chat/static/js/plugins/column-node.js');
 
     const node = { type: NodeType.COLUMN, content: 'Content' };
     const wrapped = wrapNode(node);
@@ -98,7 +98,7 @@ await asyncTest('ColumnNode isScrollable returns true', async () => {
 
 // Test: ColumnNode wrapNode integration
 await asyncTest('wrapNode returns ColumnNode for COLUMN type', async () => {
-    await import('../src/canvas_chat/static/js/column-node.js');
+    await import('../src/canvas_chat/static/js/plugins/column-node.js');
 
     const node = {
         type: NodeType.COLUMN,

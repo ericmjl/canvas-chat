@@ -64,7 +64,7 @@ console.log('\n=== Human Node Plugin Tests ===\n');
 // Test: Human node plugin is registered
 await asyncTest('Human node plugin is registered', async () => {
     // Import human-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/human-node.js');
+    await import('../src/canvas_chat/static/js/plugins/human-node.js');
 
     // Check if NodeRegistry has the human type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Human node plugin is registered', async () => {
 // Test: HumanNode protocol methods
 await asyncTest('HumanNode implements protocol methods', async () => {
     // Import human-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/human-node.js');
+    await import('../src/canvas_chat/static/js/plugins/human-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.HUMAN, 'Hello, world!', {});
@@ -90,7 +90,7 @@ await asyncTest('HumanNode implements protocol methods', async () => {
 // Test: HumanNode getActions (should return default BaseNode actions)
 await asyncTest('HumanNode getActions returns default actions', async () => {
     // Import human-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/human-node.js');
+    await import('../src/canvas_chat/static/js/plugins/human-node.js');
 
     const node = createNode(NodeType.HUMAN, 'Hello, world!', {});
     const wrapped = wrapNode(node);
@@ -111,7 +111,7 @@ await asyncTest('HumanNode getActions returns default actions', async () => {
 // Test: HumanNode isScrollable
 await asyncTest('HumanNode isScrollable returns true', async () => {
     // Import human-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/human-node.js');
+    await import('../src/canvas_chat/static/js/plugins/human-node.js');
 
     const node = { type: NodeType.HUMAN, content: 'Hello, world!' };
     const wrapped = wrapNode(node);
@@ -121,7 +121,7 @@ await asyncTest('HumanNode isScrollable returns true', async () => {
 // Test: HumanNode wrapNode integration
 await asyncTest('wrapNode returns HumanNode for HUMAN type', async () => {
     // Import human-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/human-node.js');
+    await import('../src/canvas_chat/static/js/plugins/human-node.js');
 
     const node = { type: NodeType.HUMAN, content: 'Hello, world!' };
     const wrapped = wrapNode(node);

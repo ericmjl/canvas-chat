@@ -64,7 +64,7 @@ console.log('\n=== Factcheck Node Plugin Tests ===\n');
 // Test: Factcheck node plugin is registered
 await asyncTest('Factcheck node plugin is registered', async () => {
     // Import factcheck-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     // Check if NodeRegistry has the factcheck type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Factcheck node plugin is registered', async () => {
 // Test: FactcheckNode protocol methods
 await asyncTest('FactcheckNode implements protocol methods', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.FACTCHECK, 'Content', {
@@ -92,7 +92,7 @@ await asyncTest('FactcheckNode implements protocol methods', async () => {
 // Test: FactcheckNode getSummaryText with no claims
 await asyncTest('FactcheckNode getSummaryText returns "Fact Check" when no claims', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = createNode(NodeType.FACTCHECK, 'Content', {
         claims: [],
@@ -108,7 +108,7 @@ await asyncTest('FactcheckNode getSummaryText returns "Fact Check" when no claim
 // Test: FactcheckNode getSummaryText with claims
 await asyncTest('FactcheckNode getSummaryText returns claim count', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = createNode(NodeType.FACTCHECK, 'Content', {
         claims: [
@@ -127,7 +127,7 @@ await asyncTest('FactcheckNode getSummaryText returns claim count', async () => 
 // Test: FactcheckNode getSummaryText with single claim
 await asyncTest('FactcheckNode getSummaryText uses singular for one claim', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = createNode(NodeType.FACTCHECK, 'Content', {
         claims: [{ text: 'Claim 1', status: 'verified' }],
@@ -143,7 +143,7 @@ await asyncTest('FactcheckNode getSummaryText uses singular for one claim', asyn
 // Test: FactcheckNode renderContent with no claims
 await asyncTest('FactcheckNode renderContent renders markdown when no claims', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = createNode(NodeType.FACTCHECK, 'No claims to verify.', {
         claims: [],
@@ -162,7 +162,7 @@ await asyncTest('FactcheckNode renderContent renders markdown when no claims', a
 // Test: FactcheckNode renderContent with claims
 await asyncTest('FactcheckNode renderContent generates accordion HTML for claims', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = createNode(NodeType.FACTCHECK, 'Content', {
         claims: [
@@ -194,7 +194,7 @@ await asyncTest('FactcheckNode renderContent generates accordion HTML for claims
 // Test: FactcheckNode getVerdictBadge
 await asyncTest('FactcheckNode getVerdictBadge returns correct badges', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = createNode(NodeType.FACTCHECK, 'Content', {});
     const wrapped = wrapNode(node);
@@ -212,7 +212,7 @@ await asyncTest('FactcheckNode getVerdictBadge returns correct badges', async ()
 // Test: FactcheckNode getActions
 await asyncTest('FactcheckNode getActions returns correct actions', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = createNode(NodeType.FACTCHECK, 'Content', {});
     const wrapped = wrapNode(node);
@@ -227,7 +227,7 @@ await asyncTest('FactcheckNode getActions returns correct actions', async () => 
 // Test: FactcheckNode getContentClasses
 await asyncTest('FactcheckNode getContentClasses returns factcheck-content', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = createNode(NodeType.FACTCHECK, 'Content', {});
     const wrapped = wrapNode(node);
@@ -239,7 +239,7 @@ await asyncTest('FactcheckNode getContentClasses returns factcheck-content', asy
 // Test: FactcheckNode getEventBindings
 await asyncTest('FactcheckNode getEventBindings returns accordion toggle handler', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = createNode(NodeType.FACTCHECK, 'Content', {});
     const wrapped = wrapNode(node);
@@ -255,7 +255,7 @@ await asyncTest('FactcheckNode getEventBindings returns accordion toggle handler
 // Test: FactcheckNode isScrollable
 await asyncTest('FactcheckNode isScrollable returns true', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = { type: NodeType.FACTCHECK, content: 'Content' };
     const wrapped = wrapNode(node);
@@ -265,7 +265,7 @@ await asyncTest('FactcheckNode isScrollable returns true', async () => {
 // Test: FactcheckNode wrapNode integration
 await asyncTest('wrapNode returns FactcheckNode for FACTCHECK type', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = {
         type: NodeType.FACTCHECK,
@@ -283,7 +283,7 @@ await asyncTest('wrapNode returns FactcheckNode for FACTCHECK type', async () =>
 // Test: FactcheckNode handles edge cases
 await asyncTest('FactcheckNode handles missing claims array', async () => {
     // Import factcheck-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/factcheck-node.js');
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
 
     const node = {
         type: NodeType.FACTCHECK,

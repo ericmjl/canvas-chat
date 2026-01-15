@@ -58,6 +58,11 @@ class MockGraph {
     on() {
         return this; // Chainable
     }
+
+    autoPosition(existingNodes) {
+        // Simple mock implementation - return a fixed position
+        return { x: 100, y: 100 };
+    }
 }
 
 /**
@@ -69,6 +74,7 @@ class MockCanvas {
         this.renderedNodes = [];
         this.removedNodes = [];
         this.updatedNodes = [];
+        this._eventHandlers = new Map();
     }
 
     renderNode(node) {
@@ -89,10 +95,50 @@ class MockCanvas {
         return [];
     }
 
+    clearSelection() {
+        // Mock implementation
+    }
+
+    centerOnAnimated(x, y, duration) {
+        // Mock implementation
+    }
+
+    panToNodeAnimated(nodeId) {
+        // Mock implementation
+    }
+
     showStopButton(nodeId) {}
     hideStopButton(nodeId) {}
     showContinueButton(nodeId) {}
     hideContinueButton(nodeId) {}
+
+    // Event emitter methods for plugin-scoped event handlers
+    on(eventName, handler) {
+        if (!this._eventHandlers.has(eventName)) {
+            this._eventHandlers.set(eventName, []);
+        }
+        this._eventHandlers.get(eventName).push(handler);
+        return this; // Chainable
+    }
+
+    off(eventName, handler) {
+        if (this._eventHandlers.has(eventName)) {
+            const handlers = this._eventHandlers.get(eventName);
+            const index = handlers.indexOf(handler);
+            if (index > -1) {
+                handlers.splice(index, 1);
+            }
+        }
+        return this; // Chainable
+    }
+
+    emit(eventName, ...args) {
+        if (this._eventHandlers.has(eventName)) {
+            for (const handler of this._eventHandlers.get(eventName)) {
+                handler(...args);
+            }
+        }
+    }
 }
 
 /**
@@ -146,6 +192,7 @@ class MockStorage {
 class MockModalManager {
     constructor() {
         this.modalsShown = [];
+        this.registeredModals = new Map();
     }
 
     showSettingsModal() {
@@ -154,6 +201,87 @@ class MockModalManager {
 
     showModal(modalId) {
         this.modalsShown.push(modalId);
+    }
+
+    registerModal(pluginId, modalId, htmlTemplate) {
+        const key = `${pluginId}:${modalId}`;
+        // Create a mock modal element with querySelector support
+        const mockModal = {
+            id: `${pluginId}-${modalId}-modal`,
+            style: { display: 'none' },
+            classList: { contains: () => true, add: () => {} },
+            querySelector: (selector) => {
+                // Return a mock element for common selectors
+                const classes = new Set();
+                return {
+                    value: '',
+                    checked: false,
+                    innerHTML: '',
+                    textContent: '',
+                    style: { display: 'none' },
+                    addEventListener: () => {},
+                    appendChild: () => {},
+                    disabled: false,
+                    classList: {
+                        contains: (cls) => classes.has(cls),
+                        add: (cls) => classes.add(cls),
+                        remove: (cls) => classes.delete(cls),
+                        toggle: (cls) => {
+                            if (classes.has(cls)) {
+                                classes.delete(cls);
+                                return false;
+                            } else {
+                                classes.add(cls);
+                                return true;
+                            }
+                        },
+                    },
+                };
+            },
+            querySelectorAll: () => [],
+            getElementById: (id) => {
+                const classes = new Set();
+                return {
+                    value: '',
+                    checked: false,
+                    innerHTML: '',
+                    textContent: '',
+                    style: { display: 'none' },
+                    addEventListener: () => {},
+                    appendChild: () => {},
+                    disabled: false,
+                    classList: {
+                        contains: (cls) => classes.has(cls),
+                        add: (cls) => classes.add(cls),
+                        remove: (cls) => classes.delete(cls),
+                        toggle: (cls) => {
+                            if (classes.has(cls)) {
+                                classes.delete(cls);
+                                return false;
+                            } else {
+                                classes.add(cls);
+                                return true;
+                            }
+                        },
+                    },
+                };
+            },
+        };
+        this.registeredModals.set(key, mockModal);
+        return mockModal;
+    }
+
+    showPluginModal(pluginId, modalId) {
+        this.modalsShown.push(`${pluginId}:${modalId}`);
+    }
+
+    hidePluginModal(pluginId, modalId) {
+        // Mock implementation
+    }
+
+    getPluginModal(pluginId, modalId) {
+        const key = `${pluginId}:${modalId}`;
+        return this.registeredModals.get(key);
     }
 }
 
@@ -263,6 +391,23 @@ class MockApp {
 class PluginTestHarness {
     constructor() {
         this.mockApp = new MockApp();
+        // Track nodes created during tests
+        this.createdNodes = [];
+        // Track toast messages
+        this.toasts = [];
+        // Hook into graph.addNode to track created nodes (before AppContext creation)
+        const originalAddNode = this.mockApp.graph.addNode.bind(this.mockApp.graph);
+        this.mockApp.graph.addNode = (node) => {
+            this.createdNodes.push(node);
+            return originalAddNode(node);
+        };
+        // Hook into showToast to track toasts (before AppContext creation)
+        const originalShowToast = this.mockApp.showToast.bind(this.mockApp);
+        this.mockApp.showToast = (message, type) => {
+            this.toasts.push({ message, type });
+            return originalShowToast(message, type);
+        };
+        // Now create AppContext (it will use the hooked showToast)
         this.appContext = new AppContext(this.mockApp);
         this.registry = new FeatureRegistry();
         this.registry.setAppContext(this.appContext);
@@ -361,6 +506,20 @@ class PluginTestHarness {
             updateEmptyState: [],
             buildLLMRequest: [],
         };
+        // Re-hook graph.addNode to track nodes
+        const originalAddNode = this.mockApp.graph.addNode.bind(this.mockApp.graph);
+        this.mockApp.graph.addNode = (node) => {
+            this.createdNodes.push(node);
+            return originalAddNode(node);
+        };
+        // Re-hook showToast to track toasts
+        const originalShowToast = this.mockApp.showToast.bind(this.mockApp);
+        this.mockApp.showToast = (message, type) => {
+            this.toasts.push({ message, type });
+            return originalShowToast(message, type);
+        };
+        this.createdNodes = [];
+        this.toasts = [];
     }
 }
 

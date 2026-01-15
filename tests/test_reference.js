@@ -70,7 +70,7 @@ console.log('\n=== Reference Node Plugin Tests ===\n');
 // Test: Reference node plugin is registered
 await asyncTest('Reference node plugin is registered', async () => {
     // Import reference.js to trigger registration
-    await import('../src/canvas_chat/static/js/reference.js');
+    await import('../src/canvas_chat/static/js/plugins/reference.js');
 
     // Check if NodeRegistry has the reference type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -83,7 +83,7 @@ await asyncTest('Reference node plugin is registered', async () => {
 // Test: ReferenceNode protocol methods
 await asyncTest('ReferenceNode implements protocol methods', async () => {
     // Import reference.js to register the plugin
-    await import('../src/canvas_chat/static/js/reference.js');
+    await import('../src/canvas_chat/static/js/plugins/reference.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.REFERENCE, '**[Test Title](https://example.com)**\n\nTest snippet', {});
@@ -96,7 +96,7 @@ await asyncTest('ReferenceNode implements protocol methods', async () => {
 // Test: ReferenceNode getActions
 await asyncTest('ReferenceNode getActions returns correct actions in expected order', async () => {
     // Import reference.js to register the plugin
-    await import('../src/canvas_chat/static/js/reference.js');
+    await import('../src/canvas_chat/static/js/plugins/reference.js');
 
     const node = createNode(NodeType.REFERENCE, '**[Test Title](https://example.com)**\n\nTest snippet', {});
     const wrapped = wrapNode(node);
@@ -119,7 +119,7 @@ await asyncTest('ReferenceNode getActions returns correct actions in expected or
 // Test: ReferenceNode isScrollable
 await asyncTest('ReferenceNode isScrollable returns true', async () => {
     // Import reference.js to register the plugin
-    await import('../src/canvas_chat/static/js/reference.js');
+    await import('../src/canvas_chat/static/js/plugins/reference.js');
 
     const node = { type: NodeType.REFERENCE, content: '**[Test Title](https://example.com)**\n\nTest snippet' };
     const wrapped = wrapNode(node);
@@ -129,7 +129,7 @@ await asyncTest('ReferenceNode isScrollable returns true', async () => {
 // Test: ReferenceNode wrapNode integration
 await asyncTest('wrapNode returns ReferenceNode for REFERENCE type', async () => {
     // Import reference.js to register the plugin
-    await import('../src/canvas_chat/static/js/reference.js');
+    await import('../src/canvas_chat/static/js/plugins/reference.js');
 
     const node = { type: NodeType.REFERENCE, content: '**[Test Title](https://example.com)**\n\nTest snippet' };
     const wrapped = wrapNode(node);

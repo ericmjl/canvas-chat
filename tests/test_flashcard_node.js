@@ -64,7 +64,7 @@ console.log('\n=== Flashcard Node Plugin Tests ===\n');
 // Test: Flashcard node plugin is registered
 await asyncTest('Flashcard node plugin is registered', async () => {
     // Import flashcard-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     // Check if NodeRegistry has the flashcard type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Flashcard node plugin is registered', async () => {
 // Test: FlashcardNode protocol methods
 await asyncTest('FlashcardNode implements protocol methods', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.FLASHCARD, 'What is 2+2?', {
@@ -92,7 +92,7 @@ await asyncTest('FlashcardNode implements protocol methods', async () => {
 // Test: FlashcardNode getSummaryText with title
 await asyncTest('FlashcardNode getSummaryText returns title when available', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     const node = createNode(NodeType.FLASHCARD, 'What is 2+2?', {
         title: 'Math Basics',
@@ -109,7 +109,7 @@ await asyncTest('FlashcardNode getSummaryText returns title when available', asy
 // Test: FlashcardNode getSummaryText without title
 await asyncTest('FlashcardNode getSummaryText returns truncated question when no title', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     const node = createNode(NodeType.FLASHCARD, 'What is the capital of France?', {
         back: 'Paris',
@@ -131,7 +131,7 @@ await asyncTest('FlashcardNode getSummaryText returns truncated question when no
 // Test: FlashcardNode getSummaryText strips markdown
 await asyncTest('FlashcardNode getSummaryText strips markdown characters', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     const node = createNode(NodeType.FLASHCARD, '# What is **2+2**?', {
         back: '4',
@@ -151,7 +151,7 @@ await asyncTest('FlashcardNode getSummaryText strips markdown characters', async
 // Test: FlashcardNode renderContent
 await asyncTest('FlashcardNode renderContent generates correct HTML', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     const node = createNode(NodeType.FLASHCARD, 'What is 2+2?', {
         back: '4',
@@ -177,7 +177,7 @@ await asyncTest('FlashcardNode renderContent generates correct HTML', async () =
 // Test: FlashcardNode renderContent with SRS status (new)
 await asyncTest('FlashcardNode renderContent shows "New" status for new cards', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     const node = createNode(NodeType.FLASHCARD, 'Question', {
         back: 'Answer',
@@ -198,7 +198,7 @@ await asyncTest('FlashcardNode renderContent shows "New" status for new cards', 
 // Test: FlashcardNode renderContent with SRS status (due)
 await asyncTest('FlashcardNode renderContent shows "Due" status for overdue cards', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     const pastDate = new Date(Date.now() - 86400000); // Yesterday
     const node = createNode(NodeType.FLASHCARD, 'Question', {
@@ -222,7 +222,7 @@ await asyncTest('FlashcardNode renderContent shows "Due" status for overdue card
 // Test: FlashcardNode renderContent with SRS status (learning)
 await asyncTest('FlashcardNode renderContent shows learning status for future due cards', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     const futureDate = new Date(Date.now() + 2 * 86400000); // 2 days from now
     const node = createNode(NodeType.FLASHCARD, 'Question', {
@@ -246,7 +246,7 @@ await asyncTest('FlashcardNode renderContent shows learning status for future du
 // Test: FlashcardNode getActions
 await asyncTest('FlashcardNode getActions returns correct actions in expected order', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     const node = createNode(NodeType.FLASHCARD, 'Question', {
         back: 'Answer',
@@ -273,7 +273,7 @@ await asyncTest('FlashcardNode getActions returns correct actions in expected or
 // Test: FlashcardNode isScrollable
 await asyncTest('FlashcardNode isScrollable returns true', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     const node = { type: NodeType.FLASHCARD, content: 'Question', back: 'Answer' };
     const wrapped = wrapNode(node);
@@ -283,7 +283,7 @@ await asyncTest('FlashcardNode isScrollable returns true', async () => {
 // Test: FlashcardNode wrapNode integration
 await asyncTest('wrapNode returns FlashcardNode for FLASHCARD type', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     const node = {
         type: NodeType.FLASHCARD,
@@ -302,7 +302,7 @@ await asyncTest('wrapNode returns FlashcardNode for FLASHCARD type', async () =>
 // Test: FlashcardNode handles edge cases
 await asyncTest('FlashcardNode handles missing content', async () => {
     // Import flashcard-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/flashcard-node.js');
+    await import('../src/canvas_chat/static/js/plugins/flashcard-node.js');
 
     const node = {
         type: NodeType.FLASHCARD,

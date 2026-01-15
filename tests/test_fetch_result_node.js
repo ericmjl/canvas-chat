@@ -68,7 +68,7 @@ console.log('\n=== Fetch Result Node Plugin Tests ===\n');
 // Test: Fetch result node plugin is registered
 await asyncTest('Fetch result node plugin is registered', async () => {
     // Import fetch-result-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/fetch-result-node.js');
+    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
 
     // Check if NodeRegistry has the fetch_result type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -81,7 +81,7 @@ await asyncTest('Fetch result node plugin is registered', async () => {
 // Test: FetchResultNode protocol methods
 await asyncTest('FetchResultNode implements protocol methods', async () => {
     // Import fetch-result-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/fetch-result-node.js');
+    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.FETCH_RESULT, 'Fetched content...', {});
@@ -94,7 +94,7 @@ await asyncTest('FetchResultNode implements protocol methods', async () => {
 // Test: FetchResultNode getActions
 await asyncTest('FetchResultNode getActions returns correct actions in expected order', async () => {
     // Import fetch-result-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/fetch-result-node.js');
+    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
 
     const node = createNode(NodeType.FETCH_RESULT, 'Fetched content...', {});
     const wrapped = wrapNode(node);
@@ -119,7 +119,7 @@ await asyncTest('FetchResultNode getActions returns correct actions in expected 
 // Test: FetchResultNode isScrollable
 await asyncTest('FetchResultNode isScrollable returns true', async () => {
     // Import fetch-result-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/fetch-result-node.js');
+    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
 
     const node = { type: NodeType.FETCH_RESULT, content: 'Fetched content...' };
     const wrapped = wrapNode(node);
@@ -129,7 +129,7 @@ await asyncTest('FetchResultNode isScrollable returns true', async () => {
 // Test: FetchResultNode wrapNode integration
 await asyncTest('wrapNode returns FetchResultNode for FETCH_RESULT type', async () => {
     // Import fetch-result-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/fetch-result-node.js');
+    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
 
     const node = { type: NodeType.FETCH_RESULT, content: 'Fetched content...' };
     const wrapped = wrapNode(node);
@@ -142,7 +142,7 @@ await asyncTest('wrapNode returns FetchResultNode for FETCH_RESULT type', async 
 // Test: FetchResultNode handles edge cases
 await asyncTest('FetchResultNode handles empty content', async () => {
     // Import fetch-result-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/fetch-result-node.js');
+    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
 
     const node = { type: NodeType.FETCH_RESULT, content: '', id: 'test', position: { x: 0, y: 0 }, width: 640, height: 480, created_at: Date.now(), tags: [] };
     const wrapped = wrapNode(node);

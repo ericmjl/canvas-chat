@@ -64,7 +64,7 @@ console.log('\n=== Opinion Node Plugin Tests ===\n');
 // Test: Opinion node plugin is registered
 await asyncTest('Opinion node plugin is registered', async () => {
     // Import opinion-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/opinion-node.js');
+    await import('../src/canvas_chat/static/js/plugins/opinion-node.js');
 
     // Check if NodeRegistry has the opinion type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Opinion node plugin is registered', async () => {
 // Test: OpinionNode protocol methods
 await asyncTest('OpinionNode implements protocol methods', async () => {
     // Import opinion-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/opinion-node.js');
+    await import('../src/canvas_chat/static/js/plugins/opinion-node.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.OPINION, 'Committee member opinion...', {});
@@ -90,7 +90,7 @@ await asyncTest('OpinionNode implements protocol methods', async () => {
 // Test: OpinionNode getActions
 await asyncTest('OpinionNode getActions returns correct actions in expected order', async () => {
     // Import opinion-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/opinion-node.js');
+    await import('../src/canvas_chat/static/js/plugins/opinion-node.js');
 
     const node = createNode(NodeType.OPINION, 'Committee member opinion...', {});
     const wrapped = wrapNode(node);
@@ -115,7 +115,7 @@ await asyncTest('OpinionNode getActions returns correct actions in expected orde
 // Test: OpinionNode supportsStopContinue
 await asyncTest('OpinionNode supportsStopContinue returns true', async () => {
     // Import opinion-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/opinion-node.js');
+    await import('../src/canvas_chat/static/js/plugins/opinion-node.js');
 
     const node = createNode(NodeType.OPINION, 'Committee member opinion...', {});
     const wrapped = wrapNode(node);
@@ -125,7 +125,7 @@ await asyncTest('OpinionNode supportsStopContinue returns true', async () => {
 // Test: OpinionNode getHeaderButtons (should include STOP and CONTINUE)
 await asyncTest('OpinionNode getHeaderButtons includes STOP and CONTINUE', async () => {
     // Import opinion-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/opinion-node.js');
+    await import('../src/canvas_chat/static/js/plugins/opinion-node.js');
 
     const node = createNode(NodeType.OPINION, 'Committee member opinion...', {});
     const wrapped = wrapNode(node);
@@ -148,7 +148,7 @@ await asyncTest('OpinionNode getHeaderButtons includes STOP and CONTINUE', async
 // Test: OpinionNode isScrollable
 await asyncTest('OpinionNode isScrollable returns true', async () => {
     // Import opinion-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/opinion-node.js');
+    await import('../src/canvas_chat/static/js/plugins/opinion-node.js');
 
     const node = { type: NodeType.OPINION, content: 'Committee member opinion...' };
     const wrapped = wrapNode(node);
@@ -158,7 +158,7 @@ await asyncTest('OpinionNode isScrollable returns true', async () => {
 // Test: OpinionNode wrapNode integration
 await asyncTest('wrapNode returns OpinionNode for OPINION type', async () => {
     // Import opinion-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/opinion-node.js');
+    await import('../src/canvas_chat/static/js/plugins/opinion-node.js');
 
     const node = { type: NodeType.OPINION, content: 'Committee member opinion...' };
     const wrapped = wrapNode(node);
@@ -172,7 +172,7 @@ await asyncTest('wrapNode returns OpinionNode for OPINION type', async () => {
 // Test: OpinionNode handles edge cases
 await asyncTest('OpinionNode handles empty content', async () => {
     // Import opinion-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/opinion-node.js');
+    await import('../src/canvas_chat/static/js/plugins/opinion-node.js');
 
     const node = {
         type: NodeType.OPINION,

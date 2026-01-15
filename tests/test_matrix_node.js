@@ -64,7 +64,7 @@ console.log('\n=== Matrix Node Plugin Tests ===\n');
 // Test: Matrix node plugin is registered
 await asyncTest('Matrix node plugin is registered', async () => {
     // Import matrix-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     // Check if NodeRegistry has the matrix type
     const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -77,7 +77,7 @@ await asyncTest('Matrix node plugin is registered', async () => {
 // Test: MatrixNode protocol methods
 await asyncTest('MatrixNode implements protocol methods', async () => {
     // Import matrix-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     // Test protocol methods
     const testNode = createNode(NodeType.MATRIX, '', {
@@ -94,7 +94,7 @@ await asyncTest('MatrixNode implements protocol methods', async () => {
 
 // Test: MatrixNode getActions returns empty array
 await asyncTest('MatrixNode getActions returns empty array', async () => {
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     const node = createNode(NodeType.MATRIX, '', {
         context: 'Test',
@@ -111,7 +111,7 @@ await asyncTest('MatrixNode getActions returns empty array', async () => {
 
 // Test: MatrixNode getContentClasses
 await asyncTest('MatrixNode getContentClasses returns matrix-table-container', async () => {
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     const node = createNode(NodeType.MATRIX, '', {
         context: 'Test',
@@ -127,7 +127,7 @@ await asyncTest('MatrixNode getContentClasses returns matrix-table-container', a
 
 // Test: MatrixNode getSummaryText with title
 await asyncTest('MatrixNode getSummaryText returns title when present', async () => {
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     const node = createNode(NodeType.MATRIX, '', {
         title: 'My Matrix',
@@ -145,7 +145,7 @@ await asyncTest('MatrixNode getSummaryText returns title when present', async ()
 
 // Test: MatrixNode getSummaryText with context and dimensions
 await asyncTest('MatrixNode getSummaryText generates from context and dimensions', async () => {
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     const node = createNode(NodeType.MATRIX, '', {
         context: 'Model Comparison',
@@ -162,7 +162,7 @@ await asyncTest('MatrixNode getSummaryText generates from context and dimensions
 
 // Test: MatrixNode getHeaderButtons
 await asyncTest('MatrixNode getHeaderButtons returns correct buttons', async () => {
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     const node = createNode(NodeType.MATRIX, '', {
         context: 'Test',
@@ -180,7 +180,7 @@ await asyncTest('MatrixNode getHeaderButtons returns correct buttons', async () 
 
 // Test: MatrixNode renderContent generates table HTML
 await asyncTest('MatrixNode renderContent generates table HTML', async () => {
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     const node = createNode(NodeType.MATRIX, '', {
         context: 'Test Matrix',
@@ -205,7 +205,7 @@ await asyncTest('MatrixNode renderContent generates table HTML', async () => {
 
 // Test: MatrixNode renderContent with filled cells
 await asyncTest('MatrixNode renderContent shows filled cells', async () => {
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     const node = createNode(NodeType.MATRIX, '', {
         context: 'Test',
@@ -228,7 +228,7 @@ await asyncTest('MatrixNode renderContent shows filled cells', async () => {
 
 // Test: MatrixNode getEventBindings
 await asyncTest('MatrixNode getEventBindings returns event bindings', async () => {
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     const node = createNode(NodeType.MATRIX, '', {
         context: 'Test',
@@ -251,7 +251,7 @@ await asyncTest('MatrixNode getEventBindings returns event bindings', async () =
 
 // Test: MatrixNode isScrollable
 await asyncTest('MatrixNode isScrollable returns true', async () => {
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     const node = { type: NodeType.MATRIX, content: '' };
     const wrapped = wrapNode(node);
@@ -260,7 +260,7 @@ await asyncTest('MatrixNode isScrollable returns true', async () => {
 
 // Test: MatrixNode wrapNode integration
 await asyncTest('wrapNode returns MatrixNode for MATRIX type', async () => {
-    await import('../src/canvas_chat/static/js/matrix-node.js');
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     const node = {
         type: NodeType.MATRIX,
