@@ -730,7 +730,7 @@ this.streamingNodes.delete(nodeId);
 
 **The problem:** If you cache node positions and then render edges after an async operation, the positions may be stale if layout changed in the meantime.
 
-**The pattern:** Use `canvas.renderEdgeWithFreshPositions(edge, graph)` or manually fetch fresh positions.
+**The pattern:** Use `canvas.renderEdge(edge, graph)` (recommended signature) or manually fetch fresh positions.
 
 ```javascript
 // WRONG: Using cached positions after async operation
@@ -750,10 +750,10 @@ for (const result of results) {
     this.canvas.renderEdge(edge, searchNode.position, resultNode.position);
 }
 
-// CORRECT: Use renderEdgeWithFreshPositions (preferred)
+// CORRECT: Use renderEdge with graph (preferred - automatically fetches fresh positions)
 const edge = createEdge(searchNode.id, resultNode.id, EdgeType.SEARCH_RESULT);
 this.graph.addEdge(edge);
-this.canvas.renderEdgeWithFreshPositions(edge, this.graph);
+this.canvas.renderEdge(edge, this.graph);
 
 // CORRECT: Manually fetch fresh positions
 const edge = createEdge(searchNode.id, resultNode.id, EdgeType.SEARCH_RESULT);

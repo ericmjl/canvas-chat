@@ -400,6 +400,32 @@ context.modelPicker.addEventListener('change', (e) => {
 });
 ```
 
+### chatInput
+
+```javascript
+chatInput: HTMLTextAreaElement;
+```
+
+Chat input textarea element.
+
+**Get input value:**
+
+```javascript
+const text = context.chatInput.value;
+```
+
+**Set input value:**
+
+```javascript
+context.chatInput.value = 'New text';
+```
+
+**Focus input:**
+
+```javascript
+context.chatInput.focus();
+```
+
 ### featureRegistry
 
 ```javascript
@@ -435,6 +461,72 @@ context.featureRegistry.emit('my-custom-event', event);
 const commands = context.featureRegistry.getSlashCommands();
 console.log('Available commands:', commands);
 // Example: ['/committee', '/matrix', '/factcheck', ...]
+```
+
+### undoManager
+
+```javascript
+undoManager: UndoManager;
+```
+
+Undo/redo functionality manager.
+
+**Push action to undo stack:**
+
+```javascript
+context.undoManager.pushUndo({
+    type: 'nodeMove',
+    nodeId: 'node-123',
+    before: { x: 0, y: 0 },
+    after: { x: 100, y: 100 },
+});
+```
+
+**Undo last action:**
+
+```javascript
+context.undoManager.undo();
+```
+
+**Redo last undone action:**
+
+```javascript
+context.undoManager.redo();
+```
+
+### modalManager
+
+```javascript
+modalManager: ModalManager;
+```
+
+Modal dialog management system.
+
+**Show plugin modal:**
+
+```javascript
+context.modalManager.showPluginModal('my-plugin', 'modal-id');
+```
+
+**Hide plugin modal:**
+
+```javascript
+context.modalManager.hidePluginModal('my-plugin', 'modal-id');
+```
+
+**Get modal element:**
+
+```javascript
+const modal = context.modalManager.getPluginModal('my-plugin', 'modal-id');
+if (modal) {
+    const input = modal.querySelector('#my-input');
+}
+```
+
+**Register modal template:**
+
+```javascript
+context.modalManager.registerModal('my-plugin', 'modal-id', '<div>Modal HTML</div>');
 ```
 
 ### app
@@ -531,6 +623,40 @@ const response = await fetch(`${context.apiUrl}/api/some-endpoint`, {
 });
 ```
 
+#### adminMode
+
+```javascript
+adminMode: boolean;
+```
+
+Whether admin mode is enabled. In admin mode, models are configured server-side and API keys are not stored in localStorage.
+
+**Usage:**
+
+```javascript
+if (context.adminMode) {
+    // Admin mode specific logic
+    console.log('Admin models:', context.adminModels);
+}
+```
+
+#### adminModels
+
+```javascript
+adminModels: string[];
+```
+
+Array of model identifiers configured by admin (only available in admin mode).
+
+**Usage:**
+
+```javascript
+if (context.adminMode && context.adminModels.length > 0) {
+    // Use admin-configured models
+    const model = context.adminModels[0];
+}
+```
+
 ## Helper functions
 
 ### showToast()
@@ -550,6 +676,23 @@ Display toast notification.
 
 ```javascript
 context.showToast?.('Operation completed', 'success');
+```
+
+**Note:** Use optional chaining (`?.`) as it may be undefined in tests.
+
+### updateCollapseButtonForNode()
+
+```javascript
+context.updateCollapseButtonForNode(nodeId: string): void
+```
+
+Update the collapse/expand button visibility for a node based on whether it has children.
+
+**Usage:**
+
+```javascript
+// After adding/removing child nodes, update the collapse button
+context.updateCollapseButtonForNode?.(nodeId);
 ```
 
 **Note:** Use optional chaining (`?.`) as it may be undefined in tests.
