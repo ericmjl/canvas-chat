@@ -1,28 +1,144 @@
 /**
- * Factcheck Feature Module
+ * Factcheck Plugin (Built-in)
  *
- * Handles the /factcheck command for verifying claims with web search.
- * Extracted from app.js for modularity.
- *
- * Dependencies (injected via constructor):
- * - graph: CRDTGraph instance
- * - canvas: Canvas instance
- * - getModelPicker: function returning modelPicker element
- * - saveSession: function to persist session
- * - buildLLMRequest: function to build LLM request with base_url
- *
- * Global dependencies:
- * - chat: For API calls (getApiKeyForModel, sendMessageNonStreaming)
- * - storage: For Exa API key (hasExaApiKey, getExaApiKey)
- * - createNode, createEdge: Node/edge factory functions
- * - NodeType, EdgeType: Type constants
+ * Provides factcheck nodes for claim verification with verdicts.
+ * This is a self-contained plugin that combines:
+ * - FactcheckNode protocol (custom node rendering)
+ * - FactcheckFeature (slash command and event handling)
  */
 
-import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
-import { storage } from './storage.js';
-import { chat } from './chat.js';
-import { apiUrl } from './utils.js';
-import { FeaturePlugin } from './feature-plugin.js';
+import { NodeType, EdgeType, createNode, createEdge } from '../graph-types.js';
+import { storage } from '../storage.js';
+import { chat } from '../chat.js';
+import { apiUrl } from '../utils.js';
+import { BaseNode, Actions } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+import { FeaturePlugin } from '../feature-plugin.js';
+
+// =============================================================================
+// Factcheck Node Protocol
+// =============================================================================
+
+/**
+ * Factcheck Node Protocol Class
+ * Defines how factcheck nodes are rendered and what actions they support.
+ */
+class FactcheckNode extends BaseNode {
+    getTypeLabel() {
+        return 'Factcheck';
+    }
+
+    getTypeIcon() {
+        return '🔍';
+    }
+
+    getSummaryText(canvas) {
+        const claims = this.node.claims || [];
+        const count = claims.length;
+        if (count === 0) return 'Fact Check';
+        return `Fact Check · ${count} claim${count !== 1 ? 's' : ''}`;
+    }
+
+    renderContent(canvas) {
+        const claims = this.node.claims || [];
+        if (claims.length === 0) {
+            return canvas.renderMarkdown(this.node.content || 'No claims to verify.');
+        }
+
+        // Render accordion-style claims
+        const claimsHtml = claims
+            .map((claim, index) => {
+                const badge = this.getVerdictBadge(claim.status);
+                const statusClass = claim.status || 'checking';
+                const isChecking = claim.status === 'checking';
+
+                let detailsHtml = '';
+                if (!isChecking && claim.explanation) {
+                    const sourcesHtml = (claim.sources || [])
+                        .map(
+                            (s) =>
+                                `<a href="${canvas.escapeHtml(s.url)}" target="_blank" rel="noopener">${canvas.escapeHtml(s.title || s.url)}</a>`
+                        )
+                        .join(', ');
+
+                    detailsHtml = `
+                    <div class="factcheck-details">
+                        <p>${canvas.escapeHtml(claim.explanation)}</p>
+                        ${sourcesHtml ? `<div class="factcheck-sources"><strong>Sources:</strong> ${sourcesHtml}</div>` : ''}
+                    </div>
+                `;
+                }
+
+                return `
+                <div class="factcheck-claim ${statusClass}" data-claim-index="${index}">
+                    <div class="factcheck-claim-header">
+                        <span class="factcheck-badge">${badge}</span>
+                        <span class="factcheck-claim-text">${canvas.escapeHtml(claim.text)}</span>
+                        ${isChecking ? '<span class="factcheck-spinner">⟳</span>' : '<span class="factcheck-toggle">▼</span>'}
+                    </div>
+                    ${detailsHtml}
+                </div>
+            `;
+            })
+            .join('');
+
+        return `<div class="factcheck-claims">${claimsHtml}</div>`;
+    }
+
+    getVerdictBadge(status) {
+        const badges = {
+            checking: '🔄',
+            verified: '✅',
+            partially_true: '⚠️',
+            misleading: '🔶',
+            false: '❌',
+            unverifiable: '❓',
+            error: '⚠️',
+        };
+        return badges[status] || '❓';
+    }
+
+    getActions() {
+        return [Actions.COPY];
+    }
+
+    getContentClasses() {
+        return 'factcheck-content';
+    }
+
+    /**
+     * Factcheck-specific event bindings for claim accordion
+     */
+    getEventBindings() {
+        return [
+            {
+                selector: '.factcheck-claim-header',
+                multiple: true,
+                handler: (nodeId, e, canvas) => {
+                    const claimEl = e.currentTarget.closest('.factcheck-claim');
+                    if (claimEl && !claimEl.classList.contains('checking')) {
+                        // Toggle expanded state (multiple can be open)
+                        claimEl.classList.toggle('expanded');
+                    }
+                },
+            },
+        ];
+    }
+}
+
+// Register with NodeRegistry
+NodeRegistry.register({
+    type: 'factcheck',
+    protocol: FactcheckNode,
+    defaultSize: { width: 640, height: 480 },
+});
+
+// Export FactcheckNode for testing
+export { FactcheckNode };
+
+// =============================================================================
+// Factcheck Feature Plugin
+// =============================================================================
 
 /**
  * FactcheckFeature - Handles /factcheck command for verifying claims with web search.

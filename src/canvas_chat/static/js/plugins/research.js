@@ -5,11 +5,11 @@
  * Extends FeaturePlugin to integrate with the plugin architecture.
  */
 
-import { NodeType, EdgeType, createNode, createEdge } from './graph-types.js';
-import { storage } from './storage.js';
-import { readSSEStream, normalizeText } from './sse.js';
-import { apiUrl } from './utils.js';
-import { FeaturePlugin } from './feature-plugin.js';
+import { NodeType, EdgeType, createNode, createEdge } from '../graph-types.js';
+import { storage } from '../storage.js';
+import { readSSEStream, normalizeText } from '../sse.js';
+import { apiUrl } from '../utils.js';
+import { FeaturePlugin } from '../feature-plugin.js';
 
 /**
  * ResearchFeature - Handles search and research commands with Exa/DuckDuckGo.

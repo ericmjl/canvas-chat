@@ -5,8 +5,8 @@
  * Summary nodes display concise summaries of longer content.
  */
 
-import { BaseNode, Actions } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode, Actions } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
 /**
  * Summary Node Protocol Class

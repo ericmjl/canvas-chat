@@ -5,8 +5,8 @@
  * Search nodes display the search query and are created by ResearchFeature
  * when users run the /search command.
  */
-import { BaseNode } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
 class SearchNode extends BaseNode {
     getTypeLabel() {

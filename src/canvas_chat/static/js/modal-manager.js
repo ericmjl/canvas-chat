@@ -579,7 +579,11 @@ class ModalManager {
         this.app.graph.updateNode(this.app.editingCodeNodeId, { code: newCode, content: newCode });
 
         // Update the code display in the node (uses highlight.js)
-        this.app.canvas.updateCodeContent(this.app.editingCodeNodeId, newCode, false);
+        const codeNode = this.app.graph.getNode(this.app.editingCodeNodeId);
+        if (codeNode) {
+            const codeWrapped = wrapNode(codeNode);
+            codeWrapped.updateContent(this.app.editingCodeNodeId, newCode, false, this.app.canvas);
+        }
 
         // Close modal and save
         this.hideCodeEditorModal();

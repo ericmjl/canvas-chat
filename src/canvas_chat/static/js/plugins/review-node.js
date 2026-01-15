@@ -1,21 +1,21 @@
 /**
- * Opinion Node Plugin (Built-in)
+ * Review Node Plugin (Built-in)
  *
- * Provides opinion nodes for committee member opinions.
- * Opinion nodes represent individual committee member's opinions in the
- * committee feature. They support stop/continue controls for streaming
- * responses and include actions for summarizing and creating flashcards.
+ * Provides review nodes for committee member reviews of other opinions.
+ * Review nodes represent a committee member's review of other members'
+ * opinions. They support stop/continue controls for streaming responses
+ * and include actions for summarizing and creating flashcards.
  */
-import { BaseNode, Actions, HeaderButtons } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode, Actions, HeaderButtons } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
-class OpinionNode extends BaseNode {
+class ReviewNode extends BaseNode {
     getTypeLabel() {
-        return 'Opinion';
+        return 'Review';
     }
 
     getTypeIcon() {
-        return '🗣️';
+        return '🔍';
     }
 
     getActions() {
@@ -41,10 +41,10 @@ class OpinionNode extends BaseNode {
 }
 
 NodeRegistry.register({
-    type: 'opinion',
-    protocol: OpinionNode,
+    type: 'review',
+    protocol: ReviewNode,
     defaultSize: { width: 640, height: 480 },
 });
 
-export { OpinionNode };
-console.log('Opinion node plugin loaded');
+export { ReviewNode };
+console.log('Review node plugin loaded');

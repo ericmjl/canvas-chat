@@ -5,8 +5,8 @@
  * PDF nodes represent uploaded PDF documents that can be summarized,
  * used to create flashcards, or replied to.
  */
-import { BaseNode, Actions } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode, Actions } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
 class PdfNode extends BaseNode {
     getTypeLabel() {

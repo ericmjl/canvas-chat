@@ -5,8 +5,8 @@
  * Reference nodes display title, URL, and snippet from search results.
  * They support fetching full content and summarizing via the FETCH_SUMMARIZE action.
  */
-import { BaseNode, Actions } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode, Actions } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
 class ReferenceNode extends BaseNode {
     getTypeLabel() {

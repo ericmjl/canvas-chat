@@ -5,9 +5,9 @@
  * Image nodes support custom rendering of image data and copying
  * images to the clipboard.
  */
-import { BaseNode } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
-import { NodeType } from './graph-types.js';
+import { BaseNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+import { NodeType } from '../graph-types.js';
 
 class ImageNode extends BaseNode {
     getTypeLabel() {

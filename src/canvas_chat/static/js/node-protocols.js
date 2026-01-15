@@ -355,6 +355,56 @@ class BaseNode {
         // Base class doesn't have code
         return null;
     }
+
+    /**
+     * Show generate UI (for nodes that support AI generation, e.g., CodeNode).
+     * Override in subclasses that support generation UI.
+     * @param {string} nodeId - The node ID
+     * @param {Array<Object>} models - Available model options with {id, name}
+     * @param {string} currentModel - Currently selected model ID
+     * @param {Canvas} canvas - Canvas instance for DOM manipulation and event emission
+     * @param {App|null} app - App instance (optional, can use canvas.emit() instead)
+     * @returns {boolean} True if the UI was shown
+     */
+    showGenerateUI(nodeId, models, currentModel, canvas, app) {
+        // Base class doesn't support generate UI
+        return false;
+    }
+
+    /**
+     * Hide generate UI (for nodes that support AI generation).
+     * Override in subclasses that support generation UI.
+     * @param {string} nodeId - The node ID
+     * @param {Canvas} canvas - Canvas instance for DOM manipulation
+     * @returns {boolean} True if the UI was hidden
+     */
+    hideGenerateUI(nodeId, canvas) {
+        // Base class doesn't support generate UI
+        return false;
+    }
+
+    /**
+     * Handle custom resize operations (for nodes with custom resize handles).
+     * Override in subclasses that have custom resize handles (e.g., matrix index column).
+     * @param {MouseEvent} e - The mousedown event
+     * @param {string} nodeId - The node ID
+     * @param {Canvas} canvas - Canvas instance for DOM manipulation and event emission
+     * @returns {boolean} True if the resize was handled
+     */
+    handleCustomResize(e, nodeId, canvas) {
+        // Base class doesn't support custom resize
+        return false;
+    }
+
+    /**
+     * Whether this node type should prevent height changes when resizing east (width only).
+     * Override in subclasses that need special resize behavior (e.g., matrix nodes).
+     * @returns {boolean} True to prevent height change on east-only resize
+     */
+    shouldPreventHeightChangeOnEastResize() {
+        // Base class allows height change
+        return false;
+    }
 }
 
 /**
@@ -436,7 +486,7 @@ class BaseNode {
 
 /**
  * Factory function to wrap a node with its protocol class
- * Uses NodeRegistry if available, falls back to hardcoded map for backwards compatibility.
+ * All node types are now plugins registered with NodeRegistry.
  * Checks node.imageData first (for image highlights), then dispatches by node.type
  *
  * @param {Object} node - Node object from graph
@@ -447,47 +497,22 @@ function wrapNode(node) {
     // Note: ImageNode is now a plugin, but we still check imageData first for HIGHLIGHT nodes
     // The registry will handle IMAGE type nodes below
     if (node.imageData && node.type === NodeType.IMAGE) {
-        // Try registry first (ImageNode is now a plugin)
+        // Try registry (ImageNode is now a plugin)
         if (typeof NodeRegistry !== 'undefined' && NodeRegistry.isRegistered(node.type)) {
             const NodeClass = NodeRegistry.getProtocolClass(node.type);
             return new NodeClass(node);
         }
     }
 
-    // Try registry first (for plugins)
+    // All node types are plugins - use registry
     if (typeof NodeRegistry !== 'undefined' && NodeRegistry.isRegistered(node.type)) {
         const NodeClass = NodeRegistry.getProtocolClass(node.type);
         return new NodeClass(node);
     }
 
-    // Fallback: hardcoded map for built-in types (backwards compatibility)
-    const classMap = {
-        // Note: HumanNode is now a plugin (human-node.js)
-        // Note: AINode is now a plugin (ai-node.js)
-        // Note: NoteNode is now a plugin (note.js)
-        // Note: SummaryNode is now a plugin (summary.js)
-        // Note: ReferenceNode is now a plugin (reference.js)
-        // Note: SearchNode is now a plugin (search-node.js)
-        // Note: ResearchNode is now a plugin (research-node.js)
-        // Note: HighlightNode is now a plugin (highlight-node.js)
-        // Note: MatrixNode is now a plugin (matrix-node.js)
-        // Note: CellNode is now a plugin (cell-node.js)
-        // Note: RowNode is now a plugin (row-node.js)
-        // Note: ColumnNode is now a plugin (column-node.js)
-        // Note: FetchResultNode is now a plugin (fetch-result-node.js)
-        // Note: PdfNode is now a plugin (pdf-node.js)
-        // Note: OpinionNode is now a plugin (opinion-node.js)
-        // Note: SynthesisNode is now a plugin (synthesis-node.js)
-        // Note: ReviewNode is now a plugin (review-node.js)
-        // Note: FactcheckNode is now a plugin (factcheck-node.js)
-        // Note: ImageNode is now a plugin (image-node.js)
-        // Note: FlashcardNode is now a plugin (flashcard-node.js)
-        // Note: CsvNode is now a plugin (csv-node.js)
-        // Note: CodeNode is now a plugin (code-node.js)
-    };
-
-    const NodeClass = classMap[node.type] || BaseNode;
-    return new NodeClass(node);
+    // Fallback to BaseNode if type not registered (should not happen in production)
+    console.warn(`wrapNode: Node type "${node.type}" not registered in NodeRegistry, using BaseNode`);
+    return new BaseNode(node);
 }
 
 /**

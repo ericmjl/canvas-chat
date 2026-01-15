@@ -14,34 +14,34 @@ import { SlashCommandMenu, SLASH_COMMANDS, setFeatureRegistry } from './slash-co
 import { NodeRegistry } from './node-registry.js';
 import { ModalManager } from './modal-manager.js';
 import { FileUploadHandler } from './file-upload-handler.js';
-import { FlashcardFeature } from './flashcards.js';
-import { CommitteeFeature } from './committee.js';
-import { MatrixFeature } from './matrix.js';
-import { FactcheckFeature } from './factcheck.js';
-import { ResearchFeature } from './research.js';
-import './code-feature.js'; // Side-effect import for CodeFeature registration
-import './note.js'; // Side-effect import for NoteNode plugin registration (NoteFeature imported by feature-registry.js) - consolidated plugin
-import './summary.js'; // Side-effect import for SummaryNode plugin registration
-import './human-node.js'; // Side-effect import for HumanNode plugin registration
-import './ai-node.js'; // Side-effect import for AINode plugin registration
-import './reference.js'; // Side-effect import for ReferenceNode plugin registration
-import './pdf-node.js'; // Side-effect import for PdfNode plugin registration
-import './research-node.js'; // Side-effect import for ResearchNode plugin registration
-import './opinion-node.js'; // Side-effect import for OpinionNode plugin registration
-import './synthesis-node.js'; // Side-effect import for SynthesisNode plugin registration
-import './review-node.js'; // Side-effect import for ReviewNode plugin registration
-import './image-node.js'; // Side-effect import for ImageNode plugin registration
-import './csv-node.js'; // Side-effect import for CsvNode plugin registration
-import './flashcard-node.js'; // Side-effect import for FlashcardNode plugin registration
-import './factcheck-node.js'; // Side-effect import for FactcheckNode plugin registration
-import './search-node.js'; // Side-effect import for SearchNode plugin registration
-import './highlight-node.js'; // Side-effect import for HighlightNode plugin registration
-import './fetch-result-node.js'; // Side-effect import for FetchResultNode plugin registration
-import './matrix-node.js'; // Side-effect import for MatrixNode plugin registration
-import './cell-node.js'; // Side-effect import for CellNode plugin registration
-import './row-node.js'; // Side-effect import for RowNode plugin registration
-import './column-node.js'; // Side-effect import for ColumnNode plugin registration
-import './code-node.js'; // Side-effect import for CodeNode plugin registration
+import { FlashcardFeature } from './plugins/flashcards.js';
+import { CommitteeFeature } from './plugins/committee.js';
+import { MatrixFeature } from './plugins/matrix.js';
+import { FactcheckFeature } from './plugins/factcheck.js';
+import { ResearchFeature } from './plugins/research.js';
+// CodeFeature is now in code.js (consolidated plugin)
+import './plugins/note.js'; // Side-effect import for NoteNode plugin registration (NoteFeature imported by feature-registry.js) - consolidated plugin
+import './plugins/summary.js'; // Side-effect import for SummaryNode plugin registration
+import './plugins/human-node.js'; // Side-effect import for HumanNode plugin registration
+import './plugins/ai-node.js'; // Side-effect import for AINode plugin registration
+import './plugins/reference.js'; // Side-effect import for ReferenceNode plugin registration
+import './plugins/pdf-node.js'; // Side-effect import for PdfNode plugin registration
+import './plugins/research-node.js'; // Side-effect import for ResearchNode plugin registration
+import './plugins/opinion-node.js'; // Side-effect import for OpinionNode plugin registration
+import './plugins/synthesis-node.js'; // Side-effect import for SynthesisNode plugin registration
+import './plugins/review-node.js'; // Side-effect import for ReviewNode plugin registration
+import './plugins/image-node.js'; // Side-effect import for ImageNode plugin registration
+import './plugins/csv-node.js'; // Side-effect import for CsvNode plugin registration
+import './plugins/flashcard-node.js'; // Side-effect import for FlashcardNode plugin registration
+import './plugins/factcheck.js'; // Side-effect import for FactcheckNode plugin registration
+import './plugins/search-node.js'; // Side-effect import for SearchNode plugin registration
+import './plugins/highlight-node.js'; // Side-effect import for HighlightNode plugin registration
+import './plugins/fetch-result-node.js'; // Side-effect import for FetchResultNode plugin registration
+import './plugins/matrix.js'; // Side-effect import for MatrixNode plugin registration
+import './plugins/cell-node.js'; // Side-effect import for CellNode plugin registration
+import './plugins/row-node.js'; // Side-effect import for RowNode plugin registration
+import './plugins/column-node.js'; // Side-effect import for ColumnNode plugin registration
+import './plugins/code.js'; // Side-effect import for CodeNode plugin registration and CodeFeature
 // Note: poll.js is an external plugin - load via config.yaml
 import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { wrapNode } from './node-protocols.js';
@@ -2306,7 +2306,7 @@ df.head()
         // Get available models for dropdown
         const models = chat.models || [];
         const currentModel = this.modelPicker.value;
-        this.canvas.showGenerateInput(nodeId, models, currentModel);
+        wrapped.showGenerateUI(nodeId, models, currentModel, this.canvas, this);
     }
 
     /**
@@ -2322,7 +2322,7 @@ df.head()
         if (!wrapped.supportsCodeExecution || !wrapped.supportsCodeExecution()) return;
 
         // Hide the generate input
-        this.canvas.hideGenerateInput(nodeId);
+        wrapped.hideGenerateUI(nodeId, this.canvas);
 
         try {
             // Gather context for code generation
@@ -2330,7 +2330,11 @@ df.head()
 
             // Set placeholder code to signal generation in progress
             const placeholderCode = '# Generating code...\n';
-            this.canvas.updateCodeContent(nodeId, placeholderCode, true);
+            const codeNode = this.graph.getNode(nodeId);
+            if (codeNode) {
+                const codeWrapped = wrapNode(codeNode);
+                codeWrapped.updateContent(nodeId, placeholderCode, true, this.canvas);
+            }
             this.graph.updateNode(nodeId, { content: placeholderCode });
 
             // Create AbortController for this stream
@@ -2377,7 +2381,11 @@ df.head()
                 onEvent: (eventType, data) => {
                     if (eventType === 'message' && data) {
                         generatedCode += data;
-                        this.canvas.updateCodeContent(nodeId, generatedCode, true);
+                        const codeNode = this.graph.getNode(nodeId);
+                        if (codeNode) {
+                            const codeWrapped = wrapNode(codeNode);
+                            codeWrapped.updateContent(nodeId, generatedCode, true, this.canvas);
+                        }
                     }
                 },
                 onDone: async () => {
@@ -2385,7 +2393,11 @@ df.head()
                     this.streamingManager.unregister(nodeId);
 
                     // Final update ensures editor has final content
-                    this.canvas.updateCodeContent(nodeId, generatedCode, false);
+                    const codeNode = this.graph.getNode(nodeId);
+                    if (codeNode) {
+                        const codeWrapped = wrapNode(codeNode);
+                        codeWrapped.updateContent(nodeId, generatedCode, false, this.canvas);
+                    }
                     this.graph.updateNode(nodeId, { content: generatedCode, code: generatedCode });
                     this.saveSession();
 
@@ -2409,7 +2421,11 @@ df.head()
             // Show error
             console.error('Code generation failed:', error);
             const errorCode = `# Code generation failed: ${error.message}\n`;
-            this.canvas.updateCodeContent(nodeId, errorCode, false);
+            const codeNode = this.graph.getNode(nodeId);
+            if (codeNode) {
+                const codeWrapped = wrapNode(codeNode);
+                codeWrapped.updateContent(nodeId, errorCode, false, this.canvas);
+            }
             this.graph.updateNode(nodeId, { content: errorCode });
             this.saveSession();
         }
@@ -3353,12 +3369,20 @@ df.head()
                 onEvent: (eventType, data) => {
                     if (eventType === 'message' && data) {
                         generatedCode += data;
-                        this.canvas.updateCodeContent(nodeId, generatedCode, true);
+                        const codeNode = this.graph.getNode(nodeId);
+                        if (codeNode) {
+                            const codeWrapped = wrapNode(codeNode);
+                            codeWrapped.updateContent(nodeId, generatedCode, true, this.canvas);
+                        }
                     }
                 },
                 onDone: async () => {
                     this.streamingManager.unregister(nodeId); // Auto-hides stop button
-                    this.canvas.updateCodeContent(nodeId, generatedCode, false);
+                    const codeNode = this.graph.getNode(nodeId);
+                    if (codeNode) {
+                        const codeWrapped = wrapNode(codeNode);
+                        codeWrapped.updateContent(nodeId, generatedCode, false, this.canvas);
+                    }
                     this.graph.updateNode(nodeId, { content: generatedCode, code: generatedCode });
                     this.saveSession();
 
@@ -3380,7 +3404,11 @@ df.head()
 
             console.error('Code generation error:', error);
             const errorCode = `# Error generating code: ${error.message}\n`;
-            this.canvas.updateCodeContent(nodeId, errorCode, false);
+            const codeNode = this.graph.getNode(nodeId);
+            if (codeNode) {
+                const codeWrapped = wrapNode(codeNode);
+                codeWrapped.updateContent(nodeId, errorCode, false, this.canvas);
+            }
             this.graph.updateNode(nodeId, { content: errorCode, code: errorCode });
             this.saveSession();
         }

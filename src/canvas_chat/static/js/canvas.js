@@ -2375,7 +2375,11 @@ class Canvas {
 
                     wrapper.setAttribute('width', newWidth);
 
-                    const isMatrixNode = div.classList.contains('matrix');
+                    // Check if node protocol wants to prevent height change on east-only resize
+                    const wrapped = wrapNode(node);
+                    const preventHeightChange = wrapped.shouldPreventHeightChangeOnEastResize
+                        ? wrapped.shouldPreventHeightChangeOnEastResize()
+                        : false;
 
                     if (resizeType.includes('s')) {
                         // Allow height to shrink freely (just usability minimum)
@@ -2384,7 +2388,7 @@ class Canvas {
                         wrapper.setAttribute('height', newHeight);
                         div.classList.add('viewport-fitted');
                         div.style.height = '100%';
-                    } else if (resizeType === 'e' && !isMatrixNode) {
+                    } else if (resizeType === 'e' && !preventHeightChange) {
                         // If only resizing width (east), keep height the same
                         // Content will wrap, and if it overflows, scrollbar will appear
                         // Mark as viewport-fitted so content scrolls when needed
@@ -2392,7 +2396,7 @@ class Canvas {
                         div.style.height = '100%';
                         // Height stays at startHeight (already set above)
                     }
-                    // If just resizing east on a matrix, don't change height at all
+                    // If preventHeightChange is true (e.g., matrix nodes), don't change height at all
 
                     // Update edges - read current position from wrapper, not stale node.position
                     const currentPos = {
@@ -2810,21 +2814,6 @@ class Canvas {
         }
     }
 
-    /**
-     * Update a matrix cell (for streaming cell fills)
-     * Delegates to node protocol's updateCellContent method.
-     * @deprecated Use protocol.updateCellContent() directly
-     */
-    updateMatrixCell(nodeId, row, col, content, isStreaming = false) {
-        const node = this.graph?.getNode(nodeId);
-        if (!node) return;
-
-        const wrapped = wrapNode(node);
-        const cellKey = `${row}-${col}`;
-        if (!wrapped.updateCellContent(nodeId, cellKey, content, isStreaming, this)) {
-            console.warn(`updateMatrixCell: Node ${nodeId} does not support cell updates`);
-        }
-    }
 
     /**
      * Highlight a specific cell in a matrix node
@@ -2968,94 +2957,6 @@ class Canvas {
         if (continueBtn) continueBtn.style.display = 'none';
     }
 
-    /**
-     * Show generate input for AI code generation
-     * @param {string} nodeId - The code node ID
-     * @param {Array<Object>} models - Available model options with {id, name}
-     * @param {string} currentModel - Currently selected model ID
-     */
-    showGenerateInput(nodeId, models = [], currentModel = '') {
-        const wrapper = this.nodeElements.get(nodeId);
-        if (!wrapper) return;
-
-        // Don't add if already present
-        if (wrapper.querySelector('.code-generate-input')) return;
-
-        const div = wrapper.querySelector('.node');
-        const codeContent = div.querySelector('.code-node-content');
-        if (!codeContent) return;
-
-        // Create input container with model dropdown defaulting to current model
-        const inputHtml = `
-            <div class="code-generate-input">
-                <input type="text" placeholder="Describe the code to generate..." class="generate-prompt-input" />
-                <select class="generate-model-select">
-                    ${models
-                        .map((m) => {
-                            const selected = m.id === currentModel ? 'selected' : '';
-                            return `<option value="${this.escapeHtml(m.id)}" ${selected}>${this.escapeHtml(m.name)}</option>`;
-                        })
-                        .join('')}
-                </select>
-                <button class="generate-submit-btn" title="Generate code">→</button>
-                <button class="generate-cancel-btn" title="Cancel">×</button>
-            </div>
-        `;
-
-        // Insert at the beginning of code-node-content (before data hint or editor)
-        codeContent.insertAdjacentHTML('afterbegin', inputHtml);
-
-        // Setup event listeners
-        const input = codeContent.querySelector('.generate-prompt-input');
-        const modelSelect = codeContent.querySelector('.generate-model-select');
-        const submitBtn = codeContent.querySelector('.generate-submit-btn');
-        const cancelBtn = codeContent.querySelector('.generate-cancel-btn');
-
-        const submit = () => {
-            const prompt = input.value.trim();
-            const model = modelSelect.value;
-            if (prompt) {
-                this.emit('nodeGenerateSubmit', nodeId, prompt, model);
-            }
-        };
-
-        submitBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            submit();
-        });
-
-        cancelBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.hideGenerateInput(nodeId);
-        });
-
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-            } else if (e.key === 'Escape') {
-                e.preventDefault();
-                this.hideGenerateInput(nodeId);
-            }
-        });
-
-        // Focus the input
-        input.focus();
-    }
-
-    /**
-     * Hide generate input
-     * @param {string} nodeId - The code node ID
-     */
-    hideGenerateInput(nodeId) {
-        const wrapper = this.nodeElements.get(nodeId);
-        if (!wrapper) return;
-
-        const input = wrapper.querySelector('.code-generate-input');
-        if (input) {
-            input.remove();
-        }
-    }
 
     /**
      * Update code content in a code node (for AI generation streaming)
@@ -3064,21 +2965,6 @@ class Canvas {
      * @param {string} code - The code content
      * @param {boolean} isStreaming - Whether still streaming
      */
-    /**
-     * Update code content (for streaming updates)
-     * Delegates to node protocol's updateContent method.
-     * @deprecated Use protocol.updateContent() directly
-     */
-    updateCodeContent(nodeId, code, isStreaming) {
-        const node = this.graph?.getNode(nodeId);
-        if (!node) return;
-
-        const wrapped = wrapNode(node);
-        if (!wrapped.updateContent(nodeId, code, isStreaming, this)) {
-            // Fallback to default updateNodeContent if protocol doesn't handle it
-            this.updateNodeContent(nodeId, code, isStreaming);
-        }
-    }
 
     /**
      * Update the collapse button state for a node.
@@ -3858,7 +3744,8 @@ class Canvas {
 
     /**
      * Start resizing the index column in a matrix node
-     * Uses protocol's getTableElement method to find the table.
+     * @deprecated Use protocol.handleCustomResize() instead
+     * This method is kept for backwards compatibility but delegates to the protocol.
      * @param {MouseEvent} e - The mousedown event
      * @param {string} nodeId - The matrix node's ID
      * @param {HTMLElement} nodeDiv - The node's DOM element
@@ -3868,49 +3755,9 @@ class Canvas {
         if (!node) return;
 
         const wrapped = wrapNode(node);
-        const matrixTable = wrapped.getTableElement ? wrapped.getTableElement(nodeId, this) : nodeDiv.querySelector('.matrix-table');
-        if (!matrixTable) return;
-
-        const handle = nodeDiv.querySelector('.index-col-resize-handle');
-        const tableRect = matrixTable.getBoundingClientRect();
-        const startX = e.clientX;
-
-        // Get current first column width
-        const firstCol = matrixTable.querySelector('th:first-child, td:first-child');
-        const startWidth = firstCol ? firstCol.getBoundingClientRect().width : tableRect.width * 0.25;
-
-        handle.classList.add('dragging');
-
-        const onMouseMove = (moveEvent) => {
-            const dx = moveEvent.clientX - startX;
-            let newWidth = startWidth + dx;
-
-            // Clamp to reasonable bounds (min 50px, max 70% of table width)
-            const minWidth = 50;
-            const maxWidth = tableRect.width * 0.7;
-            newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
-
-            // Calculate percentage of table width
-            const widthPercent = (newWidth / tableRect.width) * 100;
-
-            // Apply the width via CSS variable on the table
-            matrixTable.style.setProperty('--index-col-width', `${widthPercent}%`);
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            handle.classList.remove('dragging');
-
-            // Get final width percentage and persist it
-            const finalWidth = matrixTable.style.getPropertyValue('--index-col-width') || '25%';
-
-            // Notify callback to persist the width in the node data
-            this.emit('matrixIndexColResize', nodeId, finalWidth);
-        };
-
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
+        if (wrapped.handleCustomResize) {
+            wrapped.handleCustomResize(e, nodeId, this);
+        }
     }
 
     /**

@@ -4,9 +4,9 @@
  * Provides cell nodes for pinned matrix cells.
  * Cell nodes display a single cell extracted from a matrix.
  */
-import { BaseNode } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
-import { NodeType, DEFAULT_NODE_SIZES } from './graph-types.js';
+import { BaseNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+import { NodeType, DEFAULT_NODE_SIZES } from '../graph-types.js';
 
 class CellNode extends BaseNode {
     getTypeLabel() {

@@ -1,21 +1,21 @@
 /**
- * AI Node Plugin (Built-in)
+ * Opinion Node Plugin (Built-in)
  *
- * Provides AI response nodes in conversations.
- * AI nodes represent LLM-generated responses in the chat canvas.
- * They support stop/continue controls for streaming responses and include
- * actions for summarizing and creating flashcards.
+ * Provides opinion nodes for committee member opinions.
+ * Opinion nodes represent individual committee member's opinions in the
+ * committee feature. They support stop/continue controls for streaming
+ * responses and include actions for summarizing and creating flashcards.
  */
-import { BaseNode, Actions, HeaderButtons } from './node-protocols.js';
-import { NodeRegistry } from './node-registry.js';
+import { BaseNode, Actions, HeaderButtons } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 
-class AINode extends BaseNode {
+class OpinionNode extends BaseNode {
     getTypeLabel() {
-        return 'AI';
+        return 'Opinion';
     }
 
     getTypeIcon() {
-        return '🤖';
+        return '🗣️';
     }
 
     getActions() {
@@ -41,10 +41,10 @@ class AINode extends BaseNode {
 }
 
 NodeRegistry.register({
-    type: 'ai',
-    protocol: AINode,
+    type: 'opinion',
+    protocol: OpinionNode,
     defaultSize: { width: 640, height: 480 },
 });
 
-export { AINode };
-console.log('AI node plugin loaded');
+export { OpinionNode };
+console.log('Opinion node plugin loaded');
