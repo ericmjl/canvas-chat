@@ -450,6 +450,179 @@ class MatrixFeature extends FeaturePlugin {
      */
     async onLoad() {
         console.log('[MatrixFeature] Loaded');
+
+        // Register matrix creation modal
+        const createModalTemplate = `
+            <div id="matrix-main-modal" class="modal" style="display: none">
+                <div class="modal-content modal-wide">
+                    <div class="modal-header">
+                        <h2>Create Matrix</h2>
+                        <button class="modal-close" id="matrix-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="matrix-context-group">
+                            <label for="matrix-context">Matrix Context</label>
+                            <input
+                                type="text"
+                                id="matrix-context"
+                                placeholder="e.g., evaluate ideas against criteria"
+                                readonly
+                            />
+                        </div>
+
+                        <div id="matrix-loading" class="matrix-loading" style="display: none">
+                            <div class="loading-spinner"></div>
+                            <span>Extracting rows and columns...</span>
+                        </div>
+
+                        <div class="matrix-axes">
+                            <div class="matrix-axis">
+                                <div class="axis-header">
+                                    <h3>Rows</h3>
+                                    <span class="axis-count" id="row-count">0 items</span>
+                                </div>
+                                <ul class="axis-items" id="row-items">
+                                    <!-- Row items will be populated here -->
+                                </ul>
+                                <button class="axis-add-btn" id="add-row-btn">+ Add row</button>
+                            </div>
+
+                            <div class="matrix-swap">
+                                <button id="swap-axes-btn" class="icon-btn" title="Swap Axes">⇄</button>
+                            </div>
+
+                            <div class="matrix-axis">
+                                <div class="axis-header">
+                                    <h3>Columns</h3>
+                                    <span class="axis-count" id="col-count">0 items</span>
+                                </div>
+                                <ul class="axis-items" id="col-items">
+                                    <!-- Column items will be populated here -->
+                                </ul>
+                                <button class="axis-add-btn" id="add-col-btn">+ Add column</button>
+                            </div>
+                        </div>
+
+                        <div class="matrix-warning" id="matrix-warning" style="display: none">
+                            ⚠️ Maximum 10 items per axis. Some items have been truncated.
+                        </div>
+
+                        <div class="modal-actions">
+                            <button id="matrix-cancel-btn" class="secondary-btn">Cancel</button>
+                            <button id="matrix-create-btn" class="primary-btn">Create Matrix</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        this.modalManager.registerModal('matrix', 'create', createModalTemplate);
+
+        // Register edit matrix modal
+        const editModalTemplate = `
+            <div id="matrix-edit-modal" class="modal" style="display: none">
+                <div class="modal-content modal-wide">
+                    <div class="modal-header">
+                        <h2>Edit Matrix</h2>
+                        <button class="modal-close" id="edit-matrix-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="matrix-axes">
+                            <div class="matrix-axis">
+                                <div class="axis-header">
+                                    <h3>Rows</h3>
+                                    <span class="axis-count" id="edit-row-count">0 items</span>
+                                </div>
+                                <ul class="axis-items" id="edit-row-items"></ul>
+                                <button class="axis-add-btn" id="edit-add-row-btn">+ Add row</button>
+                            </div>
+
+                            <div class="matrix-swap">
+                                <button id="edit-swap-axes-btn" class="icon-btn" title="Swap Axes">⇄</button>
+                            </div>
+
+                            <div class="matrix-axis">
+                                <div class="axis-header">
+                                    <h3>Columns</h3>
+                                    <span class="axis-count" id="edit-col-count">0 items</span>
+                                </div>
+                                <ul class="axis-items" id="edit-col-items"></ul>
+                                <button class="axis-add-btn" id="edit-add-col-btn">+ Add column</button>
+                            </div>
+                        </div>
+
+                        <div class="modal-actions">
+                            <button id="edit-matrix-cancel-btn" class="secondary-btn">Cancel</button>
+                            <button id="edit-matrix-save-btn" class="primary-btn">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        this.modalManager.registerModal('matrix', 'edit', editModalTemplate);
+
+        // Register cell detail modal
+        const cellModalTemplate = `
+            <div id="matrix-cell-modal" class="modal" style="display: none">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Cell Details</h2>
+                        <button class="modal-close" id="cell-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="cell-detail-row">
+                            <label>Row:</label>
+                            <div class="cell-detail-content" id="cell-row-item"></div>
+                        </div>
+                        <div class="cell-detail-row">
+                            <label>Column:</label>
+                            <div class="cell-detail-content" id="cell-col-item"></div>
+                        </div>
+                        <div class="cell-detail-row">
+                            <label
+                                >Evaluation:
+                                <button id="cell-copy-btn" class="cell-copy-btn" title="Copy evaluation">📋</button></label
+                            >
+                            <div class="cell-detail-content cell-evaluation" id="cell-content"></div>
+                        </div>
+                        <div class="modal-actions">
+                            <button id="cell-close-btn" class="secondary-btn">Close</button>
+                            <button id="cell-pin-btn" class="primary-btn">📌 Pin to Canvas</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        this.modalManager.registerModal('matrix', 'cell', cellModalTemplate);
+
+        // Register slice (row/column) detail modal
+        const sliceModalTemplate = `
+            <div id="matrix-slice-modal" class="modal" style="display: none">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 id="slice-title">Row Details</h2>
+                        <button class="modal-close" id="slice-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="cell-detail-row">
+                            <label id="slice-label">Row:</label>
+                            <div class="cell-detail-content" id="slice-item"></div>
+                        </div>
+                        <div class="cell-detail-row">
+                            <label
+                                >Contents:
+                                <button id="slice-copy-btn" class="cell-copy-btn" title="Copy contents">📋</button></label
+                            >
+                            <div class="cell-detail-content cell-evaluation slice-content" id="slice-content"></div>
+                        </div>
+                        <div class="modal-actions">
+                            <button id="slice-close-btn" class="secondary-btn">Close</button>
+                            <button id="slice-pin-btn" class="primary-btn">📌 Pin to Canvas</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        this.modalManager.registerModal('matrix', 'slice', sliceModalTemplate);
     }
 
     /**
@@ -479,12 +652,12 @@ class MatrixFeature extends FeaturePlugin {
         document.getElementById('matrix-warning').style.display = 'none';
 
         // Show modal with loading indicator
-        const loadingModal = document.getElementById('matrix-modal');
+        const loadingModal = this.modalManager.getPluginModal('matrix', 'create');
         console.log('Matrix modal element:', loadingModal);
-        document.getElementById('matrix-context').value = matrixContext;
-        document.getElementById('matrix-loading').style.display = 'flex';
-        document.getElementById('matrix-create-btn').disabled = true;
-        loadingModal.style.display = 'flex';
+        loadingModal.querySelector('#matrix-context').value = matrixContext;
+        loadingModal.querySelector('#matrix-loading').style.display = 'flex';
+        loadingModal.querySelector('#matrix-create-btn').disabled = true;
+        this.modalManager.showPluginModal('matrix', 'create');
         console.log('Modal should now be visible');
 
         try {
@@ -513,12 +686,13 @@ class MatrixFeature extends FeaturePlugin {
             console.log('[Matrix] Column items:', colItems);
 
             // Hide loading indicator
-            document.getElementById('matrix-loading').style.display = 'none';
-            document.getElementById('matrix-create-btn').disabled = false;
+            const modal = this.modalManager.getPluginModal('matrix', 'create');
+            modal.querySelector('#matrix-loading').style.display = 'none';
+            modal.querySelector('#matrix-create-btn').disabled = false;
 
             // Check for max items warning
             const hasWarning = rowItems.length > 10 || colItems.length > 10;
-            document.getElementById('matrix-warning').style.display = hasWarning ? 'block' : 'none';
+            modal.querySelector('#matrix-warning').style.display = hasWarning ? 'block' : 'none';
 
             // Store parsed data for modal
             this._matrixData = {
@@ -535,9 +709,10 @@ class MatrixFeature extends FeaturePlugin {
             document.getElementById('row-count').textContent = `${this._matrixData.rowItems.length} items`;
             document.getElementById('col-count').textContent = `${this._matrixData.colItems.length} items`;
         } catch (err) {
-            document.getElementById('matrix-loading').style.display = 'none';
+            const modal = this.modalManager.getPluginModal('matrix', 'create');
+            modal.querySelector('#matrix-loading').style.display = 'none';
             alert(`Failed to parse list items: ${err.message}`);
-            document.getElementById('matrix-modal').style.display = 'none';
+            this.modalManager.hidePluginModal('matrix', 'create');
         }
     }
 
@@ -729,7 +904,7 @@ class MatrixFeature extends FeaturePlugin {
         }
 
         // Close modal and clean up
-        document.getElementById('matrix-modal').style.display = 'none';
+        this.modalManager.hidePluginModal('matrix', 'create');
         this._matrixData = null;
 
         // Clear selection
@@ -1000,10 +1175,11 @@ class MatrixFeature extends FeaturePlugin {
         };
 
         // Populate and show modal
-        document.getElementById('cell-row-item').textContent = rowItem;
-        document.getElementById('cell-col-item').textContent = colItem;
-        document.getElementById('cell-content').textContent = cell.content;
-        document.getElementById('cell-modal').style.display = 'flex';
+        const cellModal = this.modalManager.getPluginModal('matrix', 'cell');
+        cellModal.querySelector('#cell-row-item').textContent = rowItem;
+        cellModal.querySelector('#cell-col-item').textContent = colItem;
+        cellModal.querySelector('#cell-content').textContent = cell.content;
+        this.modalManager.showPluginModal('matrix', 'cell');
     }
 
     async handleMatrixFillAll(nodeId) {
@@ -1056,12 +1232,13 @@ class MatrixFeature extends FeaturePlugin {
         };
 
         // Populate the edit modal (reuses unified populateAxisItems)
+        const editModal = this.modalManager.getPluginModal('matrix', 'edit');
         this.populateAxisItems('edit-row-items', this._editMatrixData.rowItems);
         this.populateAxisItems('edit-col-items', this._editMatrixData.colItems);
-        document.getElementById('edit-row-count').textContent = `${this._editMatrixData.rowItems.length} items`;
-        document.getElementById('edit-col-count').textContent = `${this._editMatrixData.colItems.length} items`;
+        editModal.querySelector('#edit-row-count').textContent = `${this._editMatrixData.rowItems.length} items`;
+        editModal.querySelector('#edit-col-count').textContent = `${this._editMatrixData.colItems.length} items`;
 
-        document.getElementById('edit-matrix-modal').style.display = 'flex';
+        this.modalManager.showPluginModal('matrix', 'edit');
     }
 
     /**
@@ -1125,7 +1302,7 @@ class MatrixFeature extends FeaturePlugin {
         this.canvas.renderNode(this.graph.getNode(nodeId));
 
         // Close modal
-        document.getElementById('edit-matrix-modal').style.display = 'none';
+        this.modalManager.hidePluginModal('matrix', 'edit');
         this._editMatrixData = null;
 
         this.saveSession();
@@ -1155,7 +1332,7 @@ class MatrixFeature extends FeaturePlugin {
         this.graph.addEdge(edge);
 
         // Close modal
-        document.getElementById('cell-modal').style.display = 'none';
+        this.modalManager.hidePluginModal('matrix', 'cell');
         this._currentCellData = null;
 
         // Select the new cell node
@@ -1205,11 +1382,12 @@ class MatrixFeature extends FeaturePlugin {
         };
 
         // Populate and show modal
-        document.getElementById('slice-title').textContent = 'Row Details';
-        document.getElementById('slice-label').textContent = 'Row:';
-        document.getElementById('slice-item').textContent = rowItem;
-        document.getElementById('slice-content').textContent = displayContent.trim();
-        document.getElementById('slice-modal').style.display = 'flex';
+        const sliceModal = this.modalManager.getPluginModal('matrix', 'slice');
+        sliceModal.querySelector('#slice-title').textContent = 'Row Details';
+        sliceModal.querySelector('#slice-label').textContent = 'Row:';
+        sliceModal.querySelector('#slice-item').textContent = rowItem;
+        sliceModal.querySelector('#slice-content').textContent = displayContent.trim();
+        this.modalManager.showPluginModal('matrix', 'slice');
     }
 
     /**
@@ -1291,7 +1469,7 @@ class MatrixFeature extends FeaturePlugin {
         this.graph.addEdge(edge);
 
         // Close modal
-        document.getElementById('slice-modal').style.display = 'none';
+        this.modalManager.hidePluginModal('matrix', 'slice');
         this._currentSliceData = null;
 
         // Select the new node

@@ -23,6 +23,100 @@ class ModalManager {
      */
     constructor(app) {
         this.app = app;
+        // Map of plugin modals: Map<`${pluginId}:${modalId}`, HTMLElement>
+        this._pluginModals = new Map();
+    }
+
+    // --- Plugin Modal Registration API ---
+
+    /**
+     * Register a modal template for a plugin.
+     * Plugins should call this in their onLoad() hook.
+     * @param {string} pluginId - Plugin identifier (e.g., 'committee', 'matrix')
+     * @param {string} modalId - Modal identifier within the plugin (e.g., 'main', 'edit')
+     * @param {string} htmlTemplate - HTML template string for the modal
+     * @returns {HTMLElement} The created modal element
+     */
+    registerModal(pluginId, modalId, htmlTemplate) {
+        const key = `${pluginId}:${modalId}`;
+        if (this._pluginModals.has(key)) {
+            console.warn(`[ModalManager] Modal ${key} already registered, overwriting`);
+        }
+
+        // Create a temporary container to parse HTML
+        const temp = document.createElement('div');
+        temp.innerHTML = htmlTemplate.trim();
+
+        // Get the modal element (should be the first child)
+        const modal = temp.firstElementChild;
+        if (!modal) {
+            throw new Error(`[ModalManager] Invalid modal template for ${key}: no root element`);
+        }
+
+        // Ensure modal has the correct ID format
+        const expectedId = `${pluginId}-${modalId}-modal`;
+        if (modal.id && modal.id !== expectedId) {
+            console.warn(
+                `[ModalManager] Modal ${key} has id="${modal.id}" but expected "${expectedId}". Using provided ID.`
+            );
+        } else if (!modal.id) {
+            modal.id = expectedId;
+        }
+
+        // Ensure modal has base classes
+        if (!modal.classList.contains('modal')) {
+            modal.classList.add('modal');
+        }
+        modal.style.display = 'none';
+
+        // Append to document body
+        document.body.appendChild(modal);
+
+        // Store reference
+        this._pluginModals.set(key, modal);
+
+        console.log(`[ModalManager] Registered plugin modal: ${key}`);
+        return modal;
+    }
+
+    /**
+     * Show a plugin modal.
+     * @param {string} pluginId - Plugin identifier
+     * @param {string} modalId - Modal identifier within the plugin
+     */
+    showPluginModal(pluginId, modalId) {
+        const key = `${pluginId}:${modalId}`;
+        const modal = this._pluginModals.get(key);
+        if (!modal) {
+            throw new Error(`[ModalManager] Plugin modal ${key} not registered. Call registerModal() in onLoad().`);
+        }
+        modal.style.display = 'flex';
+    }
+
+    /**
+     * Hide a plugin modal.
+     * @param {string} pluginId - Plugin identifier
+     * @param {string} modalId - Modal identifier within the plugin
+     */
+    hidePluginModal(pluginId, modalId) {
+        const key = `${pluginId}:${modalId}`;
+        const modal = this._pluginModals.get(key);
+        if (!modal) {
+            console.warn(`[ModalManager] Plugin modal ${key} not registered`);
+            return;
+        }
+        modal.style.display = 'none';
+    }
+
+    /**
+     * Get a plugin modal element (for plugins that need direct DOM access).
+     * @param {string} pluginId - Plugin identifier
+     * @param {string} modalId - Modal identifier within the plugin
+     * @returns {HTMLElement|null} The modal element, or null if not registered
+     */
+    getPluginModal(pluginId, modalId) {
+        const key = `${pluginId}:${modalId}`;
+        return this._pluginModals.get(key) || null;
     }
 
     // --- Settings Modal ---
@@ -176,15 +270,18 @@ class ModalManager {
      * @returns {boolean}
      */
     closeAnyOpenModal() {
-        // List of all modal IDs in priority order
+        // First check plugin modals (most specific)
+        for (const [key, modal] of this._pluginModals.entries()) {
+            if (modal && modal.style.display === 'flex') {
+                modal.style.display = 'none';
+                return true;
+            }
+        }
+
+        // Then check core app modals
         const modalIds = [
             'edit-title-modal',
             'edit-content-modal',
-            'cell-modal',
-            'slice-modal',
-            'edit-matrix-modal',
-            'matrix-modal',
-            'committee-modal',
             'session-modal',
             'settings-modal',
             'help-modal',

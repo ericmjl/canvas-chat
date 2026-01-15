@@ -37,6 +37,73 @@ class FlashcardFeature extends FeaturePlugin {
      */
     async onLoad() {
         console.log('[FlashcardFeature] Loaded');
+
+        // Register generation modal
+        const generationModalTemplate = `
+            <div id="flashcard-generation-main-modal" class="modal" style="display: none">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Generate Flashcards</h2>
+                        <button class="modal-close" id="flashcard-generation-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="flashcard-generation-status" class="flashcard-status-message">
+                            Generating flashcards...
+                        </div>
+                        <div id="flashcard-candidates" class="flashcard-candidates-list">
+                            <!-- Candidate cards listed here -->
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="secondary-btn" id="flashcard-cancel">Cancel</button>
+                        <button class="primary-btn" id="flashcard-accept-selected" disabled>Accept Selected</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        this.modalManager.registerModal('flashcard', 'generation', generationModalTemplate);
+
+        // Register review modal
+        const reviewModalTemplate = `
+            <div id="flashcard-review-main-modal" class="modal" style="display: none">
+                <div class="modal-content review-modal-content">
+                    <div class="modal-header">
+                        <h2>Review Flashcards <span id="review-progress" class="review-progress">1/5</span></h2>
+                        <button class="modal-close" id="flashcard-review-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="review-question" class="review-question"></div>
+                        <textarea
+                            id="review-answer-input"
+                            class="review-answer-input"
+                            placeholder="Type your answer..."
+                        ></textarea>
+                        <button id="review-submit" class="primary-btn review-submit-btn">Submit Answer</button>
+
+                        <!-- Shown after submit -->
+                        <div id="review-result" class="review-result" style="display: none">
+                            <div class="review-correct-answer">
+                                <div class="review-label">Correct Answer:</div>
+                                <div id="review-correct-answer-text"></div>
+                            </div>
+                            <div id="review-verdict" class="review-verdict"></div>
+                            <div id="review-explanation" class="review-explanation"></div>
+                            <div class="review-override-buttons">
+                                <button id="review-override-correct" class="override-btn correct">I knew this</button>
+                                <button id="review-override-incorrect" class="override-btn incorrect">
+                                    I didn't know this
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-actions review-actions">
+                        <button class="secondary-btn" id="review-end">End Review</button>
+                        <button class="primary-btn" id="review-next" style="display: none">Next Card</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        this.modalManager.registerModal('flashcard', 'review', reviewModalTemplate);
     }
 
     /**
@@ -59,12 +126,12 @@ class FlashcardFeature extends FeaturePlugin {
         }
 
         // Get modal elements
-        const modal = document.getElementById('flashcard-generation-modal');
-        const statusEl = document.getElementById('flashcard-generation-status');
-        const candidatesEl = document.getElementById('flashcard-candidates');
-        const acceptBtn = document.getElementById('flashcard-accept-selected');
-        const cancelBtn = document.getElementById('flashcard-cancel');
-        const closeBtn = document.getElementById('flashcard-generation-close');
+        const modal = this.modalManager.getPluginModal('flashcard', 'generation');
+        const statusEl = modal.querySelector('#flashcard-generation-status');
+        const candidatesEl = modal.querySelector('#flashcard-candidates');
+        const acceptBtn = modal.querySelector('#flashcard-accept-selected');
+        const cancelBtn = modal.querySelector('#flashcard-cancel');
+        const closeBtn = modal.querySelector('#flashcard-generation-close');
 
         // Reset modal state
         statusEl.textContent = 'Generating flashcards...';
@@ -73,11 +140,11 @@ class FlashcardFeature extends FeaturePlugin {
         acceptBtn.disabled = true;
 
         // Show modal
-        modal.style.display = 'flex';
+        this.modalManager.showPluginModal('flashcard', 'generation');
 
         // Close handlers
         const closeModal = () => {
-            modal.style.display = 'none';
+            this.modalManager.hidePluginModal('flashcard', 'generation');
         };
 
         // Remove previous handlers to avoid duplicates
@@ -275,12 +342,12 @@ ${nodeContent}`;
         this.setupReviewModalListeners();
 
         // Get modal elements AFTER setupReviewModalListeners has cloned them
-        const modal = document.getElementById('flashcard-review-modal');
-        const progressEl = document.getElementById('review-progress');
-        const answerInput = document.getElementById('review-answer-input');
-        const submitBtn = document.getElementById('review-submit');
-        const resultEl = document.getElementById('review-result');
-        const nextBtn = document.getElementById('review-next');
+        const modal = this.modalManager.getPluginModal('flashcard', 'review');
+        const progressEl = modal.querySelector('#review-progress');
+        const answerInput = modal.querySelector('#review-answer-input');
+        const submitBtn = modal.querySelector('#review-submit');
+        const resultEl = modal.querySelector('#review-result');
+        const nextBtn = modal.querySelector('#review-next');
 
         // Show first card
         this.displayReviewCard(0);
@@ -298,7 +365,7 @@ ${nodeContent}`;
         progressEl.textContent = `1/${dueCardIds.length}`;
 
         // Show modal
-        modal.style.display = 'flex';
+        this.modalManager.showPluginModal('flashcard', 'review');
         answerInput.focus();
     }
 
@@ -306,13 +373,13 @@ ${nodeContent}`;
      * Set up event listeners for review modal.
      */
     setupReviewModalListeners() {
-        const _modal = document.getElementById('flashcard-review-modal');
-        const closeBtn = document.getElementById('flashcard-review-close');
-        const submitBtn = document.getElementById('review-submit');
-        const nextBtn = document.getElementById('review-next');
-        const endBtn = document.getElementById('review-end');
-        const overrideCorrectBtn = document.getElementById('review-override-correct');
-        const overrideIncorrectBtn = document.getElementById('review-override-incorrect');
+        const modal = this.modalManager.getPluginModal('flashcard', 'review');
+        const closeBtn = modal.querySelector('#flashcard-review-close');
+        const submitBtn = modal.querySelector('#review-submit');
+        const nextBtn = modal.querySelector('#review-next');
+        const endBtn = modal.querySelector('#review-end');
+        const overrideCorrectBtn = modal.querySelector('#review-override-correct');
+        const overrideIncorrectBtn = modal.querySelector('#review-override-incorrect');
 
         // Clone buttons to remove previous listeners
         const newCloseBtn = closeBtn.cloneNode(true);
@@ -337,7 +404,7 @@ ${nodeContent}`;
         newOverrideIncorrect.addEventListener('click', () => this.handleReviewOverride(false));
 
         // Enter key submits
-        const answerInput = document.getElementById('review-answer-input');
+        const answerInput = modal.querySelector('#review-answer-input');
         const newAnswerInput = answerInput.cloneNode(true);
         answerInput.parentNode.replaceChild(newAnswerInput, answerInput);
         newAnswerInput.addEventListener('keydown', (e) => {
@@ -360,8 +427,9 @@ ${nodeContent}`;
 
         if (!card) return;
 
-        const questionEl = document.getElementById('review-question');
-        const progressEl = document.getElementById('review-progress');
+        const modal = this.modalManager.getPluginModal('flashcard', 'review');
+        const questionEl = modal.querySelector('#review-question');
+        const progressEl = modal.querySelector('#review-progress');
 
         questionEl.textContent = card.content || 'No question';
         progressEl.textContent = `${index + 1}/${this.reviewState.cardIds.length}`;
@@ -371,8 +439,7 @@ ${nodeContent}`;
      * Close the review modal.
      */
     closeReviewModal() {
-        const modal = document.getElementById('flashcard-review-modal');
-        modal.style.display = 'none';
+        this.modalManager.hidePluginModal('flashcard', 'review');
         this.reviewState = null;
     }
 
@@ -382,13 +449,14 @@ ${nodeContent}`;
     async handleReviewSubmit() {
         if (!this.reviewState || this.reviewState.hasSubmitted) return;
 
-        const answerInput = document.getElementById('review-answer-input');
-        const submitBtn = document.getElementById('review-submit');
-        const resultEl = document.getElementById('review-result');
-        const correctAnswerText = document.getElementById('review-correct-answer-text');
-        const verdictEl = document.getElementById('review-verdict');
-        const explanationEl = document.getElementById('review-explanation');
-        const nextBtn = document.getElementById('review-next');
+        const modal = this.modalManager.getPluginModal('flashcard', 'review');
+        const answerInput = modal.querySelector('#review-answer-input');
+        const submitBtn = modal.querySelector('#review-submit');
+        const resultEl = modal.querySelector('#review-result');
+        const correctAnswerText = modal.querySelector('#review-correct-answer-text');
+        const verdictEl = modal.querySelector('#review-verdict');
+        const explanationEl = modal.querySelector('#review-explanation');
+        const nextBtn = modal.querySelector('#review-next');
 
         const userAnswer = answerInput.value.trim();
         if (!userAnswer) {
@@ -555,7 +623,8 @@ ${gradingRules}
     handleReviewOverride(wasCorrect) {
         if (!this.reviewState) return;
 
-        const verdictEl = document.getElementById('review-verdict');
+        const modal = this.modalManager.getPluginModal('flashcard', 'review');
+        const verdictEl = modal.querySelector('#review-verdict');
 
         // Update quality based on override
         if (wasCorrect) {
@@ -614,10 +683,11 @@ ${gradingRules}
             this.reviewState.hasSubmitted = false;
             this.reviewState.currentQuality = null;
 
-            const answerInput = document.getElementById('review-answer-input');
-            const submitBtn = document.getElementById('review-submit');
-            const resultEl = document.getElementById('review-result');
-            const nextBtn = document.getElementById('review-next');
+            const modal = this.modalManager.getPluginModal('flashcard', 'review');
+            const answerInput = modal.querySelector('#review-answer-input');
+            const submitBtn = modal.querySelector('#review-submit');
+            const resultEl = modal.querySelector('#review-result');
+            const nextBtn = modal.querySelector('#review-next');
 
             // Reset input
             answerInput.value = '';

@@ -70,6 +70,85 @@ class CommitteeFeature extends FeaturePlugin {
      */
     async onLoad() {
         console.log('[CommitteeFeature] Loaded');
+
+        // Register plugin modal
+        const modalTemplate = `
+            <div id="committee-main-modal" class="modal" style="display: none">
+                <div class="modal-content modal-wide">
+                    <div class="modal-header">
+                        <h2>LLM Committee</h2>
+                        <button class="modal-close" id="committee-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="committee-question-group">
+                            <label for="committee-question">Question</label>
+                            <textarea
+                                id="committee-question"
+                                rows="3"
+                                readonly
+                                placeholder="Your question will appear here..."
+                            ></textarea>
+                        </div>
+
+                        <!-- Persona Suggestions Section -->
+                        <div class="committee-suggestions-group">
+                            <div class="committee-suggestions-header">
+                                <label>✨ Suggested Personas</label>
+                                <button
+                                    id="committee-regenerate-btn"
+                                    class="icon-btn"
+                                    title="Regenerate suggestions"
+                                    style="display: none"
+                                >
+                                    ↻
+                                </button>
+                            </div>
+                            <div class="committee-suggestions-container" id="committee-suggestions-container">
+                                <div class="committee-suggestions-loading">
+                                    <span class="spinner">⟳</span> Generating persona suggestions...
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Committee Members Section -->
+                        <div class="committee-members-group">
+                            <div class="committee-members-header">
+                                <label>Committee Members</label>
+                                <span class="committee-members-count" id="committee-members-count">0 of 2-5 members</span>
+                            </div>
+                            <div class="committee-members-list" id="committee-members-list">
+                                <!-- Member rows will be added dynamically -->
+                            </div>
+                            <button id="committee-add-member-btn" class="secondary-btn committee-add-member-btn">
+                                + Add Member
+                            </button>
+                        </div>
+
+                        <div class="committee-chairman-group">
+                            <label for="committee-chairman">Chairman (synthesizes opinions)</label>
+                            <select id="committee-chairman" class="committee-chairman-select">
+                                <!-- Options populated by JS -->
+                            </select>
+                        </div>
+
+                        <div class="committee-options-group">
+                            <label class="committee-checkbox-label">
+                                <input type="checkbox" id="committee-include-review" />
+                                <span class="checkbox-text">Include review stage</span>
+                                <span class="checkbox-hint">Each model reviews all other opinions before synthesis</span>
+                            </label>
+                        </div>
+
+                        <div class="modal-actions">
+                            <button id="committee-cancel-btn" class="secondary-btn">Cancel</button>
+                            <button id="committee-execute-btn" class="primary-btn" disabled>Consult Committee</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.modalManager.registerModal('committee', 'main', modalTemplate);
     }
 
     /**
@@ -102,8 +181,11 @@ class CommitteeFeature extends FeaturePlugin {
             personaSuggestions: null,
         };
 
+        // Get modal element for querying
+        const modal = this.modalManager.getPluginModal('committee', 'main');
+
         // Get the question textarea and populate it
-        const questionTextarea = document.getElementById('committee-question');
+        const questionTextarea = modal.querySelector('#committee-question');
         questionTextarea.value = question;
 
         // Get current model
@@ -116,7 +198,7 @@ class CommitteeFeature extends FeaturePlugin {
         }));
 
         // Populate chairman dropdown
-        const chairmanSelect = document.getElementById('committee-chairman');
+        const chairmanSelect = modal.querySelector('#committee-chairman');
         chairmanSelect.innerHTML = '';
         for (const model of availableModels) {
             const option = document.createElement('option');
@@ -127,7 +209,7 @@ class CommitteeFeature extends FeaturePlugin {
         chairmanSelect.value = currentModel;
 
         // Reset review checkbox
-        document.getElementById('committee-include-review').checked = false;
+        modal.querySelector('#committee-include-review').checked = false;
 
         // Clear members list
         this.renderMembersList();
@@ -136,7 +218,7 @@ class CommitteeFeature extends FeaturePlugin {
         this.updateMemberCount();
 
         // Show modal
-        document.getElementById('committee-modal').style.display = 'flex';
+        this.modalManager.showPluginModal('committee', 'main');
 
         // Generate persona suggestions automatically
         await this.generatePersonaSuggestions(question);
@@ -153,10 +235,11 @@ class CommitteeFeature extends FeaturePlugin {
         if (this._modalListenersSetup) return;
         this._modalListenersSetup = true;
 
-        const addMemberBtn = document.getElementById('committee-add-member-btn');
+        const modal = this.modalManager.getPluginModal('committee', 'main');
+        const addMemberBtn = modal.querySelector('#committee-add-member-btn');
         addMemberBtn.addEventListener('click', () => this.addMember());
 
-        const regenerateBtn = document.getElementById('committee-regenerate-btn');
+        const regenerateBtn = modal.querySelector('#committee-regenerate-btn');
         regenerateBtn.addEventListener('click', () => this.generatePersonaSuggestions(this._committeeData.question));
     }
 
@@ -164,8 +247,9 @@ class CommitteeFeature extends FeaturePlugin {
      * Generate persona suggestions using LLM.
      */
     async generatePersonaSuggestions(question) {
-        const container = document.getElementById('committee-suggestions-container');
-        const regenerateBtn = document.getElementById('committee-regenerate-btn');
+        const modal = this.modalManager.getPluginModal('committee', 'main');
+        const container = modal.querySelector('#committee-suggestions-container');
+        const regenerateBtn = modal.querySelector('#committee-regenerate-btn');
 
         // Show loading state
         container.innerHTML = `
@@ -244,7 +328,8 @@ ${question}`;
      * Render persona suggestions as cards.
      */
     renderPersonaSuggestions(suggestions) {
-        const container = document.getElementById('committee-suggestions-container');
+        const modal = this.modalManager.getPluginModal('committee', 'main');
+        const container = modal.querySelector('#committee-suggestions-container');
         const grid = document.createElement('div');
         grid.className = 'committee-suggestions-grid';
 
@@ -322,7 +407,8 @@ ${question}`;
      * Render the members list.
      */
     renderMembersList() {
-        const list = document.getElementById('committee-members-list');
+        const modal = this.modalManager.getPluginModal('committee', 'main');
+        const list = modal.querySelector('#committee-members-list');
         list.innerHTML = '';
 
         const availableModels = Array.from(this.modelPicker.options).map((opt) => ({
@@ -436,13 +522,14 @@ ${question}`;
         const count = this._committeeData.members.length;
         const isValid = count >= 2 && count <= 5;
 
-        const countEl = document.getElementById('committee-members-count');
+        const modal = this.modalManager.getPluginModal('committee', 'main');
+        const countEl = modal.querySelector('#committee-members-count');
         countEl.textContent = `${count} of 2-5 members`;
         countEl.classList.toggle('valid', isValid);
         countEl.classList.toggle('invalid', !isValid);
 
         // Enable/disable execute button
-        document.getElementById('committee-execute-btn').disabled = !isValid;
+        modal.querySelector('#committee-execute-btn').disabled = !isValid;
     }
 
     /**
@@ -458,7 +545,7 @@ ${question}`;
      * Close the committee modal and clear state.
      */
     closeModal() {
-        document.getElementById('committee-modal').style.display = 'none';
+        this.modalManager.hidePluginModal('committee', 'main');
         this._committeeData = null;
     }
 
@@ -469,11 +556,12 @@ ${question}`;
         if (!this._committeeData) return;
 
         const { question, context: _context, members } = this._committeeData;
-        const chairmanModel = document.getElementById('committee-chairman').value;
-        const includeReview = document.getElementById('committee-include-review').checked;
+        const modal = this.modalManager.getPluginModal('committee', 'main');
+        const chairmanModel = modal.querySelector('#committee-chairman').value;
+        const includeReview = modal.querySelector('#committee-include-review').checked;
 
         // Close modal
-        document.getElementById('committee-modal').style.display = 'none';
+        this.modalManager.hidePluginModal('committee', 'main');
 
         // Track recently used models
         for (const member of members) {
