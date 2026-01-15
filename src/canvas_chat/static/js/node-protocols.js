@@ -473,50 +473,9 @@ class ColumnNode extends BaseNode {
  */
 
 /**
- * CSV node (uploaded CSV data for analysis)
+ * Note: CsvNode has been moved to csv-node.js plugin (built-in)
+ * This allows the CSV node type to be loaded as a plugin.
  */
-class CsvNode extends BaseNode {
-    getTypeLabel() {
-        return 'CSV';
-    }
-    getTypeIcon() {
-        return '📊';
-    }
-
-    getSummaryText(canvas) {
-        if (this.node.title) return this.node.title;
-        const filename = this.node.filename || 'CSV Data';
-        const rowCount = this.node.rowCount || '?';
-        return `${filename} (${rowCount} rows)`;
-    }
-
-    renderContent(canvas) {
-        // Show table preview with metadata header
-        const filename = this.node.filename || 'data.csv';
-        const rowCount = this.node.rowCount || '?';
-        const colCount = this.node.columnCount || '?';
-        const columns = this.node.columns || [];
-
-        let html = `<div class="csv-metadata">`;
-        html += `<strong>${canvas.escapeHtml(filename)}</strong> — `;
-        html += `${rowCount} rows × ${colCount} columns`;
-        if (columns.length > 0) {
-            html += `<br><span class="csv-columns">Columns: ${columns.map((c) => canvas.escapeHtml(c)).join(', ')}</span>`;
-        }
-        html += `</div>`;
-
-        // Render the markdown table preview
-        if (this.node.content) {
-            html += `<div class="csv-preview">${canvas.renderMarkdown(this.node.content)}</div>`;
-        }
-
-        return html;
-    }
-
-    getActions() {
-        return [Actions.ANALYZE, Actions.REPLY, Actions.SUMMARIZE, Actions.COPY];
-    }
-}
 
 /**
  * Code node (Python code for execution with Pyodide)
@@ -806,34 +765,9 @@ class FactcheckNode extends BaseNode {
 }
 
 /**
- * Image node (uploaded image for analysis)
+ * Note: ImageNode has been moved to image-node.js plugin (built-in)
+ * This allows the image node type to be loaded as a plugin.
  */
-class ImageNode extends BaseNode {
-    getTypeLabel() {
-        return 'Image';
-    }
-    getTypeIcon() {
-        return '🖼️';
-    }
-
-    getSummaryText(canvas) {
-        return 'Image';
-    }
-
-    renderContent(canvas) {
-        const imgSrc = `data:${this.node.mimeType || 'image/png'};base64,${this.node.imageData}`;
-        return `<div class="image-node-content"><img src="${imgSrc}" class="node-image" alt="Image"></div>`;
-    }
-
-    async copyToClipboard(canvas, app) {
-        if (!canvas?.copyImageToClipboard) {
-            console.error('ImageNode.copyToClipboard: canvas.copyImageToClipboard is not available');
-            return;
-        }
-        await canvas.copyImageToClipboard(this.node.imageData, this.node.mimeType);
-        canvas.showCopyFeedback(this.node.id);
-    }
-}
 
 /**
  * Flashcard node (spaced repetition Q/A card)
@@ -909,8 +843,14 @@ class FlashcardNode extends BaseNode {
  */
 function wrapNode(node) {
     // Image data takes precedence (for IMAGE nodes or HIGHLIGHT nodes with images)
+    // Note: ImageNode is now a plugin, but we still check imageData first for HIGHLIGHT nodes
+    // The registry will handle IMAGE type nodes below
     if (node.imageData && node.type === NodeType.IMAGE) {
-        return new ImageNode(node);
+        // Try registry first (ImageNode is now a plugin)
+        if (typeof NodeRegistry !== 'undefined' && NodeRegistry.isRegistered(node.type)) {
+            const NodeClass = NodeRegistry.getProtocolClass(node.type);
+            return new NodeClass(node);
+        }
     }
 
     // Try registry first (for plugins)
@@ -939,9 +879,9 @@ function wrapNode(node) {
         // Note: SynthesisNode is now a plugin (synthesis-node.js)
         // Note: ReviewNode is now a plugin (review-node.js)
         [NodeType.FACTCHECK]: FactcheckNode,
-        [NodeType.IMAGE]: ImageNode,
+        // Note: ImageNode is now a plugin (image-node.js)
         [NodeType.FLASHCARD]: FlashcardNode,
-        [NodeType.CSV]: CsvNode,
+        // Note: CsvNode is now a plugin (csv-node.js)
         [NodeType.CODE]: CodeNode,
     };
 
@@ -1008,8 +948,9 @@ function validateNodeProtocol(NodeClass) {
     // This is a heuristic - class names should match node types
     let nodeType = NodeType.NOTE; // Default fallback
     const className = NodeClass.name;
-    if (className.includes('Image')) nodeType = NodeType.IMAGE;
-    else if (className.includes('Matrix')) nodeType = NodeType.MATRIX;
+    // Note: ImageNode is now a plugin (image-node.js)
+    // if (className.includes('Image')) nodeType = NodeType.IMAGE;
+    if (className.includes('Matrix')) nodeType = NodeType.MATRIX;
     else if (className.includes('Cell')) nodeType = NodeType.CELL;
     // Note: HumanNode is now a plugin (human-node.js)
     // Note: AINode is now a plugin (ai-node.js)
@@ -1028,8 +969,9 @@ function validateNodeProtocol(NodeClass) {
     // Note: ReviewNode is now a plugin (review-node.js)
     else if (className.includes('Factcheck')) nodeType = NodeType.FACTCHECK;
     else if (className.includes('Flashcard')) nodeType = NodeType.FLASHCARD;
-    else if (className.includes('Csv')) nodeType = NodeType.CSV;
-    else if (className.includes('Code')) nodeType = NodeType.CODE;
+    // Note: CsvNode is now a plugin (csv-node.js)
+    // else if (className.includes('Csv')) nodeType = NodeType.CSV;
+    if (className.includes('Code')) nodeType = NodeType.CODE;
 
     // Create a type-appropriate mock node
     const mockNode = createMockNodeForType(nodeType);
@@ -1088,9 +1030,9 @@ function registerBuiltinNodeTypes() {
         // Note: 'synthesis' is now a plugin (synthesis-node.js)
         // Note: 'review' is now a plugin (review-node.js)
         { type: 'factcheck', protocol: FactcheckNode },
-        { type: 'image', protocol: ImageNode },
+        // Note: 'image' is now a plugin (image-node.js)
         { type: 'flashcard', protocol: FlashcardNode },
-        { type: 'csv', protocol: CsvNode },
+        // Note: 'csv' is now a plugin (csv-node.js)
         { type: 'code', protocol: CodeNode },
     ];
 
@@ -1148,9 +1090,9 @@ export {
     // OpinionNode is now exported from opinion-node.js plugin
     // SynthesisNode is now exported from synthesis-node.js plugin
     // ReviewNode is now exported from review-node.js plugin
-    CsvNode,
+    // CsvNode is now exported from csv-node.js plugin
+    // ImageNode is now exported from image-node.js plugin
     CodeNode,
     FactcheckNode,
-    ImageNode,
     FlashcardNode,
 };
