@@ -1201,11 +1201,13 @@ Rules:
 - Make the claim specific and verifiable
 - Include key facts, names, numbers, or dates from the context
 - Keep it as a clear declarative statement
+- If the context is a list of claims (numbered or bulleted), return the full list of claims as a single string, one per line
 
 Examples:
 - User: "is this true?" Context: "The Eiffel Tower was built in 1889..." → "The Eiffel Tower was built in 1889"
 - User: "verify this claim" Context: "Python is the most popular programming language..." → "Python is the most popular programming language"
-- User: "fact check" Context: "Einstein failed math as a student..." → "Albert Einstein failed math as a student" """  # noqa: E501
+- User: "fact check" Context: "Einstein failed math as a student..." → "Albert Einstein failed math as a student"
+- User: "verify these" Context: "1. Claim one\n2. Claim two" → "Claim one\nClaim two" """  # noqa: E501
     elif request.command_type == "research":
         system_prompt = """You are a research instructions optimizer. Given a user's research request and the context it refers to, generate clear, specific research instructions.
 
@@ -1266,28 +1268,43 @@ Examples:
         # Use structured generation if supported
         if supports_structured:
             logger.info(f"Using structured generation for model {request.model}")
-            kwargs["response_format"] = RefinedQueryOutput
-            response = await litellm.acompletion(**kwargs)
+            try:
+                kwargs["response_format"] = RefinedQueryOutput
+                response = await litellm.acompletion(**kwargs)
 
-            # With structured generation, response is already parsed
-            if hasattr(response, "choices") and response.choices:
-                # LiteLLM returns the structured object directly in the message content
-                content = response.choices[0].message.content
-                if isinstance(content, str):
-                    # Parse JSON if returned as string
-                    import json
+                # With structured generation, response is already parsed
+                if hasattr(response, "choices") and response.choices:
+                    # LiteLLM returns structured object directly in message content
+                    content = response.choices[0].message.content
+                    if isinstance(content, str):
+                        # Parse JSON if returned as string
+                        import json
 
-                    parsed = json.loads(content)
-                    refined_query = parsed.get("refined_query", "").strip()
-                elif hasattr(content, "refined_query"):
-                    # Direct object access
-                    refined_query = content.refined_query.strip()
+                        parsed = json.loads(content)
+                        refined_query = parsed.get("refined_query", "").strip()
+                    elif hasattr(content, "refined_query"):
+                        # Direct object access
+                        refined_query = content.refined_query.strip()
+                    else:
+                        # Fallback: treat as dict
+                        refined_query = content.get("refined_query", "").strip()
                 else:
-                    # Fallback: treat as dict
-                    refined_query = content.get("refined_query", "").strip()
-            else:
-                logger.warning("Unexpected structured response format")
-                refined_query = request.user_query
+                    logger.warning("Unexpected structured response format")
+                    refined_query = request.user_query
+            except Exception as structured_error:
+                # If structured generation fails, fall back to regular completion
+                logger.warning(
+                    f"Structured generation failed for {request.model}: "
+                    f"{structured_error}. Falling back to regular completion."
+                )
+                # Remove response_format and retry with regular completion
+                kwargs.pop("response_format", None)
+                response = await litellm.acompletion(**kwargs)
+                refined_query = response.choices[0].message.content.strip()
+
+                # Remove quotes if the LLM wrapped the query in them
+                if refined_query.startswith('"') and refined_query.endswith('"'):
+                    refined_query = refined_query[1:-1]
         else:
             logger.info(
                 f"Model {request.model} doesn't support structured generation, "

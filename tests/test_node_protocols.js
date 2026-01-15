@@ -36,6 +36,7 @@ await import('../src/canvas_chat/static/js/review-node.js');
 await import('../src/canvas_chat/static/js/image-node.js');
 await import('../src/canvas_chat/static/js/csv-node.js');
 await import('../src/canvas_chat/static/js/flashcard-node.js');
+await import('../src/canvas_chat/static/js/factcheck-node.js');
 
 const { NodeType, createNode } = await import('../src/canvas_chat/static/js/graph-types.js');
 const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
@@ -58,13 +59,13 @@ const {
     // ImageNode is now a plugin - import from image-node.js
     // CsvNode is now a plugin - import from csv-node.js
     // FlashcardNode is now a plugin - import from flashcard-node.js
+    // FactcheckNode is now a plugin - import from factcheck-node.js
     MatrixNode,
     CellNode,
     RowNode,
     ColumnNode,
     FetchResultNode,
     CodeNode,
-    FactcheckNode,
     wrapNode,
     validateNodeProtocol,
 } = await import('../src/canvas_chat/static/js/node-protocols.js');

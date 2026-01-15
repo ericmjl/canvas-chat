@@ -66,7 +66,12 @@ class FactcheckFeature extends FeaturePlugin {
         const input = args.trim();
         const selectedContext = contextObj?.text || null;
 
-        console.log('[Factcheck] Starting with:', { command, input, selectedContext });
+        console.log('[Factcheck] Starting with:', {
+            command,
+            input,
+            selectedContext: selectedContext ? `${selectedContext.substring(0, 100)}...` : null,
+            selectedContextLength: selectedContext?.length || 0,
+        });
 
         const model = this.getModelPicker().value;
 
@@ -108,8 +113,23 @@ class FactcheckFeature extends FeaturePlugin {
                 });
                 if (refineResponse.ok) {
                     const refineData = await refineResponse.json();
-                    effectiveInput = refineData.refined_query;
-                    console.log('[Factcheck] Refined to:', effectiveInput);
+                    const refined = refineData.refined_query;
+                    // If refine returned empty or just the original vague query, use context directly
+                    if (
+                        !refined ||
+                        refined.trim().length === 0 ||
+                        refined === input ||
+                        refined === 'verify this' ||
+                        refined.length < 10
+                    ) {
+                        console.warn(
+                            '[Factcheck] Refine returned unhelpful result, using context directly'
+                        );
+                        effectiveInput = selectedContext;
+                    } else {
+                        effectiveInput = refined;
+                        console.log('[Factcheck] Refined to:', effectiveInput);
+                    }
                 } else {
                     console.warn('[Factcheck] Refine failed, using context directly');
                     effectiveInput = selectedContext;
@@ -348,8 +368,27 @@ class FactcheckFeature extends FeaturePlugin {
 
         let factcheckNode;
         if (existingNodeId) {
-            // Reuse existing node
+            // Reuse existing node - preserve existing claims if they exist
             factcheckNode = this.graph.getNode(existingNodeId);
+            const existingClaims = factcheckNode.claims || [];
+
+            // If we have existing claims with the same text, preserve their status
+            // Otherwise, use the new claims data
+            if (existingClaims.length === claimsData.length) {
+                // Try to match existing claims by text and preserve their status
+                const preservedClaims = claimsData.map((newClaim, index) => {
+                    const existingClaim = existingClaims[index];
+                    // If text matches and claim is already verified, preserve it
+                    if (existingClaim &&
+                        existingClaim.text === newClaim.text &&
+                        existingClaim.status !== 'checking') {
+                        return existingClaim; // Keep the existing verified claim
+                    }
+                    return newClaim; // Use new claim (either new text or still checking)
+                });
+                claimsData = preservedClaims;
+            }
+
             factcheckNode.claims = claimsData;
             factcheckNode.content = nodeContent;
             this.graph.updateNode(existingNodeId, { content: nodeContent, claims: claimsData });
@@ -376,11 +415,35 @@ class FactcheckFeature extends FeaturePlugin {
         this.saveSession();
 
         // Verify each claim in parallel
+        console.log(`[Factcheck] Starting verification of ${claims.length} claims`);
         const verificationPromises = claims.map((claim, index) =>
-            this.verifyClaim(factcheckNode.id, index, claim, model, apiKey)
+            this.verifyClaim(factcheckNode.id, index, claim, model, apiKey).catch((err) => {
+                console.error(`[Factcheck] Claim ${index + 1} verification failed:`, err);
+                // Update node to show error for this claim
+                const node = this.graph.getNode(factcheckNode.id);
+                if (node && node.claims) {
+                    node.claims[index] = {
+                        ...node.claims[index],
+                        status: 'error',
+                        explanation: `Verification failed: ${err.message}`,
+                        sources: [],
+                    };
+                    const newContent = this.buildFactcheckContent(node.claims);
+                    this.graph.updateNode(factcheckNode.id, { content: newContent, claims: node.claims });
+                    const updatedNode = this.graph.getNode(factcheckNode.id);
+                    if (updatedNode) {
+                        this.canvas.renderNode(updatedNode);
+                    }
+                }
+            })
         );
 
-        await Promise.allSettled(verificationPromises);
+        const results = await Promise.allSettled(verificationPromises);
+        console.log(`[Factcheck] All verifications complete. Results:`, results.map((r, i) => ({
+            index: i,
+            status: r.status,
+            error: r.status === 'rejected' ? r.reason : null,
+        })));
 
         // Final save after all verifications complete
         this.saveSession();
@@ -496,11 +559,22 @@ class FactcheckFeature extends FeaturePlugin {
             }
 
             // 3. Analyze search results to produce verdict
+            console.log(`[Factcheck] Analyzing verdict for claim ${claimIndex + 1}:`, claim);
             const verdict = await this.analyzeClaimVerdict(claim, uniqueResults, model, apiKey);
+            console.log(`[Factcheck] Verdict for claim ${claimIndex + 1}:`, verdict);
 
             // 4. Update the claim in the node
-            node.claims[claimIndex] = {
-                ...node.claims[claimIndex],
+            // Get fresh node reference in case it was updated
+            const freshNode = this.graph.getNode(nodeId);
+            if (!freshNode || !freshNode.claims) {
+                console.warn(`[Factcheck] Node ${nodeId} or claims missing after analysis`);
+                return;
+            }
+
+            // Create a copy of the claims array to avoid mutation issues
+            const updatedClaims = [...freshNode.claims];
+            updatedClaims[claimIndex] = {
+                ...updatedClaims[claimIndex],
                 status: verdict.status,
                 verdict: verdict.verdict,
                 explanation: verdict.explanation,
@@ -508,9 +582,19 @@ class FactcheckFeature extends FeaturePlugin {
             };
 
             // Update node data and re-render with protocol
-            const newContent = this.buildFactcheckContent(node.claims);
-            this.graph.updateNode(nodeId, { content: newContent, claims: node.claims });
-            this.canvas.renderNode(this.graph.getNode(nodeId));
+            const newContent = this.buildFactcheckContent(updatedClaims);
+            this.graph.updateNode(nodeId, { content: newContent, claims: updatedClaims });
+
+            // Get the node again after update to ensure we have the latest
+            const updatedNode = this.graph.getNode(nodeId);
+            if (updatedNode) {
+                // Ensure the node's claims array matches what we just set
+                updatedNode.claims = updatedClaims;
+                this.canvas.renderNode(updatedNode);
+                console.log(`[Factcheck] Updated claim ${claimIndex + 1} status to: ${verdict.status}`);
+            } else {
+                console.error(`[Factcheck] Failed to get node ${nodeId} after update`);
+            }
         } catch (err) {
             console.error('Claim verification error:', err);
 
@@ -546,6 +630,9 @@ Rules:
 5. Be inclusive - if something looks like a factual assertion, include it
 6. Political statements about countries' actions or positions ARE verifiable claims
 7. IMPORTANT: Even simple statements like "The Earth is flat" or "Water boils at 100°C" ARE verifiable claims - include them!
+8. If the input is a numbered list (e.g., "1. Claim one\n2. Claim two"), extract each numbered item as a separate claim
+9. If the input is a bulleted list, extract each bullet point as a separate claim
+10. Strip numbering/bullets and extract the actual claim text
 
 Respond with a JSON array of claim strings. Example:
 ["The Eiffel Tower is 330 meters tall", "Paris is the capital of France"]
@@ -674,6 +761,7 @@ Include only the most relevant sources (max 3) that support your verdict.`;
 SEARCH RESULTS:
 ${resultsText}`;
 
+        console.log(`[Factcheck] Calling LLM to analyze verdict for claim: ${claim.substring(0, 50)}...`);
         const response = await chat.sendMessageNonStreaming(
             [
                 { role: 'system', content: systemPrompt },
@@ -682,6 +770,7 @@ ${resultsText}`;
             model,
             apiKey
         );
+        console.log(`[Factcheck] LLM response received (length: ${response.length})`);
 
         try {
             const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -694,16 +783,19 @@ ${resultsText}`;
                     FALSE: 'false',
                     UNVERIFIABLE: 'unverifiable',
                 };
-                return {
+                const verdictResult = {
                     status: statusMap[result.verdict] || 'unverifiable',
                     verdict: result.verdict,
                     explanation: result.explanation || 'No explanation provided.',
                     sources: Array.isArray(result.sources) ? result.sources.slice(0, 3) : [],
                 };
+                console.log(`[Factcheck] Parsed verdict result:`, verdictResult);
+                return verdictResult;
             }
+            console.warn('[Factcheck] No JSON found in LLM response:', response.substring(0, 200));
             throw new Error('No JSON found in response');
         } catch (e) {
-            console.warn('Failed to parse verdict:', e);
+            console.warn('[Factcheck] Failed to parse verdict:', e, 'Response:', response.substring(0, 200));
             return {
                 status: 'unverifiable',
                 verdict: 'UNVERIFIABLE',
