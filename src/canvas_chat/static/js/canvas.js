@@ -2821,35 +2821,30 @@ class Canvas {
 
     /**
      * Update a matrix cell (for streaming cell fills)
+     * Delegates to node protocol's updateCellContent method.
+     * @deprecated Use protocol.updateCellContent() directly
      */
     updateMatrixCell(nodeId, row, col, content, isStreaming = false) {
-        const wrapper = this.nodeElements.get(nodeId);
-        if (!wrapper) return;
+        const node = this.graph?.getNode(nodeId);
+        if (!node) return;
 
-        const cell = wrapper.querySelector(`.matrix-cell[data-row="${row}"][data-col="${col}"]`);
-        if (!cell) return;
-
-        if (isStreaming) {
-            cell.classList.add('loading');
-            cell.classList.remove('empty');
-            cell.classList.add('filled');
-            cell.innerHTML = `<div class="matrix-cell-content">${this.escapeHtml(content)}</div>`;
-        } else {
-            cell.classList.remove('loading');
-            cell.classList.add('filled');
-            cell.classList.remove('empty');
-            cell.innerHTML = `<div class="matrix-cell-content">${this.escapeHtml(content)}</div>`;
+        const wrapped = wrapNode(node);
+        const cellKey = `${row}-${col}`;
+        if (!wrapped.updateCellContent(nodeId, cellKey, content, isStreaming, this)) {
+            console.warn(`updateMatrixCell: Node ${nodeId} does not support cell updates`);
         }
     }
 
     /**
      * Highlight a specific cell in a matrix node
+     * Uses protocol's getElement method to find the cell.
      */
     highlightMatrixCell(matrixNodeId, row, col) {
-        const wrapper = this.nodeElements.get(matrixNodeId);
-        if (!wrapper) return;
+        const node = this.graph?.getNode(matrixNodeId);
+        if (!node) return;
 
-        const cell = wrapper.querySelector(`.matrix-cell[data-row="${row}"][data-col="${col}"]`);
+        const wrapped = wrapNode(node);
+        const cell = wrapped.getElement(matrixNodeId, `.matrix-cell[data-row="${row}"][data-col="${col}"]`, this);
         if (cell) {
             cell.classList.add('highlighted');
         }
@@ -2857,8 +2852,10 @@ class Canvas {
 
     /**
      * Clear all matrix cell highlights
+     * Uses protocol's getElement method to find cells.
      */
     clearMatrixCellHighlights() {
+        // Query all matrix nodes and clear their highlights via protocol
         const highlightedCells = this.nodesLayer.querySelectorAll('.matrix-cell.highlighted');
         highlightedCells.forEach((cell) => cell.classList.remove('highlighted'));
     }
@@ -3868,12 +3865,17 @@ class Canvas {
 
     /**
      * Start resizing the index column in a matrix node
+     * Uses protocol's getTableElement method to find the table.
      * @param {MouseEvent} e - The mousedown event
      * @param {string} nodeId - The matrix node's ID
      * @param {HTMLElement} nodeDiv - The node's DOM element
      */
     startIndexColResize(e, nodeId, nodeDiv) {
-        const matrixTable = nodeDiv.querySelector('.matrix-table');
+        const node = this.graph?.getNode(nodeId);
+        if (!node) return;
+
+        const wrapped = wrapNode(node);
+        const matrixTable = wrapped.getTableElement ? wrapped.getTableElement(nodeId, this) : nodeDiv.querySelector('.matrix-table');
         if (!matrixTable) return;
 
         const handle = nodeDiv.querySelector('.index-col-resize-handle');
