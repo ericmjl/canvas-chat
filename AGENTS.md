@@ -177,12 +177,73 @@ All documentation must follow the [Diataxis framework](https://diataxis.fr/):
 
 - **docs/explanation/**: Design decisions, architecture rationale, "why" documents
 - **docs/how-to/**: Task-oriented guides for accomplishing specific goals
-  - **build-plugins.md**: Comprehensive guide for building JavaScript-only, Python-only, and paired plugins with detailed prompt templates
-  - **create-feature-plugins.md**: Step-by-step guide for creating feature plugins
-  - **create-custom-node-plugins.md**: Guide for creating custom node types
 - **docs/reference/**: Technical descriptions of APIs, configuration options, data structures
 
 Do not mix documentation types. Each document should serve one purpose.
+
+### Documentation Map
+
+Quick reference guide for finding the right documentation based on what you need to do:
+
+#### Plugin Development
+
+| Task/Question | Documentation | Description |
+|---------------|---------------|-------------|
+| **I want to build a plugin** | [build-plugins.md](docs/how-to/build-plugins.md) | Comprehensive guide with prompt templates for all plugin types (JS-only, Python-only, paired) |
+| **I want to create a feature plugin with slash commands** | [create-feature-plugins.md](docs/how-to/create-feature-plugins.md) | Step-by-step guide for Level 2 plugins (feature plugins) |
+| **I want to create a custom node type** | [create-custom-node-plugins.md](docs/how-to/create-custom-node-plugins.md) | Guide for Level 1 plugins (custom node types) |
+| **What is the plugin architecture?** | [plugin-architecture.md](docs/explanation/plugin-architecture.md) | Design decisions and rationale for the three-level plugin system |
+| **What APIs are available to plugins?** | [feature-plugin-api.md](docs/reference/feature-plugin-api.md) | Complete API reference for FeaturePlugin base class |
+| **What is AppContext and what APIs does it provide?** | [app-context-api.md](docs/reference/app-context-api.md) | Dependency injection and available Canvas-Chat APIs |
+| **How do I register and manage plugins?** | [feature-registry-api.md](docs/reference/feature-registry-api.md) | Plugin registration, lifecycle, and management |
+| **How do I hook into existing features?** | [extension-hooks.md](docs/reference/extension-hooks.md) | Level 3 plugins - hooking into existing features |
+| **How do node protocols work?** | [node-protocols.md](docs/explanation/node-protocols.md) | Design decisions for node protocol system |
+
+#### User Features
+
+| Task/Question | Documentation | Description |
+|---------------|---------------|-------------|
+| **How does deep research work?** | [deep-research.md](docs/how-to/deep-research.md) | Using the /research command for deep research |
+| **How does web search work?** | [web-search.md](docs/how-to/web-search.md) | Using the /search command for web searches |
+| **How does the committee feature work?** | [llm-committee.md](docs/how-to/llm-committee.md) | Multi-LLM consultation and synthesis |
+| **How does fact-checking work?** | [factcheck.md](docs/how-to/factcheck.md) | Claim verification with web search |
+| **How do I use the matrix evaluation?** | [use-matrix-evaluation.md](docs/how-to/use-matrix-evaluation.md) | Creating and using comparison matrices |
+| **How do I import PDFs?** | [import-pdfs.md](docs/how-to/import-pdfs.md) | Uploading and working with PDF documents |
+| **How do I use images?** | [use-images.md](docs/how-to/use-images.md) | Adding and working with images |
+| **How do I navigate nodes?** | [navigate-nodes.md](docs/how-to/navigate-nodes.md) | Keyboard shortcuts and navigation |
+| **How do I highlight and branch conversations?** | [highlight-and-branch.md](docs/how-to/highlight-and-branch.md) | Creating conversation branches |
+| **What keyboard shortcuts are available?** | [keyboard-shortcuts.md](docs/reference/keyboard-shortcuts.md) | Complete list of keyboard shortcuts |
+
+#### Architecture & Design
+
+| Task/Question | Documentation | Description |
+|---------------|---------------|-------------|
+| **Why is the plugin system designed this way?** | [plugin-architecture.md](docs/explanation/plugin-architecture.md) | Design rationale for three-level plugin architecture |
+| **How does streaming work?** | [streaming-architecture.md](docs/explanation/streaming-architecture.md) | Server-sent events and streaming design |
+| **How does auto-layout work?** | [auto-layout.md](docs/explanation/auto-layout.md) | Node positioning and overlap resolution |
+| **How does the committee feature work internally?** | [committee-architecture.md](docs/explanation/committee-architecture.md) | Multi-LLM consultation design |
+| **How does matrix evaluation work?** | [matrix-evaluation.md](docs/explanation/matrix-evaluation.md) | Matrix cell filling and evaluation design |
+| **How does matrix resizing work?** | [matrix-resize-behavior.md](docs/explanation/matrix-resize-behavior.md) | Matrix node resize behavior |
+| **How does URL fetching work?** | [url-fetching.md](docs/explanation/url-fetching.md) | URL content extraction design |
+| **How does WebRTC signaling work?** | [webrtc-signaling.md](docs/explanation/webrtc-signaling.md) | WebRTC peer connection signaling |
+| **What is admin mode and how is it secured?** | [admin-mode-security.md](docs/explanation/admin-mode-security.md) | Admin mode security design |
+
+#### Configuration & Deployment
+
+| Task/Question | Documentation | Description |
+|---------------|---------------|-------------|
+| **How do I set up admin mode?** | [admin-mode.md](docs/how-to/admin-mode.md) | Configuring server-side API keys |
+| **What is the search API?** | [search-api.md](docs/reference/search-api.md) | Search API reference |
+
+#### Code Reference
+
+| Task/Question | Where to Look | Description |
+|---------------|---------------|-------------|
+| **What methods are available on FeaturePlugin?** | [feature-plugin-api.md](docs/reference/feature-plugin-api.md) | Complete FeaturePlugin API reference |
+| **What APIs can I access via AppContext?** | [app-context-api.md](docs/reference/app-context-api.md) | Graph, Canvas, Chat, Storage APIs |
+| **How do I register a plugin?** | [feature-registry-api.md](docs/reference/feature-registry-api.md) | FeatureRegistry registration methods |
+| **What events can I subscribe to?** | [extension-hooks.md](docs/reference/extension-hooks.md) | Available events and hooks |
+| **What keyboard shortcuts exist?** | [keyboard-shortcuts.md](docs/reference/keyboard-shortcuts.md) | Complete keyboard shortcut reference |
 
 ## Code style
 
