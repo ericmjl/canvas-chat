@@ -1,25 +1,19 @@
 /**
  * File Upload Handler
  *
- * Handles file uploads (PDF, Image, CSV) from various sources:
+ * Handles file uploads from various sources:
  * - Paperclip button
  * - Drag & drop
  * - Paste (for images)
  *
+ * Delegates to registered file upload handler plugins via FileUploadRegistry.
+ *
  * Dependencies (injected via constructor):
  * - app: App instance with graph, canvas, saveSession, updateEmptyState, showCanvasHint, chatInput
- *
- * Global dependencies:
- * - createNode, NodeType: Node creation utilities
- * - resizeImage: Image resizing utility
- * - Papa: CSV parsing library
- * - apiUrl: API URL helper
  */
 
-import { NodeType, createNode } from './graph-types.js';
-import { apiUrl, resizeImage } from './utils.js';
-
-/* global Papa */
+import { FileUploadRegistry } from './file-upload-registry.js';
+import { FileUploadHandlerPlugin } from './file-upload-handler-plugin.js';
 
 class FileUploadHandler {
     /**
@@ -31,238 +25,91 @@ class FileUploadHandler {
     }
 
     /**
-     * Handle PDF file upload (from paperclip button or drag & drop).
-     *
-     * @param {File} file - The PDF file to upload
-     * @param {Object} position - Optional position for the node (for drag & drop)
+     * Handle file upload using registered handlers
+     * @param {File} file - The file to upload
+     * @param {Object|null} position - Optional position for the node (for drag & drop)
+     * @param {Object} context - Additional context (e.g., showHint)
+     * @returns {Promise<Object>} The created node
+     */
+    async handleFileUpload(file, position = null, context = {}) {
+        // Find handler for this file type
+        const handlerConfig = FileUploadRegistry.findHandler(file);
+        if (!handlerConfig) {
+            alert(`Unsupported file type: ${file.name} (${file.type || 'unknown type'})`);
+            return null;
+        }
+
+        // Create handler instance with app context
+        const handlerContext = {
+            app: this.app,
+            graph: this.app.graph,
+            canvas: this.app.canvas,
+            saveSession: () => this.app.saveSession(),
+            updateEmptyState: () => this.app.updateEmptyState(),
+            showCanvasHint: (message) => this.app.showCanvasHint(message),
+        };
+
+        const handler = new handlerConfig.handler(handlerContext);
+
+        // Delegate to handler
+        try {
+            return await handler.handleUpload(file, position, context);
+        } catch (err) {
+            // Handler should have already handled the error, but log it
+            console.error(`File upload handler error for ${file.name}:`, err);
+            return null;
+        }
+    }
+
+    // --- Legacy methods for backwards compatibility ---
+    // These delegate to the new plugin-based system
+
+    /**
+     * Handle PDF file upload (legacy method - delegates to plugin system)
+     * @deprecated Use handleFileUpload() directly
      */
     async handlePdfUpload(file, position = null) {
-        // Validate file type
-        if (file.type !== 'application/pdf') {
-            alert('Please select a PDF file.');
-            return;
-        }
-
-        // Validate file size (25 MB limit)
-        const MAX_SIZE = 25 * 1024 * 1024;
-        if (file.size > MAX_SIZE) {
-            alert(`PDF file is too large. Maximum size is 25 MB.`);
-            return;
-        }
-
-        // Create a placeholder node while processing
-        const nodePosition = position || this.app.graph.autoPosition([]);
-        const pdfNode = createNode(NodeType.PDF, `Processing PDF: ${file.name}...`, {
-            position: nodePosition,
-        });
-
-        this.app.graph.addNode(pdfNode);
-        this.app.canvas.renderNode(pdfNode);
-
-        this.app.canvas.clearSelection();
-        this.app.saveSession();
-        this.app.updateEmptyState();
-
-        // Pan to the new node
-        this.app.canvas.centerOnAnimated(pdfNode.position.x + 160, pdfNode.position.y + 100, 300);
-
-        try {
-            // Upload PDF via FormData
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const response = await fetch(apiUrl('/api/upload-pdf'), {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to process PDF');
-            }
-
-            const data = await response.json();
-
-            // Update the node with the extracted content
-            this.app.canvas.updateNodeContent(pdfNode.id, data.content, false);
-            this.app.graph.updateNode(pdfNode.id, {
-                content: data.content,
-                title: data.title,
-                page_count: data.page_count,
-            });
-            this.app.saveSession();
-        } catch (err) {
-            // Update node with error message
-            const errorContent = `**Failed to process PDF**\n\n${file.name}\n\n*Error: ${err.message}*`;
-            this.app.canvas.updateNodeContent(pdfNode.id, errorContent, false);
-            this.app.graph.updateNode(pdfNode.id, { content: errorContent });
-            this.app.saveSession();
-        }
+        return this.handleFileUpload(file, position);
     }
 
     /**
-     * Handle PDF drop on canvas (from drag & drop).
-     *
-     * @param {File} file - The PDF file that was dropped
-     * @param {Object} position - The drop position in canvas coordinates
+     * Handle PDF drop on canvas (legacy method - delegates to plugin system)
+     * @deprecated Use handleFileUpload() directly
      */
     async handlePdfDrop(file, position) {
-        await this.handlePdfUpload(file, position);
+        return this.handleFileUpload(file, position);
     }
 
     /**
-     * Handle image file upload (from paperclip button, drag & drop, or paste).
-     *
-     * @param {File} file - The image file to upload
-     * @param {Object} position - Optional position for the node (for drag & drop)
-     * @param {boolean} showHint - Whether to show a canvas hint after upload
+     * Handle image file upload (legacy method - delegates to plugin system)
+     * @deprecated Use handleFileUpload() directly
      */
     async handleImageUpload(file, position = null, showHint = false) {
-        // Validate image type
-        if (!file.type.startsWith('image/')) {
-            alert('Please select an image file.');
-            return;
-        }
-
-        // Validate size (20 MB raw limit)
-        const MAX_SIZE = 20 * 1024 * 1024;
-        if (file.size > MAX_SIZE) {
-            alert('Image is too large. Maximum size is 20 MB.');
-            return;
-        }
-
-        try {
-            // Resize and convert to base64
-            const dataUrl = await resizeImage(file);
-            const [header, base64Data] = dataUrl.split(',');
-            const mimeMatch = header.match(/data:(.*);base64/);
-            const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
-
-            // Create IMAGE node
-            const nodePosition = position || this.app.graph.autoPosition([]);
-            const imageNode = createNode(NodeType.IMAGE, '', {
-                position: nodePosition,
-                imageData: base64Data,
-                mimeType: mimeType,
-            });
-
-            this.app.graph.addNode(imageNode);
-            this.app.canvas.renderNode(imageNode);
-
-            this.app.canvas.clearSelection();
-            this.app.canvas.selectNode(imageNode.id); // Select the new image
-            this.app.saveSession();
-            this.app.updateEmptyState();
-
-            // Pan to the new node
-            this.app.canvas.centerOnAnimated(imageNode.position.x + 160, imageNode.position.y + 100, 300);
-
-            // Show hint if requested (e.g., from paste)
-            if (showHint) {
-                this.app.showCanvasHint('Image added! Select it and type a message to ask about it.');
-            }
-        } catch (err) {
-            alert(`Failed to process image: ${err.message}`);
-        }
+        return this.handleFileUpload(file, position, { showHint });
     }
 
     /**
-     * Handle image drop on canvas (from drag & drop).
-     *
-     * @param {File} file - The image file that was dropped
-     * @param {Object} position - The drop position in canvas coordinates
+     * Handle image drop on canvas (legacy method - delegates to plugin system)
+     * @deprecated Use handleFileUpload() directly
      */
     async handleImageDrop(file, position) {
-        await this.handleImageUpload(file, position);
+        return this.handleFileUpload(file, position);
     }
 
     /**
-     * Handle CSV file upload (from drag & drop or file picker).
-     *
-     * @param {File} file - The CSV file to upload
-     * @param {Object} position - Optional position for the node (for drag & drop)
+     * Handle CSV file upload (legacy method - delegates to plugin system)
+     * @deprecated Use handleFileUpload() directly
      */
     async handleCsvUpload(file, position = null) {
-        // Validate CSV type
-        if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
-            alert('Please select a CSV file.');
-            return;
-        }
-
-        // Validate size (10 MB limit for browser-friendly parsing)
-        const MAX_SIZE = 10 * 1024 * 1024;
-        if (file.size > MAX_SIZE) {
-            alert('CSV is too large. Maximum size is 10 MB.');
-            return;
-        }
-
-        try {
-            // Read file contents
-            const text = await file.text();
-
-            // Parse CSV with Papa Parse
-            const parseResult = Papa.parse(text, {
-                header: true,
-                skipEmptyLines: true,
-                dynamicTyping: true,
-            });
-
-            if (parseResult.errors && parseResult.errors.length > 0) {
-                console.warn('CSV parse warnings:', parseResult.errors);
-            }
-
-            const data = parseResult.data;
-            const columns = parseResult.meta.fields || [];
-
-            // Create preview content (first 5 rows as markdown table)
-            const previewRows = data.slice(0, 5);
-            let previewContent = `**${file.name}** (${data.length} rows, ${columns.length} columns)\n\n`;
-            if (columns.length > 0) {
-                previewContent += '| ' + columns.join(' | ') + ' |\n';
-                previewContent += '| ' + columns.map(() => '---').join(' | ') + ' |\n';
-                for (const row of previewRows) {
-                    previewContent += '| ' + columns.map((col) => String(row[col] ?? '')).join(' | ') + ' |\n';
-                }
-                if (data.length > 5) {
-                    previewContent += `\n*...and ${data.length - 5} more rows*`;
-                }
-            }
-
-            // Create CSV node
-            const nodePosition = position || this.app.graph.autoPosition([]);
-            const csvNode = createNode(NodeType.CSV, previewContent, {
-                position: nodePosition,
-                title: file.name,
-                filename: file.name,
-                csvData: text, // Store raw CSV string for code execution
-                columns: columns,
-            });
-
-            this.app.graph.addNode(csvNode);
-            this.app.canvas.renderNode(csvNode);
-
-            this.app.canvas.clearSelection();
-            this.app.canvas.selectNode(csvNode.id);
-            this.app.saveSession();
-            this.app.updateEmptyState();
-
-            // Pan to the new node
-            this.app.canvas.centerOnAnimated(csvNode.position.x + 200, csvNode.position.y + 150, 300);
-
-            this.app.showCanvasHint('CSV loaded! Click "Analyze" to write Python code.');
-        } catch (err) {
-            alert(`Failed to process CSV: ${err.message}`);
-        }
+        return this.handleFileUpload(file, position);
     }
 
     /**
-     * Handle CSV drop on canvas (from drag & drop).
-     *
-     * @param {File} file - The CSV file that was dropped
-     * @param {Object} position - The drop position in canvas coordinates
+     * Handle CSV drop on canvas (legacy method - delegates to plugin system)
+     * @deprecated Use handleFileUpload() directly
      */
     async handleCsvDrop(file, position) {
-        await this.handleCsvUpload(file, position);
+        return this.handleFileUpload(file, position);
     }
 }
 
