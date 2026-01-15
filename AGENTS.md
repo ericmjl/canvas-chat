@@ -287,8 +287,25 @@ git add .
 git commit -m "fix: description"
 git push -u origin fix/descriptive-name
 
-# Create PR
-gh pr create --title "Fix: Description" --body "Summary of changes"
+# Create PR - ALWAYS write body to /tmp file first to avoid shell parsing issues
+echo "## Summary
+...
+## Changes Breakdown
+..." > /tmp/pr_body.md
+gh pr create --title "Fix: Description" --body-file /tmp/pr_body.md
+```
+
+**CRITICAL: Always write PR bodies to a `/tmp` file first.** Complex PR descriptions with special characters, quotes, or multi-line content can cause shell parsing errors. Use `--body-file` instead of `--body`:
+
+```bash
+# Write PR body to temp file
+cat > /tmp/pr_body.md << 'EOF'
+## Summary
+Complex PR description with special characters, quotes, etc.
+EOF
+
+# Create PR using the file
+gh pr create --title "Title" --body-file /tmp/pr_body.md
 ```
 
 - Keep PR descriptions aligned with the actual diff before review.
