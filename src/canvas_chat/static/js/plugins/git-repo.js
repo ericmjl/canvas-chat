@@ -8,7 +8,7 @@
 import { FeaturePlugin } from '../feature-plugin.js';
 import { createNode, NodeType } from '../graph-types.js';
 import { createEdge, EdgeType } from '../graph-types.js';
-import { apiUrl } from '../utils.js';
+import { isUrlContent, apiUrl } from '../utils.js';
 import { BaseNode, Actions } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
@@ -26,6 +26,43 @@ export class GitRepoFeature extends FeaturePlugin {
         // All properties (graph, canvas, modalManager, chatInput, showToast, etc.)
         // are already provided by FeaturePlugin base class via context
         // No need to assign them here
+    }
+
+    /**
+     * Get slash commands for this feature
+     * @returns {Array} Array of slash command definitions
+     */
+    getSlashCommands() {
+        return [
+            {
+                command: '/git',
+                description: 'Fetch git repository with file selection',
+                placeholder: 'https://github.com/user/repo',
+            },
+        ];
+    }
+
+    /**
+     * Handle /git slash command
+     * @param {string} command - The slash command (e.g., '/git')
+     * @param {string} args - Text after the command (URL)
+     * @param {Object} contextObj - Additional context (e.g., { text: selectedNodesContent })
+     */
+    async handleCommand(command, args, contextObj) {
+        const url = args.trim();
+        if (!url) {
+            this.showToast?.('Please provide a repository URL', 'warning');
+            return;
+        }
+
+        // Validate it's actually a URL
+        if (!isUrlContent(url)) {
+            this.showToast?.('Please provide a valid URL', 'warning');
+            return;
+        }
+
+        // Use existing handleGitUrl() logic
+        await this.handleGitUrl(url);
     }
 
     /**
@@ -142,7 +179,7 @@ export class GitRepoFeature extends FeaturePlugin {
 
         // Create a placeholder node while fetching
         const fetchNode = createNode(
-            NodeType.FETCH_RESULT,
+            NodeType.GIT_REPO,
             `Loading repository files:\n${url}...`,
             {
                 position: this.graph.autoPosition(parentIds),
@@ -302,9 +339,10 @@ export class GitRepoFeature extends FeaturePlugin {
      * @param {Object} options - Rendering options
      * @param {boolean} options.hideCheckboxes - If true, hide checkboxes (for read-only node view)
      * @param {Set<string>} options.fetchedFiles - Set of actually fetched file paths (for highlighting)
+     * @param {string} options.selectedFilePath - Currently selected file path (for drawer view highlight)
      */
     renderFileTree(files, selectedPaths, container, depth = 0, options = {}) {
-        const { hideCheckboxes = false, fetchedFiles = null } = options;
+        const { hideCheckboxes = false, fetchedFiles = null, selectedFilePath = null } = options;
         // If container is already a ul, use it directly; otherwise create a new ul
         const ul = container.tagName === 'UL' ? container : document.createElement('ul');
         if (container.tagName !== 'UL') {
@@ -348,6 +386,21 @@ export class GitRepoFeature extends FeaturePlugin {
                 const isFetched = fetchedFiles ? fetchedFiles.has(fullPath) : false;
                 if (isFetched) {
                     li.classList.add('git-repo-file-fetched');
+                }
+
+                // Files explicitly selected in modal should stay highlighted
+                if (isSelected) {
+                    li.classList.add('git-repo-file-selected');
+                }
+
+                // Check if this file is currently selected for viewing in the drawer
+                const isViewSelected = selectedFilePath && (
+                    fullPath === selectedFilePath ||
+                    fullPath.toLowerCase() === selectedFilePath.toLowerCase() ||
+                    fullPath.split('/').pop() === selectedFilePath.split('/').pop()
+                );
+                if (isViewSelected) {
+                    li.classList.add('git-repo-file-view-selected');
                 }
 
                 const label = document.createElement('label');
@@ -714,8 +767,34 @@ export class GitRepoFeature extends FeaturePlugin {
         const isEdit = modal.dataset.isEdit === 'true';
         const fetchBtn = modal.querySelector('#git-repo-fetch-btn');
         const checkboxes = modal.querySelectorAll('input[type="checkbox"]:checked');
+        const selectedFilePaths = new Set();
 
-        const selectedPaths = Array.from(checkboxes).map((cb) => cb.dataset.path);
+        // Collect selected file paths, expanding directories to their file children
+        checkboxes.forEach((cb) => {
+            const path = cb.dataset.path;
+            const type = cb.dataset.type;
+            if (!path || !type) {
+                return;
+            }
+
+            if (type === 'file') {
+                selectedFilePaths.add(path);
+                return;
+            }
+
+            if (type === 'directory') {
+                const li = cb.closest('.git-repo-file-tree-item');
+                if (!li) {
+                    return;
+                }
+                const childFiles = li.querySelectorAll('input[data-type="file"][data-path]');
+                childFiles.forEach((child) => {
+                    selectedFilePaths.add(child.dataset.path);
+                });
+            }
+        });
+
+        const selectedPaths = Array.from(selectedFilePaths);
 
         if (selectedPaths.length === 0) {
             this.showToast?.('Please select at least one file', 'warning');
@@ -743,11 +822,29 @@ export class GitRepoFeature extends FeaturePlugin {
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to fetch files');
+                let errorDetail = 'Failed to fetch files';
+                try {
+                    const error = await response.json();
+                    errorDetail = error.detail || error.message || errorDetail;
+                    console.error('[GitRepoFeature] Backend error:', error);
+                } catch (e) {
+                    const text = await response.text();
+                    console.error('[GitRepoFeature] Backend error (non-JSON):', text);
+                    errorDetail = `HTTP ${response.status}: ${text.substring(0, 200)}`;
+                }
+                throw new Error(errorDetail);
             }
 
             const data = await response.json();
+
+            // Debug: Log backend response
+            console.log('[GitRepoFeature] Backend fetch response:', {
+                hasMetadata: !!data.metadata,
+                metadataKeys: data.metadata ? Object.keys(data.metadata) : [],
+                hasFiles: !!(data.metadata?.files),
+                filesCount: data.metadata?.files ? Object.keys(data.metadata.files).length : 0,
+                filesKeys: data.metadata?.files ? Object.keys(data.metadata.files).slice(0, 5) : []
+            });
 
             // Get the file tree structure (we need to fetch it again or store it)
             // For now, let's fetch it again to get the full tree
@@ -775,12 +872,25 @@ export class GitRepoFeature extends FeaturePlugin {
             // Store git repo data in node instead of markdown content
             // Read files from metadata (unified fetch response format)
             const metadata = data.metadata || {};
+            const files = metadata.files || {};
+
+            // Debug: Log what we're storing
+            const fetchedFilePaths = Object.keys(files);
+            console.log('[GitRepoFeature] Storing gitRepoData:', {
+                url,
+                title: data.title,
+                selectedFilesCount: selectedPaths.length,
+                filesCount: fetchedFilePaths.length,
+                fileKeys: fetchedFilePaths.slice(0, 5), // First 5 for debugging
+            });
+
             const gitRepoData = {
                 url,
                 title: data.title,
                 fileTree: fileTree || [],
                 selectedFiles: selectedPaths,
-                files: metadata.files || {}, // Map of file paths to file data (content, lang, status)
+                fetchedFilePaths,
+                files: files, // Map of file paths to file data (content, lang, status)
             };
 
             // Update node with git repo data
@@ -808,6 +918,15 @@ export class GitRepoFeature extends FeaturePlugin {
             // Re-render the node to show the file tree
             const node = this.graph.getNode(nodeId);
             if (node) {
+                // Debug: Verify data was stored correctly
+                console.log('[GitRepoFeature] After updateNode, node has:', {
+                    hasGitRepoData: !!node.gitRepoData,
+                    gitRepoDataKeys: node.gitRepoData ? Object.keys(node.gitRepoData) : [],
+                    hasFiles: !!(node.gitRepoData?.files),
+                    filesType: typeof node.gitRepoData?.files,
+                    filesCount: node.gitRepoData?.files ? Object.keys(node.gitRepoData.files).length : 0,
+                    filesKeys: node.gitRepoData?.files ? Object.keys(node.gitRepoData.files).slice(0, 5) : []
+                });
                 this.canvas.renderNode(node);
             }
 
@@ -885,29 +1004,24 @@ export class GitRepoFeature extends FeaturePlugin {
 
         this.modalManager.registerModal('git-repo', 'file-selection', modalTemplate);
 
-        // Register custom node protocol for git repository nodes
-        // Get original protocol if it exists (must be done before we override it)
-        // Note: FetchResultNode registers as 'fetch_result' (string), not NodeType.FETCH_RESULT
-        let OriginalProtocol = BaseNode;
-        try {
-            // Try both the enum value and the string
-            const fetchResultType = NodeType.FETCH_RESULT || 'fetch_result';
-            if (NodeRegistry.isRegistered(fetchResultType)) {
-                OriginalProtocol = NodeRegistry.getProtocolClass(fetchResultType);
-                console.log('[GitRepoFeature] Found original FETCH_RESULT protocol:', OriginalProtocol.name);
-            } else {
-                console.log('[GitRepoFeature] FETCH_RESULT protocol not registered yet, using BaseNode');
-            }
-        } catch (err) {
-            console.warn('[GitRepoFeature] Could not get original FETCH_RESULT protocol, using BaseNode:', err);
-        }
-
         // Capture reference to this (GitRepoFeature instance) for use in protocol class
         const gitRepoFeatureInstance = this;
 
         // Register custom node protocol for git repository nodes
-        // This extends the original protocol and adds git repo tree rendering
-        const GitRepoProtocol = class extends OriginalProtocol {
+        // Uses BaseNode as base (no need to extend FetchResultNode since we have our own node type)
+        const GitRepoProtocol = class extends BaseNode {
+            getTypeLabel() {
+                return 'Git Repository';
+            }
+
+            getTypeIcon() {
+                return '📦';
+            }
+
+            getAdditionalActions() {
+                return [Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS];
+            }
+
             // Uses default actions [Reply, Edit, Copy] from BaseNode
             // Edit is handled specially via nodeEditContent event listener
 
@@ -952,17 +1066,12 @@ export class GitRepoFeature extends FeaturePlugin {
              * @returns {boolean}
              */
             hasOutput() {
-                // Only handle git repo nodes - delegate everything else to parent
-                if (!this.node.gitRepoData) {
-                    return super.hasOutput();
+                // Only show drawer when a file is selected (not by default)
+                // This keeps the drawer closed initially until user clicks on a file
+                if (this.node.gitRepoData && this.node.gitRepoData.files && this.node.selectedFilePath) {
+                    return !!this.node.gitRepoData.files[this.node.selectedFilePath];
                 }
-
-                // Check for git repo file selection
-                return !!(
-                    this.node.selectedFilePath &&
-                    this.node.gitRepoData.files &&
-                    this.node.gitRepoData.files[this.node.selectedFilePath]
-                );
+                return false;
             }
 
             /**
@@ -971,24 +1080,19 @@ export class GitRepoFeature extends FeaturePlugin {
              * @returns {string} HTML string
              */
             renderOutputPanel(canvas) {
-                // Only handle git repo nodes - delegate everything else to parent
-                if (!this.node.gitRepoData) {
-                    return super.renderOutputPanel(canvas);
-                }
-
                 // Handle git repo file selection
+                if (!this.node.gitRepoData || !this.node.gitRepoData.files) {
+                    return '<div class="git-repo-file-panel-content">No repository data</div>';
+                }
+
                 const filePath = this.node.selectedFilePath;
-                if (!filePath || !this.node.gitRepoData || !this.node.gitRepoData.files) {
-                    return '<div class="git-repo-file-panel-content">No file selected</div>';
-                }
 
-                const fileData = this.node.gitRepoData.files[filePath];
-                if (!fileData) {
-                    return `<div class="git-repo-file-panel-content">File not found: ${canvas.escapeHtml(filePath)}</div>`;
-                }
+                // If a specific file is selected, show it
+                if (filePath && this.node.gitRepoData.files[filePath]) {
+                    const fileData = this.node.gitRepoData.files[filePath];
 
-                const { content, lang, status } = fileData;
-                const escapedPath = canvas.escapeHtml(filePath);
+                    const { content, lang, status } = fileData;
+                    const escapedPath = canvas.escapeHtml(filePath);
 
                 let html = `<div class="git-repo-file-panel-content">`;
                 html += `<div class="git-repo-file-panel-header">`;
@@ -1014,8 +1118,13 @@ export class GitRepoFeature extends FeaturePlugin {
                     html += `<div class="git-repo-file-panel-error">No content available</div>`;
                 }
 
-                html += `</div>`;
-                return html;
+                    html += `</div>`;
+                    return html;
+                }
+
+                // No file selected - drawer shouldn't be open (hasOutput returns false)
+                // This is a fallback in case it's called anyway
+                return '<div class="git-repo-file-panel-content"><em>Click a file in the tree to view its contents</em></div>';
             }
 
             /**
@@ -1041,16 +1150,23 @@ export class GitRepoFeature extends FeaturePlugin {
             }
 
             renderContent(canvas) {
-                // Only apply git repo rendering if this is actually a git repo node
-                // Delegate everything else to parent (YouTube, PDFs, regular URLs, etc.)
+                // Render git repo file tree if available
                 if (!this.node.gitRepoData) {
-                    return super.renderContent(canvas);
+                    // Fallback to markdown content
+                    return canvas.renderMarkdown(this.node.content || '');
                 }
 
                 // Check if this is a git repo node with file tree data
                 if (Array.isArray(this.node.gitRepoData.fileTree) && this.node.gitRepoData.fileTree.length > 0) {
                     try {
-                        const { fileTree, url, title, selectedFiles } = this.node.gitRepoData;
+                        const {
+                            fileTree,
+                            url,
+                            title,
+                            selectedFiles,
+                            fetchedFilePaths,
+                            files,
+                        } = this.node.gitRepoData;
                         const container = document.createElement('div');
                         container.className = 'git-repo-node-tree';
 
@@ -1069,7 +1185,11 @@ export class GitRepoFeature extends FeaturePlugin {
                         const treeContainer = document.createElement('div');
                         treeContainer.className = 'git-repo-node-tree-container';
                         const selectedPathsSet = new Set(selectedFiles || []);
-                        const fetchedFilesSet = new Set(selectedFiles || []); // Files that were actually fetched
+                        const fetchedFilesSet = new Set(
+                            fetchedFilePaths && fetchedFilePaths.length > 0
+                                ? fetchedFilePaths
+                                : Object.keys(files || {})
+                        );
                         // Use the captured GitRepoFeature instance to call renderFileTree
                         gitRepoFeatureInstance.renderFileTree(
                             fileTree,
@@ -1078,7 +1198,8 @@ export class GitRepoFeature extends FeaturePlugin {
                             0,
                             {
                                 hideCheckboxes: true,
-                                fetchedFiles: fetchedFilesSet
+                                fetchedFiles: fetchedFilesSet,
+                                selectedFilePath: this.node.selectedFilePath || null
                             }
                         );
                         container.appendChild(treeContainer);
@@ -1108,13 +1229,12 @@ export class GitRepoFeature extends FeaturePlugin {
             }
         };
 
-        // Register with both the enum value and string to be safe
-        const fetchResultType = NodeType.FETCH_RESULT || 'fetch_result';
+        // Register for GIT_REPO node type
         NodeRegistry.register({
-            type: fetchResultType,
+            type: NodeType.GIT_REPO,
             protocol: GitRepoProtocol,
         });
-        console.log('[GitRepoFeature] Registered custom protocol for', fetchResultType);
+        console.log('[GitRepoFeature] Registered custom protocol for', NodeType.GIT_REPO);
 
         // Hook into settings modal lifecycle
         this.setupSettingsModalHooks();

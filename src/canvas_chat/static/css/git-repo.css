@@ -334,6 +334,20 @@
     color: var(--accent-primary);
 }
 
+/* Selected file for viewing in drawer - persistent highlight */
+.git-repo-file-tree-item.git-repo-file-view-selected > .git-repo-file-tree-item-content {
+    background: rgba(100, 150, 255, 0.25);
+    border-left: 3px solid var(--accent-primary);
+    padding-left: 4px;
+    margin-left: -3px;
+    border-radius: 2px;
+}
+
+.git-repo-file-tree-item.git-repo-file-view-selected .git-repo-file-fetched-label {
+    font-weight: 700;
+    color: var(--accent-primary);
+}
+
 /* File drawer panel styles (reuse code output panel architecture) */
 .git-repo-file-panel-content {
     min-height: 0;
