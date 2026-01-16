@@ -162,6 +162,16 @@ export class UrlFetchFeature extends FeaturePlugin {
             const metadata = data.metadata || {};
             const contentType = metadata.content_type;
 
+            // Debug: log what we received from backend
+            console.log('[UrlFetchFeature] Backend response:', {
+                url,
+                title: data.title,
+                contentLength: data.content?.length,
+                metadata: data.metadata,
+                metadataKeys: data.metadata ? Object.keys(data.metadata) : [],
+                contentType,
+            });
+
             // For YouTube videos: extract transcript from content, show video in main content
             let nodeContent = data.content;
             if (contentType === 'youtube' && metadata.video_id) {

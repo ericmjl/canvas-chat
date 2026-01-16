@@ -2433,7 +2433,7 @@ async def fetch_url(request: FetchUrlRequest):
                     url=request.url,
                     title=result["title"],
                     content=result["content"],
-                    video_id=result.get("video_id"),
+                    metadata=result.get("metadata", {}),
                 )
             except Exception as handler_error:
                 logger.warning(
