@@ -6,7 +6,7 @@
  * resummarizing, editing, and creating flashcards.
  * For YouTube videos: video is embedded in main content, transcript is in output panel.
  */
-import { BaseNode, Actions } from '../node-protocols.js';
+import { Actions, BaseNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
 class FetchResultNode extends BaseNode {
@@ -43,7 +43,7 @@ class FetchResultNode extends BaseNode {
     }
 
     getAdditionalActions() {
-        return [Actions.RESUMMARIZE, Actions.CREATE_FLASHCARDS];
+        return [Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS];
     }
 
     /**
