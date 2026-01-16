@@ -1331,8 +1331,13 @@ export class GitRepoFeature extends FeaturePlugin {
      */
     async handleEditGitRepoNode(nodeId) {
         const node = this.graph.getNode(nodeId);
-        if (!node || !node.gitRepoData || !node.gitRepoData.url) {
+        if (!node) {
+            console.warn('[GitRepoFeature] Node not found:', nodeId);
+            return false;
+        }
+        if (!node.gitRepoData || !node.gitRepoData.url) {
             // Not a git repo node, let default handler take over
+            console.log('[GitRepoFeature] Node is not a git repo node:', nodeId, 'has gitRepoData:', !!node.gitRepoData);
             return false;
         }
 
