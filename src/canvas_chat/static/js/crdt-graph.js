@@ -559,6 +559,13 @@ class CRDTGraph extends EventEmitter {
                     yCells.set(cellKey, yCell);
                 }
                 yNode.set('cells', yCells);
+            } else if (key === 'metadata' && value && typeof value === 'object') {
+                // Metadata object - store as Y.Map to preserve nested properties
+                const yMetadata = new Y.Map();
+                for (const [metaKey, metaValue] of Object.entries(value)) {
+                    yMetadata.set(metaKey, metaValue);
+                }
+                yNode.set('metadata', yMetadata);
             } else if (Array.isArray(value)) {
                 // Other arrays (rowItems, colItems, contextNodeIds)
                 const yArr = new Y.Array();
@@ -864,6 +871,17 @@ class CRDTGraph extends EventEmitter {
                         }
                         yCell.set('content', cellValue.content);
                         yCell.set('filled', cellValue.filled || false);
+                    }
+                } else if (key === 'metadata' && value && typeof value === 'object') {
+                    // Metadata object - store as Y.Map to preserve nested properties
+                    let yMetadata = yNode.get('metadata');
+                    if (!isYMap(yMetadata)) {
+                        yMetadata = new Y.Map();
+                        yNode.set('metadata', yMetadata);
+                    }
+                    // Update all metadata properties
+                    for (const [metaKey, metaValue] of Object.entries(value)) {
+                        yMetadata.set(metaKey, metaValue);
                     }
                 } else {
                     // Primitives
