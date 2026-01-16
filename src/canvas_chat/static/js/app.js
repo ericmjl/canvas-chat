@@ -1140,7 +1140,8 @@ class App {
                             this.modalManager.handleNodeEditCode(selectedNodeIds[0]);
                         } else if (actions.some((a) => a.id === 'edit-content')) {
                             e.preventDefault();
-                            this.modalManager.handleNodeEditContent(selectedNodeIds[0]);
+                            // Emit event so git repo nodes can be handled specially
+                            this.graph.emit('nodeEditContent', selectedNodeIds[0]);
                         }
                     }
                 }
