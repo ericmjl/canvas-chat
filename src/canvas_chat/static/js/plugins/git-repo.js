@@ -947,9 +947,16 @@ export class GitRepoFeature extends FeaturePlugin {
 
             /**
              * Check if this git repo node has output to display (selected file in drawer)
+             * Also supports YouTube videos (which use the same fetch_result node type)
              * @returns {boolean}
              */
             hasOutput() {
+                // Check for YouTube video (delegate to parent FetchResultNode)
+                if (this.node.youtubeVideoId) {
+                    return super.hasOutput();
+                }
+
+                // Check for git repo file selection
                 return !!(
                     this.node.selectedFilePath &&
                     this.node.gitRepoData &&
@@ -960,10 +967,17 @@ export class GitRepoFeature extends FeaturePlugin {
 
             /**
              * Render the output panel content (called by canvas for the slide-out panel)
+             * Supports both git repo files and YouTube transcripts
              * @param {Canvas} canvas - Canvas instance for helper methods
              * @returns {string} HTML string
              */
             renderOutputPanel(canvas) {
+                // Delegate to parent FetchResultNode for YouTube videos
+                if (this.node.youtubeVideoId) {
+                    return super.renderOutputPanel(canvas);
+                }
+
+                // Handle git repo file selection
                 const filePath = this.node.selectedFilePath;
                 if (!filePath || !this.node.gitRepoData || !this.node.gitRepoData.files) {
                     return '<div class="git-repo-file-panel-content">No file selected</div>';
