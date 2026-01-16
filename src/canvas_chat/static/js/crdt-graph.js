@@ -566,6 +566,39 @@ class CRDTGraph extends EventEmitter {
                     yMetadata.set(metaKey, metaValue);
                 }
                 yNode.set('metadata', yMetadata);
+            } else if (value && typeof value === 'object' && !Array.isArray(value) && value.constructor === Object) {
+                // Generic nested object (not position, cells, metadata which have special handling above)
+                // Recursively convert to Y.Map to preserve nested properties
+                // This handles plugin-specific nested objects (e.g., gitRepoData) without special casing
+                const yObj = new Y.Map();
+                for (const [objKey, objValue] of Object.entries(value)) {
+                    if (objValue && typeof objValue === 'object' && !Array.isArray(objValue) && objValue.constructor === Object) {
+                        // Nested object - recursively convert
+                        const yNested = new Y.Map();
+                        for (const [nestedKey, nestedValue] of Object.entries(objValue)) {
+                            if (nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue) && nestedValue.constructor === Object) {
+                                // Deeply nested object - convert one more level
+                                const yDeep = new Y.Map();
+                                for (const [deepKey, deepValue] of Object.entries(nestedValue)) {
+                                    yDeep.set(deepKey, deepValue);
+                                }
+                                yNested.set(nestedKey, yDeep);
+                            } else {
+                                yNested.set(nestedKey, nestedValue);
+                            }
+                        }
+                        yObj.set(objKey, yNested);
+                    } else if (Array.isArray(objValue)) {
+                        // Arrays in nested objects - store as Y.Array
+                        const yArr = new Y.Array();
+                        yArr.push(objValue);
+                        yObj.set(objKey, yArr);
+                    } else {
+                        // Primitives
+                        yObj.set(objKey, objValue);
+                    }
+                }
+                yNode.set(key, yObj);
             } else if (Array.isArray(value)) {
                 // Other arrays (rowItems, colItems, contextNodeIds)
                 const yArr = new Y.Array();
@@ -882,6 +915,60 @@ class CRDTGraph extends EventEmitter {
                     // Update all metadata properties
                     for (const [metaKey, metaValue] of Object.entries(value)) {
                         yMetadata.set(metaKey, metaValue);
+                    }
+                } else if (value && typeof value === 'object' && !Array.isArray(value) && value.constructor === Object) {
+                    // Generic nested object (not position, cells, metadata which have special handling above)
+                    // Recursively convert to Y.Map to preserve nested properties
+                    // This handles plugin-specific nested objects without special casing
+                    let yObj = yNode.get(key);
+                    if (!isYMap(yObj)) {
+                        yObj = new Y.Map();
+                        yNode.set(key, yObj);
+                    }
+                    // Update all object properties
+                    for (const [objKey, objValue] of Object.entries(value)) {
+                        if (objValue && typeof objValue === 'object' && !Array.isArray(objValue) && objValue.constructor === Object) {
+                            // Nested object - recursively convert
+                            let yNested = yObj.get(objKey);
+                            if (!isYMap(yNested)) {
+                                yNested = new Y.Map();
+                                yObj.set(objKey, yNested);
+                            }
+                            // Update nested object properties
+                            for (const [nestedKey, nestedValue] of Object.entries(objValue)) {
+                                if (nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue) && nestedValue.constructor === Object) {
+                                    // Deeply nested object - convert one more level
+                                    let yDeep = yNested.get(nestedKey);
+                                    if (!isYMap(yDeep)) {
+                                        yDeep = new Y.Map();
+                                        yNested.set(nestedKey, yDeep);
+                                    }
+                                    // Update deeply nested properties
+                                    for (const [deepKey, deepValue] of Object.entries(nestedValue)) {
+                                        yDeep.set(deepKey, deepValue);
+                                    }
+                                } else {
+                                    yNested.set(nestedKey, nestedValue);
+                                }
+                            }
+                        } else if (Array.isArray(objValue)) {
+                            // Arrays in nested objects - store as Y.Array
+                            let yArr = yObj.get(objKey);
+                            if (!isYArray(yArr)) {
+                                yArr = new Y.Array();
+                                yObj.set(objKey, yArr);
+                            }
+                            // Replace array contents
+                            while (yArr.length > 0) {
+                                yArr.delete(0);
+                            }
+                            if (objValue.length > 0) {
+                                yArr.push(objValue);
+                            }
+                        } else {
+                            // Primitives
+                            yObj.set(objKey, objValue);
+                        }
                     }
                 } else {
                     // Primitives
@@ -1244,7 +1331,7 @@ class CRDTGraph extends EventEmitter {
         const sorted = Array.from(allAncestors.values()).sort((a, b) => a.created_at - b.created_at);
 
         // Convert to message format for API
-        const userTypes = [NodeType.HUMAN, NodeType.HIGHLIGHT, NodeType.NOTE, NodeType.IMAGE, NodeType.PDF, NodeType.FETCH_RESULT];
+        const userTypes = [NodeType.HUMAN, NodeType.HIGHLIGHT, NodeType.NOTE, NodeType.IMAGE, NodeType.PDF, NodeType.FETCH_RESULT, NodeType.YOUTUBE, NodeType.GIT_REPO];
         return sorted.map((node) => {
             const msg = {
                 role: userTypes.includes(node.type) ? 'user' : 'assistant',
