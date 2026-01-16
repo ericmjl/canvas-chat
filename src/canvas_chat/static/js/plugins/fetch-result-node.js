@@ -67,6 +67,9 @@ class FetchResultNode extends BaseNode {
                 youtubeVideoId: this.node.youtubeVideoId,
                 metadata: this.node.metadata,
                 hasMetadata: !!this.node.metadata,
+                // Expand metadata to see actual contents
+                metadataKeys: this.node.metadata ? Object.keys(this.node.metadata) : [],
+                metadataJSON: this.node.metadata ? JSON.stringify(this.node.metadata) : 'null',
             });
         }
 
