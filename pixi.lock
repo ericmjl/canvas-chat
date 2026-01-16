@@ -1639,7 +1639,7 @@ packages:
 - pypi: ./
   name: canvas-chat
   version: 0.1.60
-  sha256: 9945e8a5827aec1d803e6a533959eb1c40c452d6c4450eb8a9aa1c6e65e4166d
+  sha256: 40b21427f0f6bc98e7e0655ed6627ad38949c907e336a1a4d29a8903c83e6b9c
   requires_dist:
   - fastapi>=0.115.0
   - uvicorn>=0.32.0
@@ -1659,7 +1659,7 @@ packages:
   - beautifulsoup4>=4.14.3,<5
   - ddgs>=9.0.0,<10
   - ruamel-yaml>=0.19.1,<0.20
-  - youtube-transcript-api>=0.6.0
+  - youtube-transcript-api>=1.2.3,<2
   - pytest>=8.0.0 ; extra == 'dev'
   - httpx>=0.27.0 ; extra == 'dev'
   requires_python: '>=3.11'

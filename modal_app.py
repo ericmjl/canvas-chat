@@ -30,6 +30,7 @@ image = (
         "python-multipart>=0.0.9",
         "html2text>=2024.0.0",
         "ruamel.yaml>=0.18.0",
+        "youtube-transcript-api>=1.2.3,<2",
     )
     .add_local_dir("src/canvas_chat", remote_path="/app/canvas_chat")
     .add_local_file("pyproject.toml", remote_path="/app/pyproject.toml")
