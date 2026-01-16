@@ -4756,6 +4756,12 @@ df.head()
 
         storage.saveApiKeys(keys);
 
+        // Let git-repo plugin handle saving its own credentials
+        const gitRepoFeature = this.featureRegistry?.getFeature('git-repo');
+        if (gitRepoFeature && gitRepoFeature.saveGitCredentials) {
+            gitRepoFeature.saveGitCredentials();
+        }
+
         // Save base URL
         const baseUrl = document.getElementById('base-url').value.trim();
         storage.setBaseUrl(baseUrl);

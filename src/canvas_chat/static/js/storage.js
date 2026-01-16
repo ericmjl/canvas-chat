@@ -258,6 +258,34 @@ class Storage {
     }
 
     /**
+     * Get git credentials from localStorage
+     * Returns object mapping git host (e.g., 'github.com') to credential (PAT)
+     * @returns {Object<string, string>} Map of host to credential
+     */
+    getGitCredentials() {
+        const creds = localStorage.getItem('canvas-chat-git-credentials');
+        return creds ? JSON.parse(creds) : {};
+    }
+
+    /**
+     * Save git credentials to localStorage
+     * @param {Object<string, string>} credentials - Map of host to credential
+     */
+    saveGitCredentials(credentials) {
+        localStorage.setItem('canvas-chat-git-credentials', JSON.stringify(credentials));
+    }
+
+    /**
+     * Get git credential for a specific host
+     * @param {string} host - Git host (e.g., 'github.com', 'gitlab.com')
+     * @returns {string|null} Credential (PAT) or null if not found
+     */
+    getGitCredentialForHost(host) {
+        const creds = this.getGitCredentials();
+        return creds[host] || null;
+    }
+
+    /**
      * Save API keys to localStorage
      */
     saveApiKeys(keys) {

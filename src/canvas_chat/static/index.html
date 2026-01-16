@@ -265,6 +265,52 @@
                         </div>
                     </div>
 
+                    <!-- Git Credentials Section -->
+                    <div class="settings-section">
+                        <h3>Git Repository Credentials</h3>
+                        <p class="settings-note">
+                            Personal Access Tokens (PATs) for accessing private repositories.
+                            Leave empty for public repositories.
+                        </p>
+
+                        <div class="api-key-group">
+                            <label for="git-github-cred">GitHub (github.com)</label>
+                            <input type="password" id="git-github-cred" placeholder="ghp_... or github_pat_..." />
+                            <small class="key-hint"
+                                >PAT with <code>repo</code> scope for private repos.
+                                <a href="https://github.com/settings/tokens" target="_blank">Create token</a></small
+                            >
+                        </div>
+
+                        <div class="api-key-group">
+                            <label for="git-gitlab-cred">GitLab (gitlab.com)</label>
+                            <input type="password" id="git-gitlab-cred" placeholder="glpat-..." />
+                            <small class="key-hint"
+                                >Personal Access Token with <code>read_repository</code> scope.
+                                <a href="https://gitlab.com/-/user_settings/personal_access_tokens" target="_blank">Create token</a></small
+                            >
+                        </div>
+
+                        <div class="api-key-group">
+                            <label for="git-bitbucket-cred">Bitbucket (bitbucket.org)</label>
+                            <input type="password" id="git-bitbucket-cred" placeholder="App password..." />
+                            <small class="key-hint"
+                                >App password with <code>Repositories: Read</code> permission.
+                                <a href="https://bitbucket.org/account/settings/app-passwords/" target="_blank">Create password</a></small
+                            >
+                        </div>
+
+                        <div class="api-key-group">
+                            <label for="git-generic-cred">Other Git Hosts</label>
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <input type="text" id="git-generic-host" placeholder="example.com" style="flex: 1;" />
+                                <input type="password" id="git-generic-cred" placeholder="Token or password" style="flex: 1;" />
+                                <button id="git-add-cred-btn" class="secondary-btn">Add</button>
+                            </div>
+                            <div id="git-custom-creds-list" style="margin-top: 8px;"></div>
+                        </div>
+                    </div>
+
                     <!-- LLM Proxy Section (hidden in admin mode) -->
                     <div id="settings-proxy-section" class="settings-section">
                         <h3>LLM Proxy</h3>

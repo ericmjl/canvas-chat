@@ -134,6 +134,7 @@ class ModalManager {
         document.getElementById('github-key').value = keys.github || '';
         document.getElementById('exa-key').value = keys.exa || '';
 
+
         // Load base URL
         document.getElementById('base-url').value = storage.getBaseUrl() || '';
 
@@ -147,6 +148,7 @@ class ModalManager {
     hideSettingsModal() {
         document.getElementById('settings-modal').style.display = 'none';
     }
+
 
     /**
      * Render the custom models list in the settings modal

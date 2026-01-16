@@ -43,6 +43,54 @@ export class GitRepoFeature extends FeaturePlugin {
     }
 
     /**
+     * Extract git host from URL
+     * @param {string} url - Git repository URL
+     * @returns {string|null} Host (e.g., 'github.com') or null
+     */
+    extractGitHost(url) {
+        try {
+            // Handle SSH URLs: git@github.com:user/repo.git
+            if (url.startsWith('git@')) {
+                const match = url.match(/git@([^:]+):/);
+                if (match) {
+                    return match[1].toLowerCase();
+                }
+            }
+
+            // Handle HTTPS/HTTP URLs: https://github.com/user/repo.git
+            const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
+            let host = urlObj.hostname.toLowerCase();
+            // Remove port if present
+            if (host.includes(':')) {
+                host = host.split(':')[0];
+            }
+            return host;
+        } catch (err) {
+            console.warn('[GitRepoFeature] Failed to extract host from URL:', err);
+            return null;
+        }
+    }
+
+    /**
+     * Get git credentials for a specific URL's host
+     * @param {string} url - Git repository URL
+     * @returns {Object<string, string>} Map of host to credential (empty if none)
+     */
+    getGitCredentialsForUrl(url) {
+        const host = this.extractGitHost(url);
+        if (!host) {
+            return {};
+        }
+
+        const cred = this.storage.getGitCredentialForHost(host);
+        if (!cred) {
+            return {};
+        }
+
+        return { [host]: cred };
+    }
+
+    /**
      * Public API: Handle git repository URL
      * Called by NoteFeature when git URL is detected
      * @param {string} url - Git repository URL
@@ -133,11 +181,17 @@ export class GitRepoFeature extends FeaturePlugin {
             treeContainer.innerHTML = '';
         }
 
+        // Get git credentials for this URL's host
+        const gitCreds = this.getGitCredentialsForUrl(url);
+
         try {
             const response = await fetch(apiUrl('/api/url-fetch/list-files'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
+                body: JSON.stringify({
+                    url,
+                    git_credentials: gitCreds,
+                }),
             });
 
             if (!response.ok) {
@@ -647,11 +701,18 @@ export class GitRepoFeature extends FeaturePlugin {
             fetchBtn.textContent = 'Fetching...';
         }
 
+        // Get git credentials for this URL's host
+        const gitCreds = this.getGitCredentialsForUrl(url);
+
         try {
             const response = await fetch(apiUrl('/api/url-fetch/fetch-files'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, file_paths: selectedPaths }),
+                body: JSON.stringify({
+                    url,
+                    file_paths: selectedPaths,
+                    git_credentials: gitCreds,
+                }),
             });
 
             if (!response.ok) {
@@ -665,10 +726,16 @@ export class GitRepoFeature extends FeaturePlugin {
             // For now, let's fetch it again to get the full tree
             let fileTree = null;
             try {
+                // Get git credentials for this URL's host
+                const gitCreds = this.getGitCredentialsForUrl(url);
+
                 const treeResponse = await fetch(apiUrl('/api/url-fetch/list-files'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url }),
+                    body: JSON.stringify({
+                        url,
+                        git_credentials: gitCreds,
+                    }),
                 });
                 if (treeResponse.ok) {
                     const treeData = await treeResponse.json();
@@ -1007,6 +1074,157 @@ export class GitRepoFeature extends FeaturePlugin {
             protocol: GitRepoProtocol,
         });
         console.log('[GitRepoFeature] Registered custom protocol for', fetchResultType);
+
+        // Hook into settings modal lifecycle
+        this.setupSettingsModalHooks();
+    }
+
+    /**
+     * Setup hooks for settings modal to manage git credentials UI
+     */
+    setupSettingsModalHooks() {
+        // Hook into settings modal show event
+        const originalShowSettings = this.modalManager.showSettingsModal.bind(this.modalManager);
+        this.modalManager.showSettingsModal = () => {
+            originalShowSettings();
+            this.loadGitCredentialsUI();
+        };
+    }
+
+    /**
+     * Load git credentials UI when settings modal is shown
+     */
+    loadGitCredentialsUI() {
+        const gitCreds = this.storage.getGitCredentials();
+
+        // Load standard hosts
+        const githubInput = document.getElementById('git-github-cred');
+        const gitlabInput = document.getElementById('git-gitlab-cred');
+        const bitbucketInput = document.getElementById('git-bitbucket-cred');
+
+        if (githubInput) githubInput.value = gitCreds['github.com'] || '';
+        if (gitlabInput) gitlabInput.value = gitCreds['gitlab.com'] || '';
+        if (bitbucketInput) bitbucketInput.value = gitCreds['bitbucket.org'] || '';
+
+        // Render custom git credentials
+        this.renderCustomGitCreds(gitCreds);
+
+        // Setup "Add" button for custom git credentials
+        const addCredBtn = document.getElementById('git-add-cred-btn');
+        if (addCredBtn) {
+            // Remove existing listener if any (clone to remove old listeners)
+            const newBtn = addCredBtn.cloneNode(true);
+            addCredBtn.parentNode.replaceChild(newBtn, addCredBtn);
+
+            newBtn.addEventListener('click', () => {
+                const hostInput = document.getElementById('git-generic-host');
+                const credInput = document.getElementById('git-generic-cred');
+                const host = hostInput.value.trim();
+                const cred = credInput.value.trim();
+
+                if (!host || !cred) {
+                    this.showToast?.('Please enter both host and credential', 'warning');
+                    return;
+                }
+
+                // Validate host format (basic check)
+                if (!/^[\w\.-]+$/.test(host)) {
+                    this.showToast?.('Invalid host format', 'error');
+                    return;
+                }
+
+                const creds = this.storage.getGitCredentials();
+                creds[host] = cred;
+                this.storage.saveGitCredentials(creds);
+
+                // Clear inputs
+                hostInput.value = '';
+                credInput.value = '';
+
+                // Refresh list
+                this.renderCustomGitCreds(creds);
+                this.showToast?.(`Added credential for ${host}`, 'success');
+            });
+        }
+    }
+
+    /**
+     * Render custom git credentials list
+     * @param {Object<string, string>} gitCreds - Map of host to credential
+     */
+    renderCustomGitCreds(gitCreds) {
+        const listContainer = document.getElementById('git-custom-creds-list');
+        if (!listContainer) return;
+
+        listContainer.innerHTML = '';
+
+        // Filter out standard hosts (github.com, gitlab.com, bitbucket.org)
+        const standardHosts = ['github.com', 'gitlab.com', 'bitbucket.org'];
+        const customCreds = Object.entries(gitCreds).filter(
+            ([host]) => !standardHosts.includes(host)
+        );
+
+        if (customCreds.length === 0) {
+            return;
+        }
+
+        customCreds.forEach(([host, cred]) => {
+            const item = document.createElement('div');
+            item.className = 'api-key-group';
+            item.style.marginTop = '8px';
+            const escapedHost = this.canvas.escapeHtml(host);
+            const escapedCred = this.canvas.escapeHtml(cred);
+            item.innerHTML = `
+                <label>${escapedHost}</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="password" class="git-custom-cred-input" data-host="${escapedHost}"
+                           value="${escapedCred}" placeholder="Token" style="flex: 1;" />
+                    <button class="secondary-btn git-remove-cred-btn" data-host="${escapedHost}">Remove</button>
+                </div>
+            `;
+            listContainer.appendChild(item);
+        });
+
+        // Add remove button handlers
+        listContainer.querySelectorAll('.git-remove-cred-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const host = btn.dataset.host;
+                const creds = this.storage.getGitCredentials();
+                delete creds[host];
+                this.storage.saveGitCredentials(creds);
+                this.renderCustomGitCreds(creds);
+            });
+        });
+    }
+
+    /**
+     * Save git credentials from settings modal
+     * Called by app.saveSettings()
+     */
+    saveGitCredentials() {
+        const gitCreds = {
+            'github.com': document.getElementById('git-github-cred')?.value.trim() || '',
+            'gitlab.com': document.getElementById('git-gitlab-cred')?.value.trim() || '',
+            'bitbucket.org': document.getElementById('git-bitbucket-cred')?.value.trim() || '',
+        };
+
+        // Add custom git credentials
+        document.querySelectorAll('.git-custom-cred-input').forEach((input) => {
+            const host = input.dataset.host;
+            const cred = input.value.trim();
+            if (host && cred) {
+                gitCreds[host] = cred;
+            }
+        });
+
+        // Remove empty credentials
+        Object.keys(gitCreds).forEach((host) => {
+            if (!gitCreds[host]) {
+                delete gitCreds[host];
+            }
+        });
+
+        this.storage.saveGitCredentials(gitCreds);
     }
 
     /**

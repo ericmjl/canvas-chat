@@ -53,18 +53,54 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
             normalized_url = normalized_url[:-4]
         return normalized_url.split("/")[-1]
 
-    def _clone_repository(self, url: str, repo_path: Path) -> None:
+    def _clone_repository(
+        self, url: str, repo_path: Path, git_credentials: dict[str, str] | None = None
+    ) -> None:
         """Clone a git repository to the specified path.
 
         Args:
             url: Git repository URL
             repo_path: Path where repository should be cloned
+            git_credentials: Optional map of git host to credential (PAT)
 
         Raises:
             Exception: If cloning fails
         """
         normalized_url = self._normalize_url(url)
-        logger.info(f"Cloning git repository: {normalized_url}")
+
+        # If credentials provided, embed PAT in HTTPS URL
+        if git_credentials:
+            # Extract host from URL (e.g., 'github.com' from 'https://github.com/user/repo.git')
+            try:
+                from urllib.parse import urlparse
+
+                parsed = urlparse(normalized_url)
+                host = parsed.netloc.lower()
+                # Remove port if present (e.g., 'github.com:443' -> 'github.com')
+                if ":" in host:
+                    host = host.split(":")[0]
+
+                # Look up credential for this host
+                credential = git_credentials.get(host)
+                if credential:
+                    # Embed credential in URL: https://token@host/path
+                    # Replace https:// with https://token@
+                    if normalized_url.startswith("https://"):
+                        normalized_url = normalized_url.replace(
+                            "https://", f"https://{credential}@", 1
+                        )
+                        logger.info(f"Using credential for {host}")
+                    elif normalized_url.startswith("http://"):
+                        normalized_url = normalized_url.replace(
+                            "http://", f"http://{credential}@", 1
+                        )
+                        logger.info(f"Using credential for {host}")
+            except Exception as e:
+                logger.warning(f"Failed to extract host from URL for credentials: {e}")
+
+        logger.info(
+            f"Cloning git repository: {normalized_url.split('@')[-1]}"
+        )  # Don't log token
 
         try:
             subprocess.run(
@@ -192,7 +228,9 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
         find_files(file_tree["files"])
         return selected[:20]  # Limit to prevent too many files
 
-    async def list_files(self, url: str) -> dict[str, any] | None:
+    async def list_files(
+        self, url: str, git_credentials: dict[str, str] | None = None
+    ) -> dict[str, any] | None:
         """List files in a git repository.
 
         Args:
@@ -217,7 +255,7 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
             repo_path = Path(temp_dir) / repo_name
 
             # Clone repository
-            self._clone_repository(url, repo_path)
+            self._clone_repository(url, repo_path, git_credentials=git_credentials)
 
             # Build file tree
             files = self._build_file_tree(repo_path)
@@ -225,7 +263,10 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
             return {"files": files}
 
     async def fetch_selected_files(
-        self, url: str, file_paths: list[str]
+        self,
+        url: str,
+        file_paths: list[str],
+        git_credentials: dict[str, str] | None = None,
     ) -> dict[str, any]:
         """Fetch content from selected files in a git repository.
 
@@ -254,7 +295,7 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
             repo_path = Path(temp_dir) / repo_name
 
             # Clone repository
-            self._clone_repository(url, repo_path)
+            self._clone_repository(url, repo_path, git_credentials=git_credentials)
 
             # Build content from selected files, grouped by directory
             content_parts = []
@@ -561,6 +602,8 @@ def register_endpoints(app):
         """Request body for listing files in a git repository."""
 
         url: str
+        git_credentials: dict[str, str] | None = None
+        # Optional: Map of git host (e.g., 'github.com') to credential (PAT)
 
     class FileTreeItem(BaseModel):
         """File tree item structure."""
@@ -581,6 +624,8 @@ def register_endpoints(app):
 
         url: str
         file_paths: list[str]
+        git_credentials: dict[str, str] | None = None
+        # Optional: Map of git host (e.g., 'github.com') to credential (PAT)
 
     class FetchUrlResult(BaseModel):
         """Result from fetching a URL."""
@@ -615,7 +660,9 @@ def register_endpoints(app):
                     status_code=400, detail="Handler does not support file listing"
                 )
 
-            file_tree = await handler.list_files(request.url)
+            file_tree = await handler.list_files(
+                request.url, git_credentials=request.git_credentials
+            )
             return ListFilesResult(url=request.url, files=file_tree["files"])
         except HTTPException:
             raise
@@ -646,7 +693,11 @@ def register_endpoints(app):
                 )
 
             handler = handler_config["handler"]()
-            result = await handler.fetch_selected_files(request.url, request.file_paths)
+            result = await handler.fetch_selected_files(
+                request.url,
+                request.file_paths,
+                git_credentials=request.git_credentials,
+            )
             # Return result with files data if present (for git repo drawer)
             return FetchUrlResult(
                 url=request.url,
