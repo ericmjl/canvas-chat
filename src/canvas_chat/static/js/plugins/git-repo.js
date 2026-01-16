@@ -9,7 +9,7 @@ import { FeaturePlugin } from '../feature-plugin.js';
 import { createNode, NodeType } from '../graph-types.js';
 import { createEdge, EdgeType } from '../graph-types.js';
 import { apiUrl } from '../utils.js';
-import { BaseNode } from '../node-protocols.js';
+import { BaseNode, Actions } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
 
@@ -802,6 +802,124 @@ export class GitRepoFeature extends FeaturePlugin {
         // Register custom node protocol for git repository nodes
         // This extends the original protocol and adds git repo tree rendering
         const GitRepoProtocol = class extends OriginalProtocol {
+            /**
+             * Get action buttons for git repo nodes
+             * Only show Reply, Edit, and Copy (no Re-summarize or Flashcards)
+             * @returns {Array} Array of action button definitions
+             */
+            getActions() {
+                // Actions is imported at the top of the file
+                return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.COPY];
+            }
+
+            /**
+             * Copy all fetched files to clipboard with format:
+             * [filename]\ncontent\n========\n[filename2]\ncontent2\n...
+             * @param {Canvas} canvas - Canvas instance
+             * @param {Object} app - App instance (optional)
+             */
+            async copyToClipboard(canvas, app) {
+                if (!this.node.gitRepoData || !this.node.gitRepoData.files) {
+                    return;
+                }
+
+                const files = this.node.gitRepoData.files;
+                const filePaths = Object.keys(files).sort(); // Sort for consistent order
+
+                const parts = [];
+                for (const filePath of filePaths) {
+                    const fileData = files[filePath];
+                    if (fileData && fileData.content && fileData.status === 'success') {
+                        parts.push(`[${filePath}]`);
+                        parts.push(fileData.content);
+                        parts.push('========');
+                    }
+                }
+
+                // Remove trailing separator
+                if (parts.length > 0 && parts[parts.length - 1] === '========') {
+                    parts.pop();
+                }
+
+                const text = parts.join('\n');
+                if (text) {
+                    await navigator.clipboard.writeText(text);
+                    canvas.showCopyFeedback(this.node.id);
+                }
+            }
+
+            /**
+             * Get edit fields for all fetched files
+             * @returns {Array} Array of edit field definitions (one per file)
+             */
+            getEditFields() {
+                if (!this.node.gitRepoData || !this.node.gitRepoData.files) {
+                    return super.getEditFields(); // Fallback to default
+                }
+
+                const files = this.node.gitRepoData.files;
+                const filePaths = Object.keys(files).sort(); // Sort for consistent order
+
+                return filePaths.map((filePath) => {
+                    const fileData = files[filePath];
+                    const content = fileData && fileData.content ? fileData.content : '';
+                    const lang = fileData && fileData.lang ? fileData.lang : '';
+
+                    return {
+                        id: `file_${filePath}`, // Use file path as part of ID
+                        label: filePath,
+                        value: content,
+                        placeholder: `Edit ${filePath}...`,
+                        lang: lang, // Store language for syntax highlighting
+                    };
+                });
+            }
+
+            /**
+             * Handle saving edited fields for git repo files
+             * @param {Object} fields - Object mapping field IDs to values
+             * @param {Object} app - App instance for graph updates
+             * @returns {Object} Update object to pass to graph.updateNode()
+             */
+            handleEditSave(fields, app) {
+                if (!this.node.gitRepoData || !this.node.gitRepoData.files) {
+                    return super.handleEditSave(fields, app);
+                }
+
+                // Update files dictionary with edited content
+                const updatedFiles = { ...this.node.gitRepoData.files };
+                let hasChanges = false;
+
+                for (const [fieldId, value] of Object.entries(fields)) {
+                    if (fieldId.startsWith('file_')) {
+                        const filePath = fieldId.substring(5); // Remove 'file_' prefix
+                        const existingFile = updatedFiles[filePath];
+                        if (existingFile && existingFile.content !== value) {
+                            // Only update if content actually changed
+                            updatedFiles[filePath] = {
+                                ...existingFile,
+                                content: value,
+                            };
+                            hasChanges = true;
+                        }
+                    }
+                }
+
+                if (!hasChanges) {
+                    return {}; // Return empty object if no changes
+                }
+
+                // Update gitRepoData with modified files
+                const updatedGitRepoData = {
+                    ...this.node.gitRepoData,
+                    files: updatedFiles,
+                };
+
+                return {
+                    gitRepoData: updatedGitRepoData,
+                };
+            }
+
             /**
              * Check if this git repo node has output to display (selected file in drawer)
              * @returns {boolean}
