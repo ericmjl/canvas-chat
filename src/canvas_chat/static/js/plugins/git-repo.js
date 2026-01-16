@@ -949,21 +949,17 @@ export class GitRepoFeature extends FeaturePlugin {
 
             /**
              * Check if this git repo node has output to display (selected file in drawer)
-             * Also supports YouTube videos (which use the same fetch_result node type)
              * @returns {boolean}
              */
             hasOutput() {
-                // Check for YouTube video (delegate to parent FetchResultNode)
-                // Support both old format (youtubeVideoId) and new format (metadata.video_id)
-                const metadata = this.node.metadata || {};
-                if (this.node.youtubeVideoId || (metadata.content_type === 'youtube' && metadata.video_id)) {
+                // Only handle git repo nodes - delegate everything else to parent
+                if (!this.node.gitRepoData) {
                     return super.hasOutput();
                 }
 
                 // Check for git repo file selection
                 return !!(
                     this.node.selectedFilePath &&
-                    this.node.gitRepoData &&
                     this.node.gitRepoData.files &&
                     this.node.gitRepoData.files[this.node.selectedFilePath]
                 );
@@ -971,15 +967,12 @@ export class GitRepoFeature extends FeaturePlugin {
 
             /**
              * Render the output panel content (called by canvas for the slide-out panel)
-             * Supports both git repo files and YouTube transcripts
              * @param {Canvas} canvas - Canvas instance for helper methods
              * @returns {string} HTML string
              */
             renderOutputPanel(canvas) {
-                // Delegate to parent FetchResultNode for YouTube videos
-                // Support both old format (youtubeVideoId) and new format (metadata.video_id)
-                const metadata = this.node.metadata || {};
-                if (this.node.youtubeVideoId || (metadata.content_type === 'youtube' && metadata.video_id)) {
+                // Only handle git repo nodes - delegate everything else to parent
+                if (!this.node.gitRepoData) {
                     return super.renderOutputPanel(canvas);
                 }
 
@@ -1049,11 +1042,8 @@ export class GitRepoFeature extends FeaturePlugin {
 
             renderContent(canvas) {
                 // Only apply git repo rendering if this is actually a git repo node
-                // YouTube videos and other fetched content should use parent protocol
-                // Check metadata first (new format), then gitRepoData
-                const metadata = this.node.metadata || {};
-                if (metadata.content_type === 'youtube' || !this.node.gitRepoData) {
-                    // YouTube video or not a git repo node - delegate to parent
+                // Delegate everything else to parent (YouTube, PDFs, regular URLs, etc.)
+                if (!this.node.gitRepoData) {
                     return super.renderContent(canvas);
                 }
 
