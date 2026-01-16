@@ -1,156 +1,178 @@
 /**
- * Tests for Fetch Result node plugin
- * Verifies that the fetch result node plugin works correctly when loaded
+ * Tests for FetchResultNode protocol metadata handling.
+ *
+ * Guards against regression where metadata.content_type wasn't read correctly
+ * for determining node rendering (YouTube video embed vs markdown).
  */
 
-// Setup global mocks FIRST, before any imports that might use them
-// Must set window before any module imports that reference it
-global.window = global;
-global.window.addEventListener = () => {}; // Mock window.addEventListener
-global.localStorage = {
-    getItem: () => null,
-    setItem: () => {},
-    removeItem: () => {},
-    clear: () => {},
-};
-global.indexedDB = {
-    open: () => {
-        const request = {
-            onsuccess: null,
-            onerror: null,
-            onupgradeneeded: null,
-            result: {
-                transaction: () => ({
-                    objectStore: () => ({
-                        get: () => ({ onsuccess: null, onerror: null }),
-                        put: () => ({ onsuccess: null, onerror: null }),
-                        delete: () => ({ onsuccess: null, onerror: null }),
-                    }),
-                }),
-            },
-        };
-        setTimeout(() => {
-            if (request.onsuccess) {
-                request.onsuccess({ target: request });
-            }
-        }, 0);
-        return request;
-    },
+import { test, assertTrue, assertEqual, FetchResultNode } from './test_setup.js';
+
+// Mock canvas for testing
+const mockCanvas = {
+    renderMarkdown: (content) => `<div class="markdown">${content}</div>`,
 };
 
-// Now import modules
-import { assertTrue, assertEqual } from './test_helpers/assertions.js';
-import { createNode, NodeType } from '../src/canvas_chat/static/js/graph-types.js';
-import { wrapNode, Actions } from '../src/canvas_chat/static/js/node-protocols.js';
+// ============================================================================
+// Tests for FetchResultNode metadata reading
+// ============================================================================
 
-async function asyncTest(description, fn) {
-    try {
-        await fn();
-        console.log(`✓ ${description}`);
-    } catch (error) {
-        console.error(`✗ ${description}`);
-        console.error(`  ${error.message}`);
-        if (error.stack) {
-            console.error(error.stack.split('\n').slice(1, 4).join('\n'));
-        }
-        process.exit(1);
-    }
-}
+test('FetchResultNode renders YouTube video when metadata.content_type is youtube', () => {
+    const node = {
+        id: 'youtube-node',
+        type: 'fetch_result',
+        content: 'Transcript text here...',
+        metadata: {
+            content_type: 'youtube',
+            video_id: 'dQw4w9WgXcQ',
+        },
+    };
 
-function assertIncludes(array, item) {
-    if (!array.includes(item)) {
-        throw new Error(`Expected array to include ${JSON.stringify(item)}, got ${JSON.stringify(array)}`);
-    }
-}
+    const protocol = new FetchResultNode(node);
+    const content = protocol.renderContent(mockCanvas);
 
-console.log('\n=== Fetch Result Node Plugin Tests ===\n');
-
-// Test: Fetch result node plugin is registered
-await asyncTest('Fetch result node plugin is registered', async () => {
-    // Import fetch-result-node.js to trigger registration
-    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
-
-    // Check if NodeRegistry has the fetch_result type
-    const { NodeRegistry } = await import('../src/canvas_chat/static/js/node-registry.js');
-    assertTrue(NodeRegistry.isRegistered('fetch_result'), 'Fetch result node type should be registered');
-
-    const protocol = NodeRegistry.getProtocolClass('fetch_result');
-    assertTrue(protocol !== undefined, 'Fetch result protocol class should exist');
+    // Should render YouTube embed iframe
+    assertTrue(
+        content.includes('youtube.com/embed/dQw4w9WgXcQ'),
+        'Should render YouTube embed with video ID from metadata'
+    );
+    assertTrue(content.includes('iframe'), 'Should render as iframe');
 });
 
-// Test: FetchResultNode protocol methods
-await asyncTest('FetchResultNode implements protocol methods', async () => {
-    // Import fetch-result-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
+test('FetchResultNode falls back to youtubeVideoId for backward compatibility', () => {
+    // Old format node without metadata
+    const node = {
+        id: 'old-youtube-node',
+        type: 'fetch_result',
+        content: 'Transcript...',
+        youtubeVideoId: 'oldFormat123',
+        // No metadata field
+    };
 
-    // Test protocol methods
-    const testNode = createNode(NodeType.FETCH_RESULT, 'Fetched content...', {});
-    const wrapped = wrapNode(testNode);
+    const protocol = new FetchResultNode(node);
+    const content = protocol.renderContent(mockCanvas);
 
-    assertEqual(wrapped.getTypeLabel(), 'Fetched Content', 'Type label should be "Fetched Content"');
-    assertEqual(wrapped.getTypeIcon(), '📄', 'Type icon should be 📄');
+    // Should still render YouTube embed using legacy youtubeVideoId
+    assertTrue(
+        content.includes('youtube.com/embed/oldFormat123'),
+        'Should fall back to youtubeVideoId property'
+    );
 });
 
-// Test: FetchResultNode getActions
-await asyncTest('FetchResultNode getActions returns correct actions in expected order', async () => {
-    // Import fetch-result-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
+test('FetchResultNode renders markdown for non-YouTube content', () => {
+    const node = {
+        id: 'html-node',
+        type: 'fetch_result',
+        content: '# Fetched HTML content',
+        metadata: {
+            content_type: 'html',
+        },
+    };
 
-    const node = createNode(NodeType.FETCH_RESULT, 'Fetched content...', {});
-    const wrapped = wrapNode(node);
-    const actions = wrapped.getComputedActions();
+    const protocol = new FetchResultNode(node);
+    const content = protocol.renderContent(mockCanvas);
 
-    assertTrue(Array.isArray(actions), 'Actions should be an array');
-    assertTrue(actions.length === 5, 'Should have exactly 5 actions');
-
-    // Check for expected actions in expected order (defaults + additional)
-    assertEqual(actions[0].id, 'reply', 'First action should be REPLY');
-    assertEqual(actions[1].id, 'edit-content', 'Second action should be EDIT_CONTENT');
-    assertEqual(actions[2].id, 'copy', 'Third action should be COPY');
-    assertEqual(actions[3].id, 'resummarize', 'Fourth action should be RESUMMARIZE');
-    assertEqual(actions[4].id, 'create-flashcards', 'Fifth action should be CREATE_FLASHCARDS');
-
-    // Verify no duplicates
-    const actionIds = actions.map((a) => a.id);
-    const uniqueIds = new Set(actionIds);
-    assertTrue(uniqueIds.size === actions.length, 'Actions should not have duplicates');
+    // Should render markdown, not iframe
+    assertTrue(content.includes('markdown'), 'Should render as markdown');
+    assertTrue(!content.includes('iframe'), 'Should not render iframe');
 });
 
-// Test: FetchResultNode isScrollable
-await asyncTest('FetchResultNode isScrollable returns true', async () => {
-    // Import fetch-result-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
+test('FetchResultNode renders markdown when metadata is missing', () => {
+    const node = {
+        id: 'no-metadata-node',
+        type: 'fetch_result',
+        content: '# Some content',
+        // No metadata
+    };
 
-    const node = { type: NodeType.FETCH_RESULT, content: 'Fetched content...' };
-    const wrapped = wrapNode(node);
-    assertTrue(wrapped.isScrollable(), 'FetchResultNode should be scrollable');
+    const protocol = new FetchResultNode(node);
+    const content = protocol.renderContent(mockCanvas);
+
+    // Should render markdown as fallback
+    assertTrue(content.includes('markdown'), 'Should render as markdown when no metadata');
 });
 
-// Test: FetchResultNode wrapNode integration
-await asyncTest('wrapNode returns FetchResultNode for FETCH_RESULT type', async () => {
-    // Import fetch-result-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
+test('FetchResultNode hasOutput returns true for YouTube videos', () => {
+    const node = {
+        id: 'youtube-with-output',
+        type: 'fetch_result',
+        content: 'Transcript...',
+        metadata: {
+            content_type: 'youtube',
+            video_id: 'abc123',
+        },
+    };
 
-    const node = { type: NodeType.FETCH_RESULT, content: 'Fetched content...' };
-    const wrapped = wrapNode(node);
+    const protocol = new FetchResultNode(node);
 
-    // Verify it's wrapped correctly (not BaseNode)
-    assertTrue(wrapped.getTypeLabel() === 'Fetched Content', 'Should return Fetch result node protocol');
-    assertTrue(wrapped.getTypeIcon() === '📄', 'Should have fetch result icon');
+    assertTrue(protocol.hasOutput(), 'YouTube videos should have output (transcript drawer)');
 });
 
-// Test: FetchResultNode handles edge cases
-await asyncTest('FetchResultNode handles empty content', async () => {
-    // Import fetch-result-node.js to register the plugin
-    await import('../src/canvas_chat/static/js/plugins/fetch-result-node.js');
+test('FetchResultNode hasOutput returns false for non-YouTube', () => {
+    const node = {
+        id: 'html-no-output',
+        type: 'fetch_result',
+        content: 'HTML content',
+        metadata: {
+            content_type: 'html',
+        },
+    };
 
-    const node = { type: NodeType.FETCH_RESULT, content: '', id: 'test', position: { x: 0, y: 0 }, width: 640, height: 480, created_at: Date.now(), tags: [] };
-    const wrapped = wrapNode(node);
+    const protocol = new FetchResultNode(node);
 
-    // Should still work with empty content
-    assertEqual(wrapped.getTypeLabel(), 'Fetched Content', 'Should return type label even with empty content');
-    const actions = wrapped.getComputedActions();
-    assertTrue(Array.isArray(actions) && actions.length === 5, 'Should return actions even with empty content');
+    assertTrue(!protocol.hasOutput(), 'Non-YouTube content should not have output panel');
 });
 
-console.log('\n✅ All Fetch Result node plugin tests passed!\n');
+test('FetchResultNode getTypeLabel returns correct label for content types', () => {
+    const youtubeNode = {
+        id: 'yt',
+        type: 'fetch_result',
+        content: '',
+        metadata: { content_type: 'youtube' },
+    };
+
+    const pdfNode = {
+        id: 'pdf',
+        type: 'fetch_result',
+        content: '',
+        metadata: { content_type: 'pdf' },
+    };
+
+    const gitNode = {
+        id: 'git',
+        type: 'fetch_result',
+        content: '',
+        metadata: { content_type: 'git' },
+    };
+
+    const defaultNode = {
+        id: 'default',
+        type: 'fetch_result',
+        content: '',
+    };
+
+    assertEqual(new FetchResultNode(youtubeNode).getTypeLabel(), 'YouTube Video');
+    assertEqual(new FetchResultNode(pdfNode).getTypeLabel(), 'PDF');
+    assertEqual(new FetchResultNode(gitNode).getTypeLabel(), 'Git Repository');
+    assertEqual(new FetchResultNode(defaultNode).getTypeLabel(), 'Fetched');
+});
+
+test('FetchResultNode getTypeIcon returns correct icon for content types', () => {
+    const youtubeNode = {
+        id: 'yt',
+        type: 'fetch_result',
+        content: '',
+        metadata: { content_type: 'youtube' },
+    };
+
+    const pdfNode = {
+        id: 'pdf',
+        type: 'fetch_result',
+        content: '',
+        metadata: { content_type: 'pdf' },
+    };
+
+    assertEqual(new FetchResultNode(youtubeNode).getTypeIcon(), '▶️');
+    assertEqual(new FetchResultNode(pdfNode).getTypeIcon(), '📑');
+});
+
+// Tests are automatically collected by the test runner
