@@ -7,7 +7,6 @@ import logging
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
 
 from canvas_chat.url_fetch_handler_plugin import UrlFetchHandlerPlugin
 from canvas_chat.url_fetch_registry import PRIORITY, UrlFetchRegistry
@@ -304,10 +303,6 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
                 f"**Repository:** [{normalized_url}]({normalized_url})\n\n"
             )
 
-            max_file_size = 100 * 1024  # 100KB per file
-            max_total_size = 500 * 1024  # 500KB total limit
-            total_size = 0
-
             # Store file content separately for drawer
             # (map of path -> {content, lang, status})
             files_data = {}
@@ -362,31 +357,6 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
                     file_content = file_path.read_text(
                         encoding="utf-8", errors="ignore"
                     )
-                    file_size = len(file_content)
-
-                    # Truncate if too large
-                    if file_size > max_file_size:
-                        file_content = (
-                            file_content[:max_file_size] + "\n\n... (truncated)"
-                        )
-                        file_size = max_file_size
-
-                    # Check total size limit
-                    if total_size + file_size > max_total_size:
-                        remaining = max_total_size - total_size
-                        if remaining > 0:
-                            file_content = (
-                                file_content[:remaining]
-                                + "\n\n... (truncated due to total size limit)"
-                            )
-                        else:
-                            content_parts.append(
-                                "\n\n*Note: Some files were omitted due to "
-                                "total size limit (500KB)*\n"
-                            )
-                            break
-
-                    total_size += file_size
 
                     # Determine file extension for syntax highlighting
                     file_ext = Path(normalized_path).suffix.lstrip(".")
@@ -513,7 +483,7 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
                             )
 
             content = "".join(content_parts)
-            return {
+            result = {
                 "title": repo_name,
                 "content": content,
                 "metadata": {
@@ -521,6 +491,17 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
                     "files": files_data,  # Map of file paths to file data for drawer
                 },
             }
+
+            # Debug: Log what we're returning
+            logger.info(
+                f"GitRepoHandler.fetch_selected_files returning: "
+                f"has_metadata={bool(result.get('metadata'))}, "
+                f"metadata_keys={list(result.get('metadata', {}).keys())}, "
+                f"files_count={len(result.get('metadata', {}).get('files', {}))}, "
+                f"files_keys={list(result.get('metadata', {}).get('files', {}).keys())[:5]}"  # noqa: E501
+            )
+
+            return result
 
     async def fetch_url(self, url: str) -> dict[str, any]:
         """Fetch URL content using smart defaults (for backward compatibility).
@@ -630,16 +611,6 @@ def register_endpoints(app):
         git_credentials: dict[str, str] | None = None
         # Optional: Map of git host (e.g., 'github.com') to credential (PAT)
 
-    class FetchUrlResult(BaseModel):
-        """Result from fetching a URL."""
-
-        url: str
-        title: str
-        content: str  # Markdown content
-        files: dict[str, dict[str, Any]] | None = (
-            None  # Optional: file content map for drawer
-        )
-
     @app.post("/api/url-fetch/list-files", response_model=ListFilesResult)
     async def list_url_fetch_files(request: ListFilesRequest):
         """List files available for selection from a URL (plugin-based).
@@ -681,12 +652,16 @@ def register_endpoints(app):
             logger.error(traceback.format_exc())
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/api/url-fetch/fetch-files", response_model=FetchUrlResult)
+    @app.post("/api/url-fetch/fetch-files")
     async def fetch_url_fetch_files(request: FetchFilesRequest):
         """Fetch content from selected files from a URL (plugin-based).
 
         Uses UrlFetchRegistry to find the appropriate handler for the URL.
         """
+        # Import here to avoid circular import (app.py imports this module at module level)  # noqa: E501
+        # Import inside the endpoint handler, not in register_endpoints
+        from canvas_chat.app import FetchUrlResult
+
         logger.info(
             f"Fetch URL fetch files request: url='{request.url}', "
             f"files={len(request.file_paths)}"
@@ -706,13 +681,98 @@ def register_endpoints(app):
                 request.file_paths,
                 git_credentials=request.git_credentials,
             )
-            # Return result with metadata (files data for git repo drawer)
-            return FetchUrlResult(
-                url=request.url,
-                title=result["title"],
-                content=result["content"],
-                metadata=result.get("metadata", {}),
+
+            # Debug: Log what handler returned
+            metadata = result.get("metadata", {})
+            files = metadata.get("files", {}) if metadata else {}
+            logger.info(
+                f"Handler fetch_selected_files returned: has_metadata={bool(metadata)}, "  # noqa: E501
+                f"metadata_keys={list(metadata.keys()) if metadata else []}, "
+                f"files_count={len(files)}"
             )
+
+            # Ensure metadata is a plain dict (not Y.Map or other CRDT type)
+            # Deep copy to ensure it's a plain Python dict, not a Y.Map or other type
+            import json
+
+            if metadata:
+                try:
+                    # Test if metadata is JSON-serializable by serializing and deserializing  # noqa: E501
+                    metadata_json = json.dumps(metadata)
+                    metadata = json.loads(metadata_json)
+                    logger.info(
+                        f"Metadata converted to plain dict via JSON: keys={list(metadata.keys())}"  # noqa: E501
+                    )
+                except (TypeError, ValueError) as e:
+                    logger.error(f"Metadata is not JSON-serializable: {e}")
+                    # Fallback: try to convert manually
+                    if not isinstance(metadata, dict):
+                        metadata = dict(metadata)
+                    else:
+                        # Recursively convert nested dicts
+                        def convert_to_plain_dict(obj):
+                            if isinstance(obj, dict):
+                                return {
+                                    k: convert_to_plain_dict(v) for k, v in obj.items()
+                                }
+                            elif isinstance(obj, list):
+                                return [convert_to_plain_dict(item) for item in obj]
+                            else:
+                                return obj
+
+                        metadata = convert_to_plain_dict(metadata)
+                        logger.info(
+                            f"Metadata converted to plain dict manually: keys={list(metadata.keys())}"  # noqa: E501
+                        )
+
+            # Return result with metadata (files data for git repo drawer)
+            try:
+                # Debug: Log metadata before creating FetchUrlResult
+                logger.info(
+                    f"Creating FetchUrlResult with metadata: "
+                    f"type={type(metadata)}, "
+                    f"is_dict={isinstance(metadata, dict)}, "
+                    f"has_files={'files' in metadata if isinstance(metadata, dict) else False}, "  # noqa: E501
+                    f"files_type={type(metadata.get('files')) if isinstance(metadata, dict) else None}"  # noqa: E501
+                )
+
+                fetch_result = FetchUrlResult(
+                    url=request.url,
+                    title=result["title"],
+                    content=result["content"],
+                    metadata=metadata,
+                )
+
+                # Debug: Check metadata directly on the object (before serialization)
+                try:
+                    direct_metadata = fetch_result.metadata
+                    logger.info(
+                        f"FetchUrlResult.metadata (direct access): "
+                        f"type={type(direct_metadata)}, "
+                        f"is_dict={isinstance(direct_metadata, dict)}, "
+                        f"keys={list(direct_metadata.keys()) if isinstance(direct_metadata, dict) else []}, "  # noqa: E501
+                        f"has_files={'files' in direct_metadata if isinstance(direct_metadata, dict) else False}"  # noqa: E501
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to access fetch_result.metadata directly: {e}"  # noqa: E501
+                    )
+
+                # Verify serialization works
+                serialized = fetch_result.model_dump()
+                logger.info(
+                    f"FetchUrlResult.model_dump() result: "
+                    f"has_metadata={bool(serialized.get('metadata'))}, "
+                    f"metadata_keys={list(serialized.get('metadata', {}).keys())}, "
+                    f"files_count={len(serialized.get('metadata', {}).get('files', {}))}"  # noqa: E501
+                )
+                return fetch_result
+            except Exception as create_error:
+                logger.error(f"Failed to create FetchUrlResult: {create_error}")
+                import traceback
+
+                logger.error(traceback.format_exc())
+                raise
         except HTTPException:
             raise
         except Exception as e:
