@@ -14,6 +14,7 @@ import { CodeFeature } from './plugins/code.js';
 import { NoteFeature } from './plugins/note.js';
 import { GitRepoFeature } from './plugins/git-repo.js';
 import { UrlFetchFeature } from './plugins/url-fetch.js';
+import { YouTubeFeature } from './plugins/youtube.js';
 
 /**
  * Priority levels for slash command resolution
@@ -138,7 +139,23 @@ class FeatureRegistry {
             {
                 id: 'git-repo',
                 feature: GitRepoFeature,
-                slashCommands: [], // No slash command - called by UrlFetchFeature
+                slashCommands: [
+                    {
+                        command: '/git',
+                        handler: 'handleCommand',
+                    },
+                ],
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'youtube',
+                feature: YouTubeFeature,
+                slashCommands: [
+                    {
+                        command: '/youtube',
+                        handler: 'handleCommand',
+                    },
+                ],
                 priority: PRIORITY.BUILTIN,
             },
             {

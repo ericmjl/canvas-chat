@@ -11,7 +11,7 @@
 
 /**
  * Valid node type values
- * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'code'} NodeTypeValue
+ * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'code'|'youtube'|'git_repo'} NodeTypeValue
  */
 
 /**
@@ -174,8 +174,10 @@ const NodeType = {
     CELL: 'cell', // Pinned cell from a matrix
     ROW: 'row', // Extracted row from a matrix
     COLUMN: 'column', // Extracted column from a matrix
-    FETCH_RESULT: 'fetch_result', // Fetched content from URL (via Exa)
+    FETCH_RESULT: 'fetch_result', // Fetched content from URL (generic)
     PDF: 'pdf', // Imported PDF document
+    YOUTUBE: 'youtube', // YouTube video with transcript
+    GIT_REPO: 'git_repo', // Git repository with file selection
     OPINION: 'opinion', // Committee member's opinion
     SYNTHESIS: 'synthesis', // Chairman's synthesized answer
     REVIEW: 'review', // Committee member's review of other opinions
@@ -200,6 +202,8 @@ const DEFAULT_NODE_SIZES = {
     [NodeType.RESEARCH]: { width: 640, height: 480 },
     [NodeType.FETCH_RESULT]: { width: 640, height: 480 },
     [NodeType.PDF]: { width: 640, height: 480 },
+    [NodeType.YOUTUBE]: { width: 640, height: 480 },
+    [NodeType.GIT_REPO]: { width: 640, height: 480 },
     [NodeType.OPINION]: { width: 640, height: 480 },
     [NodeType.SYNTHESIS]: { width: 640, height: 480 },
     [NodeType.REVIEW]: { width: 640, height: 480 },

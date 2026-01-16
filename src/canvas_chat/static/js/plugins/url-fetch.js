@@ -1,9 +1,11 @@
 /**
  * URL Fetch Plugin (Built-in)
  *
- * Handles /fetch slash command for fetching URLs (PDFs, websites, git repos).
- * This is a self-contained feature plugin that coordinates with other plugins
- * (like GitRepoFeature) to handle different URL types.
+ * Handles /fetch slash command for generic URL fetching.
+ * Creates basic FETCH_RESULT nodes without special rendering.
+ * For enhanced UX (file selection, video embedding), use specific commands:
+ * - /git for git repositories
+ * - /youtube for YouTube videos
  */
 
 import { FeaturePlugin } from '../feature-plugin.js';
@@ -16,7 +18,7 @@ export class UrlFetchFeature extends FeaturePlugin {
         return [
             {
                 command: '/fetch',
-                description: 'Fetch content from URL (PDF, website, or git repo)',
+                description: 'Fetch content from URL (basic fetch, no special rendering)',
                 placeholder: 'https://...',
             },
         ];
@@ -24,6 +26,9 @@ export class UrlFetchFeature extends FeaturePlugin {
 
     /**
      * Handle /fetch slash command
+     * Generic URL fetching - creates basic FETCH_RESULT nodes.
+     * For enhanced UX, use specific commands (/git, /youtube).
+     *
      * @param {string} command - The slash command (e.g., '/fetch')
      * @param {string} args - Text after the command (URL)
      * @param {Object} contextObj - Additional context (e.g., { text: selectedNodesContent })
@@ -41,77 +46,21 @@ export class UrlFetchFeature extends FeaturePlugin {
             return;
         }
 
-        // Check if URL supports file selection (e.g., git repos) via backend registry
-        // This uses the unified backend UrlFetchRegistry to determine handler
-        const supportsFileSelection = await this.checkUrlSupportsFileSelection(url);
-
-        if (supportsFileSelection) {
-            // URL supports file selection - delegate to GitRepoFeature for now
-            // (In future, this could be more generic and route to any handler that supports file selection)
-            try {
-                const gitRepoFeature = this.featureRegistry?.getFeature('git-repo');
-                if (gitRepoFeature) {
-                    await gitRepoFeature.handleGitUrl(url);
-                    return;
-                }
-            } catch (err) {
-                console.warn('[UrlFetchFeature] GitRepoFeature not available, falling back to regular fetch:', err);
-                // Fall through to regular URL fetching
-            }
-        }
-
-        // All URLs (PDFs, YouTube, HTML, etc.) go through unified endpoint
-        // Backend will route to appropriate handler via UrlFetchRegistry
+        // Generic URL fetching - no special cases
+        // Backend routes to appropriate handler via UrlFetchRegistry
+        // All create basic FETCH_RESULT nodes (no special rendering)
         await this.handleWebUrl(url);
     }
 
     /**
-     * Check if URL supports file selection by querying backend registry
-     * @param {string} url - URL to check
-     * @returns {Promise<boolean>} True if URL supports file selection
-     */
-    async checkUrlSupportsFileSelection(url) {
-        try {
-            // Try to list files - if endpoint exists and handler supports it, URL supports file selection
-            const response = await fetch(apiUrl('/api/url-fetch/list-files'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, git_credentials: {} }), // Empty credentials for check
-            });
-
-            // If we get a response (even if it fails due to auth), the handler supports file listing
-            // Only return false if handler doesn't exist or doesn't support file listing
-            if (response.status === 400) {
-                const error = await response.json();
-                // "not supported by any registered handler" means no handler for this URL
-                // "does not support file listing" means handler exists but no file selection
-                if (error.detail?.includes('not supported by any registered handler') ||
-                    error.detail?.includes('does not support file listing')) {
-                    return false;
-                }
-                // Other 400 errors (like auth) mean the handler exists and supports file listing
-                return true;
-            }
-
-            // 200 means handler exists and supports file listing
-            return response.ok;
-        } catch (err) {
-            // Network error or other issue - assume no file selection support
-            console.warn('[UrlFetchFeature] Error checking file selection support:', err);
-            return false;
-        }
-    }
-
-    /**
-     * Fetch URL content and create a FETCH_RESULT node.
+     * Fetch URL content and create a basic FETCH_RESULT node.
+     *
+     * Generic URL fetching - creates basic nodes without special rendering.
+     * For enhanced UX (file selection, video embedding), use specific commands:
+     * - /git for git repositories
+     * - /youtube for YouTube videos
      *
      * This uses Jina Reader API (/api/fetch-url) which is free and requires no API key.
-     * This is intentionally separate from handleNodeFetchSummarize which uses Exa API.
-     *
-     * Design rationale (see docs/explanation/url-fetching.md):
-     * - /fetch <url> should "just work" without any API configuration (zero-friction)
-     * - Exa API (used by fetch+summarize) offers higher quality but requires API key
-     * - Both create FETCH_RESULT nodes with the same structure for consistency
      *
      * @param {string} url - The URL to fetch
      */
@@ -144,7 +93,7 @@ export class UrlFetchFeature extends FeaturePlugin {
         this.updateEmptyState?.();
 
         try {
-            // Fetch URL content via backend (uses Jina Reader API, free, no API key required)
+            // Fetch URL content via backend (uses UrlFetchRegistry to route to handler)
             const response = await fetch(apiUrl('/api/fetch-url'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -158,28 +107,14 @@ export class UrlFetchFeature extends FeaturePlugin {
 
             const data = await response.json();
 
-            // Extract metadata from response
-            const metadata = data.metadata || {};
-            const contentType = metadata.content_type;
+            // Generic content - always use full content with title
+            // No special rendering (that's handled by /git and /youtube commands)
+            const nodeContent = `**[${data.title}](${url})**\n\n${data.content}`;
 
-            // For YouTube videos: extract transcript from content, show video in main content
-            let nodeContent = data.content;
-            if (contentType === 'youtube' && metadata.video_id) {
-                // Extract transcript (everything after "---\n\n" separator)
-                const transcriptStart = data.content.indexOf('---\n\n');
-                if (transcriptStart !== -1) {
-                    // Use just the transcript as content (for LLM context)
-                    nodeContent = data.content.substring(transcriptStart + 5); // Skip "---\n\n"
-                }
-            } else {
-                // For non-YouTube URLs, use full content with title
-                nodeContent = `**[${data.title}](${url})**\n\n${data.content}`;
-            }
-
-            // Store metadata and configure node based on content type
+            // Update node (basic FETCH_RESULT, no special rendering)
             const updateData = {
                 content: nodeContent,
-                metadata: metadata, // Store full metadata
+                metadata: data.metadata || {},
                 versions: [
                     {
                         content: nodeContent,
@@ -189,33 +124,8 @@ export class UrlFetchFeature extends FeaturePlugin {
                 ],
             };
 
-            // YouTube-specific configuration
-            if (contentType === 'youtube' && metadata.video_id) {
-                updateData.youtubeVideoId = metadata.video_id; // Keep for backward compatibility
-                // Open drawer by default for YouTube videos to show transcript
-                updateData.outputExpanded = true;
-                // Set a reasonable default height for transcript panel
-                updateData.outputPanelHeight = 400;
-            }
-
-            // Update node in graph first
             this.graph.updateNode(fetchNode.id, updateData);
-
-            // For YouTube videos, do full re-render to show video and output panel
-            // For other URLs, just update content display
-            if (contentType === 'youtube' && metadata.video_id) {
-                // Get the updated node from graph (with youtubeVideoId and outputExpanded)
-                // graph.updateNode is synchronous, so the node should be updated immediately
-                const updatedNode = this.graph.getNode(fetchNode.id);
-                if (updatedNode) {
-                    // Full re-render to show video in main content and transcript in drawer
-                    // This will call renderContent() (shows video) and renderOutputPanel() (shows transcript)
-                    this.canvas.renderNode(updatedNode);
-                }
-            } else {
-                // For non-YouTube URLs, just update content display
-                this.canvas.updateNodeContent(fetchNode.id, nodeContent, false);
-            }
+            this.canvas.updateNodeContent(fetchNode.id, nodeContent, false);
 
             this.saveSession?.();
         } catch (err) {
