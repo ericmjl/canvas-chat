@@ -782,8 +782,10 @@ export class GitRepoFeature extends FeaturePlugin {
             };
 
             // Update node with git repo data
+            // Use backend's formatted content (includes all file contents) for LLM context
+            // The backend formats it as: "**[title](url)**\n\n## Directory: ...\n\n### file.py\n\n```python\n...\n```"
             const updateData = {
-                content: `**[${data.title}](${url})**`, // Minimal content for fallback
+                content: data.content || `**[${data.title}](${url})**`, // Backend formats with file contents
                 gitRepoData,
             };
 
