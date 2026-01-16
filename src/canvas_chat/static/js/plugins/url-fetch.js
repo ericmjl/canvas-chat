@@ -180,8 +180,6 @@ export class UrlFetchFeature extends FeaturePlugin {
                 nodeContent = `**[${data.title}](${url})**\n\n${data.content}`;
             }
 
-            this.canvas.updateNodeContent(fetchNode.id, nodeContent, false);
-
             // Store YouTube video ID if present (for embedding)
             const updateData = {
                 content: nodeContent,
@@ -198,12 +196,20 @@ export class UrlFetchFeature extends FeaturePlugin {
                 // Open drawer by default for YouTube videos to show transcript
                 updateData.outputExpanded = true;
             }
+
+            // Update node in graph first
             this.graph.updateNode(fetchNode.id, updateData);
 
+            // Update content display
+            this.canvas.updateNodeContent(fetchNode.id, nodeContent, false);
+
             // Re-render node to show output panel if YouTube video is present
+            // This ensures hasOutput() detects youtubeVideoId and renders the panel
             if (data.video_id) {
+                // Get the updated node from graph (with youtubeVideoId and outputExpanded)
                 const updatedNode = this.graph.getNode(fetchNode.id);
                 if (updatedNode) {
+                    // Full re-render to show video in main content and transcript in drawer
                     this.canvas.renderNode(updatedNode);
                 }
             }
