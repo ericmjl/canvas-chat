@@ -58,6 +58,18 @@ class FetchResultNode extends BaseNode {
         // If this is a YouTube video, show embedded video in main content
         // Support both old format (youtubeVideoId) and new format (metadata.video_id)
         const videoId = this.node.youtubeVideoId || metadata.video_id;
+
+        // Debug: log what we're checking
+        if (this.node.type === 'fetch_result') {
+            console.log('[FetchResultNode] renderContent:', {
+                contentType,
+                videoId,
+                youtubeVideoId: this.node.youtubeVideoId,
+                metadata: this.node.metadata,
+                hasMetadata: !!this.node.metadata,
+            });
+        }
+
         if (contentType === 'youtube' && videoId) {
             const embedUrl = `https://www.youtube.com/embed/${videoId}`;
 
