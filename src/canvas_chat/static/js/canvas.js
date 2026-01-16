@@ -2744,20 +2744,28 @@ class Canvas {
         });
 
         // Git repo node tree expand/collapse handlers
-        const gitRepoDirItems = div.querySelectorAll('.git-repo-node-dir-item[data-has-children="true"]');
-        gitRepoDirItems.forEach((dirItem) => {
-            dirItem.addEventListener('click', (e) => {
-                // Only toggle if clicking on the directory item itself, not on nested elements
-                if (e.target === dirItem || e.target.closest('.git-repo-node-dir-item') === dirItem) {
-                    e.stopPropagation();
-                    const childrenUl = dirItem.querySelector('ul.git-repo-node-tree-nested');
+        // Handle expand/collapse for git repo file tree in node view
+        // Use the same classes as modal tree (git-repo-file-tree-item, git-repo-expand-btn)
+        const gitRepoExpandBtns = div.querySelectorAll('.git-repo-expand-btn');
+        gitRepoExpandBtns.forEach((expandBtn) => {
+            expandBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const li = expandBtn.closest('.git-repo-file-tree-item');
+                if (li) {
+                    const childrenUl = li.querySelector('ul.git-repo-file-tree-list');
                     if (childrenUl) {
-                        const isExpanded = childrenUl.style.display !== 'none';
-                        childrenUl.style.display = isExpanded ? 'none' : 'block';
-                        const icon = dirItem.querySelector('.git-repo-node-expand-icon');
+                        const isCurrentlyExpanded = childrenUl.style.display !== 'none';
+                        const willBeExpanded = !isCurrentlyExpanded;
+
+                        // Toggle display
+                        childrenUl.style.display = willBeExpanded ? 'block' : 'none';
+
+                        // Update arrow icon to match new state
+                        const icon = expandBtn.querySelector('.git-repo-expand-icon');
                         if (icon) {
-                            icon.textContent = isExpanded ? '▶' : '▼';
+                            icon.textContent = willBeExpanded ? '▼' : '▶';
                         }
+                        expandBtn.classList.toggle('expanded', willBeExpanded);
                     }
                 }
             });

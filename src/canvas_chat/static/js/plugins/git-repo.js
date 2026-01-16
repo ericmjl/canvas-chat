@@ -218,8 +218,12 @@ export class GitRepoFeature extends FeaturePlugin {
      * @param {Set<string>} selectedPaths - Set of selected file paths
      * @param {HTMLElement} container - Container element (ul or div)
      * @param {number} depth - Current nesting depth (for indentation)
+     * @param {Object} options - Rendering options
+     * @param {boolean} options.hideCheckboxes - If true, hide checkboxes (for read-only node view)
+     * @param {Set<string>} options.fetchedFiles - Set of actually fetched file paths (for highlighting)
      */
-    renderFileTree(files, selectedPaths, container, depth = 0) {
+    renderFileTree(files, selectedPaths, container, depth = 0, options = {}) {
+        const { hideCheckboxes = false, fetchedFiles = null } = options;
         // If container is already a ul, use it directly; otherwise create a new ul
         const ul = container.tagName === 'UL' ? container : document.createElement('ul');
         if (container.tagName !== 'UL') {
@@ -253,11 +257,23 @@ export class GitRepoFeature extends FeaturePlugin {
                 checkbox.checked = isSelected;
                 checkbox.dataset.path = fullPath;
                 checkbox.dataset.type = 'file';
+                if (hideCheckboxes) {
+                    checkbox.style.display = 'none';
+                }
+
+                // Check if this file was actually fetched
+                const isFetched = fetchedFiles ? fetchedFiles.has(fullPath) : false;
+                if (isFetched) {
+                    li.classList.add('git-repo-file-fetched');
+                }
 
                 const label = document.createElement('label');
                 label.htmlFor = checkbox.id;
                 label.className = 'git-repo-file-label';
                 label.title = fullPath; // Tooltip with full path
+                if (isFetched) {
+                    label.classList.add('git-repo-file-fetched-label');
+                }
                 label.innerHTML = `<span class="git-repo-file-icon">📄</span> ${displayName}`;
 
                 // Wrap content in a container for consistency
@@ -290,6 +306,9 @@ export class GitRepoFeature extends FeaturePlugin {
                 dirCheckbox.id = `git-repo-dir-${fullPath.replace(/[^a-zA-Z0-9]/g, '_')}`;
                 dirCheckbox.dataset.path = fullPath;
                 dirCheckbox.dataset.type = 'directory';
+                if (hideCheckboxes) {
+                    dirCheckbox.style.display = 'none';
+                }
 
                 // Check if all files in directory are selected
                 if (hasChildren) {
@@ -392,7 +411,7 @@ export class GitRepoFeature extends FeaturePlugin {
                         expandBtn.classList.remove('expanded');
                     }
 
-                    this.renderFileTree(item.children, selectedPaths, childrenUl, depth + 1);
+                    this.renderFileTree(item.children, selectedPaths, childrenUl, depth + 1, options);
                     li.appendChild(childrenUl);
                 }
             }
@@ -748,6 +767,9 @@ export class GitRepoFeature extends FeaturePlugin {
             console.warn('[GitRepoFeature] Could not get original FETCH_RESULT protocol, using BaseNode:', err);
         }
 
+        // Capture reference to this (GitRepoFeature instance) for use in protocol class
+        const gitRepoFeatureInstance = this;
+
         // Register custom node protocol for git repository nodes
         // This extends the original protocol and adds git repo tree rendering
         const GitRepoProtocol = class extends OriginalProtocol {
@@ -755,7 +777,7 @@ export class GitRepoFeature extends FeaturePlugin {
                 // Check if this is a git repo node with file tree data
                 if (this.node.gitRepoData && Array.isArray(this.node.gitRepoData.fileTree) && this.node.gitRepoData.fileTree.length > 0) {
                     try {
-                        const { fileTree, url, title } = this.node.gitRepoData;
+                        const { fileTree, url, title, selectedFiles } = this.node.gitRepoData;
                         const container = document.createElement('div');
                         container.className = 'git-repo-node-tree';
 
@@ -770,9 +792,23 @@ export class GitRepoFeature extends FeaturePlugin {
                         header.innerHTML = `<strong><a href="${escapedUrl}" target="_blank" style="color: var(--accent-primary); text-decoration: none;">${escapedTitle}</a></strong>`;
                         container.appendChild(header);
 
-                        // Render file tree
-                        const treeHtml = this.renderFileTreeInNode(fileTree, 0);
-                        container.innerHTML += `<div class="git-repo-node-tree-container"><ul class="git-repo-node-tree-list" style="margin: 0; padding-left: 0; list-style: none;">${treeHtml}</ul></div>`;
+                        // Render file tree using the same function as modal, but with checkboxes hidden
+                        const treeContainer = document.createElement('div');
+                        treeContainer.className = 'git-repo-node-tree-container';
+                        const selectedPathsSet = new Set(selectedFiles || []);
+                        const fetchedFilesSet = new Set(selectedFiles || []); // Files that were actually fetched
+                        // Use the captured GitRepoFeature instance to call renderFileTree
+                        gitRepoFeatureInstance.renderFileTree(
+                            fileTree,
+                            selectedPathsSet,
+                            treeContainer,
+                            0,
+                            {
+                                hideCheckboxes: true,
+                                fetchedFiles: fetchedFilesSet
+                            }
+                        );
+                        container.appendChild(treeContainer);
 
                         return container.outerHTML;
                     } catch (err) {
@@ -790,36 +826,14 @@ export class GitRepoFeature extends FeaturePlugin {
                 }
             }
 
-                /**
-                 * Render file tree in node (read-only, no checkboxes)
-                 * Returns HTML string (no event listeners - they'll be added after DOM insertion)
-                 */
-                renderFileTreeInNode(files, depth = 0) {
-                    let html = '';
-                    for (const item of files) {
-                        const displayName = item.path.split('/').pop();
-                        const escapedPath = this.escapeHtml(item.path);
-                        const escapedName = this.escapeHtml(displayName);
 
-                        if (item.type === 'file') {
-                            html += `<li class="git-repo-node-tree-item" title="${escapedPath}"><span class="git-repo-node-file-icon">📄</span> <span>${escapedName}</span></li>`;
-                        } else if (item.type === 'directory') {
-                            const hasChildren = item.children && item.children.length > 0;
-                            const expandIcon = hasChildren ? '<span class="git-repo-node-expand-icon">▶</span>' : '<span class="git-repo-node-expand-icon-empty"></span>';
-                            const childrenHtml = hasChildren ? this.renderFileTreeInNode(item.children, depth + 1) : '';
-                            html += `<li class="git-repo-node-tree-item git-repo-node-dir-item" title="${escapedPath}" data-has-children="${hasChildren}">${expandIcon}<span class="git-repo-node-folder-icon">📁</span> <span>${escapedName}</span>${hasChildren ? `<ul class="git-repo-node-tree-list git-repo-node-tree-nested">${childrenHtml}</ul>` : ''}</li>`;
-                        }
-                    }
-                    return html;
-                }
-
-                escapeHtml(text) {
-                    if (!text) return '';
-                    const div = document.createElement('div');
-                    div.textContent = text;
-                    return div.innerHTML;
-                }
-            };
+            escapeHtml(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        };
 
         // Register with both the enum value and string to be safe
         const fetchResultType = NodeType.FETCH_RESULT || 'fetch_result';

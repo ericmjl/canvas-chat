@@ -98,6 +98,8 @@
     display: block;
     /* Ensure proper vertical stacking - children appear below parent */
     clear: both;
+    /* Prevent hover on parent when hovering children */
+    pointer-events: none;
 }
 
 /* Content wrapper contains button/spacer, checkbox, label in a row */
@@ -105,6 +107,10 @@
     display: inline-flex;
     align-items: center;
     width: 100%;
+    /* Add padding for hover effect without affecting layout */
+    padding: 1px 2px;
+    margin: -1px -2px;
+    border-radius: var(--radius-sm);
 }
 
 /* Spacer for files to align with directory arrows */
@@ -112,9 +118,21 @@
     flex-shrink: 0;
 }
 
-.git-repo-file-tree-item:hover {
-    background: var(--bg-secondary);
+/* Hover effect only on the content wrapper, and only when directly hovering that specific item */
+/* Use :hover with pointer-events to prevent parent highlighting when hovering children */
+.git-repo-file-tree-item > .git-repo-file-tree-item-content {
+    pointer-events: auto;
+}
+
+/* Subtle light blue hover effect */
+.git-repo-file-tree-item > .git-repo-file-tree-item-content:hover {
+    background: rgba(100, 150, 255, 0.1); /* Light blue with transparency */
     border-radius: var(--radius-sm);
+}
+
+/* Prevent hover on parent when hovering nested items */
+.git-repo-file-tree-item > ul {
+    pointer-events: auto;
 }
 
 .git-repo-file-tree-item input[type='checkbox'] {
@@ -196,6 +214,8 @@
     list-style: none;
     width: auto;
     /* Display is controlled by inline style from JS - don't override with !important */
+    /* Re-enable pointer events for nested items so they can be hovered */
+    pointer-events: auto;
 }
 
 /* =============================================================================
@@ -214,7 +234,11 @@
 
 .git-repo-node-tree-container {
     /* Container for the tree */
+    /* Reuse the same styles as modal tree - classes are shared */
 }
+
+/* Node tree uses the same classes as modal tree, so styles are inherited */
+/* Additional highlighting for fetched files */
 
 .git-repo-node-tree-list {
     list-style: none;
@@ -249,10 +273,8 @@
     vertical-align: middle;
 }
 
-.git-repo-node-tree-item:hover {
-    background: var(--bg-secondary);
-    border-radius: var(--radius-sm);
-}
+/* Remove this - node tree now uses same classes as modal tree */
+/* Hover is handled by .git-repo-file-tree-item:hover .git-repo-file-tree-item-content */
 
 .git-repo-node-tree-item .git-repo-node-expand-icon {
     cursor: pointer;
@@ -280,4 +302,34 @@
     margin-bottom: 0;
     padding: 0;
     list-style: none;
+}
+
+/* Highlight fetched files in node tree view */
+.git-repo-file-fetched {
+    /* Fetched files get a subtle background highlight */
+}
+
+.git-repo-file-fetched-label {
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+/* Also apply to node tree items (when using same classes) */
+/* Highlight fetched files - apply to content wrapper to avoid covering nested items */
+.git-repo-file-tree-item.git-repo-file-fetched > .git-repo-file-tree-item-content {
+    background: var(--bg-secondary); /* Gray background for fetched files */
+    border-left: 2px solid var(--accent-primary);
+    padding-left: 4px;
+    margin-left: -2px; /* Compensate for border */
+}
+
+/* When hovering fetched files, use light blue hover (overrides gray background) */
+.git-repo-file-tree-item.git-repo-file-fetched > .git-repo-file-tree-item-content:hover {
+    background: rgba(100, 150, 255, 0.15); /* Slightly more opaque for fetched files on hover */
+    border-left: 2px solid var(--accent-primary); /* Keep the accent border */
+}
+
+.git-repo-file-tree-item.git-repo-file-fetched .git-repo-file-fetched-label {
+    font-weight: 600;
+    color: var(--accent-primary);
 }
