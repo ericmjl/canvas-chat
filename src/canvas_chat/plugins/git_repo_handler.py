@@ -1,0 +1,494 @@
+"""Git Repository URL Fetch Handler Plugin
+
+Handles git repository URL fetching with file selection support.
+"""
+
+import logging
+import subprocess
+import tempfile
+from pathlib import Path
+
+from canvas_chat.url_fetch_handler_plugin import UrlFetchHandlerPlugin
+from canvas_chat.url_fetch_registry import PRIORITY, UrlFetchRegistry
+
+logger = logging.getLogger(__name__)
+
+
+class GitRepoHandler(UrlFetchHandlerPlugin):
+    """Handler for git repository URLs."""
+
+    def _normalize_url(self, url: str) -> str:
+        """Normalize git URL (add .git if missing, convert SSH to HTTPS).
+
+        Args:
+            url: Git repository URL
+
+        Returns:
+            Normalized URL
+        """
+        normalized_url = url
+        if url.startswith("git@"):
+            # Convert SSH URL to HTTPS
+            # git@github.com:user/repo.git -> https://github.com/user/repo.git
+            normalized_url = url.replace("git@", "https://").replace(":", "/", 1)
+        if not normalized_url.endswith(".git") and not normalized_url.endswith("/"):
+            normalized_url = normalized_url + ".git"
+        return normalized_url
+
+    def _extract_repo_name(self, url: str) -> str:
+        """Extract repository name from URL.
+
+        Args:
+            url: Git repository URL
+
+        Returns:
+            Repository name
+        """
+        normalized_url = self._normalize_url(url)
+        return normalized_url.rstrip("/").rstrip(".git").split("/")[-1]
+
+    def _clone_repository(self, url: str, repo_path: Path) -> None:
+        """Clone a git repository to the specified path.
+
+        Args:
+            url: Git repository URL
+            repo_path: Path where repository should be cloned
+
+        Raises:
+            Exception: If cloning fails
+        """
+        normalized_url = self._normalize_url(url)
+        logger.info(f"Cloning git repository: {normalized_url}")
+
+        try:
+            subprocess.run(
+                [
+                    "git",
+                    "clone",
+                    "--depth",
+                    "1",
+                    "--quiet",
+                    normalized_url,
+                    str(repo_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=True,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise Exception("Git clone timed out (repository may be too large)") from e
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr.strip() if e.stderr else "Unknown git error"
+            if (
+                "not found" in error_msg.lower()
+                or "does not exist" in error_msg.lower()
+            ):
+                raise Exception(
+                    "Repository not found (may be private or invalid URL)"
+                ) from e
+            raise Exception(f"Failed to clone repository: {error_msg}") from e
+        except FileNotFoundError as e:
+            raise Exception("Git is not installed or not available in PATH") from e
+
+    def _build_file_tree(self, repo_path: Path, base_path: Path = None) -> list[dict]:
+        """Build file tree structure from repository.
+
+        Args:
+            repo_path: Path to repository root
+            base_path: Base path for relative paths (defaults to repo_path)
+
+        Returns:
+            List of file tree items with structure:
+            [
+                {"path": "README.md", "type": "file", "size": 1234},
+                {"path": "src", "type": "directory", "children": [...]}
+            ]
+        """
+        if base_path is None:
+            base_path = repo_path
+
+        items = []
+        try:
+            for item_path in sorted(repo_path.iterdir()):
+                # Skip .git directory
+                if item_path.name == ".git":
+                    continue
+
+                rel_path = item_path.relative_to(base_path)
+                if item_path.is_file():
+                    try:
+                        size = item_path.stat().st_size
+                    except OSError:
+                        size = None
+                    items.append(
+                        {
+                            "path": str(rel_path),
+                            "type": "file",
+                            "size": size,
+                        }
+                    )
+                elif item_path.is_dir():
+                    children = self._build_file_tree(item_path, base_path)
+                    items.append(
+                        {
+                            "path": str(rel_path),
+                            "type": "directory",
+                            "children": children,
+                        }
+                    )
+        except PermissionError as e:
+            logger.warning(f"Permission denied accessing {repo_path}: {e}")
+
+        return items
+
+    def _get_smart_default_files(self, file_tree: dict) -> list[str]:
+        """Determine which files should be selected by default.
+
+        Args:
+            file_tree: File tree structure from list_files()
+
+        Returns:
+            List of file paths to select by default
+        """
+        selected = []
+
+        # README files
+        readme_patterns = ["README.md", "README.rst", "README.txt", "README"]
+        # Config files
+        config_files = [
+            ".gitignore",
+            "pyproject.toml",
+            "package.json",
+            "requirements.txt",
+            "Cargo.toml",
+            "go.mod",
+        ]
+        # Main entry points
+        main_files = ["main.py", "index.js", "index.ts", "app.py"]
+
+        def find_files(items, base_path=""):
+            for item in items:
+                full_path = f"{base_path}/{item['path']}" if base_path else item["path"]
+                if item["type"] == "file":
+                    name = item["path"].split("/")[-1]
+                    if (
+                        name in readme_patterns
+                        or name in config_files
+                        or name in main_files
+                        or full_path.startswith("src/")
+                        or full_path.startswith("lib/")
+                    ):
+                        selected.append(full_path)
+                elif item["type"] == "directory" and item.get("children"):
+                    find_files(item["children"], full_path)
+
+        find_files(file_tree["files"])
+        return selected[:20]  # Limit to prevent too many files
+
+    async def list_files(self, url: str) -> dict[str, any] | None:
+        """List files in a git repository.
+
+        Args:
+            url: Git repository URL
+
+        Returns:
+            Dictionary with file tree structure:
+            {
+                "files": [
+                    {"path": "README.md", "type": "file", "size": 1234},
+                    {"path": "src", "type": "directory", "children": [...]}
+                ]
+            }
+
+        Raises:
+            Exception: If repository cannot be cloned or accessed
+        """
+        repo_name = self._extract_repo_name(url)
+
+        # Create temporary directory for cloning
+        with tempfile.TemporaryDirectory(prefix="canvas-chat-git-") as temp_dir:
+            repo_path = Path(temp_dir) / repo_name
+
+            # Clone repository
+            self._clone_repository(url, repo_path)
+
+            # Build file tree
+            files = self._build_file_tree(repo_path)
+
+            return {"files": files}
+
+    async def fetch_selected_files(
+        self, url: str, file_paths: list[str]
+    ) -> dict[str, any]:
+        """Fetch content from selected files in a git repository.
+
+        Args:
+            url: Git repository URL
+            file_paths: List of file paths to fetch (e.g., ["README.md", "src/main.py"])
+
+        Returns:
+            Dictionary with:
+            - "title": str - Repository name
+            - "content": str - Markdown content from selected files
+
+        Raises:
+            Exception: If repository cannot be cloned or files cannot be read
+        """
+        repo_name = self._extract_repo_name(url)
+        normalized_url = self._normalize_url(url)
+
+        # Create temporary directory for cloning
+        with tempfile.TemporaryDirectory(prefix="canvas-chat-git-") as temp_dir:
+            repo_path = Path(temp_dir) / repo_name
+
+            # Clone repository
+            self._clone_repository(url, repo_path)
+
+            # Build content from selected files, grouped by directory
+            content_parts = []
+            content_parts.append(f"# {repo_name}\n\n")
+            content_parts.append(
+                f"**Repository:** [{normalized_url}]({normalized_url})\n\n"
+            )
+
+            max_file_size = 100 * 1024  # 100KB per file
+            max_total_size = 500 * 1024  # 500KB total limit
+            total_size = 0
+
+            # Group files by directory
+            files_by_dir = {}
+            root_files = []
+
+            for file_path_str in file_paths:
+                # Normalize path to prevent duplication issues
+                # Remove any leading slashes and normalize separators
+                normalized_path = file_path_str.lstrip("/").replace("\\", "/")
+                # Remove consecutive duplicate path segments
+                # (e.g., "src/src/vs" -> "src/vs")
+                # This handles cases where paths get duplicated during tree building
+                path_parts = []
+                for part in normalized_path.split("/"):
+                    if part:  # Skip empty parts
+                        # Only add if it's not the same as the last part
+                        # (prevents consecutive duplicates)
+                        if not path_parts or part != path_parts[-1]:
+                            path_parts.append(part)
+                normalized_path = (
+                    "/".join(path_parts) if path_parts else normalized_path
+                )
+
+                file_path = repo_path / normalized_path
+                if not file_path.exists() or not file_path.is_file():
+                    logger.warning(
+                        f"File not found: {normalized_path} (original: {file_path_str})"
+                    )
+                    # Still add to appropriate group for error display
+                    dir_path = str(Path(normalized_path).parent)
+                    if dir_path == "." or dir_path == "":
+                        root_files.append((normalized_path, None, "not_found", None))
+                    else:
+                        if dir_path not in files_by_dir:
+                            files_by_dir[dir_path] = []
+                        files_by_dir[dir_path].append(
+                            (normalized_path, None, "not_found", None)
+                        )
+                    continue
+
+                try:
+                    file_content = file_path.read_text(
+                        encoding="utf-8", errors="ignore"
+                    )
+                    file_size = len(file_content)
+
+                    # Truncate if too large
+                    if file_size > max_file_size:
+                        file_content = (
+                            file_content[:max_file_size] + "\n\n... (truncated)"
+                        )
+                        file_size = max_file_size
+
+                    # Check total size limit
+                    if total_size + file_size > max_total_size:
+                        remaining = max_total_size - total_size
+                        if remaining > 0:
+                            file_content = (
+                                file_content[:remaining]
+                                + "\n\n... (truncated due to total size limit)"
+                            )
+                        else:
+                            content_parts.append(
+                                "\n\n*Note: Some files were omitted due to "
+                                "total size limit (500KB)*\n"
+                            )
+                            break
+
+                    total_size += file_size
+
+                    # Determine file extension for syntax highlighting
+                    file_ext = Path(normalized_path).suffix.lstrip(".")
+                    lang = file_ext if file_ext else ""
+
+                    # Group by directory
+                    dir_path = str(Path(normalized_path).parent)
+                    if dir_path == "." or dir_path == "":
+                        root_files.append(
+                            (file_path_str, file_content, "success", lang)  # noqa: E501
+                        )
+                    else:
+                        if dir_path not in files_by_dir:
+                            files_by_dir[dir_path] = []
+                        files_by_dir[dir_path].append(
+                            (file_path_str, file_content, "success", lang)  # noqa: E501
+                        )
+
+                except PermissionError as e:
+                    logger.warning(f"Permission denied reading {file_path}: {e}")
+                    dir_path = str(Path(normalized_path).parent)
+                    if dir_path == "." or dir_path == "":
+                        root_files.append(
+                            (normalized_path, None, "permission_denied", None)
+                        )
+                    else:
+                        if dir_path not in files_by_dir:
+                            files_by_dir[dir_path] = []
+                        files_by_dir[dir_path].append(
+                            (normalized_path, None, "permission_denied", None)
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to read {file_path}: {e}")
+                    dir_path = str(Path(normalized_path).parent)
+                    if dir_path == "." or dir_path == "":
+                        root_files.append((normalized_path, None, "error", None))
+                    else:
+                        if dir_path not in files_by_dir:
+                            files_by_dir[dir_path] = []
+                        files_by_dir[dir_path].append(
+                            (normalized_path, None, "error", None)
+                        )
+
+            # Render files grouped by directory
+            # Root files first
+            if root_files:
+                content_parts.append("## Root Files\n\n")
+                for file_path_str, file_content, status, lang in root_files:
+                    if status == "not_found":
+                        content_parts.append(
+                            f"### {file_path_str}\n\n*File not found*\n\n"
+                        )
+                    elif status == "permission_denied":
+                        content_parts.append(
+                            f"### {file_path_str}\n\n*Permission denied*\n\n"
+                        )
+                    elif status == "error":
+                        content_parts.append(
+                            f"### {file_path_str}\n\n*Failed to read file*\n\n"
+                        )
+                    else:  # success
+                        if lang:
+                            content_parts.append(
+                                f"### {file_path_str}\n\n"
+                                f"```{lang}\n{file_content}\n```\n\n"
+                            )
+                        else:
+                            content_parts.append(
+                                f"### {file_path_str}\n\n```\n{file_content}\n```\n\n"
+                            )
+
+            # Then directories (sorted)
+            for dir_path in sorted(files_by_dir.keys()):
+                files = files_by_dir[dir_path]
+                file_count = len([f for f in files if f[2] == "success"])
+                content_parts.append(f"## Directory: {dir_path}/\n\n")
+                if file_count > 0:
+                    content_parts.append(
+                        f"*{file_count} file{'s' if file_count != 1 else ''} "
+                        f"selected*\n\n"
+                    )
+
+                for file_path_str, file_content, status, lang in files:
+                    if status == "not_found":
+                        content_parts.append(
+                            f"### {file_path_str}\n\n*File not found*\n\n"
+                        )
+                    elif status == "permission_denied":
+                        content_parts.append(
+                            f"### {file_path_str}\n\n*Permission denied*\n\n"
+                        )
+                    elif status == "error":
+                        content_parts.append(
+                            f"### {file_path_str}\n\n*Failed to read file*\n\n"
+                        )
+                    else:  # success
+                        if lang:
+                            content_parts.append(
+                                f"### {file_path_str}\n\n"
+                                f"```{lang}\n{file_content}\n```\n\n"
+                            )
+                        else:
+                            content_parts.append(
+                                f"### {file_path_str}\n\n```\n{file_content}\n```\n\n"
+                            )
+
+            content = "".join(content_parts)
+            return {"title": repo_name, "content": content}
+
+    async def fetch_url(self, url: str) -> dict[str, any]:
+        """Fetch URL content using smart defaults (for backward compatibility).
+
+        Args:
+            url: Git repository URL
+
+        Returns:
+            Dictionary with:
+            - "title": str - Repository name
+            - "content": str - Markdown content from smart default files
+
+        Raises:
+            Exception: If repository cannot be cloned or accessed
+        """
+        # Get file tree
+        file_tree = await self.list_files(url)
+        if not file_tree:
+            raise Exception("Failed to list repository files")
+
+        # Get smart defaults
+        default_files = self._get_smart_default_files(file_tree)
+
+        # If no smart defaults, return directory structure
+        if not default_files:
+            repo_name = self._extract_repo_name(url)
+            normalized_url = self._normalize_url(url)
+            content_parts = []
+            content_parts.append(f"# {repo_name}\n\n")
+            content_parts.append(
+                f"**Repository:** [{normalized_url}]({normalized_url})\n\n"
+            )
+            content_parts.append("## Repository Structure\n\n")
+            content_parts.append("```\n")
+            for item in file_tree["files"]:
+                if item["type"] == "directory":
+                    content_parts.append(f"{item['path']}/\n")
+                else:
+                    content_parts.append(f"{item['path']}\n")
+            content_parts.append("```\n\n")
+            content = "".join(content_parts)
+            return {"title": repo_name, "content": content}
+
+        # Fetch selected files
+        return await self.fetch_selected_files(url, default_files)
+
+
+# Register git repository handler
+UrlFetchRegistry.register(
+    id="git-repo",
+    url_patterns=[
+        r"^https?://(github|gitlab|bitbucket|gitea|codeberg)\.(com|org)/[\w\-\.]+/[\w\-\.]+(?:\.git)?/?$",
+        r"^git@[\w\-\.]+:[\w\-\.]+/[\w\-\.]+(?:\.git)?$",
+        r"^https?://[\w\-\.]+/([\w\-\.]+/)+[\w\-\.]+(?:\.git)?/?$",
+    ],
+    handler=GitRepoHandler,
+    priority=PRIORITY["BUILTIN"],
+)
+
+logger.info("Git repository URL fetch handler plugin loaded")

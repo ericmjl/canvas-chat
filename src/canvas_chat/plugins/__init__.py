@@ -1,4 +1,7 @@
 """Backend plugins for canvas-chat.
 
-This package contains backend file upload handler plugins.
+This package contains backend file upload handler plugins and URL fetch handler plugins.
 """
+
+# Import built-in URL fetch handler plugins (registers them)
+from canvas_chat.plugins import git_repo_handler  # noqa: F401

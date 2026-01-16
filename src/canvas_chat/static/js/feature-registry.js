@@ -12,6 +12,7 @@ import { FactcheckFeature } from './plugins/factcheck.js';
 import { ResearchFeature } from './plugins/research.js';
 import { CodeFeature } from './plugins/code.js';
 import { NoteFeature } from './plugins/note.js';
+import { GitRepoFeature } from './plugins/git-repo.js';
 
 /**
  * Priority levels for slash command resolution
@@ -131,6 +132,12 @@ class FeatureRegistry {
                         handler: 'handleCommand',
                     },
                 ],
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'git-repo',
+                feature: GitRepoFeature,
+                slashCommands: [], // No slash command - called by NoteFeature
                 priority: PRIORITY.BUILTIN,
             },
         ];

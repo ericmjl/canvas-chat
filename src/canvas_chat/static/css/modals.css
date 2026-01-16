@@ -1382,6 +1382,7 @@ kbd {
     width: auto;
 }
 
+/* Git Repository File Selection Modal */
 /* Cell Detail Modal */
 .cell-detail-row {
     margin-bottom: 16px;

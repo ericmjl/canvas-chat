@@ -242,6 +242,79 @@ class FeaturePlugin {
             this.featureRegistry.emit(eventName, event);
         }
     }
+
+    /**
+     * Inject CSS styles for this plugin.
+     * This allows plugins to be self-contained with their own styles.
+     *
+     * @param {string} css - CSS string to inject
+     * @param {string} [id] - Optional unique ID for the style element (defaults to plugin class name)
+     * @returns {HTMLStyleElement} The created style element
+     */
+    injectCSS(css, id = null) {
+        if (!css || typeof css !== 'string') {
+            console.warn('[FeaturePlugin] injectCSS: CSS must be a non-empty string');
+            return null;
+        }
+
+        // Generate ID from class name if not provided
+        if (!id) {
+            id = `plugin-styles-${this.constructor.name.toLowerCase()}`;
+        }
+
+        // Check if style element already exists
+        let styleElement = document.getElementById(id);
+        if (styleElement) {
+            // Update existing styles
+            styleElement.textContent = css;
+            return styleElement;
+        }
+
+        // Create new style element
+        styleElement = document.createElement('style');
+        styleElement.id = id;
+        styleElement.textContent = css;
+        document.head.appendChild(styleElement);
+
+        return styleElement;
+    }
+
+    /**
+     * Inject CSS from a URL (for external plugins).
+     * Creates a <link> element to load CSS from a remote or local URL.
+     *
+     * @param {string} url - URL to the CSS file
+     * @param {string} [id] - Optional unique ID for the link element
+     * @returns {HTMLLinkElement} The created link element
+     */
+    injectCSSFromURL(url, id = null) {
+        if (!url || typeof url !== 'string') {
+            console.warn('[FeaturePlugin] injectCSSFromURL: URL must be a non-empty string');
+            return null;
+        }
+
+        // Generate ID from class name if not provided
+        if (!id) {
+            id = `plugin-styles-${this.constructor.name.toLowerCase()}`;
+        }
+
+        // Check if link element already exists
+        let linkElement = document.getElementById(id);
+        if (linkElement) {
+            // Update existing link
+            linkElement.href = url;
+            return linkElement;
+        }
+
+        // Create new link element
+        linkElement = document.createElement('link');
+        linkElement.id = id;
+        linkElement.rel = 'stylesheet';
+        linkElement.href = url;
+        document.head.appendChild(linkElement);
+
+        return linkElement;
+    }
 }
 
 export { AppContext, FeaturePlugin };
