@@ -663,6 +663,11 @@ def register_endpoints(app):
             file_tree = await handler.list_files(
                 request.url, git_credentials=request.git_credentials
             )
+            if file_tree is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Handler does not support file listing for this URL",
+                )
             return ListFilesResult(url=request.url, files=file_tree["files"])
         except HTTPException:
             raise
