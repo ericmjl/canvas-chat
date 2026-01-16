@@ -45,7 +45,12 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
             Repository name
         """
         normalized_url = self._normalize_url(url)
-        return normalized_url.rstrip("/").rstrip(".git").split("/")[-1]
+        # Remove trailing slash
+        normalized_url = normalized_url.rstrip("/")
+        # Remove .git suffix if present (must be exact match, not rstrip)
+        if normalized_url.endswith(".git"):
+            normalized_url = normalized_url[:-4]
+        return normalized_url.split("/")[-1]
 
     def _clone_repository(self, url: str, repo_path: Path) -> None:
         """Clone a git repository to the specified path.
