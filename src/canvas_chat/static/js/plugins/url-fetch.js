@@ -162,16 +162,6 @@ export class UrlFetchFeature extends FeaturePlugin {
             const metadata = data.metadata || {};
             const contentType = metadata.content_type;
 
-            // Debug: log what we received from backend
-            console.log('[UrlFetchFeature] Backend response:', {
-                url,
-                title: data.title,
-                contentLength: data.content?.length,
-                metadata: data.metadata,
-                metadataKeys: data.metadata ? Object.keys(data.metadata) : [],
-                contentType,
-            });
-
             // For YouTube videos: extract transcript from content, show video in main content
             let nodeContent = data.content;
             if (contentType === 'youtube' && metadata.video_id) {
@@ -218,16 +208,6 @@ export class UrlFetchFeature extends FeaturePlugin {
                 // graph.updateNode is synchronous, so the node should be updated immediately
                 const updatedNode = this.graph.getNode(fetchNode.id);
                 if (updatedNode) {
-                    // Debug: verify node has correct data
-                    console.log('[UrlFetchFeature] YouTube node data:', {
-                        id: updatedNode.id,
-                        contentType: updatedNode.metadata?.content_type,
-                        videoId: updatedNode.metadata?.video_id,
-                        youtubeVideoId: updatedNode.youtubeVideoId,
-                        hasMetadata: !!updatedNode.metadata,
-                        metadata: updatedNode.metadata,
-                    });
-
                     // Full re-render to show video in main content and transcript in drawer
                     // This will call renderContent() (shows video) and renderOutputPanel() (shows transcript)
                     this.canvas.renderNode(updatedNode);
