@@ -20,7 +20,6 @@ const modKeyLong = isMac ? 'Cmd' : 'Ctrl'; // For longer tooltips
 const Actions = {
     REPLY: { id: 'reply', label: '↩️ Reply (r)', title: 'Reply (r)' },
     BRANCH: { id: 'branch', label: '🌿 Branch', title: 'Branch from selection' },
-    SUMMARIZE: { id: 'summarize', label: '📝 Summarize', title: 'Summarize' },
     FETCH_SUMMARIZE: {
         id: 'fetch-summarize',
         label: '📄 Fetch & Summarize',
@@ -31,7 +30,7 @@ const Actions = {
         label: '✏️ Edit (e)',
         title: `Edit content (e, save with ${modKeyLong}+Enter)`,
     },
-    RESUMMARIZE: { id: 'resummarize', label: '📝 Re-summarize', title: 'Create new summary from edited content' },
+    SUMMARIZE: { id: 'summarize', label: '📝 Summarize', title: 'Create new summary from edited content' },
     COPY: { id: 'copy', label: '📋 Copy (c)', title: 'Copy (c)' },
     FLIP_CARD: { id: 'flip-card', label: '🔄 Flip', title: 'Flip card to see answer' },
     CREATE_FLASHCARDS: { id: 'create-flashcards', label: '🎴 Flashcards', title: 'Generate flashcards from content' },

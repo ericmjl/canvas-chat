@@ -449,12 +449,12 @@ test('getActions: ReferenceNode includes FETCH_SUMMARIZE', () => {
     assertIncludes(actions, Actions.FETCH_SUMMARIZE);
 });
 
-test('getComputedActions: FetchResultNode includes EDIT_CONTENT and RESUMMARIZE', () => {
+test('getComputedActions: FetchResultNode includes EDIT_CONTENT and SUMMARIZE', () => {
     const node = { type: NodeType.FETCH_RESULT, content: 'Content' };
     const wrapped = wrapNode(node);
     const actions = wrapped.getComputedActions();
     assertIncludes(actions, Actions.EDIT_CONTENT);
-    assertIncludes(actions, Actions.RESUMMARIZE);
+    assertIncludes(actions, Actions.SUMMARIZE);
 });
 
 // Note: NoteNode is now a plugin - test via NodeRegistry

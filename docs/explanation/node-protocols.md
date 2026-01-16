@@ -126,7 +126,7 @@ All node classes extend `BaseNode`, which provides default implementations for a
 - `CellNode` - Pinned cells from matrices (can have contextual titles)
 - `RowNode` - Extracted rows from matrices
 - `ColumnNode` - Extracted columns from matrices
-- `FetchResultNode` - Fetched content from URLs (includes Edit and Re-summarize actions)
+- `FetchResultNode` - Fetched content from URLs (includes Edit and Summarize actions)
 - `PdfNode` - Imported PDF documents
 - `OpinionNode` - Committee member opinions (includes Stop/Continue buttons)
 - `SynthesisNode` - Chairman's synthesized answers (includes Stop/Continue buttons)

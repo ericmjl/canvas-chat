@@ -136,7 +136,7 @@ test('FetchResultNode includes default actions plus additional', () => {
     assertTrue(actions.some((a) => a.id === 'reply'));
     assertTrue(actions.some((a) => a.id === 'edit-content'));
     assertTrue(actions.some((a) => a.id === 'copy'));
-    assertTrue(actions.some((a) => a.id === 'resummarize'));
+    assertTrue(actions.some((a) => a.id === 'summarize'));
     assertTrue(actions.some((a) => a.id === 'create-flashcards'));
 });
 
