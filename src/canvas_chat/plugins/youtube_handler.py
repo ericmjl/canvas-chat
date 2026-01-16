@@ -80,60 +80,73 @@ class YouTubeHandler(UrlFetchHandlerPlugin):
         logger.info(f"Fetching transcript for YouTube video: {video_id}")
 
         try:
+            # Create API instance (required in v1.2.3+)
+            api = YouTubeTranscriptApi()
+
             # Try to fetch transcript - prefer English, fallback to any language
             transcript_data = None
             language_code = "en"
+            is_generated = False
 
             try:
                 # First, try to list available transcripts to get better control
-                try:
-                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                    # Find English transcript (prefers manual, then auto-generated)
-                    transcript = transcript_list.find_transcript(["en"])
-                    transcript_data = transcript.fetch()
-                    language_code = transcript.language_code
-                    is_generated = transcript.is_generated
-                except (AttributeError, NoTranscriptFound):
-                    # If list_transcripts doesn't exist, fall back to get_transcript
-                    # This handles older versions of the library
-                    transcript_data = YouTubeTranscriptApi.get_transcript(
-                        video_id, languages=["en"]
-                    )
-                    is_generated = False  # Can't determine from simple API
+                transcript_list = api.list(video_id)
+                # Find English transcript (prefers manual, then auto-generated)
+                transcript = transcript_list.find_transcript(["en"])
+                fetched_transcript = transcript.fetch()
+                # Convert FetchedTranscript to list of dicts
+                transcript_data = [
+                    {
+                        "text": snippet.text,
+                        "start": snippet.start,
+                        "duration": snippet.duration,
+                    }
+                    for snippet in fetched_transcript
+                ]
+                language_code = transcript.language_code
+                is_generated = transcript.is_generated
             except NoTranscriptFound:
                 # English not available, try any language
                 try:
-                    transcript_data = YouTubeTranscriptApi.get_transcript(video_id)
-                    is_generated = False
+                    # Use fetch() which tries multiple languages
+                    fetched_transcript = api.fetch(video_id, languages=["en"])
+                    transcript_data = [
+                        {
+                            "text": snippet.text,
+                            "start": snippet.start,
+                            "duration": snippet.duration,
+                        }
+                        for snippet in fetched_transcript
+                    ]
+                    is_generated = False  # Can't determine from simple fetch
                 except NoTranscriptFound:
                     # Try listing to get any available transcript
-                    try:
-                        transcript_list = YouTubeTranscriptApi.list_transcripts(
-                            video_id
-                        )
-                        available = list(transcript_list)
-                        if available:
-                            # Prefer manually created transcripts
-                            manual = [t for t in available if not t.is_generated]
-                            if manual:
-                                transcript = manual[0]
-                            else:
-                                transcript = available[0]
-                            transcript_data = transcript.fetch()
-                            language_code = transcript.language_code
-                            is_generated = transcript.is_generated
+                    transcript_list = api.list(video_id)
+                    available = list(transcript_list)
+                    if available:
+                        # Prefer manually created transcripts
+                        manual = [t for t in available if not t.is_generated]
+                        if manual:
+                            transcript = manual[0]
                         else:
-                            raise NoTranscriptFound(
-                                video_id,
-                                None,
-                                f"No transcripts found for video {video_id}",
-                            )
-                    except (AttributeError, NoTranscriptFound) as e:
+                            transcript = available[0]
+                        fetched_transcript = transcript.fetch()
+                        transcript_data = [
+                            {
+                                "text": snippet.text,
+                                "start": snippet.start,
+                                "duration": snippet.duration,
+                            }
+                            for snippet in fetched_transcript
+                        ]
+                        language_code = transcript.language_code
+                        is_generated = transcript.is_generated
+                    else:
                         raise NoTranscriptFound(
                             video_id,
                             None,
-                            f"No transcript available for video {video_id}",
-                        ) from e
+                            f"No transcripts found for video {video_id}",
+                        ) from None
 
             # Format as markdown
             content_parts = ["# YouTube Video Transcript\n\n"]
