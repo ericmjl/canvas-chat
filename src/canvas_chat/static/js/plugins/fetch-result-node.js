@@ -11,10 +11,34 @@ import { NodeRegistry } from '../node-registry.js';
 
 class FetchResultNode extends BaseNode {
     getTypeLabel() {
+        // Show content-type-specific labels
+        const metadata = this.node.metadata || {};
+        const contentType = metadata.content_type;
+
+        if (contentType === 'pdf') {
+            return 'PDF';
+        } else if (contentType === 'youtube') {
+            return 'YouTube Video';
+        } else if (contentType === 'git') {
+            return 'Git Repository';
+        }
+
         return 'Fetched Content';
     }
 
     getTypeIcon() {
+        // Show content-type-specific icons
+        const metadata = this.node.metadata || {};
+        const contentType = metadata.content_type;
+
+        if (contentType === 'pdf') {
+            return '📑';
+        } else if (contentType === 'youtube') {
+            return '▶️';
+        } else if (contentType === 'git') {
+            return '📦';
+        }
+
         return '📄';
     }
 
@@ -27,9 +51,14 @@ class FetchResultNode extends BaseNode {
      * For YouTube videos, show embedded video. Otherwise, show markdown content.
      */
     renderContent(canvas) {
+        // Read metadata (unified format)
+        const metadata = this.node.metadata || {};
+        const contentType = metadata.content_type;
+
         // If this is a YouTube video, show embedded video in main content
-        if (this.node.youtubeVideoId) {
-            const videoId = this.node.youtubeVideoId;
+        // Support both old format (youtubeVideoId) and new format (metadata.video_id)
+        const videoId = this.node.youtubeVideoId || metadata.video_id;
+        if (contentType === 'youtube' && videoId) {
             const embedUrl = `https://www.youtube.com/embed/${videoId}`;
 
             return `
@@ -54,15 +83,20 @@ class FetchResultNode extends BaseNode {
      */
     hasOutput() {
         // YouTube videos always have transcripts in the output panel
-        return !!this.node.youtubeVideoId;
+        // Support both old format (youtubeVideoId) and new format (metadata.video_id)
+        const metadata = this.node.metadata || {};
+        return !!(this.node.youtubeVideoId || (metadata.content_type === 'youtube' && metadata.video_id));
     }
 
     /**
      * Render the output panel content (transcript for YouTube videos)
      */
     renderOutputPanel(canvas) {
-        const videoId = this.node.youtubeVideoId;
-        if (!videoId) {
+        // Support both old format (youtubeVideoId) and new format (metadata.video_id)
+        const metadata = this.node.metadata || {};
+        const videoId = this.node.youtubeVideoId || metadata.video_id;
+
+        if (!videoId || metadata.content_type !== 'youtube') {
             return '';
         }
 

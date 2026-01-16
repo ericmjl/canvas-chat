@@ -62,6 +62,11 @@ class PdfFileUploadHandler(FileUploadHandlerPlugin):
             "content": content,
             "title": title,
             "page_count": page_count,
+            "metadata": {
+                "content_type": "pdf",
+                "page_count": page_count,
+                "source": "upload",
+            },
         }
 
     def extract_text_from_pdf(self, pdf_bytes: bytes) -> tuple[str, int]:

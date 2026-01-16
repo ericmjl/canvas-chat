@@ -59,8 +59,9 @@ class PdfFileUploadHandler extends FileUploadHandlerPlugin {
         this.validateFile(file, MAX_SIZE, 'PDF');
 
         // Create a placeholder node while processing
+        // Use FETCH_RESULT node type (unified with fetched PDFs)
         const nodePosition = position || this.graph.autoPosition([]);
-        const pdfNode = createNode(NodeType.PDF, `Processing PDF: ${file.name}...`, {
+        const pdfNode = createNode(NodeType.FETCH_RESULT, `Processing PDF: ${file.name}...`, {
             position: nodePosition,
         });
 
@@ -84,10 +85,15 @@ class PdfFileUploadHandler extends FileUploadHandlerPlugin {
 
             const data = await response.json();
 
-            // Update the node with the extracted content
+            // Update the node with the extracted content and metadata
+            // Store metadata to identify this as a PDF (unified with fetched PDFs)
             this.updateNodeAfterProcessing(pdfNode.id, data.content, {
                 title: data.title,
-                page_count: data.page_count,
+                metadata: {
+                    content_type: 'pdf',
+                    page_count: data.page_count,
+                    source: 'upload',
+                },
             });
 
             return pdfNode;

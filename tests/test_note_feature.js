@@ -115,7 +115,7 @@ await asyncTest('NoteFeature registers /note slash command', async () => {
     assertEqual(slashCommands[0].command, '/note', 'Command should be /note');
     assertEqual(
         slashCommands[0].description,
-        'Add a note or fetch URL content',
+        'Add a note with markdown content',
         'Description should match'
     );
 });

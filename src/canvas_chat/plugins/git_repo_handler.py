@@ -516,7 +516,10 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
             return {
                 "title": repo_name,
                 "content": content,
-                "files": files_data,  # Map of file paths to file data for drawer
+                "metadata": {
+                    "content_type": "git",
+                    "files": files_data,  # Map of file paths to file data for drawer
+                },
             }
 
     async def fetch_url(self, url: str) -> dict[str, any]:
@@ -703,12 +706,12 @@ def register_endpoints(app):
                 request.file_paths,
                 git_credentials=request.git_credentials,
             )
-            # Return result with files data if present (for git repo drawer)
+            # Return result with metadata (files data for git repo drawer)
             return FetchUrlResult(
                 url=request.url,
                 title=result["title"],
                 content=result["content"],
-                files=result.get("files"),  # Optional: file content map for drawer
+                metadata=result.get("metadata", {}),
             )
         except HTTPException:
             raise

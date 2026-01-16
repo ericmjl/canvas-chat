@@ -51,6 +51,7 @@ from canvas_chat.file_upload_registry import FileUploadRegistry
 from canvas_chat.plugins import (
     git_repo_handler,  # noqa: F401
     pdf_handler,  # noqa: F401
+    pdf_url_handler,  # noqa: F401
     youtube_handler,  # noqa: F401
 )
 from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE
@@ -2296,10 +2297,9 @@ class FetchUrlResult(BaseModel):
     url: str
     title: str
     content: str  # Markdown content
-    video_id: str | None = None  # Optional: YouTube video ID for embedding
-    files: dict[str, dict[str, Any]] | None = (
-        None  # Optional: file content map for drawer (path -> {content, lang, status})
-    )
+    metadata: dict[
+        str, Any
+    ] = {}  # Plugin-specific metadata (e.g., video_id, files, page_count)
 
 
 # --- PDF Upload/Fetch Models ---

@@ -773,12 +773,14 @@ export class GitRepoFeature extends FeaturePlugin {
             }
 
             // Store git repo data in node instead of markdown content
+            // Read files from metadata (unified fetch response format)
+            const metadata = data.metadata || {};
             const gitRepoData = {
                 url,
                 title: data.title,
                 fileTree: fileTree || [],
                 selectedFiles: selectedPaths,
-                files: data.files || {}, // Map of file paths to file data (content, lang, status)
+                files: metadata.files || {}, // Map of file paths to file data (content, lang, status)
             };
 
             // Update node with git repo data

@@ -1078,6 +1078,15 @@ Always use in-app modals for user interactions that require confirmation or inpu
 
 ## Testing
 
+**CRITICAL:** Always run unit tests after making code changes to ensure nothing is broken.
+
+```bash
+pixi run test      # Python tests
+pixi run test-js   # JavaScript tests
+```
+
+Run both test suites before committing changes. If tests fail, fix the issues before proceeding.
+
 Run the dev server with `pixi run dev` before testing UI changes.
 
 **Important:** Never kill the dev server process. The developer runs it in reload mode,

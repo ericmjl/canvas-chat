@@ -60,17 +60,9 @@ export class UrlFetchFeature extends FeaturePlugin {
             }
         }
 
-        // Check if URL is a PDF
-        const isPdfUrl = /\.pdf(\?.*)?$/i.test(url);
-
-        if (isPdfUrl) {
-            // Fetch PDF and extract text
-            await this.handlePdfUrl(url);
-        } else {
-            // Fetch URL content via unified backend endpoint
-            // Backend will route to appropriate handler via UrlFetchRegistry
-            await this.handleWebUrl(url);
-        }
+        // All URLs (PDFs, YouTube, HTML, etc.) go through unified endpoint
+        // Backend will route to appropriate handler via UrlFetchRegistry
+        await this.handleWebUrl(url);
     }
 
     /**
@@ -166,9 +158,13 @@ export class UrlFetchFeature extends FeaturePlugin {
 
             const data = await response.json();
 
+            // Extract metadata from response
+            const metadata = data.metadata || {};
+            const contentType = metadata.content_type;
+
             // For YouTube videos: extract transcript from content, show video in main content
             let nodeContent = data.content;
-            if (data.video_id) {
+            if (contentType === 'youtube' && metadata.video_id) {
                 // Extract transcript (everything after "---\n\n" separator)
                 const transcriptStart = data.content.indexOf('---\n\n');
                 if (transcriptStart !== -1) {
@@ -180,9 +176,10 @@ export class UrlFetchFeature extends FeaturePlugin {
                 nodeContent = `**[${data.title}](${url})**\n\n${data.content}`;
             }
 
-            // Store YouTube video ID if present (for embedding)
+            // Store metadata and configure node based on content type
             const updateData = {
                 content: nodeContent,
+                metadata: metadata, // Store full metadata
                 versions: [
                     {
                         content: nodeContent,
@@ -191,8 +188,10 @@ export class UrlFetchFeature extends FeaturePlugin {
                     },
                 ],
             };
-            if (data.video_id) {
-                updateData.youtubeVideoId = data.video_id;
+
+            // YouTube-specific configuration
+            if (contentType === 'youtube' && metadata.video_id) {
+                updateData.youtubeVideoId = metadata.video_id; // Keep for backward compatibility
                 // Open drawer by default for YouTube videos to show transcript
                 updateData.outputExpanded = true;
                 // Set a reasonable default height for transcript panel
@@ -204,30 +203,14 @@ export class UrlFetchFeature extends FeaturePlugin {
 
             // For YouTube videos, do full re-render to show video and output panel
             // For other URLs, just update content display
-            if (data.video_id) {
+            if (contentType === 'youtube' && metadata.video_id) {
                 // Get the updated node from graph (with youtubeVideoId and outputExpanded)
                 // graph.updateNode is synchronous, so the node should be updated immediately
                 const updatedNode = this.graph.getNode(fetchNode.id);
                 if (updatedNode) {
-                    // Verify node has the required properties
-                    if (!updatedNode.youtubeVideoId) {
-                        console.warn('[UrlFetchFeature] Node missing youtubeVideoId after update');
-                    }
-                    if (updatedNode.outputExpanded !== true) {
-                        console.warn('[UrlFetchFeature] Node outputExpanded not set to true:', updatedNode.outputExpanded);
-                    }
-
                     // Full re-render to show video in main content and transcript in drawer
                     // This will call renderContent() (shows video) and renderOutputPanel() (shows transcript)
                     this.canvas.renderNode(updatedNode);
-
-                    // Verify output panel was created
-                    setTimeout(() => {
-                        const panelWrapper = this.canvas.outputPanels?.get(fetchNode.id);
-                        if (!panelWrapper) {
-                            console.warn('[UrlFetchFeature] Output panel not created for YouTube video node');
-                        }
-                    }, 100);
                 }
             } else {
                 // For non-YouTube URLs, just update content display
@@ -244,72 +227,6 @@ export class UrlFetchFeature extends FeaturePlugin {
         }
     }
 
-    /**
-     * Fetch a PDF from URL and create a PDF node with extracted text.
-     * @param {string} url - The URL of the PDF to fetch
-     */
-    async handlePdfUrl(url) {
-        // Get selected nodes (if any) to link the PDF to
-        const parentIds = this.canvas.getSelectedNodeIds();
-
-        // Create a placeholder node while fetching
-        const pdfNode = createNode(NodeType.PDF, `Fetching PDF from:\n${url}...`, {
-            position: this.graph.autoPosition(parentIds),
-        });
-
-        this.graph.addNode(pdfNode);
-
-        // Create edges from parents (if replying to selected nodes)
-        for (const parentId of parentIds) {
-            const edge = createEdge(
-                parentId,
-                pdfNode.id,
-                parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY
-            );
-            this.graph.addEdge(edge);
-        }
-
-        // Clear input
-        this.chatInput.value = '';
-        this.chatInput.style.height = 'auto';
-        this.canvas.clearSelection();
-        this.saveSession?.();
-        this.updateEmptyState?.();
-
-        // Pan to the new node
-        this.canvas.centerOnAnimated(pdfNode.position.x + 160, pdfNode.position.y + 100, 300);
-
-        try {
-            // Fetch PDF content via backend
-            const response = await fetch(apiUrl('/api/fetch-pdf'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to fetch PDF');
-            }
-
-            const data = await response.json();
-
-            // Update the node with the extracted content
-            this.canvas.updateNodeContent(pdfNode.id, data.content, false);
-            this.graph.updateNode(pdfNode.id, {
-                content: data.content,
-                title: data.title,
-                page_count: data.page_count,
-            });
-            this.saveSession?.();
-        } catch (err) {
-            // Update node with error message
-            const errorContent = `**Failed to fetch PDF**\n\n${url}\n\n*Error: ${err.message}*`;
-            this.canvas.updateNodeContent(pdfNode.id, errorContent, false);
-            this.graph.updateNode(pdfNode.id, { content: errorContent });
-            this.saveSession?.();
-        }
-    }
 }
 
 console.log('URL Fetch plugin loaded');

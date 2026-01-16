@@ -171,7 +171,16 @@ class YouTubeHandler(UrlFetchHandlerPlugin):
             # but that requires API key)
             title = f"YouTube Video: {video_id}"
 
-            return {"title": title, "content": content, "video_id": video_id}
+            return {
+                "title": title,
+                "content": content,
+                "metadata": {
+                    "content_type": "youtube",
+                    "video_id": video_id,
+                    "language": language_code,
+                    "is_generated": is_generated,
+                },
+            }
 
         except TranscriptsDisabled:
             raise Exception(f"Transcripts are disabled for video {video_id}") from None
