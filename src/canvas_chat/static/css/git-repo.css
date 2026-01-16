@@ -333,3 +333,47 @@
     font-weight: 600;
     color: var(--accent-primary);
 }
+
+/* File drawer panel styles (reuse code output panel architecture) */
+.git-repo-file-panel-content {
+    min-height: 0;
+}
+
+.git-repo-file-panel-header {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--bg-secondary);
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.git-repo-file-panel-lang {
+    color: var(--text-muted);
+    font-weight: normal;
+    font-size: 12px;
+}
+
+.git-repo-file-panel-error {
+    padding: 16px;
+    color: var(--text-error);
+    font-style: italic;
+}
+
+.git-repo-file-panel-code {
+    background: var(--color-bg-code, #1e1e1e);
+    color: var(--color-text-code, #d4d4d4);
+    padding: 12px;
+    margin: 0;
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.git-repo-file-panel-code code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+    font-family: inherit;
+}

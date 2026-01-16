@@ -7,6 +7,7 @@ import logging
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from canvas_chat.url_fetch_handler_plugin import UrlFetchHandlerPlugin
 from canvas_chat.url_fetch_registry import PRIORITY, UrlFetchRegistry
@@ -236,6 +237,11 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
             Dictionary with:
             - "title": str - Repository name
             - "content": str - Markdown content from selected files
+            - "files": dict[str, dict] - Map of file paths to file data:
+                - "content": str - Raw file content
+                - "lang": str - Language for syntax highlighting
+                - "status": str - "success", "not_found", "permission_denied",
+                  or "error"
 
         Raises:
             Exception: If repository cannot be cloned or files cannot be read
@@ -260,6 +266,10 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
             max_file_size = 100 * 1024  # 100KB per file
             max_total_size = 500 * 1024  # 500KB total limit
             total_size = 0
+
+            # Store file content separately for drawer
+            # (map of path -> {content, lang, status})
+            files_data = {}
 
             # Group files by directory
             files_by_dir = {}
@@ -288,6 +298,13 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
                     logger.warning(
                         f"File not found: {normalized_path} (original: {file_path_str})"
                     )
+                    # Store error state for drawer
+                    files_data[file_path_str] = {
+                        "content": None,
+                        "lang": None,
+                        "status": "not_found",
+                    }
+
                     # Still add to appropriate group for error display
                     dir_path = str(Path(normalized_path).parent)
                     if dir_path == "." or dir_path == "":
@@ -334,6 +351,13 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
                     file_ext = Path(normalized_path).suffix.lstrip(".")
                     lang = file_ext if file_ext else ""
 
+                    # Store file data for drawer (use original file_path_str as key)
+                    files_data[file_path_str] = {
+                        "content": file_content,
+                        "lang": lang,
+                        "status": "success",
+                    }
+
                     # Group by directory
                     dir_path = str(Path(normalized_path).parent)
                     if dir_path == "." or dir_path == "":
@@ -349,6 +373,12 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
 
                 except PermissionError as e:
                     logger.warning(f"Permission denied reading {file_path}: {e}")
+                    # Store error state for drawer
+                    files_data[file_path_str] = {
+                        "content": None,
+                        "lang": None,
+                        "status": "permission_denied",
+                    }
                     dir_path = str(Path(normalized_path).parent)
                     if dir_path == "." or dir_path == "":
                         root_files.append(
@@ -362,6 +392,12 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
                         )
                 except Exception as e:
                     logger.warning(f"Failed to read {file_path}: {e}")
+                    # Store error state for drawer
+                    files_data[file_path_str] = {
+                        "content": None,
+                        "lang": None,
+                        "status": "error",
+                    }
                     dir_path = str(Path(normalized_path).parent)
                     if dir_path == "." or dir_path == "":
                         root_files.append((normalized_path, None, "error", None))
@@ -436,7 +472,11 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
                             )
 
             content = "".join(content_parts)
-            return {"title": repo_name, "content": content}
+            return {
+                "title": repo_name,
+                "content": content,
+                "files": files_data,  # Map of file paths to file data for drawer
+            }
 
     async def fetch_url(self, url: str) -> dict[str, any]:
         """Fetch URL content using smart defaults (for backward compatibility).
@@ -497,3 +537,128 @@ UrlFetchRegistry.register(
 )
 
 logger.info("Git repository URL fetch handler plugin loaded")
+
+
+# =============================================================================
+# FastAPI Endpoint Registration
+# =============================================================================
+
+
+def register_endpoints(app):
+    """Register FastAPI endpoints for git repository handling.
+
+    This function is called from app.py to register plugin-specific endpoints.
+    This keeps the endpoints self-contained within the plugin.
+
+    Args:
+        app: FastAPI application instance
+    """
+    from fastapi import HTTPException
+    from pydantic import BaseModel
+
+    # Request/Response models (defined here to keep them with the plugin)
+    class ListFilesRequest(BaseModel):
+        """Request body for listing files in a git repository."""
+
+        url: str
+
+    class FileTreeItem(BaseModel):
+        """File tree item structure."""
+
+        path: str
+        type: str  # "file" or "directory"
+        size: int | None = None
+        children: list["FileTreeItem"] | None = None
+
+    class ListFilesResult(BaseModel):
+        """Result from listing files."""
+
+        url: str
+        files: list[FileTreeItem]
+
+    class FetchFilesRequest(BaseModel):
+        """Request body for fetching selected files from a git repository."""
+
+        url: str
+        file_paths: list[str]
+
+    class FetchUrlResult(BaseModel):
+        """Result from fetching a URL."""
+
+        url: str
+        title: str
+        content: str  # Markdown content
+        files: dict[str, dict[str, Any]] | None = (
+            None  # Optional: file content map for drawer
+        )
+
+    @app.post("/api/url-fetch/list-files", response_model=ListFilesResult)
+    async def list_url_fetch_files(request: ListFilesRequest):
+        """List files available for selection from a URL (plugin-based).
+
+        Uses UrlFetchRegistry to find the appropriate handler for the URL.
+        Only handlers that support file listing (have list_files method) can be used.
+        """
+        logger.info(f"List URL fetch files request: url='{request.url}'")
+
+        try:
+            handler_config = UrlFetchRegistry.find_handler(request.url)
+            if not handler_config:
+                raise HTTPException(
+                    status_code=400,
+                    detail="URL is not supported by any registered handler",
+                )
+
+            handler = handler_config["handler"]()
+            if not hasattr(handler, "list_files"):
+                raise HTTPException(
+                    status_code=400, detail="Handler does not support file listing"
+                )
+
+            file_tree = await handler.list_files(request.url)
+            return ListFilesResult(url=request.url, files=file_tree["files"])
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"List URL fetch files failed: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/api/url-fetch/fetch-files", response_model=FetchUrlResult)
+    async def fetch_url_fetch_files(request: FetchFilesRequest):
+        """Fetch content from selected files from a URL (plugin-based).
+
+        Uses UrlFetchRegistry to find the appropriate handler for the URL.
+        """
+        logger.info(
+            f"Fetch URL fetch files request: url='{request.url}', "
+            f"files={len(request.file_paths)}"
+        )
+
+        try:
+            handler_config = UrlFetchRegistry.find_handler(request.url)
+            if not handler_config:
+                raise HTTPException(
+                    status_code=400,
+                    detail="URL is not supported by any registered handler",
+                )
+
+            handler = handler_config["handler"]()
+            result = await handler.fetch_selected_files(request.url, request.file_paths)
+            # Return result with files data if present (for git repo drawer)
+            return FetchUrlResult(
+                url=request.url,
+                title=result["title"],
+                content=result["content"],
+                files=result.get("files"),  # Optional: file content map for drawer
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Fetch URL fetch files failed: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=str(e)) from e

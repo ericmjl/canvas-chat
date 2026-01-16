@@ -1862,8 +1862,12 @@ class Canvas {
         this.setupNodeEvents(wrapper, node);
 
         // Render output panel for nodes that support it (if they have output)
-        if (wrapped.hasOutput && wrapped.hasOutput()) {
-            this.renderOutputPanel(node, wrapper);
+        // Check if protocol has hasOutput method and it returns true
+        if (wrapped.hasOutput && typeof wrapped.hasOutput === 'function') {
+            const hasOutput = wrapped.hasOutput();
+            if (hasOutput) {
+                this.renderOutputPanel(node, wrapper);
+            }
         }
 
         // Restore selection state if node was previously selected
@@ -1900,7 +1904,12 @@ class Canvas {
         }
 
         // Only render if there's output
-        if (!wrapped.hasOutput || !wrapped.hasOutput()) {
+        // Check if protocol has hasOutput method and it returns true
+        if (!wrapped.hasOutput || typeof wrapped.hasOutput !== 'function') {
+            return;
+        }
+        const hasOutput = wrapped.hasOutput();
+        if (!hasOutput) {
             return;
         }
 
@@ -1969,6 +1978,46 @@ class Canvas {
 
         // Setup event listeners for panel buttons and resize
         this.setupOutputPanelEvents(panelWrapper, node, nodeWrapper);
+
+        // Initialize syntax highlighting for code in panel (if protocol supports it)
+        // Note: wrapped is already declared above (line 1890), so we reuse it
+        if (wrapped && wrapped.getEventBindings) {
+            const bindings = wrapped.getEventBindings();
+            if (bindings && bindings.length > 0) {
+                // Apply bindings to the panel content (same pattern as applyProtocolEventBindings)
+                const panelBody = panelDiv.querySelector('.code-output-panel-body');
+                if (panelBody) {
+                    for (const binding of bindings) {
+                        const { selector, event = 'click', handler } = binding;
+
+                        // Handle special 'init' event (called once after render, not a DOM event)
+                        if (event === 'init') {
+                            const element = panelBody.querySelector(selector);
+                            if (element && typeof handler === 'function') {
+                                // Create a fake event object for init handlers
+                                const fakeEvent = { currentTarget: element, target: element };
+                                try {
+                                    handler(node.id, fakeEvent, this);
+                                } catch (err) {
+                                    console.error(`Error in init handler for ${selector}:`, err);
+                                }
+                            }
+                            continue;
+                        }
+
+                        // For other events, set up listeners
+                        const elements = panelBody.querySelectorAll(selector);
+                        elements.forEach((element) => {
+                            element.addEventListener(event, (e) => {
+                                if (typeof handler === 'function') {
+                                    handler(node.id, e, this);
+                                }
+                            });
+                        });
+                    }
+                }
+            }
+        }
 
         // Animate initial slide-out if expanded (skip if replacing existing panel or explicitly requested)
         const shouldAnimate = outputExpanded && !skipAnimation && !hadExistingPanel;
@@ -2093,10 +2142,44 @@ class Canvas {
         if (!panelBody) return;
 
         const wrapped = wrapNode(node);
-        if (!wrapped.renderOutputPanel) return;
+        if (!wrapped || !wrapped.renderOutputPanel) return;
 
         // Update just the body content
         panelBody.innerHTML = wrapped.renderOutputPanel(this);
+
+        // Re-initialize syntax highlighting if protocol supports it (same pattern as renderOutputPanel)
+        if (wrapped && wrapped.getEventBindings) {
+            const bindings = wrapped.getEventBindings();
+            if (bindings && bindings.length > 0) {
+                for (const binding of bindings) {
+                    const { selector, event = 'click', handler } = binding;
+
+                    // Handle special 'init' event
+                    if (event === 'init') {
+                        const element = panelBody.querySelector(selector);
+                        if (element && typeof handler === 'function') {
+                            const fakeEvent = { currentTarget: element, target: element };
+                            try {
+                                handler(nodeId, fakeEvent, this);
+                            } catch (err) {
+                                console.error(`Error in init handler for ${selector}:`, err);
+                            }
+                        }
+                        continue;
+                    }
+
+                    // For other events, set up listeners
+                    const elements = panelBody.querySelectorAll(selector);
+                    elements.forEach((element) => {
+                        element.addEventListener(event, (e) => {
+                            if (typeof handler === 'function') {
+                                handler(nodeId, e, this);
+                            }
+                        });
+                    });
+                }
+            }
+        }
     }
 
     /**
@@ -2241,6 +2324,10 @@ class Canvas {
      */
     setupNodeEvents(wrapper, node) {
         const div = wrapper.querySelector('.node');
+        // Store nodeId on div for easy access by event handlers
+        if (div && !div.dataset.nodeId) {
+            div.dataset.nodeId = node.id;
+        }
 
         // IMPORTANT: Use capture phase to ensure node selection happens BEFORE
         // any child element's stopPropagation() can prevent it. This provides
@@ -2766,6 +2853,40 @@ class Canvas {
                             icon.textContent = willBeExpanded ? '▼' : '▶';
                         }
                         expandBtn.classList.toggle('expanded', willBeExpanded);
+                    }
+                }
+            });
+        });
+
+        // Handle file clicks to open drawer (only for fetched files)
+        const gitRepoFileLabels = div.querySelectorAll('.git-repo-file-fetched-label[data-file-path]');
+        gitRepoFileLabels.forEach((label) => {
+            label.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const filePath = label.dataset.filePath;
+                if (filePath) {
+                    // Use node.id directly (passed to setupNodeEvents)
+                    const nodeId = node.id;
+                    if (nodeId) {
+                        // Access graph via window.app (Canvas doesn't have direct graph reference)
+                        const graph = window.app?.graph;
+                        if (graph) {
+                            const currentNode = graph.getNode(nodeId);
+                            if (currentNode && currentNode.gitRepoData && currentNode.gitRepoData.files && currentNode.gitRepoData.files[filePath]) {
+                                // Set selected file and open drawer
+                                graph.updateNode(nodeId, {
+                                    selectedFilePath: filePath,
+                                    outputExpanded: true,
+                                    outputPanelHeight: currentNode.outputPanelHeight || 300, // Default height
+                                });
+                                // Re-render to show drawer
+                                const updatedNode = graph.getNode(nodeId);
+                                if (updatedNode) {
+                                    this.renderNode(updatedNode);
+                                }
+                            }
+                        }
                     }
                 }
             });

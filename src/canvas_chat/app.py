@@ -23,7 +23,7 @@ import os
 import sys
 import traceback
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import httpx
 import litellm
@@ -63,6 +63,9 @@ logger = logging.getLogger(__name__)
 litellm.drop_params = True  # Drop unsupported params gracefully
 
 app = FastAPI(title="Canvas Chat", version=__version__)
+
+# Register plugin-specific endpoints (must be after app creation)
+git_repo_handler.register_endpoints(app)
 
 # --- Configuration Management ---
 # This is initialized at module load time based on environment variables
@@ -2292,35 +2295,9 @@ class FetchUrlResult(BaseModel):
     url: str
     title: str
     content: str  # Markdown content
-
-
-class ListFilesRequest(BaseModel):
-    """Request body for listing files in a git repository."""
-
-    url: str
-
-
-class FileTreeItem(BaseModel):
-    """File tree item (file or directory)."""
-
-    path: str
-    type: str  # "file" or "directory"
-    size: int | None = None
-    children: list["FileTreeItem"] | None = None
-
-
-class ListFilesResult(BaseModel):
-    """Result from listing files in a git repository."""
-
-    url: str
-    files: list[FileTreeItem]
-
-
-class FetchFilesRequest(BaseModel):
-    """Request body for fetching selected files from a git repository."""
-
-    url: str
-    file_paths: list[str]
+    files: dict[str, dict[str, Any]] | None = (
+        None  # Optional: file content map for drawer (path -> {content, lang, status})
+    )
 
 
 # --- PDF Upload/Fetch Models ---
@@ -2481,69 +2458,6 @@ async def fetch_url(request: FetchUrlRequest):
         raise HTTPException(status_code=504, detail="Request timed out") from None
     except Exception as e:
         logger.error(f"Fetch URL failed: {e}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.post("/api/url-fetch/list-files")
-async def list_url_fetch_files(request: ListFilesRequest):
-    """List files available for selection from a URL (plugin-based).
-
-    Uses UrlFetchRegistry to find the appropriate handler for the URL.
-    Only handlers that support file listing (have list_files method) can be used.
-    """
-    logger.info(f"List URL fetch files request: url='{request.url}'")
-
-    try:
-        handler_config = UrlFetchRegistry.find_handler(request.url)
-        if not handler_config:
-            raise HTTPException(
-                status_code=400, detail="URL is not supported by any registered handler"
-            )
-
-        handler = handler_config["handler"]()
-        if not hasattr(handler, "list_files"):
-            raise HTTPException(
-                status_code=400, detail="Handler does not support file listing"
-            )
-
-        file_tree = await handler.list_files(request.url)
-        return ListFilesResult(url=request.url, files=file_tree["files"])
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"List URL fetch files failed: {e}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.post("/api/url-fetch/fetch-files")
-async def fetch_url_fetch_files(request: FetchFilesRequest):
-    """Fetch content from selected files from a URL (plugin-based).
-
-    Uses UrlFetchRegistry to find the appropriate handler for the URL.
-    """
-    logger.info(
-        f"Fetch URL fetch files request: url='{request.url}', "
-        f"files={len(request.file_paths)}"
-    )
-
-    try:
-        handler_config = UrlFetchRegistry.find_handler(request.url)
-        if not handler_config:
-            raise HTTPException(
-                status_code=400, detail="URL is not supported by any registered handler"
-            )
-
-        handler = handler_config["handler"]()
-        result = await handler.fetch_selected_files(request.url, request.file_paths)
-        return FetchUrlResult(
-            url=request.url, title=result["title"], content=result["content"]
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Fetch URL fetch files failed: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e)) from e
 

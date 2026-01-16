@@ -262,6 +262,8 @@ export class GitRepoFeature extends FeaturePlugin {
                 }
 
                 // Check if this file was actually fetched
+                // Use selectedFiles (the actual paths sent to backend) to determine if fetched
+                // This ensures we use the same path format as the backend's files dictionary keys
                 const isFetched = fetchedFiles ? fetchedFiles.has(fullPath) : false;
                 if (isFetched) {
                     li.classList.add('git-repo-file-fetched');
@@ -273,6 +275,32 @@ export class GitRepoFeature extends FeaturePlugin {
                 label.title = fullPath; // Tooltip with full path
                 if (isFetched) {
                     label.classList.add('git-repo-file-fetched-label');
+                    // Make fetched files clickable to open drawer
+                    label.style.cursor = 'pointer';
+                    // Use the path from selectedFiles (which matches backend keys) instead of item.path
+                    // Find the matching path from selectedFiles that corresponds to this file
+                    // If fullPath is in fetchedFiles, use it; otherwise try to find a match
+                    let filePathForLookup = fullPath;
+                    if (fetchedFiles) {
+                        // fetchedFiles contains the actual paths sent to backend (same as files dict keys)
+                        // Check if fullPath is in fetchedFiles, or find a matching path
+                        if (fetchedFiles.has(fullPath)) {
+                            filePathForLookup = fullPath;
+                        } else {
+                            // Try to find a matching path (case-insensitive or partial match)
+                            const matchingPath = Array.from(fetchedFiles).find(p =>
+                                p === fullPath ||
+                                p.toLowerCase() === fullPath.toLowerCase() ||
+                                p.endsWith(fullPath) ||
+                                fullPath.endsWith(p) ||
+                                p.split('/').pop() === fullPath.split('/').pop()
+                            );
+                            if (matchingPath) {
+                                filePathForLookup = matchingPath;
+                            }
+                        }
+                    }
+                    label.dataset.filePath = filePathForLookup;
                 }
                 label.innerHTML = `<span class="git-repo-file-icon">📄</span> ${displayName}`;
 
@@ -655,6 +683,7 @@ export class GitRepoFeature extends FeaturePlugin {
                 title: data.title,
                 fileTree: fileTree || [],
                 selectedFiles: selectedPaths,
+                files: data.files || {}, // Map of file paths to file data (content, lang, status)
             };
 
             // Update node with git repo data
@@ -773,6 +802,88 @@ export class GitRepoFeature extends FeaturePlugin {
         // Register custom node protocol for git repository nodes
         // This extends the original protocol and adds git repo tree rendering
         const GitRepoProtocol = class extends OriginalProtocol {
+            /**
+             * Check if this git repo node has output to display (selected file in drawer)
+             * @returns {boolean}
+             */
+            hasOutput() {
+                return !!(
+                    this.node.selectedFilePath &&
+                    this.node.gitRepoData &&
+                    this.node.gitRepoData.files &&
+                    this.node.gitRepoData.files[this.node.selectedFilePath]
+                );
+            }
+
+            /**
+             * Render the output panel content (called by canvas for the slide-out panel)
+             * @param {Canvas} canvas - Canvas instance for helper methods
+             * @returns {string} HTML string
+             */
+            renderOutputPanel(canvas) {
+                const filePath = this.node.selectedFilePath;
+                if (!filePath || !this.node.gitRepoData || !this.node.gitRepoData.files) {
+                    return '<div class="git-repo-file-panel-content">No file selected</div>';
+                }
+
+                const fileData = this.node.gitRepoData.files[filePath];
+                if (!fileData) {
+                    return `<div class="git-repo-file-panel-content">File not found: ${canvas.escapeHtml(filePath)}</div>`;
+                }
+
+                const { content, lang, status } = fileData;
+                const escapedPath = canvas.escapeHtml(filePath);
+
+                let html = `<div class="git-repo-file-panel-content">`;
+                html += `<div class="git-repo-file-panel-header">`;
+                html += `<strong>${escapedPath}</strong>`;
+                if (lang) {
+                    html += ` <span class="git-repo-file-panel-lang">(${canvas.escapeHtml(lang)})</span>`;
+                }
+                html += `</div>`;
+
+                if (status === "not_found") {
+                    html += `<div class="git-repo-file-panel-error">File not found</div>`;
+                } else if (status === "permission_denied") {
+                    html += `<div class="git-repo-file-panel-error">Permission denied</div>`;
+                } else if (status === "error") {
+                    html += `<div class="git-repo-file-panel-error">Failed to read file</div>`;
+                } else if (content) {
+                    // Syntax-highlighted code display (same pattern as code node)
+                    // Escape HTML to prevent XSS, highlight.js will handle the rest
+                    const escapedContent = canvas.escapeHtml(content);
+                    const codeClass = lang ? `language-${lang}` : '';
+                    html += `<pre class="git-repo-file-panel-code"><code class="${codeClass}" data-highlight="true">${escapedContent}</code></pre>`;
+                } else {
+                    html += `<div class="git-repo-file-panel-error">No content available</div>`;
+                }
+
+                html += `</div>`;
+                return html;
+            }
+
+            /**
+             * Get event bindings for syntax highlighting initialization
+             * @returns {Array} Array of event binding objects
+             */
+            getEventBindings() {
+                return [
+                    {
+                        selector: '.git-repo-file-panel-code',
+                        event: 'init', // Special event: called after render, not a DOM event
+                        handler: (nodeId, e, canvas) => {
+                            // Initialize syntax highlighting after render
+                            if (window.hljs) {
+                                const codeEl = e.currentTarget.querySelector('code[data-highlight="true"]');
+                                if (codeEl) {
+                                    window.hljs.highlightElement(codeEl);
+                                }
+                            }
+                        },
+                    },
+                ];
+            }
+
             renderContent(canvas) {
                 // Check if this is a git repo node with file tree data
                 if (this.node.gitRepoData && Array.isArray(this.node.gitRepoData.fileTree) && this.node.gitRepoData.fileTree.length > 0) {
