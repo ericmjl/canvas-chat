@@ -82,7 +82,7 @@ export class GitRepoFeature extends FeaturePlugin {
             return {};
         }
 
-        const cred = this.storage.getGitCredentialForHost(host);
+        const cred = this.getGitCredentialForHost(host);
         if (!cred) {
             return {};
         }
