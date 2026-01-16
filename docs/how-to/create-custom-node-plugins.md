@@ -517,7 +517,6 @@ Actions.COPY; // Copy content
 Actions.SUMMARIZE; // Generate summary
 Actions.EDIT_CONTENT; // Edit in modal (triggers getEditFields())
 Actions.FETCH_SUMMARIZE; // Fetch and summarize URL
-Actions.RESUMMARIZE; // Regenerate summary
 Actions.EDIT_CODE; // Edit code in modal
 Actions.GENERATE; // Generate code
 Actions.RUN_CODE; // Run Python code

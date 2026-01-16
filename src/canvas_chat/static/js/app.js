@@ -37,6 +37,7 @@ import './plugins/factcheck.js'; // Side-effect import for FactcheckNode plugin 
 import './plugins/search-node.js'; // Side-effect import for SearchNode plugin registration
 import './plugins/highlight-node.js'; // Side-effect import for HighlightNode plugin registration
 import './plugins/fetch-result-node.js'; // Side-effect import for FetchResultNode plugin registration
+import './plugins/youtube-node.js'; // Side-effect import for YouTubeNode plugin registration
 import './plugins/matrix.js'; // Side-effect import for MatrixNode plugin registration
 import './plugins/cell-node.js'; // Side-effect import for CellNode plugin registration
 import './plugins/row-node.js'; // Side-effect import for RowNode plugin registration
@@ -650,7 +651,7 @@ class App {
                     this.modalManager.handleNodeEditContent(nodeId);
                 }
             })
-            .on('nodeResummarize', this.handleNodeResummarize.bind(this))
+            .on('nodeSummarize', this.handleNodeSummarize.bind(this))
             // Flashcard events
             .on('createFlashcards', this.handleCreateFlashcards.bind(this))
             .on('reviewCard', this.reviewSingleCard.bind(this))
@@ -2489,9 +2490,9 @@ df.head()
         // Get ancestor context (conversation history)
         const ancestors = this.graph.getAncestors(nodeId);
         const ancestorContext = ancestors
-            .filter((n) => [NodeType.HUMAN, NodeType.AI, NodeType.NOTE, NodeType.PDF, NodeType.FETCH_RESULT].includes(n.type))
+            .filter((n) => [NodeType.HUMAN, NodeType.AI, NodeType.NOTE, NodeType.PDF, NodeType.FETCH_RESULT, NodeType.YOUTUBE, NodeType.GIT_REPO].includes(n.type))
             .map((n) => ({
-                role: [NodeType.HUMAN, NodeType.PDF, NodeType.FETCH_RESULT].includes(n.type) ? 'user' : 'assistant',
+                role: [NodeType.HUMAN, NodeType.PDF, NodeType.FETCH_RESULT, NodeType.YOUTUBE, NodeType.GIT_REPO].includes(n.type) ? 'user' : 'assistant',
                 content: n.content,
             }));
 
@@ -3656,9 +3657,9 @@ df.head()
     // Edit Content and Code Editor Modal methods moved to modal-manager.js
 
     /**
-     * Handle re-summarizing a FETCH_RESULT node (creates new SUMMARY node)
+     * Handle summarizing a FETCH_RESULT node (creates new SUMMARY node)
      */
-    async handleNodeResummarize(nodeId) {
+    async handleNodeSummarize(nodeId) {
         const fetchNode = this.graph.getNode(nodeId);
         if (!fetchNode) return;
 
