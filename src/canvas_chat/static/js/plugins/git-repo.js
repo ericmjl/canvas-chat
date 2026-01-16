@@ -630,6 +630,7 @@ export class GitRepoFeature extends FeaturePlugin {
      * @param {string} nodeId - Node ID to update
      */
     async fetchSelectedFiles(modal, url, nodeId) {
+        const isEdit = modal.dataset.isEdit === 'true';
         const fetchBtn = modal.querySelector('#git-repo-fetch-btn');
         const checkboxes = modal.querySelectorAll('input[type="checkbox"]:checked');
 
@@ -687,17 +688,24 @@ export class GitRepoFeature extends FeaturePlugin {
             };
 
             // Update node with git repo data
-            this.graph.updateNode(nodeId, {
+            const updateData = {
                 content: `**[${data.title}](${url})**`, // Minimal content for fallback
                 gitRepoData,
-                versions: [
+            };
+
+            // Only add versions if this is a new node (not an edit)
+            if (!isEdit) {
+                const node = this.graph.getNode(nodeId);
+                updateData.versions = [
                     {
-                        content: `**[${data.title}](${url})**`,
-                        timestamp: Date.now(),
-                        reason: 'fetched',
+                        content: node?.content || `**[${data.title}](${url})**`,
+                        timestamp: node?.createdAt || Date.now(),
+                        reason: 'initial',
                     },
-                ],
-            });
+                ];
+            }
+
+            this.graph.updateNode(nodeId, updateData);
 
             // Re-render the node to show the file tree
             const node = this.graph.getNode(nodeId);
@@ -846,78 +854,6 @@ export class GitRepoFeature extends FeaturePlugin {
                     await navigator.clipboard.writeText(text);
                     canvas.showCopyFeedback(this.node.id);
                 }
-            }
-
-            /**
-             * Get edit fields for all fetched files
-             * @returns {Array} Array of edit field definitions (one per file)
-             */
-            getEditFields() {
-                if (!this.node.gitRepoData || !this.node.gitRepoData.files) {
-                    return super.getEditFields(); // Fallback to default
-                }
-
-                const files = this.node.gitRepoData.files;
-                const filePaths = Object.keys(files).sort(); // Sort for consistent order
-
-                return filePaths.map((filePath) => {
-                    const fileData = files[filePath];
-                    const content = fileData && fileData.content ? fileData.content : '';
-                    const lang = fileData && fileData.lang ? fileData.lang : '';
-
-                    return {
-                        id: `file_${filePath}`, // Use file path as part of ID
-                        label: filePath,
-                        value: content,
-                        placeholder: `Edit ${filePath}...`,
-                        lang: lang, // Store language for syntax highlighting
-                    };
-                });
-            }
-
-            /**
-             * Handle saving edited fields for git repo files
-             * @param {Object} fields - Object mapping field IDs to values
-             * @param {Object} app - App instance for graph updates
-             * @returns {Object} Update object to pass to graph.updateNode()
-             */
-            handleEditSave(fields, app) {
-                if (!this.node.gitRepoData || !this.node.gitRepoData.files) {
-                    return super.handleEditSave(fields, app);
-                }
-
-                // Update files dictionary with edited content
-                const updatedFiles = { ...this.node.gitRepoData.files };
-                let hasChanges = false;
-
-                for (const [fieldId, value] of Object.entries(fields)) {
-                    if (fieldId.startsWith('file_')) {
-                        const filePath = fieldId.substring(5); // Remove 'file_' prefix
-                        const existingFile = updatedFiles[filePath];
-                        if (existingFile && existingFile.content !== value) {
-                            // Only update if content actually changed
-                            updatedFiles[filePath] = {
-                                ...existingFile,
-                                content: value,
-                            };
-                            hasChanges = true;
-                        }
-                    }
-                }
-
-                if (!hasChanges) {
-                    return {}; // Return empty object if no changes
-                }
-
-                // Update gitRepoData with modified files
-                const updatedGitRepoData = {
-                    ...this.node.gitRepoData,
-                    files: updatedFiles,
-                };
-
-                return {
-                    gitRepoData: updatedGitRepoData,
-                };
             }
 
             /**
@@ -1071,6 +1007,65 @@ export class GitRepoFeature extends FeaturePlugin {
             protocol: GitRepoProtocol,
         });
         console.log('[GitRepoFeature] Registered custom protocol for', fetchResultType);
+    }
+
+    /**
+     * Handle edit button click for git repo nodes
+     * Opens file selection modal instead of content edit modal
+     * @param {string} nodeId - Node ID to edit
+     */
+    async handleEditGitRepoNode(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node || !node.gitRepoData || !node.gitRepoData.url) {
+            // Not a git repo node, let default handler take over
+            return false;
+        }
+
+        // Show file selection modal with existing URL and pre-selected files
+        const url = node.gitRepoData.url;
+        const existingSelectedFiles = node.gitRepoData.selectedFiles || [];
+
+        const modal = this.modalManager.getPluginModal('git-repo', 'file-selection');
+        if (!modal) {
+            this.showToast?.('File selection modal not found', 'error');
+            return true; // Handled (even though it failed)
+        }
+
+        // Show modal
+        this.modalManager.showPluginModal('git-repo', 'file-selection');
+
+        // Set URL in modal
+        const urlInput = modal.querySelector('#git-repo-url');
+        if (urlInput) {
+            urlInput.textContent = url;
+        }
+
+        // Store current URL and node ID (for updating existing node)
+        modal.dataset.url = url;
+        modal.dataset.nodeId = nodeId;
+        modal.dataset.isEdit = 'true'; // Flag to indicate this is an edit, not a new fetch
+
+        // Load file tree
+        await this.loadFileTree(url, modal);
+
+        // Pre-select existing files
+        if (existingSelectedFiles.length > 0) {
+            const checkboxes = modal.querySelectorAll('input[type="checkbox"][data-type="file"]');
+            checkboxes.forEach((checkbox) => {
+                if (existingSelectedFiles.includes(checkbox.dataset.path)) {
+                    checkbox.checked = true;
+                }
+            });
+            // Update parent directory checkboxes
+            this.updateParentDirectoryCheckboxes(modal);
+            // Update selection count
+            this.updateSelectionCount(modal, existingSelectedFiles.length);
+        }
+
+        // Setup event listeners (will update existing node instead of creating new one)
+        this.setupModalEventListeners(modal, url, nodeId);
+
+        return true; // Handled
     }
 
     /**

@@ -629,7 +629,18 @@ class App {
             .on('nodeFitToViewport', this.handleNodeFitToViewport.bind(this))
             .on('nodeResetSize', this.handleNodeResetSize.bind(this))
             // Content editing events (for FETCH_RESULT nodes)
-            .on('nodeEditContent', (nodeId) => this.modalManager.handleNodeEditContent(nodeId))
+            .on('nodeEditContent', (nodeId) => {
+                // Check if this is a git repo node and handle specially
+                const gitRepoFeature = this.featureRegistry?.getFeature('git-repo');
+                if (gitRepoFeature && gitRepoFeature.handleEditGitRepoNode) {
+                    const handled = gitRepoFeature.handleEditGitRepoNode(nodeId);
+                    if (handled) {
+                        return; // Git repo feature handled it
+                    }
+                }
+                // Default handler for other node types
+                this.modalManager.handleNodeEditContent(nodeId);
+            })
             .on('nodeResummarize', this.handleNodeResummarize.bind(this))
             // Flashcard events
             .on('createFlashcards', this.handleCreateFlashcards.bind(this))
