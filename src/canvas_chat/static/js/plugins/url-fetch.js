@@ -195,6 +195,8 @@ export class UrlFetchFeature extends FeaturePlugin {
                 updateData.youtubeVideoId = data.video_id;
                 // Open drawer by default for YouTube videos to show transcript
                 updateData.outputExpanded = true;
+                // Set a reasonable default height for transcript panel
+                updateData.outputPanelHeight = 400;
             }
 
             // Update node in graph first
