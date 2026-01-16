@@ -47,8 +47,13 @@ from canvas_chat.config import AppConfig
 from canvas_chat.file_upload_registry import FileUploadRegistry
 
 # Import built-in file upload handler plugins (registers them)
-from canvas_chat.plugins import pdf_handler  # noqa: F401
+# Import built-in URL fetch handler plugins (registers them)
+from canvas_chat.plugins import (
+    git_repo_handler,  # noqa: F401
+    pdf_handler,  # noqa: F401
+)
 from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE
+from canvas_chat.url_fetch_registry import UrlFetchRegistry
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -2289,6 +2294,35 @@ class FetchUrlResult(BaseModel):
     content: str  # Markdown content
 
 
+class ListFilesRequest(BaseModel):
+    """Request body for listing files in a git repository."""
+
+    url: str
+
+
+class FileTreeItem(BaseModel):
+    """File tree item (file or directory)."""
+
+    path: str
+    type: str  # "file" or "directory"
+    size: int | None = None
+    children: list["FileTreeItem"] | None = None
+
+
+class ListFilesResult(BaseModel):
+    """Result from listing files in a git repository."""
+
+    url: str
+    files: list[FileTreeItem]
+
+
+class FetchFilesRequest(BaseModel):
+    """Request body for fetching selected files from a git repository."""
+
+    url: str
+    file_paths: list[str]
+
+
 # --- PDF Upload/Fetch Models ---
 
 
@@ -2363,42 +2397,28 @@ async def fetch_url_via_jina(url: str, client: httpx.AsyncClient) -> tuple[str, 
 
 async def fetch_url_directly(url: str, client: httpx.AsyncClient) -> tuple[str, str]:
     """
-    Fetch URL content directly and convert HTML to markdown.
+    Fetch URL content directly (fallback when Jina fails).
 
     Returns (title, content) tuple.
-    Uses html2text for HTML-to-markdown conversion.
+    Content is returned as plain text (HTML not converted to markdown).
     """
-    import html2text
-
-    response = await client.get(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (compatible; CanvasChat/1.0)",
-            "Accept": "text/html,application/xhtml+xml",
-        },
-        follow_redirects=True,
-    )
+    response = await client.get(url, follow_redirects=True)
 
     if response.status_code != 200:
         raise Exception(f"Direct fetch returned {response.status_code}")
 
-    html_content = response.text
-
-    # Extract title from HTML
+    # Extract title from HTML if possible
     title = "Untitled"
+    content = response.text
+
+    # Try to extract title from HTML
     import re
 
-    title_match = re.search(r"<title[^>]*>([^<]+)</title>", html_content, re.IGNORECASE)
+    title_match = re.search(
+        r"<title[^>]*>(.*?)</title>", content, re.IGNORECASE | re.DOTALL
+    )
     if title_match:
-        title = title_match.group(1).strip()
-
-    # Convert HTML to markdown
-    h = html2text.HTML2Text()
-    h.ignore_links = False
-    h.ignore_images = False
-    h.ignore_emphasis = False
-    h.body_width = 0  # Don't wrap lines
-    content = h.handle(html_content)
+        title = re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
 
     return title, content
 
@@ -2409,18 +2429,37 @@ async def fetch_url(request: FetchUrlRequest):
     Fetch the content of a URL and return it as markdown.
 
     Strategy:
-    1. Try Jina Reader API first (free, good markdown conversion)
-    2. Fall back to direct fetch + html2text if Jina fails
+    1. Check if URL is a git repository - if so, clone and extract files
+    2. Try Jina Reader API (free, good markdown conversion)
+    3. Fall back to direct fetch + html2text if Jina fails
 
     Design rationale (see docs/explanation/url-fetching.md):
     - This endpoint enables zero-config URL fetching for /note <url>
     - Separate from /api/exa/get-contents which uses Exa API (requires API key)
     - Jina Reader provides good markdown conversion for most public web pages
     - Direct fetch fallback ensures robustness when Jina is unavailable
+    - Git repository support enables standalone content extraction from repos
     """
     logger.info(f"Fetch URL request: url='{request.url}'")
 
     try:
+        # Check URL fetch registry first
+        handler_config = UrlFetchRegistry.find_handler(request.url)
+        if handler_config:
+            try:
+                handler = handler_config["handler"]()
+                result = await handler.fetch_url(request.url)
+                logger.info(f"Successfully fetched URL via handler: {result['title']}")
+                return FetchUrlResult(
+                    url=request.url, title=result["title"], content=result["content"]
+                )
+            except Exception as handler_error:
+                logger.warning(
+                    f"URL fetch handler failed, falling back to regular URL fetch: "
+                    f"{handler_error}"
+                )
+                # Fall through to regular URL fetching
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             # Try Jina Reader first
             try:
@@ -2442,6 +2481,69 @@ async def fetch_url(request: FetchUrlRequest):
         raise HTTPException(status_code=504, detail="Request timed out") from None
     except Exception as e:
         logger.error(f"Fetch URL failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/url-fetch/list-files")
+async def list_url_fetch_files(request: ListFilesRequest):
+    """List files available for selection from a URL (plugin-based).
+
+    Uses UrlFetchRegistry to find the appropriate handler for the URL.
+    Only handlers that support file listing (have list_files method) can be used.
+    """
+    logger.info(f"List URL fetch files request: url='{request.url}'")
+
+    try:
+        handler_config = UrlFetchRegistry.find_handler(request.url)
+        if not handler_config:
+            raise HTTPException(
+                status_code=400, detail="URL is not supported by any registered handler"
+            )
+
+        handler = handler_config["handler"]()
+        if not hasattr(handler, "list_files"):
+            raise HTTPException(
+                status_code=400, detail="Handler does not support file listing"
+            )
+
+        file_tree = await handler.list_files(request.url)
+        return ListFilesResult(url=request.url, files=file_tree["files"])
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"List URL fetch files failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/url-fetch/fetch-files")
+async def fetch_url_fetch_files(request: FetchFilesRequest):
+    """Fetch content from selected files from a URL (plugin-based).
+
+    Uses UrlFetchRegistry to find the appropriate handler for the URL.
+    """
+    logger.info(
+        f"Fetch URL fetch files request: url='{request.url}', "
+        f"files={len(request.file_paths)}"
+    )
+
+    try:
+        handler_config = UrlFetchRegistry.find_handler(request.url)
+        if not handler_config:
+            raise HTTPException(
+                status_code=400, detail="URL is not supported by any registered handler"
+            )
+
+        handler = handler_config["handler"]()
+        result = await handler.fetch_selected_files(request.url, request.file_paths)
+        return FetchUrlResult(
+            url=request.url, title=result["title"], content=result["content"]
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Fetch URL fetch files failed: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e)) from e
 

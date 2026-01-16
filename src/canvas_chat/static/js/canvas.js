@@ -2742,6 +2742,26 @@ class Canvas {
                 this.emit('tagChipClick', color);
             });
         });
+
+        // Git repo node tree expand/collapse handlers
+        const gitRepoDirItems = div.querySelectorAll('.git-repo-node-dir-item[data-has-children="true"]');
+        gitRepoDirItems.forEach((dirItem) => {
+            dirItem.addEventListener('click', (e) => {
+                // Only toggle if clicking on the directory item itself, not on nested elements
+                if (e.target === dirItem || e.target.closest('.git-repo-node-dir-item') === dirItem) {
+                    e.stopPropagation();
+                    const childrenUl = dirItem.querySelector('ul.git-repo-node-tree-nested');
+                    if (childrenUl) {
+                        const isExpanded = childrenUl.style.display !== 'none';
+                        childrenUl.style.display = isExpanded ? 'none' : 'block';
+                        const icon = dirItem.querySelector('.git-repo-node-expand-icon');
+                        if (icon) {
+                            icon.textContent = isExpanded ? '▶' : '▼';
+                        }
+                    }
+                }
+            });
+        });
     }
 
     /**

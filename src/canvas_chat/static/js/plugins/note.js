@@ -159,6 +159,20 @@ export class NoteFeature extends FeaturePlugin {
      * @param {string} url - The URL to fetch
      */
     async handleNoteFromUrl(url) {
+        // Check if URL is a git repository and delegate to GitRepoFeature
+        try {
+            const gitRepoFeature = this.featureRegistry?.getFeature('git-repo');
+            if (gitRepoFeature && gitRepoFeature.isGitRepositoryUrl(url)) {
+                // Delegate to GitRepoFeature
+                await gitRepoFeature.handleGitUrl(url);
+                return;
+            }
+        } catch (err) {
+            // GitRepoFeature not available, fall through to regular URL fetching
+            console.warn('[NoteFeature] GitRepoFeature not available, using regular fetch:', err);
+        }
+
+        // Fall through to regular URL fetching (existing logic)
         // Get selected nodes (if any) to link the fetched content to
         const parentIds = this.canvas.getSelectedNodeIds();
 
