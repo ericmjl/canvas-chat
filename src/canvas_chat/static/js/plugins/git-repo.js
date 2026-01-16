@@ -1042,8 +1042,15 @@ export class GitRepoFeature extends FeaturePlugin {
             }
 
             renderContent(canvas) {
+                // Only apply git repo rendering if this is actually a git repo node
+                // YouTube videos and other fetched content should use parent protocol
+                if (!this.node.gitRepoData) {
+                    // Not a git repo node - delegate to parent (handles YouTube, regular URLs, etc.)
+                    return super.renderContent(canvas);
+                }
+
                 // Check if this is a git repo node with file tree data
-                if (this.node.gitRepoData && Array.isArray(this.node.gitRepoData.fileTree) && this.node.gitRepoData.fileTree.length > 0) {
+                if (Array.isArray(this.node.gitRepoData.fileTree) && this.node.gitRepoData.fileTree.length > 0) {
                     try {
                         const { fileTree, url, title, selectedFiles } = this.node.gitRepoData;
                         const container = document.createElement('div');
