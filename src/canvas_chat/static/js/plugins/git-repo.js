@@ -34,10 +34,26 @@ export class GitRepoFeature extends FeaturePlugin {
      * @returns {boolean} True if URL matches git repository patterns
      */
     isGitRepositoryUrl(url) {
+        // Exclude known non-git URLs
+        const nonGitHosts = ['arxiv.org', 'doi.org', 'pubmed.ncbi.nlm.nih.gov'];
+        try {
+            const urlObj = new URL(url);
+            if (nonGitHosts.includes(urlObj.hostname.toLowerCase())) {
+                return false;
+            }
+        } catch (e) {
+            // Invalid URL, not a git repo
+            return false;
+        }
+
         const gitPatterns = [
+            // Known git hosting platforms
             /^https?:\/\/(github|gitlab|bitbucket|gitea|codeberg)\.(com|org)\/[\w\-\.]+\/[\w\-\.]+(?:\.git)?\/?$/i,
+            // SSH git URLs
             /^git@[\w\-\.]+:[\w\-\.]+\/[\w\-\.]+(?:\.git)?$/,
-            /^https?:\/\/[\w\-\.]+\/([\w\-\.]+\/)+[\w\-\.]+(?:\.git)?\/?$/i,
+            // Generic git URLs (must end with .git or have specific git patterns)
+            // More restrictive: require .git extension or match known git hosting patterns
+            /^https?:\/\/[\w\-\.]+\/[\w\-\.]+\/[\w\-\.]+\.git\/?$/i,
         ];
         return gitPatterns.some((pattern) => pattern.test(url));
     }
