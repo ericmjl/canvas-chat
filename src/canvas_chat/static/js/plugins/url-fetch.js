@@ -205,16 +205,30 @@ export class UrlFetchFeature extends FeaturePlugin {
             // For YouTube videos, do full re-render to show video and output panel
             // For other URLs, just update content display
             if (data.video_id) {
-                // Use setTimeout to ensure graph update completes before re-rendering
-                // This ensures the node has youtubeVideoId and outputExpanded properties
-                setTimeout(() => {
-                    const updatedNode = this.graph.getNode(fetchNode.id);
-                    if (updatedNode && updatedNode.youtubeVideoId) {
-                        // Full re-render to show video in main content and transcript in drawer
-                        // This will call renderContent() (shows video) and renderOutputPanel() (shows transcript)
-                        this.canvas.renderNode(updatedNode);
+                // Get the updated node from graph (with youtubeVideoId and outputExpanded)
+                // graph.updateNode is synchronous, so the node should be updated immediately
+                const updatedNode = this.graph.getNode(fetchNode.id);
+                if (updatedNode) {
+                    // Verify node has the required properties
+                    if (!updatedNode.youtubeVideoId) {
+                        console.warn('[UrlFetchFeature] Node missing youtubeVideoId after update');
                     }
-                }, 0);
+                    if (updatedNode.outputExpanded !== true) {
+                        console.warn('[UrlFetchFeature] Node outputExpanded not set to true:', updatedNode.outputExpanded);
+                    }
+
+                    // Full re-render to show video in main content and transcript in drawer
+                    // This will call renderContent() (shows video) and renderOutputPanel() (shows transcript)
+                    this.canvas.renderNode(updatedNode);
+
+                    // Verify output panel was created
+                    setTimeout(() => {
+                        const panelWrapper = this.canvas.outputPanels?.get(fetchNode.id);
+                        if (!panelWrapper) {
+                            console.warn('[UrlFetchFeature] Output panel not created for YouTube video node');
+                        }
+                    }, 100);
+                }
             } else {
                 // For non-YouTube URLs, just update content display
                 this.canvas.updateNodeContent(fetchNode.id, nodeContent, false);
