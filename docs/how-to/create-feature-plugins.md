@@ -1,197 +1,122 @@
-# How to create feature plugins
+# How to Create Plugins for Canvas-Chat
 
-This guide shows you how to extend Canvas-Chat with custom features using the Level 2 plugin system.
+This comprehensive guide shows you how to extend Canvas-Chat with custom plugins. Canvas-Chat supports three levels of plugins, and you can create plugins using JavaScript, Python, or both.
 
-## Overview
+## Table of Contents
 
-Feature plugins enable complex, multi-step workflows beyond simple node rendering. With feature plugins, you can:
+- [Plugin Architecture Overview](#plugin-architecture-overview)
+- [Configuration in config.yaml](#configuration-in-configyaml)
+- [Level 1: Custom Node Types](#level-1-custom-node-types)
+- [Level 2: Feature Plugins](#level-2-feature-plugins)
+- [Level 3: Backend URL Fetch Handlers](#level-3-backend-url-fetch-handlers)
+- [Complete Examples](#complete-examples)
+- [AI Prompts for Plugin Creation](#ai-prompts-for-plugin-creation)
 
-- Create slash commands that orchestrate multiple LLM calls
-- Manage stateful workflows (e.g., committee discussions, research pipelines)
-- Access Canvas-Chat APIs (graph, canvas, chat, storage, modals)
-- Subscribe to application events
-- Extend existing features with custom behaviors
+## Plugin Architecture Overview
 
-## Prerequisites
+Canvas-Chat uses a **three-level plugin architecture**:
 
-- Canvas-Chat running locally or deployed
-- Basic JavaScript knowledge (ES modules, async/await, classes)
-- Understanding of Canvas-Chat's node system
+| Level | Type | Files | Purpose | Example |
+|-------|------|-------|---------|---------|
+| **Level 1** | Custom Node Types | `.js` | Custom rendering, simple interactions | Poll nodes, flashcard nodes |
+| **Level 2** | Feature Plugins | `.js` | Slash commands, multi-step workflows | `/git`, `/youtube`, `/committee` |
+| **Level 3** | Backend Handlers | `.py` | Backend URL fetching, API integration | Git repo handler, YouTube handler |
 
-## Quick start
+**Key concepts:**
 
-Here's a minimal feature plugin:
+- **JavaScript plugins** (`.js`): Frontend plugins that run in the browser
+- **Python plugins** (`.py`): Backend plugins that run on the server
+- **Paired plugins**: JavaScript + Python working together (e.g., `/git` command + git repo handler)
+- **CSS**: Injected dynamically via `injectCSS()` or included in static files
+
+## Configuration in config.yaml
+
+Plugins are configured in `config.yaml` using one of three formats:
+
+### Format 1: JavaScript-only (simple)
+
+```yaml
+plugins:
+  - path: ./plugins/my-plugin.js
+  # OR
+  - js: ./plugins/my-plugin.js
+```
+
+### Format 2: Python-only
+
+```yaml
+plugins:
+  - py: ./plugins/my_handler.py
+```
+
+### Format 3: Paired (JavaScript + Python)
+
+```yaml
+plugins:
+  - id: my-plugin
+    js: ./plugins/my-plugin.js
+    py: ./plugins/my_handler.py
+```
+
+**Path resolution:**
+
+- Relative paths are resolved from the `config.yaml` file location
+- Absolute paths are supported: `/absolute/path/to/plugin.js`
+- File extensions determine plugin type: `.js` = JavaScript, `.py` = Python
+
+**How files are loaded:**
+
+1. **JavaScript plugins**: Served via `/api/plugins/{filename}` and injected into HTML as `<script type="module">` tags
+2. **Python plugins**: Loaded dynamically at startup via `importlib` (module-level code executes)
+3. **CSS files**: Injected via `FeaturePlugin.injectCSS()` or `injectCSSFromURL()`, or included in main CSS
+
+## Level 1: Custom Node Types
+
+Custom node types provide custom rendering and simple interactions. See [Create Custom Node Types](./create-custom-node-plugins.md) for complete documentation.
+
+**Quick example:**
 
 ```javascript
-/**
- * Bookmark Manager Plugin
- * Adds /bookmark command to save important nodes for later review
- */
+import { BaseNode, Actions } from '/static/js/node-protocols.js';
+import { NodeRegistry } from '/static/js/node-registry.js';
 
-import { FeaturePlugin } from '/static/js/feature-plugin.js';
-import { NodeType, createNode } from '/static/js/graph-types.js';
-
-class BookmarkFeature extends FeaturePlugin {
-    constructor(context) {
-        super(context);
-        this.bookmarks = new Set();
-    }
-
-    async onLoad() {
-        console.log('[BookmarkFeature] Loaded');
-    }
-
-    async handleBookmark(command, args, context) {
-        const selectedIds = this.canvas.getSelectedNodeIds();
-
-        if (selectedIds.length === 0) {
-            this.showToast('Select a node to bookmark', 'warning');
-            return;
-        }
-
-        for (const nodeId of selectedIds) {
-            this.bookmarks.add(nodeId);
-        }
-
-        this.showToast(`Bookmarked ${selectedIds.length} node(s)`, 'success');
+class MyNode extends BaseNode {
+    getTypeLabel() { return 'My Node'; }
+    getTypeIcon() { return '🎯'; }
+    renderContent(canvas) {
+        return `<div>${canvas.escapeHtml(this.node.content)}</div>`;
     }
 }
 
-// Register the plugin
-export { BookmarkFeature };
-```
-
-## Architecture overview
-
-### The three plugin levels
-
-Canvas-Chat supports three levels of extensibility:
-
-| Level       | Capability         | Use Case                                               |
-| ----------- | ------------------ | ------------------------------------------------------ |
-| **Level 1** | Custom node types  | Custom rendering, simple interactions                  |
-| **Level 2** | Feature plugins    | Multi-step workflows, slash commands, state management |
-| **Level 3** | Feature extensions | Hook into existing features, modify behaviors          |
-
-This guide covers **Level 2**.
-
-### How feature plugins work
-
-1. **Registration**: Plugins are registered with the `FeatureRegistry`
-2. **Dependency injection**: Plugins receive an `AppContext` with access to all Canvas-Chat APIs
-3. **Lifecycle**: Plugins have `onLoad()` and `onUnload()` hooks
-4. **Slash commands**: Plugins can register slash commands that route to handler methods
-5. **Events**: Plugins can emit and subscribe to events
-
-## Step 1: Create a feature class
-
-All feature plugins extend `FeaturePlugin`:
-
-```javascript
-import { FeaturePlugin } from '/static/js/feature-plugin.js';
-
-class MyFeature extends FeaturePlugin {
-    constructor(context) {
-        super(context);
-
-        // Access Canvas-Chat APIs via context
-        this.graph = context.graph;
-        this.canvas = context.canvas;
-        this.chat = context.chat;
-        this.storage = context.storage;
-        this.app = context.app;
-
-        // Initialize feature state
-        this.myState = {};
-    }
-}
-```
-
-### Available APIs (via AppContext)
-
-The `context` parameter provides access to:
-
-| API               | Description          | Common Methods                                                |
-| ----------------- | -------------------- | ------------------------------------------------------------- |
-| `graph`           | Graph data structure | `addNode()`, `getNode()`, `addEdge()`, `autoPosition()`       |
-| `canvas`          | Visual canvas        | `renderNode()`, `updateNodeContent()`, `getSelectedNodeIds()` |
-| `chat`            | LLM communication    | `sendMessage()`, `getApiKeyForModel()`, `summarize()`         |
-| `storage`         | LocalStorage wrapper | `getSession()`, `saveSession()`, `getApiKeys()`               |
-| `modelPicker`     | Model selector UI    | `value` property (current model)                              |
-| `featureRegistry` | Plugin registry      | `emit()`, `getFeature()`                                      |
-| `showToast()`     | Toast notifications  | Call directly: `this.showToast(msg, type)`                    |
-
-## Step 2: Implement lifecycle hooks
-
-### onLoad() - Initialization
-
-Called when the plugin is registered:
-
-```javascript
-async onLoad() {
-    console.log('[MyFeature] Loaded');
-
-    // Load saved state
-    const savedData = this.storage.getItem('my-feature-data');
-    if (savedData) {
-        this.myState = JSON.parse(savedData);
-    }
-
-    // Initialize any resources
-    await this.initializeResources();
-}
-```
-
-### onUnload() - Cleanup
-
-Called when the plugin is unregistered:
-
-```javascript
-async onUnload() {
-    console.log('[MyFeature] Unloaded');
-
-    // Save state
-    this.storage.setItem('my-feature-data', JSON.stringify(this.myState));
-
-    // Clean up resources
-    this.cleanup();
-}
-```
-
-## Step 3: Register slash commands
-
-Slash commands can be registered in two ways:
-
-### Pattern 1: Register via FeatureRegistry (for built-in features)
-
-When registering a plugin, provide slash commands in the registration config:
-
-```javascript
-// In your plugin file
-export { MyFeature };
-
-// Elsewhere (usually in FeatureRegistry or app.js):
-await featureRegistry.register({
-    id: 'my-feature',
-    feature: MyFeature,
-    slashCommands: [
-        {
-            command: '/mycommand',
-            handler: 'handleMyCommand',
-        },
-    ],
-    priority: PRIORITY.COMMUNITY, // or PRIORITY.BUILTIN, PRIORITY.OFFICIAL
+NodeRegistry.register({
+    type: 'my-node',
+    protocol: MyNode,
+    defaultSize: { width: 400, height: 300 },
+    css: `.node.my-node { background: #f0f0f0; }`
 });
 ```
 
-This pattern is used by built-in features registered in `FeatureRegistry.registerBuiltInFeatures()`.
+## Level 2: Feature Plugins
 
-### Pattern 2: Implement getSlashCommands() method (for command menu metadata)
+Feature plugins enable slash commands, multi-step workflows, and access to Canvas-Chat APIs.
 
-For external plugins or when you need to provide command metadata (description, placeholder) for the slash command menu, implement `getSlashCommands()`:
+### Basic Structure
 
 ```javascript
+import { FeaturePlugin } from '/static/js/feature-plugin.js';
+import { createNode, NodeType } from '/static/js/graph-types.js';
+
 export class MyFeature extends FeaturePlugin {
+    constructor(context) {
+        super(context);
+        // Access APIs via context:
+        // this.graph, this.canvas, this.chat, this.storage, etc.
+    }
+
+    async onLoad() {
+        console.log('[MyFeature] Loaded');
+    }
+
     getSlashCommands() {
         return [
             {
@@ -202,525 +127,621 @@ export class MyFeature extends FeaturePlugin {
         ];
     }
 
-    async handleMyCommand(command, args, context) {
-        // Handler implementation
+    async handleCommand(command, args, context) {
+        // Handle slash command
     }
 }
 ```
 
-**Note:** You can use both patterns together:
+### Registration
 
-- Register commands via `FeatureRegistry.register()` for routing
-- Implement `getSlashCommands()` for UI metadata (description, placeholder)
-
-The `FeatureRegistry.getSlashCommandsWithMetadata()` method calls `getSlashCommands()` on each feature to populate the slash command menu.
-
-### Implementing command handlers
-
-Command handlers receive three parameters:
+Feature plugins must be registered in `FeatureRegistry`. For built-in features, this happens in `feature-registry.js`:
 
 ```javascript
-async handleMyCommand(command, args, context) {
-    // command: '/mycommand' (the full command string)
-    // args: 'foo bar' (everything after the command)
-    // context: { text: 'selected text or node content' }
+// In feature-registry.js
+import { MyFeature } from './plugins/my-feature.js';
 
-    console.log('User typed:', command, args);
-    console.log('Context:', context.text);
-
-    // Your logic here
-}
-```
-
-### Command handler patterns
-
-#### Pattern 1: Create nodes based on user input
-
-```javascript
-async handleNote(command, args, context) {
-    const noteContent = args.trim();
-
-    if (!noteContent) {
-        this.showToast('Please provide note content', 'warning');
-        return;
-    }
-
-    const selectedIds = this.canvas.getSelectedNodeIds();
-    const position = this.graph.autoPosition(selectedIds);
-
-    const node = createNode(NodeType.NOTE, noteContent, { position });
-    this.graph.addNode(node);
-    this.canvas.renderNode(node);
-
-    this.app.saveSession();
-}
-```
-
-#### Pattern 2: Multi-step LLM workflow
-
-```javascript
-async handleAnalyze(command, args, context) {
-    const selectedIds = this.canvas.getSelectedNodeIds();
-
-    if (selectedIds.length === 0) {
-        this.showToast('Select nodes to analyze', 'warning');
-        return;
-    }
-
-    // Step 1: Gather context from selected nodes
-    const contextNodes = this.graph.resolveContext(selectedIds);
-    const messages = buildMessagesForApi(contextNodes);
-
-    // Step 2: Create AI node
-    const model = this.modelPicker.value;
-    const aiNode = createNode(NodeType.AI, '', {
-        position: this.graph.autoPosition(selectedIds),
-        model: model.split('/').pop(),
-    });
-    this.graph.addNode(aiNode);
-    this.canvas.renderNode(aiNode);
-
-    // Step 3: Stream LLM response
-    const abortController = new AbortController();
-
-    await this.chat.sendMessage(
-        messages,
-        model,
-        // onChunk
-        (chunk, fullContent) => {
-            this.canvas.updateNodeContent(aiNode.id, fullContent, true);
-        },
-        // onDone
-        () => {
-            this.canvas.updateNodeContent(aiNode.id, aiNode.content, false);
-            this.app.saveSession();
-        },
-        // onError
-        (error) => {
-            this.showToast(`Error: ${error.message}`, 'error');
-        },
-        abortController.signal
-    );
-}
-```
-
-#### Pattern 3: Show modal for complex input
-
-```javascript
-async handleConfigure(command, args, context) {
-    // Show custom modal
-    const modal = document.getElementById('my-feature-modal');
-    modal.classList.remove('hidden');
-
-    // Wait for user input
-    const config = await this.waitForModalSubmit(modal);
-
-    // Process configuration
-    await this.processConfig(config);
-}
-```
-
-## Step 4: Subscribe to events
-
-Plugins can react to application events:
-
-```javascript
-getEventSubscriptions() {
-    return {
-        'node:created': this.onNodeCreated.bind(this),
-        'node:deleted': this.onNodeDeleted.bind(this),
-        'session:loaded': this.onSessionLoaded.bind(this),
-    };
-}
-
-onNodeCreated(event) {
-    const { nodeId, nodeType } = event.data;
-    console.log('Node created:', nodeId, nodeType);
-
-    // React to new nodes
-    if (nodeType === NodeType.AI) {
-        // Track AI responses
-    }
-}
-```
-
-## Step 5: Test your plugin
-
-Use `PluginTestHarness` to test plugins in isolation:
-
-```javascript
-import { PluginTestHarness } from '/static/js/plugin-test-harness.js';
-import { MyFeature } from './my-feature.js';
-import { PRIORITY } from '/static/js/feature-registry.js';
-
-// Create test harness
-const harness = new PluginTestHarness();
-
-// Load plugin
-await harness.loadPlugin({
+await featureRegistry.register({
     id: 'my-feature',
     feature: MyFeature,
     slashCommands: [
         {
             command: '/mycommand',
-            handler: 'handleMyCommand',
+            handler: 'handleCommand',
         },
     ],
-    priority: PRIORITY.COMMUNITY,
+    priority: PRIORITY.BUILTIN,
 });
-
-// Test slash command
-await harness.executeCommand('/mycommand', 'test args', {
-    text: 'some context',
-});
-
-// Verify behavior
-const createdNodes = harness.mockCanvas.getRenderedNodes();
-console.assert(createdNodes.length === 1, 'Should create one node');
-
-// Test event subscription
-await harness.emitEvent('node:created', {
-    nodeId: 'test-node',
-    nodeType: 'ai',
-});
-
-// Verify event handling
-const logs = harness.getLogs();
-console.assert(logs.includes('Node created'), 'Should log event');
-
-// Unload plugin
-await harness.unloadPlugin('my-feature');
 ```
 
-## Common patterns
+For external plugins loaded from config, registration happens automatically when the module loads (side-effect import).
 
-### Pattern: Streaming LLM with abort support
+### Available APIs
+
+Via `AppContext` (injected in constructor):
+
+| API | Description | Common Methods |
+|-----|-------------|----------------|
+| `graph` | Graph data structure | `addNode()`, `getNode()`, `addEdge()`, `autoPosition()` |
+| `canvas` | Visual canvas | `renderNode()`, `updateNodeContent()`, `getSelectedNodeIds()` |
+| `chat` | LLM communication | `sendMessage()`, `getApiKeyForModel()`, `summarize()` |
+| `storage` | LocalStorage wrapper | `getSession()`, `saveSession()`, `getApiKeys()` |
+| `modalManager` | Modal dialogs | `showPluginModal()`, `hidePluginModal()` |
+| `showToast()` | Toast notifications | `this.showToast(msg, type)` |
+
+### CSS Injection
+
+Feature plugins can inject CSS dynamically:
 
 ```javascript
-async streamWithAbort(nodeId, messages, model) {
-    const abortController = new AbortController();
+async onLoad() {
+    // Option 1: Inject CSS string
+    this.injectCSS(`
+        .my-feature-content { padding: 16px; }
+        .my-feature-button { background: var(--accent-primary); }
+    `, 'my-feature-styles');
 
-    // Track streaming state
-    this.streamingNodes.set(nodeId, {
-        abortController,
-        model,
-        messages,
-    });
-
-    this.canvas.showStopButton(nodeId);
-
-    try {
-        await this.chat.sendMessage(
-            messages,
-            model,
-            // onChunk
-            (chunk, fullContent) => {
-                this.canvas.updateNodeContent(nodeId, fullContent, true);
-            },
-            // onDone
-            () => {
-                this.canvas.updateNodeContent(nodeId, fullContent, false);
-                this.canvas.hideStopButton(nodeId);
-                this.streamingNodes.delete(nodeId);
-            },
-            // onError
-            (error) => {
-                this.showToast(`Error: ${error.message}`, 'error');
-                this.canvas.hideStopButton(nodeId);
-                this.streamingNodes.delete(nodeId);
-            },
-            abortController.signal
-        );
-    } catch (error) {
-        console.error('Stream error:', error);
-    }
-}
-
-stopStreaming(nodeId) {
-    const state = this.streamingNodes.get(nodeId);
-    if (state) {
-        state.abortController.abort();
-        this.streamingNodes.delete(nodeId);
-        this.canvas.hideStopButton(nodeId);
-    }
+    // Option 2: Inject CSS from URL
+    this.injectCSSFromURL('/static/css/my-feature.css', 'my-feature-styles');
 }
 ```
 
-### Pattern: Concurrent operations
+## Level 3: Backend URL Fetch Handlers
 
-When multiple instances of an operation can run simultaneously, use `Map` for state:
+Backend handlers process URLs on the server (e.g., fetching git repos, YouTube videos).
 
-```javascript
-constructor(context) {
-    super(context);
+### Handler Structure
 
-    // DON'T: Single state (only one operation can run)
-    // this.currentNodeId = null;
+```python
+from canvas_chat.url_fetch_handler_plugin import UrlFetchHandlerPlugin
+from canvas_chat.url_fetch_registry import UrlFetchRegistry, PRIORITY
 
-    // DO: Per-instance state (many operations can run)
-    this.activeOperations = new Map();
-}
+class MyUrlHandler(UrlFetchHandlerPlugin):
+    async def fetch_url(self, url: str) -> dict:
+        """Fetch URL content.
 
-async processNode(nodeId) {
-    const abortController = new AbortController();
+        Returns:
+            dict with keys: title, content, metadata (optional)
+        """
+        # Fetch and process URL
+        return {
+            "title": "Page Title",
+            "content": "Page content...",
+            "metadata": {"custom": "data"}
+        }
 
-    // Store per-operation state
-    this.activeOperations.set(nodeId, {
-        abortController,
-        startTime: Date.now(),
-    });
-
-    try {
-        await this.doWork(nodeId, abortController.signal);
-    } finally {
-        this.activeOperations.delete(nodeId);
-    }
-}
-
-cancelOperation(nodeId) {
-    const state = this.activeOperations.get(nodeId);
-    if (state) {
-        state.abortController.abort();
-        this.activeOperations.delete(nodeId);
-    }
-}
+# Register at module level (executes when plugin loads)
+UrlFetchRegistry.register(
+    id="my-handler",
+    url_patterns=[
+        r"^https?://example\.com/.*$",
+    ],
+    handler=MyUrlHandler,
+    priority=PRIORITY.BUILTIN,
+)
 ```
 
-### Pattern: Modal interaction
+### Handler Methods
 
-```javascript
-async showConfigModal() {
-    const modal = document.getElementById('my-feature-modal');
-    const form = modal.querySelector('form');
+```python
+class MyUrlHandler(UrlFetchHandlerPlugin):
+    async def fetch_url(self, url: str) -> dict:
+        """Required: Fetch URL content."""
+        pass
 
-    modal.classList.remove('hidden');
-
-    return new Promise((resolve) => {
-        const submitHandler = (e) => {
-            e.preventDefault();
-            const formData = new FormData(form);
-            const config = Object.fromEntries(formData);
-
-            modal.classList.add('hidden');
-            form.removeEventListener('submit', submitHandler);
-
-            resolve(config);
-        };
-
-        form.addEventListener('submit', submitHandler);
-    });
-}
+    async def list_files(self, url: str, git_credentials: dict = None) -> dict:
+        """Optional: List files (for git repos, etc.)."""
+        pass
 ```
 
-## Best practices
+## Complete Examples
 
-### Do
+### Example 1: YouTube Plugin (Feature Plugin + Backend Handler)
 
-- ✅ Use `Map` for concurrent operation state (not single variables)
-- ✅ Clean up resources in `onUnload()`
-- ✅ Show toast notifications for user feedback
-- ✅ Handle errors gracefully with try-catch
-- ✅ Log plugin lifecycle events
-- ✅ Test with `PluginTestHarness`
-- ✅ Use `canvas.updateNodeContent(nodeId, content, isStreaming)` for updates
-- ✅ Call `app.saveSession()` after making graph changes
-
-### Don't
-
-- ❌ Modify global state directly (use AppContext APIs)
-- ❌ Use single variables for concurrent operations (use `Map`)
-- ❌ Forget to abort streaming operations on cleanup
-- ❌ Skip error handling in async operations
-- ❌ Assume plugin load order (use events for coordination)
-- ❌ Hardcode model names (use `this.modelPicker.value`)
-- ❌ Directly manipulate DOM outside of node content
-
-## Example: Complete feature plugin
-
-Here's a complete example of a "Debate Mode" plugin:
+**Frontend (`youtube.js`):**
 
 ```javascript
-/**
- * Debate Mode Plugin
- * Creates a structured debate with pro/con perspectives
- */
+import { FeaturePlugin } from '../feature-plugin.js';
+import { createNode, NodeType } from '../graph-types.js';
 
-import { FeaturePlugin } from '/static/js/feature-plugin.js';
-import { NodeType, EdgeType, createNode, createEdge } from '/static/js/graph-types.js';
-
-class DebateFeature extends FeaturePlugin {
-    constructor(context) {
-        super(context);
-        this.debates = new Map(); // Track active debates
+export class YouTubeFeature extends FeaturePlugin {
+    getSlashCommands() {
+        return [{
+            command: '/youtube',
+            description: 'Fetch YouTube video with transcript',
+            placeholder: 'https://youtube.com/watch?v=...',
+        }];
     }
 
-    async onLoad() {
-        console.log('[DebateFeature] Loaded');
-    }
-
-    async handleDebate(command, args, context) {
-        const topic = args.trim() || context.text;
-
-        if (!topic) {
-            this.showToast('Please provide a debate topic', 'warning');
+    async handleCommand(command, args, context) {
+        const url = args.trim();
+        if (!url) {
+            this.showToast?.('Please provide a YouTube URL', 'warning');
             return;
         }
 
-        await this.createDebate(topic);
-    }
-
-    async createDebate(topic) {
-        const model = this.modelPicker.value;
-        const selectedIds = this.canvas.getSelectedNodeIds();
-        const basePosition = this.graph.autoPosition(selectedIds);
-
-        // Create topic node
-        const topicNode = createNode(NodeType.HUMAN, topic, {
-            position: basePosition,
+        // Create placeholder node
+        const node = createNode(NodeType.YOUTUBE, 'Fetching...', {
+            position: this.graph.autoPosition(this.canvas.getSelectedNodeIds()),
         });
-        this.graph.addNode(topicNode);
-        this.canvas.renderNode(topicNode);
-
-        // Create pro and con nodes
-        const proNode = await this.createPerspective(topicNode.id, topic, 'pro', model, {
-            x: basePosition.x - 250,
-            y: basePosition.y + 200,
-        });
-
-        const conNode = await this.createPerspective(topicNode.id, topic, 'con', model, {
-            x: basePosition.x + 250,
-            y: basePosition.y + 200,
-        });
-
-        // Create synthesis node
-        await this.createSynthesis([proNode.id, conNode.id], topic, model, {
-            x: basePosition.x,
-            y: basePosition.y + 400,
-        });
-
-        this.app.saveSession();
-        this.showToast('Debate created', 'success');
-    }
-
-    async createPerspective(parentId, topic, stance, model, position) {
-        const prompt = `Argue ${stance === 'pro' ? 'for' : 'against'}: ${topic}`;
-
-        const node = createNode(NodeType.AI, '', {
-            position,
-            model: model.split('/').pop(),
-        });
-
         this.graph.addNode(node);
         this.canvas.renderNode(node);
 
-        const edge = createEdge(parentId, node.id, EdgeType.REPLY);
-        this.graph.addEdge(edge);
-
-        const parentNode = this.graph.getNode(parentId);
-        this.canvas.renderEdge(edge, parentNode.position, position);
-
-        // Stream LLM response
-        await this.streamResponse(node.id, prompt, model);
-
-        return node;
-    }
-
-    async createSynthesis(parentIds, topic, model, position) {
-        const prompt = `Synthesize the debate about: ${topic}`;
-
-        const node = createNode(NodeType.SYNTHESIS, '', {
-            position,
-            model: model.split('/').pop(),
+        // Fetch via backend
+        const response = await fetch(apiUrl('/api/fetch-url'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url }),
         });
 
-        this.graph.addNode(node);
-        this.canvas.renderNode(node);
+        const data = await response.json();
+        const metadata = data.metadata || {};
 
-        for (const parentId of parentIds) {
-            const edge = createEdge(parentId, node.id, EdgeType.MERGE);
-            this.graph.addEdge(edge);
+        // Update node with video data
+        this.graph.updateNode(node.id, {
+            content: data.content, // Transcript
+            metadata: metadata,
+            youtubeVideoId: metadata.video_id,
+        });
 
-            const parentNode = this.graph.getNode(parentId);
-            this.canvas.renderEdge(edge, parentNode.position, position);
+        this.canvas.renderNode(this.graph.getNode(node.id));
+        this.saveSession?.();
+    }
+}
+```
+
+**Backend (`youtube_handler.py`):**
+
+```python
+from canvas_chat.url_fetch_handler_plugin import UrlFetchHandlerPlugin
+from canvas_chat.url_fetch_registry import UrlFetchRegistry, PRIORITY
+from youtube_transcript_api import YouTubeTranscriptApi
+
+class YouTubeHandler(UrlFetchHandlerPlugin):
+    def _extract_video_id(self, url: str) -> str | None:
+        # Extract video ID from various YouTube URL formats
+        # ... (implementation)
+        return video_id
+
+    async def fetch_url(self, url: str) -> dict:
+        video_id = self._extract_video_id(url)
+        if not video_id:
+            raise ValueError("Invalid YouTube URL")
+
+        # Fetch transcript
+        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+        transcript_text = " ".join([t["text"] for t in transcript_list])
+
+        return {
+            "title": f"YouTube Video {video_id}",
+            "content": transcript_text,
+            "metadata": {
+                "content_type": "youtube",
+                "video_id": video_id,
+            },
         }
 
-        await this.streamResponse(node.id, prompt, model);
+# Register handler
+UrlFetchRegistry.register(
+    id="youtube",
+    url_patterns=[
+        r"^https?://(www\.)?(youtube\.com|youtu\.be)/.*$",
+    ],
+    handler=YouTubeHandler,
+    priority=PRIORITY.BUILTIN,
+)
+```
 
-        return node;
+**Node Protocol (`youtube-node.js`):**
+
+```javascript
+import { BaseNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+import { NodeType } from '../graph-types.js';
+
+class YouTubeNode extends BaseNode {
+    getTypeLabel() { return 'YouTube Video'; }
+    getTypeIcon() { return '▶️'; }
+
+    getSummaryText(canvas) {
+        if (this.node.title) return this.node.title;
+        const videoTitle = this.node.metadata?.title;
+        return videoTitle || 'YouTube Video';
     }
 
-    async streamResponse(nodeId, prompt, model) {
-        const abortController = new AbortController();
+    renderContent() {
+        const videoId = this.node.metadata?.video_id || this.node.youtubeVideoId;
+        if (!videoId) return this.renderMarkdown(this.node.content);
 
-        this.debates.set(nodeId, { abortController });
-        this.canvas.showStopButton(nodeId);
-
-        try {
-            await this.chat.sendMessage(
-                [{ role: 'user', content: prompt }],
-                model,
-                (chunk, fullContent) => {
-                    this.canvas.updateNodeContent(nodeId, fullContent, true);
-                },
-                () => {
-                    this.canvas.hideStopButton(nodeId);
-                    this.debates.delete(nodeId);
-                },
-                (error) => {
-                    this.showToast(`Error: ${error.message}`, 'error');
-                    this.canvas.hideStopButton(nodeId);
-                    this.debates.delete(nodeId);
-                },
-                abortController.signal
-            );
-        } catch (error) {
-            console.error('Stream error:', error);
-        }
+        const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+        return `
+            <div class="youtube-embed-container youtube-embed-main">
+                <iframe
+                    src="${embedUrl}"
+                    frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen
+                    class="youtube-embed-iframe"
+                ></iframe>
+            </div>
+        `;
     }
 
-    async onUnload() {
-        // Abort all active debates
-        for (const [nodeId, state] of this.debates.entries()) {
-            state.abortController.abort();
-        }
-        this.debates.clear();
+    hasOutput() { return true; }
 
-        console.log('[DebateFeature] Unloaded');
+    renderOutputPanel() {
+        return `
+            <div class="youtube-transcript-content">
+                ${this.renderMarkdown(this.node.content)}
+            </div>
+        `;
     }
 }
 
-export { DebateFeature };
+NodeRegistry.register({
+    type: NodeType.YOUTUBE,
+    protocol: YouTubeNode,
+});
 ```
 
-## Next steps
+**Config (`config.yaml`):**
 
-- Read the [FeaturePlugin API Reference](../reference/feature-plugin-api.md)
-- Learn about [Extension Hooks](../reference/extension-hooks.md) (Level 3 plugins)
-- See [AppContext API Reference](../reference/app-context-api.md)
-- Study built-in features: `committee.js`, `research.js`, `matrix.js`
+```yaml
+plugins:
+  # YouTube plugin (built-in, but shown for example)
+  - id: youtube
+    js: ./src/canvas_chat/static/js/plugins/youtube.js
+    py: ./src/canvas_chat/plugins/youtube_handler.py
+```
+
+### Example 2: Git Repo Plugin (Full Stack)
+
+**Frontend (`git-repo.js`):**
+
+```javascript
+import { FeaturePlugin } from '../feature-plugin.js';
+import { createNode, NodeType } from '../graph-types.js';
+import { BaseNode, Actions } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+
+// Feature plugin for slash command
+export class GitRepoFeature extends FeaturePlugin {
+    constructor(context) {
+        super(context);
+    }
+
+    async onLoad() {
+        // Inject CSS dynamically
+        await this.injectPluginCSS();
+    }
+
+    async injectPluginCSS() {
+        const cssUrl = apiUrl('/static/css/git-repo.css');
+        const response = await fetch(cssUrl);
+        const css = await response.text();
+        this.injectCSS(css, 'git-repo-plugin-styles');
+    }
+
+    getSlashCommands() {
+        return [{
+            command: '/git',
+            description: 'Fetch git repository with file selection',
+            placeholder: 'https://github.com/user/repo',
+        }];
+    }
+
+    async handleCommand(command, args, context) {
+        const url = args.trim();
+        // ... validation ...
+
+        // Show file selection modal
+        await this.showFileSelectionModal(url);
+    }
+
+    async showFileSelectionModal(url) {
+        // Create modal, fetch file tree, handle selection
+        // ... (see git-repo.js for full implementation)
+    }
+}
+
+// Node protocol for rendering
+class GitRepoProtocol extends BaseNode {
+    getTypeLabel() { return 'Git Repository'; }
+    getTypeIcon() { return '📦'; }
+
+    renderContent() {
+        // Render file tree
+        // ... (see git-repo.js for full implementation)
+    }
+
+    hasOutput() {
+        return !!this.node.selectedFilePath;
+    }
+
+    renderOutputPanel() {
+        // Render selected file content in drawer
+        // ... (see git-repo.js for full implementation)
+    }
+}
+
+NodeRegistry.register({
+    type: NodeType.GIT_REPO,
+    protocol: GitRepoProtocol,
+});
+```
+
+**Backend (`git_repo_handler.py`):**
+
+```python
+from canvas_chat.url_fetch_handler_plugin import UrlFetchHandlerPlugin
+from canvas_chat.url_fetch_registry import UrlFetchRegistry, PRIORITY
+import subprocess
+import tempfile
+from pathlib import Path
+
+class GitRepoHandler(UrlFetchHandlerPlugin):
+    async def fetch_url(self, url: str, file_paths: list[str] = None,
+                       git_credentials: dict = None) -> dict:
+        """Fetch git repository files."""
+        repo_name = self._extract_repo_name(url)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_path = Path(temp_dir) / repo_name
+            self._clone_repository(url, repo_path, git_credentials)
+
+            # Fetch selected files
+            files_data = {}
+            for file_path in file_paths or []:
+                file_content = (repo_path / file_path).read_text()
+                files_data[file_path] = {
+                    "content": file_content,
+                    "lang": Path(file_path).suffix.lstrip("."),
+                    "status": "success",
+                }
+
+            return {
+                "title": repo_name,
+                "content": self._format_content(files_data),
+                "metadata": {
+                    "content_type": "git_repo",
+                    "url": url,
+                    "files": files_data,
+                },
+            }
+
+    async def list_files(self, url: str, git_credentials: dict = None) -> dict:
+        """List files in repository."""
+        # ... implementation ...
+        return {"files": file_tree}
+
+# Register handler
+UrlFetchRegistry.register(
+    id="git-repo",
+    url_patterns=[
+        r"^https?://(github|gitlab|bitbucket)\.com/.*$",
+        r"^git@.*:.*/.*\.git$",
+    ],
+    handler=GitRepoHandler,
+    priority=PRIORITY.BUILTIN,
+)
+
+# Register FastAPI endpoints
+def register_endpoints(app):
+    @app.post("/api/url-fetch/list-files")
+    async def list_files(request: ListFilesRequest):
+        # ... endpoint implementation ...
+        pass
+
+    @app.post("/api/url-fetch/fetch-files")
+    async def fetch_files(request: FetchFilesRequest):
+        # ... endpoint implementation ...
+        pass
+```
+
+**CSS (`git-repo.css`):**
+
+```css
+.git-repo-file-tree {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.git-repo-file-tree-item {
+    padding: 2px 0;
+    display: block;
+}
+
+.git-repo-file-fetched {
+    font-weight: bold;
+}
+```
+
+**Config (`config.yaml`):**
+
+```yaml
+plugins:
+  - id: git-repo
+    js: ./src/canvas_chat/static/js/plugins/git-repo.js
+    py: ./src/canvas_chat/plugins/git_repo_handler.py
+```
+
+## AI Prompts for Plugin Creation
+
+Use these prompts with AI assistants to create plugins:
+
+### Prompt 1: Simple Feature Plugin
+
+```text
+Create a Canvas-Chat feature plugin that adds a /bookmark slash command.
+
+Requirements:
+- Command: /bookmark
+- When executed, saves the currently selected nodes to a bookmark list
+- Shows a toast notification with count of bookmarked nodes
+- Stores bookmarks in localStorage
+- Use FeaturePlugin base class
+- Register in getSlashCommands() method
+- Include error handling and user feedback
+```
+
+### Prompt 2: Feature Plugin with Custom Node Type
+
+```text
+Create a Canvas-Chat plugin that adds a /todo slash command.
+
+Requirements:
+- Command: /todo
+- Creates a custom "todo" node type with:
+  - Checkbox to mark items as complete
+  - Strikethrough styling for completed items
+  - Custom node protocol extending BaseNode
+- Register both the feature plugin and node protocol
+- Include CSS for styling
+- Use NodeRegistry.register() for the node type
+```
+
+### Prompt 3: Backend URL Fetch Handler
+
+```text
+Create a Canvas-Chat backend URL fetch handler for Wikipedia articles.
+
+Requirements:
+- Python plugin extending UrlFetchHandlerPlugin
+- Handles URLs matching: https://en.wikipedia.org/wiki/*
+- Fetches article content using Wikipedia API
+- Returns title, content, and metadata
+- Registers with UrlFetchRegistry
+- Includes error handling for missing articles
+```
+
+### Prompt 4: Full-Stack Plugin (Frontend + Backend)
+
+```text
+Create a Canvas-Chat plugin for fetching Reddit posts with comments.
+
+Requirements:
+- Frontend: Feature plugin with /reddit slash command
+- Backend: Python handler for reddit.com URLs
+- Custom node type: "reddit" with:
+  - Post title and content in main area
+  - Comments in expandable drawer
+  - Upvote/downvote display
+- CSS styling for Reddit-like appearance
+- Register all components properly
+- Include error handling throughout
+```
+
+### Prompt 5: Plugin with Modal Interaction
+
+```text
+Create a Canvas-Chat plugin that adds a /configure slash command.
+
+Requirements:
+- Shows a modal with configuration form:
+  - Text input for API key
+  - Dropdown for model selection
+  - Checkbox for options
+- Saves configuration to localStorage
+- Validates input before saving
+- Uses ModalManager API
+- Shows success/error toasts
+```
+
+### Prompt 6: Plugin with LLM Integration
+
+```text
+Create a Canvas-Chat plugin that adds a /summarize-multiple slash command.
+
+Requirements:
+- Takes multiple selected nodes
+- Sends their content to LLM for summarization
+- Creates a new SUMMARY node with the result
+- Uses chat.sendMessage() for LLM calls
+- Shows streaming progress
+- Handles errors gracefully
+- Uses StreamingManager for concurrent operations
+```
+
+## Best Practices
+
+### File Organization
+
+```text
+my-plugin/
+├── my-plugin.js          # Frontend feature plugin
+├── my_handler.py         # Backend handler (optional)
+├── my-plugin.css         # CSS styles (optional)
+└── README.md            # Documentation
+```
+
+### Code Style
+
+- **JavaScript**: Use ES modules, async/await, proper error handling
+- **Python**: Follow PEP 8, use type hints, proper logging
+- **CSS**: Use CSS variables from Canvas-Chat theme system
+- **Naming**: Use kebab-case for file names, PascalCase for classes
+
+### Error Handling
+
+```javascript
+async handleCommand(command, args, context) {
+    try {
+        // Your logic
+    } catch (err) {
+        console.error('[MyFeature] Error:', err);
+        this.showToast?.('Operation failed: ' + err.message, 'error');
+    }
+}
+```
+
+### Testing
+
+- Test in browser console for frontend plugins
+- Test with real URLs for backend handlers
+- Verify CSS injection works
+- Test error cases (invalid input, network failures)
+
+### Documentation
+
+- Document all public methods
+- Include usage examples
+- Explain configuration requirements
+- List dependencies
 
 ## Troubleshooting
 
 ### Plugin not loading
 
 - Check browser console for import errors
-- Verify `export { MyFeature }` at the end of your file
-- Ensure all imports use correct paths
+- Verify file paths in config.yaml are correct
+- Ensure file extensions are `.js` or `.py`
+- Check server logs for Python plugin errors
 
-### Slash command not working
+### Slash command not appearing
 
-- Verify command is registered in `FeatureRegistry`
-- Check handler method name matches registration
-- Ensure handler method exists on feature class
+- Verify `getSlashCommands()` returns correct format
+- Check feature is registered in FeatureRegistry
+- Ensure handler method exists and is named correctly
+- Check priority doesn't conflict with other commands
 
-### API methods undefined
+### CSS not applying
 
-- Verify you're calling APIs via AppContext (e.g., `this.graph`, not `graph`)
-- Check that the API exists (see AppContext reference)
-- Ensure plugin is loaded after app initialization
+- Verify `injectCSS()` is called in `onLoad()`
+- Check CSS selectors match your HTML structure
+- Use browser DevTools to inspect injected styles
+- Ensure CSS is scoped (e.g., `.my-plugin .content`)
 
-### State not persisting
+### Backend handler not matching URLs
 
-- Use `this.storage.setItem()` to save state
-- Call in `onUnload()` or after state changes
-- Parse JSON when loading: `JSON.parse(this.storage.getItem(...))`
+- Verify URL patterns in `UrlFetchRegistry.register()`
+- Test regex patterns independently
+- Check priority (higher priority = checked first)
+- Ensure handler class extends `UrlFetchHandlerPlugin`
+
+## Next Steps
+
+- Read [Create Custom Node Types](./create-custom-node-plugins.md) for Level 1 plugins
+- Read [Feature Plugin API Reference](../reference/feature-plugin-api.md) for complete API docs
+- Study built-in plugins: `youtube.js`, `git-repo.js`, `committee.js`
+- Check [Plugin Architecture Explanation](../explanation/plugin-architecture.md) for design rationale

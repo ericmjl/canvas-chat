@@ -2,6 +2,8 @@
 
 This guide shows you how to extend Canvas-Chat with custom node types using the plugin system.
 
+**For complete plugin development including feature plugins and backend handlers, see [How to Create Plugins](./create-feature-plugins.md).**
+
 ## Overview
 
 Canvas-Chat's plugin system allows you to create custom node types with:
@@ -122,12 +124,21 @@ models:
       apiKeyEnvVar: 'OPENAI_API_KEY'
 
 plugins:
-    # Relative path (from config file location)
+    # Format 1: Simple path (JavaScript-only)
     - path: ./plugins/my-custom-node.js
+    # OR
+    - js: ./plugins/my-custom-node.js
 
-    # Or absolute path
+    # Format 2: Paired plugin (JavaScript + Python)
+    # - id: my-plugin
+    #   js: ./plugins/my-custom-node.js
+    #   py: ./plugins/my_handler.py
+
+    # Format 3: Absolute path
     # - path: /Users/you/projects/my-custom-node.js
 ```
+
+**Note:** For complete plugin architecture including feature plugins and backend handlers, see [How to Create Plugins](./create-feature-plugins.md).
 
 ## Step 3: Run Canvas-Chat
 

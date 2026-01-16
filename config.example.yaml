@@ -87,12 +87,22 @@ models:
     #   contextWindow: 128000
 
 # ============================================================================
-# PLUGINS - Extend canvas-chat with custom node types
+# PLUGINS - Extend canvas-chat with custom features
 # ============================================================================
 #
-# Optional. Plugins are JavaScript files that register custom node types.
+# Optional. Plugins can be JavaScript (.js), Python (.py), or both (paired).
 # Paths can be absolute or relative to this config file.
 # Plugins work in both normal and admin mode.
+#
+# Plugin formats:
+#   1. JavaScript-only: - path: ./plugins/my-plugin.js
+#                      OR - js: ./plugins/my-plugin.js
+#   2. Python-only:    - py: ./plugins/my_handler.py
+#   3. Paired:         - id: my-plugin
+#                        js: ./plugins/my-plugin.js
+#                        py: ./plugins/my_handler.py
+#
+# See docs/how-to/create-feature-plugins.md for complete plugin development guide.
 #
 # To test the plugin system with the example poll node:
 # 1. Uncomment the plugins section below
@@ -102,8 +112,18 @@ models:
 # 4. In browser console: app.createAndAddNode('poll', '', {data: {question: 'Favorite?', options: ['A', 'B']}})
 
 plugins:
-    # Example: Self-contained poll plugin (node protocol + feature)
+    # Example 1: JavaScript-only plugin (custom node type)
     # - path: ./src/canvas_chat/static/js/example-plugins/poll.js
+    # OR
+    # - js: ./src/canvas_chat/static/js/example-plugins/poll.js
+
+    # Example 2: Paired plugin (JavaScript + Python)
+    # - id: my-plugin
+    #   js: ./plugins/my-feature.js
+    #   py: ./plugins/my_handler.py
+
+    # Example 3: Python-only plugin (backend handler)
+    # - py: ./plugins/my_backend_handler.py
 
     # Add your custom plugins here:
     # - path: ./plugins/my-custom-node.js
@@ -132,9 +152,22 @@ plugins:
 #       Used for self-hosted models (Ollama, vLLM) or Azure deployments
 #
 # plugins (optional, array):
-#   - path (required, string): Path to plugin JavaScript file
-#       Can be absolute or relative to this config file
-#       Plugin files must be ES modules that import from '/static/js/'
+#   Format 1 (JavaScript-only):
+#     - path (string): Path to plugin JavaScript file
+#       OR
+#     - js (string): Path to plugin JavaScript file
+#
+#   Format 2 (Python-only):
+#     - py (string): Path to plugin Python file
+#
+#   Format 3 (Paired):
+#     - id (string): Unique plugin identifier
+#     - js (string): Path to plugin JavaScript file
+#     - py (string): Path to plugin Python file
+#
+#   Paths can be absolute or relative to this config file.
+#   JavaScript plugins must be ES modules that import from '/static/js/'
+#   Python plugins must extend plugin base classes (e.g., UrlFetchHandlerPlugin)
 #
 # ============================================================================
 # ENVIRONMENT VARIABLES
