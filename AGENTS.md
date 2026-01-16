@@ -101,6 +101,9 @@ canvas-chat/
 | `src/canvas_chat/static/js/factcheck.js`    | FactcheckFeature class | Claim verification, web search integration |
 | `src/canvas_chat/static/js/research.js`     | ResearchFeature class  | Deep research with Exa API                 |
 | `src/canvas_chat/static/js/code-feature.js` | CodeFeature class      | Self-healing code execution                |
+| `src/canvas_chat/static/js/plugins/git-repo.js` | GitRepoFeature class | Git repository fetching with file selection (`/git` command) |
+| `src/canvas_chat/static/js/plugins/youtube.js` | YouTubeFeature class | YouTube video fetching with transcript (`/youtube` command) |
+| `src/canvas_chat/static/js/plugins/url-fetch.js` | UrlFetchFeature class | Generic URL fetching (`/fetch` command) |
 
 #### Example plugins
 
@@ -665,15 +668,30 @@ class MyFeature extends FeaturePlugin {
 
 ### Slash commands
 
-Slash commands are defined in `SLASH_COMMANDS` array and handled by `tryHandleSlashCommand()`.
+Slash commands are registered via FeaturePlugin's `getSlashCommands()` method and routed by FeatureRegistry.
 
-To add a new slash command:
+**Built-in slash commands:**
 
-1. Add to `SLASH_COMMANDS` array with `command`, `description`, `placeholder`
-2. Add handler check in `tryHandleSlashCommand(content, context)`
-3. Implement `handleXxx()` method
+- `/fetch` - Generic URL fetching (basic FETCH_RESULT nodes, no special rendering)
+- `/git` - Git repository fetching with file selection (enhanced UX with file tree drawer)
+- `/youtube` - YouTube video fetching with transcript and video embedding (enhanced UX)
+- `/note` - Add markdown note
+- `/search` - Web search
+- `/research` - Deep research
+- `/committee` - Multi-LLM consultation
+- `/matrix` - Create comparison matrix
+- `/factcheck` - Verify claims
 
-The `context` parameter provides surrounding text for contextual commands (e.g., selected text).
+**Note:** `/fetch <url>` creates basic FETCH_RESULT nodes for any URL. For enhanced UX (file selection, video embedding), use specific commands like `/git` or `/youtube`.
+
+**To add a new slash command:**
+
+1. Create a FeaturePlugin class
+2. Implement `getSlashCommands()` method returning command definitions
+3. Implement `handleCommand(command, args, contextObj)` method
+4. Register feature in `FeatureRegistry.registerBuiltInFeatures()`
+
+The `contextObj` parameter provides surrounding text for contextual commands (e.g., selected text).
 This enables the LLM to resolve vague references like "how does this work?" into specific queries.
 
 ### Variable naming in handleSend
@@ -1498,6 +1516,35 @@ Common issues to watch for:
 - Variable name collisions (e.g., reusing `context` in different scopes)
 - Missing imports or incorrect function names
 
+### Debugging meta-loop: Always verify fixes work
+
+**CRITICAL:** When fixing bugs, especially after editing JavaScript files, always:
+
+1. **Test the fix immediately** - Don't assume it works
+2. **Check browser console** - Look for errors or warnings
+3. **Verify data structures match** - When passing data between frontend/backend or between functions, ensure:
+   - Key names match exactly (case-sensitive)
+   - Data formats match (e.g., `filePath` vs `file_path`)
+   - Object structures are preserved (e.g., nested objects, arrays)
+4. **Add defensive checks** - If data might not match exactly, add fallback logic:
+   - Case-insensitive matching
+   - Partial path matching
+   - Logging available keys when lookup fails
+5. **Add debug logging** - When debugging data flow issues, add console.log statements at key points:
+   - When data is received from backend
+   - When data is stored in node
+   - When data is retrieved from node
+   - When data is used in operations
+6. **Document learnings in AGENTS.md** - After solving a bug, add notes about:
+   - What the issue was
+   - Why it happened (data format mismatch, timing issue, CRDT storage, etc.)
+   - How to prevent it in the future
+   - Similar patterns to watch for
+
+**Example pattern:** File path mismatches between backend (normalized paths) and frontend (display paths) - always normalize or match flexibly.
+
+**Meta-reminder:** After solving any bug, update this section with what you learned, and remember to follow this meta-loop for future bugs!
+
 ### Verify APIs exist before using them
 
 **Before calling any method on `chat`, `canvas`, `storage`, or `graph` objects, verify the method exists.**
@@ -1542,6 +1589,7 @@ that are hard to debug because they only appear when the code path is triggered.
 - `showContinueButton(nodeId)` / `hideContinueButton(nodeId)` - Resume controls
 - `renderNode(node)` / `removeNode(nodeId)` - Node lifecycle
 - `panToNodeAnimated(nodeId)` - Navigate to a node
+- `selectGitRepoFile(nodeId, filePath)` - Select a file in a git repo node and open drawer
 
 `storage.js`:
 
@@ -1549,6 +1597,32 @@ that are hard to debug because they only appear when the code path is triggered.
 - `getApiKeyForProvider(provider)` - Get key for specific provider
 - `getExaApiKey()` - Get Exa search API key
 - `saveSession(session)` / `getSession(id)` - Session persistence
+
+### Common debugging patterns
+
+**File path mismatches:**
+
+- Backend may normalize paths (remove leading slashes, normalize separators)
+- Frontend may use display paths (from file tree structure)
+- **Solution:** Always try exact match first, then case-insensitive, then filename-only match
+- **Example:** `selectGitRepoFile()` in `canvas.js` handles path mismatches between tree display paths and backend file keys
+
+**Data structure mismatches:**
+
+- Backend returns data in one format (e.g., `metadata.files`)
+- Frontend expects it in another (e.g., `gitRepoData.files`)
+- **Solution:** Check where data is transformed and ensure keys match exactly
+- **Example:** Git repo files stored in `metadata.files` but accessed via `gitRepoData.files` - ensure transformation preserves all keys
+
+**CRDT nested object storage:**
+
+- Nested objects must be stored as `Y.Map` in CRDT to preserve nested properties
+- If stored as primitives, nested properties are lost on save/load
+- **Solution:** CRDT now handles ALL nested objects generically (not just specific ones like `metadata`)
+- **Pattern:** Any plain object (`value.constructor === Object`) is recursively converted to `Y.Map`
+- **Why generic:** Follows pluginification principle - plugins can add nested objects without core changes
+- **Special cases:** `position`, `cells`, `metadata` have explicit handling for backward compatibility, but generic handler covers all other nested objects
+- **When to apply:** No action needed - generic handler automatically preserves any nested object structure
 
 ## Modal Deployment
 

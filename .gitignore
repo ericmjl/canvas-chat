@@ -181,3 +181,6 @@ node_modules/
 
 # Admin mode config (contains API key env var references)
 config.yaml
+
+# TEMP
+FETCHING*.md
