@@ -631,11 +631,14 @@ class App {
             // Content editing events (for FETCH_RESULT nodes)
             .on('nodeEditContent', async (nodeId) => {
                 // Check if this is a git repo node and handle specially
-                const gitRepoFeature = this.featureRegistry?.getFeature('git-repo');
-                if (gitRepoFeature && gitRepoFeature.handleEditGitRepoNode) {
-                    const handled = await gitRepoFeature.handleEditGitRepoNode(nodeId);
-                    if (handled) {
-                        return; // Git repo feature handled it
+                const node = this.graph.getNode(nodeId);
+                if (node && node.gitRepoData && node.gitRepoData.url) {
+                    const gitRepoFeature = this.featureRegistry?.getFeature('git-repo');
+                    if (gitRepoFeature && gitRepoFeature.handleEditGitRepoNode) {
+                        const handled = await gitRepoFeature.handleEditGitRepoNode(nodeId);
+                        if (handled) {
+                            return; // Git repo feature handled it
+                        }
                     }
                 }
                 // Default handler for other node types
