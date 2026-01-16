@@ -72,6 +72,33 @@ export class GitRepoFeature extends FeaturePlugin {
     }
 
     /**
+     * Get git credentials from plugin-specific localStorage
+     * @returns {Object<string, string>} Map of host to credential
+     */
+    getGitCredentials() {
+        const creds = localStorage.getItem('git-repo-plugin-credentials');
+        return creds ? JSON.parse(creds) : {};
+    }
+
+    /**
+     * Save git credentials to plugin-specific localStorage
+     * @param {Object<string, string>} credentials - Map of host to credential
+     */
+    saveGitCredentials(credentials) {
+        localStorage.setItem('git-repo-plugin-credentials', JSON.stringify(credentials));
+    }
+
+    /**
+     * Get git credential for a specific host
+     * @param {string} host - Git host (e.g., 'github.com')
+     * @returns {string|null} Credential or null if not found
+     */
+    getGitCredentialForHost(host) {
+        const creds = this.getGitCredentials();
+        return creds[host] || null;
+    }
+
+    /**
      * Get git credentials for a specific URL's host
      * @param {string} url - Git repository URL
      * @returns {Object<string, string>} Map of host to credential (empty if none)
@@ -1270,7 +1297,7 @@ export class GitRepoFeature extends FeaturePlugin {
      * Save git credentials from settings modal
      * Called by app.saveSettings()
      */
-    saveGitCredentials() {
+    saveGitCredentialsFromModal() {
         const gitCreds = {
             'github.com': document.getElementById('git-github-cred')?.value.trim() || '',
             'gitlab.com': document.getElementById('git-gitlab-cred')?.value.trim() || '',
@@ -1293,6 +1320,7 @@ export class GitRepoFeature extends FeaturePlugin {
             }
         });
 
+        // Save using the storage method
         this.saveGitCredentials(gitCreds);
     }
 
