@@ -185,6 +185,15 @@ export class UrlFetchFeature extends FeaturePlugin {
                 updateData.youtubeVideoId = data.video_id;
             }
             this.graph.updateNode(fetchNode.id, updateData);
+
+            // Re-render node to show output panel if YouTube video is present
+            if (data.video_id) {
+                const updatedNode = this.graph.getNode(fetchNode.id);
+                if (updatedNode) {
+                    this.canvas.renderNode(updatedNode);
+                }
+            }
+
             this.saveSession?.();
         } catch (err) {
             // Update node with error message
