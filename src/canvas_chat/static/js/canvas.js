@@ -66,7 +66,6 @@ class Canvas {
         this.onNodeFitToViewport = null; // For resizing node to 80% of viewport
         this.onNodeResetSize = null; // For resetting node to default size
         this.onNodeEditContent = null; // For editing node content (FETCH_RESULT)
-        this.onNodeResummarize = null; // For re-summarizing edited content
         this.onNodeNavigate = null; // For navigating to parent/child nodes
         this.onNavParentClick = null; // For handling parent navigation button click
         this.onNavChildClick = null; // For handling child navigation button click
@@ -1778,9 +1777,7 @@ class Canvas {
                               ? 'fetch-summarize-btn'
                               : action.id === 'edit-content'
                                 ? 'edit-content-btn'
-                                : action.id === 'resummarize'
-                                  ? 'resummarize-btn'
-                                  : action.id === 'copy'
+                                : action.id === 'copy'
                                     ? 'copy-btn'
                                     : action.id === 'create-flashcards'
                                       ? 'create-flashcards-btn'
@@ -2615,15 +2612,6 @@ class Canvas {
             });
         }
 
-        // Re-summarize button (FETCH_RESULT nodes)
-        const resummarizeBtn = div.querySelector('.resummarize-btn');
-        if (resummarizeBtn) {
-            resummarizeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.emit('nodeResummarize', node.id);
-            });
-        }
-
         // Create flashcards button
         const createFlashcardsBtn = div.querySelector('.create-flashcards-btn');
         if (createFlashcardsBtn) {
@@ -2859,6 +2847,7 @@ class Canvas {
         });
 
         // Handle file clicks to open drawer (only for fetched files)
+        // 1. Files in the main content tree
         const gitRepoFileLabels = div.querySelectorAll('.git-repo-file-fetched-label[data-file-path]');
         gitRepoFileLabels.forEach((label) => {
             label.addEventListener('click', (e) => {
@@ -2866,31 +2855,149 @@ class Canvas {
                 e.preventDefault();
                 const filePath = label.dataset.filePath;
                 if (filePath) {
-                    // Use node.id directly (passed to setupNodeEvents)
-                    const nodeId = node.id;
-                    if (nodeId) {
-                        // Access graph via window.app (Canvas doesn't have direct graph reference)
-                        const graph = window.app?.graph;
-                        if (graph) {
-                            const currentNode = graph.getNode(nodeId);
-                            if (currentNode && currentNode.gitRepoData && currentNode.gitRepoData.files && currentNode.gitRepoData.files[filePath]) {
-                                // Set selected file and open drawer
-                                graph.updateNode(nodeId, {
-                                    selectedFilePath: filePath,
-                                    outputExpanded: true,
-                                    outputPanelHeight: currentNode.outputPanelHeight || 300, // Default height
-                                });
-                                // Re-render to show drawer
-                                const updatedNode = graph.getNode(nodeId);
-                                if (updatedNode) {
-                                    this.renderNode(updatedNode);
-                                }
-                            }
-                        }
-                    }
+                    this.selectGitRepoFile(node.id, filePath);
                 }
             });
         });
+
+        // 2. Files in the drawer file list
+        const gitRepoFileListItems = div.querySelectorAll('.git-repo-file-list-item[data-file-path]');
+        gitRepoFileListItems.forEach((item) => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const filePath = item.dataset.filePath;
+                if (filePath) {
+                    this.selectGitRepoFile(node.id, filePath);
+                }
+            });
+        });
+    }
+
+    /**
+     * Select a file in a git repo node and open the drawer
+     * @param {string} nodeId - Node ID
+     * @param {string} filePath - File path to select
+     */
+    selectGitRepoFile(nodeId, filePath) {
+        // Access graph via window.app (Canvas doesn't have direct graph reference)
+        const graph = window.app?.graph;
+        if (!graph) {
+            console.warn('[Canvas] selectGitRepoFile: graph not available');
+            return;
+        }
+
+        const currentNode = graph.getNode(nodeId);
+        if (!currentNode) {
+            console.warn('[Canvas] selectGitRepoFile: node not found', { nodeId, filePath });
+            return;
+        }
+
+        if (!currentNode.gitRepoData) {
+            console.warn('[Canvas] selectGitRepoFile: node has no gitRepoData', {
+                nodeId,
+                filePath,
+                nodeType: currentNode.type,
+                nodeKeys: Object.keys(currentNode).slice(0, 10)
+            });
+            return;
+        }
+
+        if (!currentNode.gitRepoData.files) {
+            console.warn('[Canvas] selectGitRepoFile: gitRepoData has no files', {
+                nodeId,
+                filePath,
+                gitRepoDataKeys: Object.keys(currentNode.gitRepoData),
+                gitRepoDataFilesType: typeof currentNode.gitRepoData.files
+            });
+            return;
+        }
+
+        // Try to find the file - the path might not match exactly due to normalization
+        let actualFilePath = filePath;
+        const files = currentNode.gitRepoData.files;
+
+        // First try exact match
+        if (!files[filePath]) {
+            // Try case-insensitive match
+            const lowerPath = filePath.toLowerCase();
+            actualFilePath = Object.keys(files).find(key => key.toLowerCase() === lowerPath);
+
+            // If still not found, try matching by filename (last part of path)
+            if (!actualFilePath) {
+                const fileName = filePath.split('/').pop();
+                actualFilePath = Object.keys(files).find(key => key.split('/').pop() === fileName);
+            }
+
+            // If still not found, log available keys for debugging
+            if (!actualFilePath) {
+                console.warn('[Canvas] selectGitRepoFile: file path not found', {
+                    requested: filePath,
+                    availableKeys: Object.keys(files).slice(0, 10), // First 10 for debugging
+                    totalFiles: Object.keys(files).length
+                });
+                return;
+            }
+        }
+
+        // Set selected file and open drawer (use actualFilePath which matches the key in files dict)
+        graph.updateNode(nodeId, {
+            selectedFilePath: actualFilePath,
+            outputExpanded: true,
+            outputPanelHeight: currentNode.outputPanelHeight || 300, // Default height
+        });
+
+        // Get the updated node (updateNode is synchronous)
+        const updatedNode = graph.getNode(nodeId);
+        if (!updatedNode) {
+            console.warn('[Canvas] selectGitRepoFile: node not found after update', nodeId);
+            return;
+        }
+
+        // Get the wrapper element
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) {
+            console.warn('[Canvas] selectGitRepoFile: wrapper not found', nodeId);
+            return;
+        }
+
+        // Update file selection highlight in the tree (without re-rendering the whole node)
+        // Remove previous selection highlight
+        wrapper.querySelectorAll('.git-repo-file-view-selected').forEach(el => {
+            el.classList.remove('git-repo-file-view-selected');
+        });
+
+        // Add selection highlight to the clicked file
+        // Find the file label with matching data-file-path
+        const fileLabels = wrapper.querySelectorAll('.git-repo-file-fetched-label[data-file-path]');
+        for (const label of fileLabels) {
+            const labelPath = label.dataset.filePath;
+            if (labelPath === actualFilePath ||
+                labelPath.toLowerCase() === actualFilePath.toLowerCase() ||
+                labelPath.split('/').pop() === actualFilePath.split('/').pop()) {
+                // Add highlight to the parent li element
+                const li = label.closest('.git-repo-file-tree-item');
+                if (li) {
+                    li.classList.add('git-repo-file-view-selected');
+                }
+                break;
+            }
+        }
+
+        // Clear existing output panel from map BEFORE calling renderOutputPanel
+        // This ensures the animation runs when switching files (hadExistingPanel will be false)
+        const existingPanel = this.outputPanels.get(nodeId);
+        if (existingPanel) {
+            existingPanel.remove();
+            this.outputPanels.delete(nodeId);
+        }
+
+        // Render/update only the output panel (not the entire node content)
+        // This preserves the scroll position of the file tree
+        const wrapped = wrapNode(updatedNode);
+        if (wrapped.hasOutput && wrapped.hasOutput()) {
+            this.renderOutputPanel(updatedNode, wrapper, { skipAnimation: false });
+        }
     }
 
     /**
