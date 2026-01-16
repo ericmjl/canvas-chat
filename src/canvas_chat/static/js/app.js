@@ -630,19 +630,27 @@ class App {
             .on('nodeResetSize', this.handleNodeResetSize.bind(this))
             // Content editing events (for FETCH_RESULT nodes)
             .on('nodeEditContent', async (nodeId) => {
+                console.log('[App] nodeEditContent event received for node:', nodeId);
                 try {
                     // Check if this is a git repo node and handle specially
                     const node = this.graph.getNode(nodeId);
+                    console.log('[App] Node from graph:', node ? 'found' : 'not found', 'has gitRepoData:', node?.gitRepoData ? 'yes' : 'no');
                     if (node && node.gitRepoData && node.gitRepoData.url) {
+                        console.log('[App] Detected git repo node, delegating to GitRepoFeature');
                         const gitRepoFeature = this.featureRegistry?.getFeature('git-repo');
                         if (gitRepoFeature && gitRepoFeature.handleEditGitRepoNode) {
+                            console.log('[App] Calling handleEditGitRepoNode');
                             const handled = await gitRepoFeature.handleEditGitRepoNode(nodeId);
+                            console.log('[App] handleEditGitRepoNode returned:', handled);
                             if (handled) {
                                 return; // Git repo feature handled it
                             }
+                        } else {
+                            console.log('[App] GitRepoFeature not available or handleEditGitRepoNode not found');
                         }
                     }
                     // Default handler for other node types
+                    console.log('[App] Using default handleNodeEditContent');
                     this.modalManager.handleNodeEditContent(nodeId);
                 } catch (err) {
                     console.error('[App] Error handling nodeEditContent:', err);
@@ -1137,22 +1145,32 @@ class App {
             // 'e' to edit selected node (code or content)
             if (e.key === 'e' && !e.target.matches('input, textarea')) {
                 const selectedNodeIds = this.canvas.getSelectedNodeIds();
+                console.log('[App] Keyboard shortcut "e" pressed, selected nodes:', selectedNodeIds);
                 if (selectedNodeIds.length === 1) {
                     const node = this.graph.getNode(selectedNodeIds[0]);
                     if (node) {
                         const wrapped = wrapNode(node);
                         const actions = wrapped.getActions();
+                        console.log('[App] Node actions:', actions.map(a => a.id), 'has gitRepoData:', !!node.gitRepoData);
 
                         // Check if node has edit actions
                         if (actions.some((a) => a.id === 'edit-code')) {
                             e.preventDefault();
+                            console.log('[App] Handling edit-code action');
                             this.modalManager.handleNodeEditCode(selectedNodeIds[0]);
                         } else if (actions.some((a) => a.id === 'edit-content')) {
                             e.preventDefault();
+                            console.log('[App] Emitting nodeEditContent event for node:', selectedNodeIds[0]);
                             // Emit event so git repo nodes can be handled specially
                             this.graph.emit('nodeEditContent', selectedNodeIds[0]);
+                        } else {
+                            console.log('[App] No edit action found for node');
                         }
+                    } else {
+                        console.log('[App] Node not found:', selectedNodeIds[0]);
                     }
+                } else {
+                    console.log('[App] No node selected or multiple nodes selected');
                 }
             }
 
