@@ -56,11 +56,12 @@ class UrlFetchHandlerPlugin(ABC):
             "UrlFetchHandlerPlugin.fetch_url() must be implemented by subclass"
         )
 
-    async def list_files(self, url: str) -> dict[str, Any] | None:
+    async def list_files(self, url: str, **kwargs: Any) -> dict[str, Any] | None:
         """List files available for selection (optional, for interactive selection).
 
         Args:
             url: URL to list files from
+            **kwargs: Additional handler-specific parameters (e.g., git_credentials)
 
         Returns:
             Dictionary with file tree structure, or None if not supported.
@@ -74,13 +75,14 @@ class UrlFetchHandlerPlugin(ABC):
         return None
 
     async def fetch_selected_files(
-        self, url: str, file_paths: list[str]
+        self, url: str, file_paths: list[str], **kwargs: Any
     ) -> dict[str, Any]:
         """Fetch content from selected files.
 
         Args:
             url: Repository URL
             file_paths: List of file paths to fetch (e.g., ["README.md", "src/main.py"])
+            **kwargs: Additional handler-specific parameters (e.g., git_credentials)
 
         Returns:
             Dictionary with:
