@@ -202,18 +202,19 @@ export class UrlFetchFeature extends FeaturePlugin {
             // Update node in graph first
             this.graph.updateNode(fetchNode.id, updateData);
 
-            // Update content display
-            this.canvas.updateNodeContent(fetchNode.id, nodeContent, false);
-
-            // Re-render node to show output panel if YouTube video is present
-            // This ensures hasOutput() detects youtubeVideoId and renders the panel
+            // For YouTube videos, do full re-render to show video and output panel
+            // For other URLs, just update content display
             if (data.video_id) {
                 // Get the updated node from graph (with youtubeVideoId and outputExpanded)
                 const updatedNode = this.graph.getNode(fetchNode.id);
                 if (updatedNode) {
                     // Full re-render to show video in main content and transcript in drawer
+                    // This will call renderContent() (shows video) and renderOutputPanel() (shows transcript)
                     this.canvas.renderNode(updatedNode);
                 }
+            } else {
+                // For non-YouTube URLs, just update content display
+                this.canvas.updateNodeContent(fetchNode.id, nodeContent, false);
             }
 
             this.saveSession?.();
