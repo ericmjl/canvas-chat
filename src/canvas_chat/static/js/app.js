@@ -1161,8 +1161,10 @@ class App {
                         } else if (actions.some((a) => a.id === 'edit-content')) {
                             e.preventDefault();
                             console.log('[App] Emitting nodeEditContent event for node:', selectedNodeIds[0]);
+                            console.log('[App] Graph has listeners for nodeEditContent:', this.graph._events?.has('nodeEditContent'));
                             // Emit event so git repo nodes can be handled specially
-                            this.graph.emit('nodeEditContent', selectedNodeIds[0]);
+                            const emitted = this.graph.emit('nodeEditContent', selectedNodeIds[0]);
+                            console.log('[App] Event emit returned:', emitted);
                         } else {
                             console.log('[App] No edit action found for node');
                         }
