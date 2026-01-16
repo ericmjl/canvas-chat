@@ -1087,15 +1087,84 @@ export class GitRepoFeature extends FeaturePlugin {
         const originalShowSettings = this.modalManager.showSettingsModal.bind(this.modalManager);
         this.modalManager.showSettingsModal = () => {
             originalShowSettings();
-            this.loadGitCredentialsUI();
+            this.injectGitCredentialsUI();
         };
+    }
+
+    /**
+     * Inject git credentials UI section into settings modal
+     */
+    injectGitCredentialsUI() {
+        const container = document.getElementById('plugin-settings-container');
+        if (!container) {
+            console.warn('[GitRepoFeature] plugin-settings-container not found');
+            return;
+        }
+
+        // Check if already injected (avoid duplicates)
+        if (container.querySelector('#git-repo-credentials-section')) {
+            this.loadGitCredentialsUI();
+            return;
+        }
+
+        // Create and inject the settings section
+        const section = document.createElement('div');
+        section.id = 'git-repo-credentials-section';
+        section.className = 'settings-section';
+        section.innerHTML = `
+            <h3>Git Repository Credentials</h3>
+            <p class="settings-note">
+                Personal Access Tokens (PATs) for accessing private repositories.
+                Leave empty for public repositories.
+            </p>
+
+            <div class="api-key-group">
+                <label for="git-github-cred">GitHub (github.com)</label>
+                <input type="password" id="git-github-cred" placeholder="ghp_... or github_pat_..." />
+                <small class="key-hint"
+                    >PAT with <code>repo</code> scope for private repos.
+                    <a href="https://github.com/settings/tokens" target="_blank">Create token</a></small
+                >
+            </div>
+
+            <div class="api-key-group">
+                <label for="git-gitlab-cred">GitLab (gitlab.com)</label>
+                <input type="password" id="git-gitlab-cred" placeholder="glpat-..." />
+                <small class="key-hint"
+                    >Personal Access Token with <code>read_repository</code> scope.
+                    <a href="https://gitlab.com/-/user_settings/personal_access_tokens" target="_blank">Create token</a></small
+                >
+            </div>
+
+            <div class="api-key-group">
+                <label for="git-bitbucket-cred">Bitbucket (bitbucket.org)</label>
+                <input type="password" id="git-bitbucket-cred" placeholder="App password..." />
+                <small class="key-hint"
+                    >App password with <code>Repositories: Read</code> permission.
+                    <a href="https://bitbucket.org/account/settings/app-passwords/" target="_blank">Create password</a></small
+                >
+            </div>
+
+            <div class="api-key-group">
+                <label for="git-generic-cred">Other Git Hosts</label>
+                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                    <input type="text" id="git-generic-host" placeholder="example.com" style="flex: 1;" />
+                    <input type="password" id="git-generic-cred" placeholder="Token or password" style="flex: 1;" />
+                    <button id="git-add-cred-btn" class="secondary-btn">Add</button>
+                </div>
+                <div id="git-custom-creds-list" style="margin-top: 8px;"></div>
+            </div>
+        `;
+
+        container.appendChild(section);
+        this.loadGitCredentialsUI();
     }
 
     /**
      * Load git credentials UI when settings modal is shown
      */
     loadGitCredentialsUI() {
-        const gitCreds = this.storage.getGitCredentials();
+        const gitCreds = this.getGitCredentials();
 
         // Load standard hosts
         const githubInput = document.getElementById('git-github-cred');
@@ -1133,9 +1202,9 @@ export class GitRepoFeature extends FeaturePlugin {
                     return;
                 }
 
-                const creds = this.storage.getGitCredentials();
+                const creds = this.getGitCredentials();
                 creds[host] = cred;
-                this.storage.saveGitCredentials(creds);
+                this.saveGitCredentials(creds);
 
                 // Clear inputs
                 hostInput.value = '';
@@ -1189,9 +1258,9 @@ export class GitRepoFeature extends FeaturePlugin {
         listContainer.querySelectorAll('.git-remove-cred-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const host = btn.dataset.host;
-                const creds = this.storage.getGitCredentials();
+                const creds = this.getGitCredentials();
                 delete creds[host];
-                this.storage.saveGitCredentials(creds);
+                this.saveGitCredentials(creds);
                 this.renderCustomGitCreds(creds);
             });
         });
@@ -1224,7 +1293,7 @@ export class GitRepoFeature extends FeaturePlugin {
             }
         });
 
-        this.storage.saveGitCredentials(gitCreds);
+        this.saveGitCredentials(gitCreds);
     }
 
     /**
