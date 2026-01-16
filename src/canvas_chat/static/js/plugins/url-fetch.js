@@ -169,7 +169,9 @@ export class UrlFetchFeature extends FeaturePlugin {
             // Update the node with the fetched content (matching app.js format)
             const fetchedContent = `**[${data.title}](${url})**\n\n${data.content}`;
             this.canvas.updateNodeContent(fetchNode.id, fetchedContent, false);
-            this.graph.updateNode(fetchNode.id, {
+
+            // Store YouTube video ID if present (for embedding)
+            const updateData = {
                 content: fetchedContent,
                 versions: [
                     {
@@ -178,7 +180,11 @@ export class UrlFetchFeature extends FeaturePlugin {
                         reason: 'fetched',
                     },
                 ],
-            });
+            };
+            if (data.video_id) {
+                updateData.youtubeVideoId = data.video_id;
+            }
+            this.graph.updateNode(fetchNode.id, updateData);
             this.saveSession?.();
         } catch (err) {
             // Update node with error message

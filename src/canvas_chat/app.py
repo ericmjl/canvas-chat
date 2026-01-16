@@ -2296,6 +2296,7 @@ class FetchUrlResult(BaseModel):
     url: str
     title: str
     content: str  # Markdown content
+    video_id: str | None = None  # Optional: YouTube video ID for embedding
     files: dict[str, dict[str, Any]] | None = (
         None  # Optional: file content map for drawer (path -> {content, lang, status})
     )
@@ -2429,7 +2430,10 @@ async def fetch_url(request: FetchUrlRequest):
                 result = await handler.fetch_url(request.url)
                 logger.info(f"Successfully fetched URL via handler: {result['title']}")
                 return FetchUrlResult(
-                    url=request.url, title=result["title"], content=result["content"]
+                    url=request.url,
+                    title=result["title"],
+                    content=result["content"],
+                    video_id=result.get("video_id"),
                 )
             except Exception as handler_error:
                 logger.warning(
