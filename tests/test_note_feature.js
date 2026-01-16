@@ -228,14 +228,17 @@ await asyncTest('NoteNode getActions returns correct actions', async () => {
 
     const node = createNode(NodeType.NOTE, 'Test note', {});
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
 
     assertTrue(Array.isArray(actions), 'Actions should be an array');
-    assertTrue(actions.length > 0, 'Should have at least one action');
+    assertTrue(actions.length === 4, 'Should have 4 actions (REPLY, EDIT_CONTENT, COPY, CREATE_FLASHCARDS)');
 
-    // Check for expected actions
+    // Check for expected actions (defaults + additional)
     const actionIds = actions.map((a) => a.id);
     assertTrue(actionIds.includes('reply'), 'Should include REPLY action');
+    assertTrue(actionIds.includes('edit-content'), 'Should include EDIT_CONTENT action');
+    assertTrue(actionIds.includes('copy'), 'Should include COPY action');
+    assertTrue(actionIds.includes('create-flashcards'), 'Should include CREATE_FLASHCARDS action');
     assertTrue(actionIds.includes('edit-content'), 'Should include EDIT_CONTENT action');
     assertTrue(actionIds.includes('create-flashcards'), 'Should include CREATE_FLASHCARDS action');
     assertTrue(actionIds.includes('copy'), 'Should include COPY action');

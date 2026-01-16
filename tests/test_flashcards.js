@@ -379,18 +379,19 @@ test('FlashcardNode: renderContent shows learning status for failed cards (repet
     assertTrue(html.includes('Due tomorrow'), 'Should show Due tomorrow');
 });
 
-test('FlashcardNode: getActions includes FLIP_CARD', () => {
+test('FlashcardNode: getComputedActions includes FLIP_CARD', () => {
     const node = { type: NodeType.FLASHCARD, content: 'Q', question: 'Q', answer: 'A', srs: null };
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
     assertTrue(actions.some(a => a.id === 'flip-card'), 'Should include flip-card action');
     assertTrue(actions.some(a => a.id === 'edit-content'), 'Should include edit-content action');
     assertTrue(actions.some(a => a.id === 'copy'), 'Should include copy action');
+    assertTrue(actions.some(a => a.id === 'reply'), 'Should include reply action');
 });
 
-test('FlashcardNode: getActions includes REVIEW_CARD', () => {
+test('FlashcardNode: getComputedActions includes REVIEW_CARD', () => {
     const node = { type: NodeType.FLASHCARD, content: 'Q', question: 'Q', answer: 'A', srs: null };
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
     assertTrue(actions.some(a => a.id === 'review-card'), 'FlashcardNode should include review-card action');
 });

@@ -904,15 +904,8 @@ export class GitRepoFeature extends FeaturePlugin {
         // Register custom node protocol for git repository nodes
         // This extends the original protocol and adds git repo tree rendering
         const GitRepoProtocol = class extends OriginalProtocol {
-            /**
-             * Get action buttons for git repo nodes
-             * Only show Reply, Edit, and Copy (no Re-summarize or Flashcards)
-             * @returns {Array} Array of action button definitions
-             */
-            getActions() {
-                // Actions is imported at the top of the file
-                return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.COPY];
-            }
+            // Uses default actions [Reply, Edit, Copy] from BaseNode
+            // Edit is handled specially via nodeEditContent event listener
 
             /**
              * Copy all fetched files to clipboard with format:
@@ -1331,13 +1324,8 @@ export class GitRepoFeature extends FeaturePlugin {
      */
     async handleEditGitRepoNode(nodeId) {
         const node = this.graph.getNode(nodeId);
-        if (!node) {
-            console.warn('[GitRepoFeature] Node not found:', nodeId);
-            return false;
-        }
-        if (!node.gitRepoData || !node.gitRepoData.url) {
+        if (!node || !node.gitRepoData || !node.gitRepoData.url) {
             // Not a git repo node, let default handler take over
-            console.log('[GitRepoFeature] Node is not a git repo node:', nodeId, 'has gitRepoData:', !!node.gitRepoData);
             return false;
         }
 

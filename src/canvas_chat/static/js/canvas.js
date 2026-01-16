@@ -1760,7 +1760,7 @@ class Canvas {
         const typeIcon = wrapped.getTypeIcon();
         const typeLabel = wrapped.getTypeLabel();
         const contentHtml = wrapped.renderContent(this);
-        const actions = wrapped.getActions();
+        const actions = wrapped.getComputedActions();
         const headerButtons = wrapped.getHeaderButtons();
         const contentClasses = wrapped.getContentClasses();
 

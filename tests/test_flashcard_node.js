@@ -252,20 +252,21 @@ await asyncTest('FlashcardNode getActions returns correct actions in expected or
         back: 'Answer',
     });
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
 
-    // FlashcardNode has custom actions: FLIP_CARD, REVIEW_CARD, EDIT_CONTENT, COPY
+    // FlashcardNode hides edit-content from defaults, adds FLIP_CARD, REVIEW_CARD, EDIT_CONTENT
     assertTrue(Array.isArray(actions), 'Actions should be an array');
-    assertTrue(actions.length === 4, 'Should have exactly 4 actions');
+    assertTrue(actions.length === 5, 'Should have exactly 5 actions (REPLY, COPY, FLIP_CARD, REVIEW_CARD, EDIT_CONTENT)');
 
-    // Check for expected actions in expected order
-    assertEqual(actions[0], Actions.FLIP_CARD, 'First action should be FLIP_CARD');
-    assertEqual(actions[1], Actions.REVIEW_CARD, 'Second action should be REVIEW_CARD');
-    assertEqual(actions[2], Actions.EDIT_CONTENT, 'Third action should be EDIT_CONTENT');
-    assertEqual(actions[3], Actions.COPY, 'Fourth action should be COPY');
+    // Check for expected actions (defaults + additional)
+    const actionIds = actions.map((a) => a.id);
+    assertTrue(actionIds.includes('reply'), 'Should include REPLY');
+    assertTrue(actionIds.includes('copy'), 'Should include COPY');
+    assertTrue(actionIds.includes('flip-card'), 'Should include FLIP_CARD');
+    assertTrue(actionIds.includes('review-card'), 'Should include REVIEW_CARD');
+    assertTrue(actionIds.includes('edit-content'), 'Should include EDIT_CONTENT');
 
     // Verify no duplicates
-    const actionIds = actions.map((a) => a.id);
     const uniqueIds = new Set(actionIds);
     assertTrue(uniqueIds.size === actions.length, 'Actions should not have duplicates');
 });
@@ -295,8 +296,10 @@ await asyncTest('wrapNode returns FlashcardNode for FLASHCARD type', async () =>
     // Verify it's wrapped correctly (not BaseNode)
     assertTrue(wrapped.getTypeLabel() === 'Flashcard', 'Should return Flashcard node protocol');
     assertTrue(wrapped.getTypeIcon() === '🎴', 'Should have flashcard icon');
-    const actions = wrapped.getActions();
-    assertTrue(actions.length === 4 && actions[0] === Actions.FLIP_CARD, 'Should have FLIP_CARD action');
+    const actions = wrapped.getComputedActions();
+    const actionIds = actions.map((a) => a.id);
+    assertTrue(actionIds.includes('flip-card'), 'Should have FLIP_CARD action');
+    assertTrue(actions.length === 5, 'Should have 5 actions (REPLY, COPY, FLIP_CARD, REVIEW_CARD, EDIT_CONTENT)');
 });
 
 // Test: FlashcardNode handles edge cases
@@ -325,8 +328,8 @@ await asyncTest('FlashcardNode handles missing content', async () => {
     const html = wrapped.renderContent(mockCanvas);
     assertTrue(html.includes('No question'), 'Should show "No question" placeholder');
     assertTrue(html.includes('No answer'), 'Should show "No answer" placeholder');
-    const actions = wrapped.getActions();
-    assertTrue(Array.isArray(actions) && actions.length === 4, 'Should return actions even with missing content');
+    const actions = wrapped.getComputedActions();
+    assertTrue(Array.isArray(actions) && actions.length === 5, 'Should return actions even with missing content');
 });
 
 console.log('\n✅ All Flashcard node plugin tests passed!\n');

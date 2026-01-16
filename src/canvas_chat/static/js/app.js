@@ -630,27 +630,19 @@ class App {
             .on('nodeResetSize', this.handleNodeResetSize.bind(this))
             // Content editing events (for FETCH_RESULT nodes)
             .on('nodeEditContent', async (nodeId) => {
-                console.log('[App] nodeEditContent event received for node:', nodeId);
                 try {
                     // Check if this is a git repo node and handle specially
                     const node = this.graph.getNode(nodeId);
-                    console.log('[App] Node from graph:', node ? 'found' : 'not found', 'has gitRepoData:', node?.gitRepoData ? 'yes' : 'no');
                     if (node && node.gitRepoData && node.gitRepoData.url) {
-                        console.log('[App] Detected git repo node, delegating to GitRepoFeature');
                         const gitRepoFeature = this.featureRegistry?.getFeature('git-repo');
                         if (gitRepoFeature && gitRepoFeature.handleEditGitRepoNode) {
-                            console.log('[App] Calling handleEditGitRepoNode');
                             const handled = await gitRepoFeature.handleEditGitRepoNode(nodeId);
-                            console.log('[App] handleEditGitRepoNode returned:', handled);
                             if (handled) {
                                 return; // Git repo feature handled it
                             }
-                        } else {
-                            console.log('[App] GitRepoFeature not available or handleEditGitRepoNode not found');
                         }
                     }
                     // Default handler for other node types
-                    console.log('[App] Using default handleNodeEditContent');
                     this.modalManager.handleNodeEditContent(nodeId);
                 } catch (err) {
                     console.error('[App] Error handling nodeEditContent:', err);
@@ -1124,53 +1116,44 @@ class App {
                 this.deleteSelectedNodes();
             }
 
-            // 'r' to focus reply/chat input when a node is selected
-            if (e.key === 'r' && !e.target.matches('input, textarea')) {
+            // Keyboard shortcuts for node actions (protocol-based dispatch)
+            if (!e.target.matches('input, textarea')) {
                 const selectedNodeIds = this.canvas.getSelectedNodeIds();
-                if (selectedNodeIds.length > 0) {
-                    e.preventDefault();
-                    this.chatInput.focus();
-                }
-            }
-
-            // 'c' to copy selected node content
-            if (e.key === 'c' && !e.target.matches('input, textarea') && !(e.metaKey || e.ctrlKey)) {
-                const selectedNodeIds = this.canvas.getSelectedNodeIds();
-                if (selectedNodeIds.length === 1) {
-                    e.preventDefault();
-                    this.copyNodeContent(selectedNodeIds[0]);
-                }
-            }
-
-            // 'e' to edit selected node (code or content)
-            if (e.key === 'e' && !e.target.matches('input, textarea')) {
-                const selectedNodeIds = this.canvas.getSelectedNodeIds();
-                console.log('[App] Keyboard shortcut "e" pressed, selected nodes:', selectedNodeIds);
                 if (selectedNodeIds.length === 1) {
                     const node = this.graph.getNode(selectedNodeIds[0]);
                     if (node) {
                         const wrapped = wrapNode(node);
-                        const actions = wrapped.getActions();
-                        console.log('[App] Node actions:', actions.map(a => a.id), 'has gitRepoData:', !!node.gitRepoData);
+                        const shortcuts = wrapped.getKeyboardShortcuts();
 
-                        // Check if node has edit actions
-                        if (actions.some((a) => a.id === 'edit-code')) {
-                            e.preventDefault();
-                            console.log('[App] Handling edit-code action');
-                            this.modalManager.handleNodeEditCode(selectedNodeIds[0]);
-                        } else if (actions.some((a) => a.id === 'edit-content')) {
-                            e.preventDefault();
-                            console.log('[App] Emitting nodeEditContent event for node:', selectedNodeIds[0]);
-                            // Emit event on canvas (not graph) so git repo nodes can be handled specially
-                            this.canvas.emit('nodeEditContent', selectedNodeIds[0]);
-                        } else {
-                            console.log('[App] No edit action found for node');
+                        // Check if pressed key matches any shortcut
+                        for (const [key, config] of Object.entries(shortcuts)) {
+                            // Match key (case-sensitive for uppercase keys like 'A')
+                            const keyMatches = e.key === key;
+                            // Check modifiers
+                            const shiftMatches = !config.shift || e.shiftKey;
+                            const ctrlMatches = !config.ctrl || e.ctrlKey || e.metaKey;
+                            // Don't trigger if Ctrl/Cmd is pressed (unless required by shortcut)
+                            const noAccidentalCtrl = !config.ctrl || e.ctrlKey || e.metaKey;
+
+                            if (keyMatches && shiftMatches && ctrlMatches && noAccidentalCtrl) {
+                                // Special handling for 'r' - focus chat input instead of emitting event
+                                if (key === 'r' && config.handler === 'nodeReply') {
+                                    e.preventDefault();
+                                    this.chatInput.focus();
+                                    return;
+                                }
+
+                                // Special handling for 'c' - don't trigger if Ctrl/Cmd is pressed
+                                if (key === 'c' && (e.ctrlKey || e.metaKey)) {
+                                    return; // Let browser handle Ctrl+C
+                                }
+
+                                e.preventDefault();
+                                this.canvas.emit(config.handler, node.id);
+                                return;
+                            }
                         }
-                    } else {
-                        console.log('[App] Node not found:', selectedNodeIds[0]);
                     }
-                } else {
-                    console.log('[App] No node selected or multiple nodes selected');
                 }
             }
 

@@ -236,16 +236,18 @@ test('CodeNode getCode falls back to content', () => {
     assertEqual(wrapped.getCode(), 'print("hello")');
 });
 
-test('CodeNode getActions returns correct actions', () => {
+test('CodeNode getComputedActions returns correct actions', () => {
     const node = { id: 'test', type: NodeType.CODE, code: '', content: '' };
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
     assertTrue(actions.length > 0, 'Should have actions');
     const actionIds = actions.map((a) => a.id);
+    assertTrue(actionIds.includes('reply'), 'Should include reply');
     assertTrue(actionIds.includes('edit-code'), 'Should include edit-code');
     assertTrue(actionIds.includes('generate'), 'Should include generate');
     assertTrue(actionIds.includes('run-code'), 'Should include run-code');
     assertTrue(actionIds.includes('copy'), 'Should include copy');
+    assertFalse(actionIds.includes('edit-content'), 'Should not include edit-content');
 });
 
 test('CodeNode supportsStopContinue returns true', () => {

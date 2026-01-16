@@ -40,8 +40,8 @@ class NoteNode extends BaseNode {
     /**
      * Action buttons for the note node
      */
-    getActions() {
-        return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.CREATE_FLASHCARDS, Actions.COPY];
+    getAdditionalActions() {
+        return [Actions.CREATE_FLASHCARDS];
     }
 }
 

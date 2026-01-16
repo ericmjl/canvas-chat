@@ -17,8 +17,8 @@ class FetchResultNode extends BaseNode {
         return '📄';
     }
 
-    getActions() {
-        return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.RESUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
+    getAdditionalActions() {
+        return [Actions.RESUMMARIZE, Actions.CREATE_FLASHCARDS];
     }
 }
 

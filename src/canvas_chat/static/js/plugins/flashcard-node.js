@@ -65,8 +65,21 @@ class FlashcardNode extends BaseNode {
         `;
     }
 
-    getActions() {
-        return [Actions.FLIP_CARD, Actions.REVIEW_CARD, Actions.EDIT_CONTENT, Actions.COPY];
+    getHiddenActionIds() {
+        return ['edit-content']; // Hide default edit, we add it back in additional actions for custom edit
+    }
+
+    getAdditionalActions() {
+        return [Actions.FLIP_CARD, Actions.REVIEW_CARD, Actions.EDIT_CONTENT];
+    }
+
+    getKeyboardShortcuts() {
+        const shortcuts = super.getKeyboardShortcuts();
+        // Remove edit shortcut (cards aren't edited via keyboard)
+        delete shortcuts['e'];
+        // Add 'f' for flip card
+        shortcuts['f'] = { action: 'flip-card', handler: 'nodeFlipCard' };
+        return shortcuts;
     }
 
     /**

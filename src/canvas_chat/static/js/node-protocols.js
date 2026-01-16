@@ -108,10 +108,52 @@ class BaseNode {
 
     /**
      * Get action buttons for the node action bar
+     * Default actions for all nodes: Reply, Edit, Copy
      * @returns {Array<{id: string, label: string, title: string}>}
      */
     getActions() {
-        return [Actions.REPLY, Actions.COPY];
+        return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.COPY];
+    }
+
+    /**
+     * Override in subclasses to hide specific default actions
+     * @returns {Array<string>} Array of action IDs to hide (e.g., ['edit-content'])
+     */
+    getHiddenActionIds() {
+        return [];
+    }
+
+    /**
+     * Override in subclasses to add custom actions
+     * @returns {Array<{id: string, label: string, title: string}>} Additional actions to add
+     */
+    getAdditionalActions() {
+        return [];
+    }
+
+    /**
+     * Final computed actions (don't override this)
+     * Combines default actions (minus hidden ones) with additional actions
+     * @returns {Array<{id: string, label: string, title: string}>}
+     */
+    getComputedActions() {
+        const hidden = new Set(this.getHiddenActionIds());
+        const defaults = this.getActions().filter((a) => !hidden.has(a.id));
+        return [...defaults, ...this.getAdditionalActions()];
+    }
+
+    /**
+     * Get keyboard shortcuts for this node type
+     * Default shortcuts: r (reply), e (edit-content), c (copy)
+     * Override in subclasses to customize shortcuts
+     * @returns {Object<string, {action: string, handler: string, shift?: boolean, ctrl?: boolean}>}
+     */
+    getKeyboardShortcuts() {
+        return {
+            r: { action: 'reply', handler: 'nodeReply' },
+            e: { action: 'edit-content', handler: 'nodeEditContent' },
+            c: { action: 'copy', handler: 'nodeCopy' },
+        };
     }
 
     /**

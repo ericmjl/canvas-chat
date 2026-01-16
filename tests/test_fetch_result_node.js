@@ -98,17 +98,17 @@ await asyncTest('FetchResultNode getActions returns correct actions in expected 
 
     const node = createNode(NodeType.FETCH_RESULT, 'Fetched content...', {});
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
 
     assertTrue(Array.isArray(actions), 'Actions should be an array');
     assertTrue(actions.length === 5, 'Should have exactly 5 actions');
 
-    // Check for expected actions in expected order
-    assertEqual(actions[0], Actions.REPLY, 'First action should be REPLY');
-    assertEqual(actions[1], Actions.EDIT_CONTENT, 'Second action should be EDIT_CONTENT');
-    assertEqual(actions[2], Actions.RESUMMARIZE, 'Third action should be RESUMMARIZE');
-    assertEqual(actions[3], Actions.CREATE_FLASHCARDS, 'Fourth action should be CREATE_FLASHCARDS');
-    assertEqual(actions[4], Actions.COPY, 'Fifth action should be COPY');
+    // Check for expected actions in expected order (defaults + additional)
+    assertEqual(actions[0].id, 'reply', 'First action should be REPLY');
+    assertEqual(actions[1].id, 'edit-content', 'Second action should be EDIT_CONTENT');
+    assertEqual(actions[2].id, 'copy', 'Third action should be COPY');
+    assertEqual(actions[3].id, 'resummarize', 'Fourth action should be RESUMMARIZE');
+    assertEqual(actions[4].id, 'create-flashcards', 'Fifth action should be CREATE_FLASHCARDS');
 
     // Verify no duplicates
     const actionIds = actions.map((a) => a.id);
@@ -149,7 +149,7 @@ await asyncTest('FetchResultNode handles empty content', async () => {
 
     // Should still work with empty content
     assertEqual(wrapped.getTypeLabel(), 'Fetched Content', 'Should return type label even with empty content');
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
     assertTrue(Array.isArray(actions) && actions.length === 5, 'Should return actions even with empty content');
 });
 

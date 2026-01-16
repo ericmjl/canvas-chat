@@ -172,8 +172,21 @@ class CodeNode extends BaseNode {
         return true;
     }
 
-    getActions() {
-        return [Actions.EDIT_CODE, Actions.GENERATE, Actions.RUN_CODE, Actions.COPY];
+    getHiddenActionIds() {
+        return ['edit-content']; // Hide default edit, use edit-code instead
+    }
+
+    getAdditionalActions() {
+        return [Actions.EDIT_CODE, Actions.GENERATE, Actions.RUN_CODE];
+    }
+
+    getKeyboardShortcuts() {
+        const shortcuts = super.getKeyboardShortcuts();
+        // Override 'e' to use edit-code instead of edit-content
+        shortcuts['e'] = { action: 'edit-code', handler: 'nodeEditCode' };
+        // Add Shift+A for AI generate
+        shortcuts['A'] = { action: 'generate', handler: 'nodeGenerate', shift: true };
+        return shortcuts;
     }
 
     supportsStopContinue() {

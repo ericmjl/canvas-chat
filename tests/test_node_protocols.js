@@ -377,12 +377,62 @@ test('getSummaryText: truncates long content', () => {
 // getActions Tests
 // ============================================================
 
-test('getActions: BaseNode returns REPLY and COPY', () => {
+test('getActions: BaseNode returns REPLY, EDIT_CONTENT, and COPY', () => {
     const node = { type: NodeType.NOTE, content: 'Test' };
     const wrapped = wrapNode(node);
     const actions = wrapped.getActions();
     assertIncludes(actions, Actions.REPLY);
+    assertIncludes(actions, Actions.EDIT_CONTENT);
     assertIncludes(actions, Actions.COPY);
+});
+
+test('getComputedActions: BaseNode returns default actions', () => {
+    const node = { type: NodeType.NOTE, content: 'Test' };
+    const wrapped = wrapNode(node);
+    const actions = wrapped.getComputedActions();
+    assertTrue(actions.some((a) => a.id === 'reply'));
+    assertTrue(actions.some((a) => a.id === 'edit-content'));
+    assertTrue(actions.some((a) => a.id === 'copy'));
+});
+
+test('getKeyboardShortcuts: BaseNode returns default shortcuts', () => {
+    const node = { type: NodeType.NOTE, content: 'Test' };
+    const wrapped = wrapNode(node);
+    const shortcuts = wrapped.getKeyboardShortcuts();
+    assertEqual(shortcuts['r'].handler, 'nodeReply');
+    assertEqual(shortcuts['e'].handler, 'nodeEditContent');
+    assertEqual(shortcuts['c'].handler, 'nodeCopy');
+});
+
+test('getHiddenActionIds: filters out actions from getComputedActions', () => {
+    // Create a custom protocol that hides 'edit-content'
+    class TestNode extends BaseNode {
+        getHiddenActionIds() {
+            return ['edit-content'];
+        }
+    }
+
+    const node = { id: 'test', type: 'test', content: 'test' };
+    const wrapped = new TestNode(node);
+    const actions = wrapped.getComputedActions();
+
+    assertTrue(actions.some((a) => a.id === 'reply'));
+    assertTrue(!actions.some((a) => a.id === 'edit-content'));
+    assertTrue(actions.some((a) => a.id === 'copy'));
+});
+
+test('getAdditionalActions: adds custom actions', () => {
+    class TestNode extends BaseNode {
+        getAdditionalActions() {
+            return [{ id: 'custom', label: 'Custom', title: 'Custom action' }];
+        }
+    }
+
+    const node = { id: 'test', type: 'test', content: 'test' };
+    const wrapped = new TestNode(node);
+    const actions = wrapped.getComputedActions();
+
+    assertTrue(actions.some((a) => a.id === 'custom'));
 });
 
 test('getActions: AINode includes SUMMARIZE', () => {
@@ -399,22 +449,23 @@ test('getActions: ReferenceNode includes FETCH_SUMMARIZE', () => {
     assertIncludes(actions, Actions.FETCH_SUMMARIZE);
 });
 
-test('getActions: FetchResultNode includes EDIT_CONTENT and RESUMMARIZE', () => {
+test('getComputedActions: FetchResultNode includes EDIT_CONTENT and RESUMMARIZE', () => {
     const node = { type: NodeType.FETCH_RESULT, content: 'Content' };
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
     assertIncludes(actions, Actions.EDIT_CONTENT);
     assertIncludes(actions, Actions.RESUMMARIZE);
 });
 
 // Note: NoteNode is now a plugin - test via NodeRegistry
-test('getActions: NoteNode includes EDIT_CONTENT (via plugin)', async () => {
+test('getComputedActions: NoteNode includes EDIT_CONTENT and CREATE_FLASHCARDS (via plugin)', async () => {
     // Import note.js to register the plugin
     await import('../src/canvas_chat/static/js/plugins/note.js');
     const node = { type: NodeType.NOTE, content: 'Note' };
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
     assertIncludes(actions, Actions.EDIT_CONTENT);
+    assertIncludes(actions, Actions.CREATE_FLASHCARDS);
 });
 
 // ============================================================
@@ -564,43 +615,51 @@ test('getTypeIcon: CodeNode returns code icon', () => {
     assertEqual(wrapped.getTypeIcon(), '🐍');
 });
 
-test('getActions: CodeNode includes EDIT_CODE action', () => {
+test('getComputedActions: CodeNode hides edit-content and includes edit-code', () => {
     const node = { type: NodeType.CODE, code: 'print("hello")' };
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
+    assertTrue(!actions.some((a) => a.id === 'edit-content'));
     assertIncludes(actions, Actions.EDIT_CODE);
 });
 
-test('getActions: CodeNode includes GENERATE action', () => {
+test('getComputedActions: CodeNode includes GENERATE action', () => {
     const node = { type: NodeType.CODE, code: 'print("hello")' };
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
     assertIncludes(actions, Actions.GENERATE);
 });
 
-test('getActions: CodeNode includes RUN_CODE action', () => {
+test('getComputedActions: CodeNode includes RUN_CODE action', () => {
     const node = { type: NodeType.CODE, code: 'print("hello")' };
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
     assertIncludes(actions, Actions.RUN_CODE);
 });
 
-test('getActions: CodeNode includes COPY action', () => {
+test('getComputedActions: CodeNode includes COPY action', () => {
     const node = { type: NodeType.CODE, code: 'print("hello")' };
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
     assertIncludes(actions, Actions.COPY);
 });
 
-test('getActions: CodeNode action order is EDIT_CODE, GENERATE, RUN_CODE, COPY', () => {
+test('getComputedActions: CodeNode includes REPLY, EDIT_CODE, GENERATE, RUN_CODE, COPY', () => {
     const node = { type: NodeType.CODE, code: 'print("hello")' };
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
-    assertEqual(actions.length, 4);
-    assertEqual(actions[0], Actions.EDIT_CODE);
-    assertEqual(actions[1], Actions.GENERATE);
-    assertEqual(actions[2], Actions.RUN_CODE);
-    assertEqual(actions[3], Actions.COPY);
+    const actions = wrapped.getComputedActions();
+    assertTrue(actions.some((a) => a.id === 'reply'));
+    assertTrue(actions.some((a) => a.id === 'edit-code'));
+    assertTrue(actions.some((a) => a.id === 'generate'));
+    assertTrue(actions.some((a) => a.id === 'run-code'));
+    assertTrue(actions.some((a) => a.id === 'copy'));
+});
+
+test('getKeyboardShortcuts: CodeNode maps e to edit-code', () => {
+    const node = { type: NodeType.CODE, code: 'print("hello")' };
+    const wrapped = wrapNode(node);
+    const shortcuts = wrapped.getKeyboardShortcuts();
+    assertEqual(shortcuts['e'].handler, 'nodeEditCode');
 });
 
 test('renderContent: CodeNode renders code-display with code block', () => {

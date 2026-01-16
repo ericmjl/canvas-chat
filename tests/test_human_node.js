@@ -94,13 +94,14 @@ await asyncTest('HumanNode getActions returns default actions', async () => {
 
     const node = createNode(NodeType.HUMAN, 'Hello, world!', {});
     const wrapped = wrapNode(node);
-    const actions = wrapped.getActions();
+    const actions = wrapped.getComputedActions();
 
-    // HumanNode doesn't override getActions, so it should return BaseNode default
+    // HumanNode doesn't override getActions, so it should return BaseNode defaults
     assertTrue(Array.isArray(actions), 'Actions should be an array');
-    assertTrue(actions.length === 2, 'Should have 2 default actions (REPLY, COPY)');
+    assertTrue(actions.length === 3, 'Should have 3 default actions (REPLY, EDIT_CONTENT, COPY)');
     assertEqual(actions[0].id, 'reply', 'First action should be REPLY');
-    assertEqual(actions[1].id, 'copy', 'Second action should be COPY');
+    assertEqual(actions[1].id, 'edit-content', 'Second action should be EDIT_CONTENT');
+    assertEqual(actions[2].id, 'copy', 'Third action should be COPY');
 
     // Verify no duplicate actions
     const actionIds = actions.map((a) => a.id);
