@@ -4758,8 +4758,8 @@ df.head()
 
         // Let git-repo plugin handle saving its own credentials
         const gitRepoFeature = this.featureRegistry?.getFeature('git-repo');
-        if (gitRepoFeature && gitRepoFeature.saveGitCredentials) {
-            gitRepoFeature.saveGitCredentials();
+        if (gitRepoFeature && gitRepoFeature.saveGitCredentialsFromModal) {
+            gitRepoFeature.saveGitCredentialsFromModal();
         }
 
         // Save base URL
