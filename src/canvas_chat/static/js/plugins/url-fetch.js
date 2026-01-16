@@ -166,16 +166,28 @@ export class UrlFetchFeature extends FeaturePlugin {
 
             const data = await response.json();
 
-            // Update the node with the fetched content (matching app.js format)
-            const fetchedContent = `**[${data.title}](${url})**\n\n${data.content}`;
-            this.canvas.updateNodeContent(fetchNode.id, fetchedContent, false);
+            // For YouTube videos: extract transcript from content, show video in main content
+            let nodeContent = data.content;
+            if (data.video_id) {
+                // Extract transcript (everything after "---\n\n" separator)
+                const transcriptStart = data.content.indexOf('---\n\n');
+                if (transcriptStart !== -1) {
+                    // Use just the transcript as content (for LLM context)
+                    nodeContent = data.content.substring(transcriptStart + 5); // Skip "---\n\n"
+                }
+            } else {
+                // For non-YouTube URLs, use full content with title
+                nodeContent = `**[${data.title}](${url})**\n\n${data.content}`;
+            }
+
+            this.canvas.updateNodeContent(fetchNode.id, nodeContent, false);
 
             // Store YouTube video ID if present (for embedding)
             const updateData = {
-                content: fetchedContent,
+                content: nodeContent,
                 versions: [
                     {
-                        content: fetchedContent,
+                        content: nodeContent,
                         timestamp: Date.now(),
                         reason: 'fetched',
                     },
@@ -183,6 +195,8 @@ export class UrlFetchFeature extends FeaturePlugin {
             };
             if (data.video_id) {
                 updateData.youtubeVideoId = data.video_id;
+                // Open drawer by default for YouTube videos to show transcript
+                updateData.outputExpanded = true;
             }
             this.graph.updateNode(fetchNode.id, updateData);
 

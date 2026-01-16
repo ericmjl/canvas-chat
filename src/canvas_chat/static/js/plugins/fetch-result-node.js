@@ -66,19 +66,8 @@ class FetchResultNode extends BaseNode {
             return '';
         }
 
-        // Extract transcript from content (everything after the header/metadata)
-        // Content format: "**[Title](URL)**\n\n**Video ID:** ...\n\n**URL:** ...\n\n**Language:** ...\n\n---\n\n**[timestamp]** text..."
-        const content = this.node.content || '';
-
-        // Find the transcript section (after the "---" separator)
-        const transcriptStart = content.indexOf('---\n\n');
-        if (transcriptStart === -1) {
-            // Fallback: show full content if separator not found
-            return canvas.renderMarkdown(content);
-        }
-
-        // Extract transcript (everything after "---\n\n")
-        const transcript = content.substring(transcriptStart + 5); // Skip "---\n\n"
+        // For YouTube videos, content IS the transcript (no extraction needed)
+        const transcript = this.node.content || '';
 
         // Render transcript as markdown
         return canvas.renderMarkdown(transcript);
