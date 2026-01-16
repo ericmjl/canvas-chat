@@ -51,6 +51,7 @@ from canvas_chat.file_upload_registry import FileUploadRegistry
 from canvas_chat.plugins import (
     git_repo_handler,  # noqa: F401
     pdf_handler,  # noqa: F401
+    youtube_handler,  # noqa: F401
 )
 from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE
 from canvas_chat.url_fetch_registry import UrlFetchRegistry
