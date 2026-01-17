@@ -5,6 +5,7 @@ Keep this file updated whenever new cross-component dependencies are discovered.
 ## Update cross-dependency map
 
 - **Copilot authentication or other provider auth flows** → update model list refresh (`app.js`), storage keys (`storage.js`), backend provider endpoints (`app.py`), auto-refresh logic (`chat.js`), and settings modal wiring (`index.html`, `modal-manager.js`).
+- **Admin mode credential injection** → update `app.py` injection helpers, provider-models access, and Copilot auth endpoints to enforce admin-only model policy.
 - **Settings modal changes** → update `modal-manager.js` loading logic and `app.js` event bindings, plus any storage schema updates.
 - **New modal APIs on ModalManager** → update `tests/test_app_init.js` method binding checks.
 - **Model registry changes (`app.py`)** → update UI model picker refresh behavior and `tests/test_models.js` if request/response shapes change.

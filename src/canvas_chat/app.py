@@ -539,7 +539,9 @@ def extract_provider(model: str) -> str:
     return "openai"
 
 
-GITHUB_COPILOT_API_BASE = "https://api.githubcopilot.com"
+GITHUB_COPILOT_API_BASE = os.getenv(
+    "GITHUB_COPILOT_API_BASE", "https://api.githubcopilot.com"
+)
 GITHUB_COPILOT_CLIENT_ID = "Iv1.b507a08c87ecfe98"
 GITHUB_COPILOT_DEVICE_CODE_URL = "https://github.com/login/device/code"
 GITHUB_COPILOT_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
@@ -575,6 +577,46 @@ def add_copilot_headers(kwargs: dict, model: str) -> dict:
     copilot_headers = get_copilot_headers(model)
     if copilot_headers:
         kwargs["extra_headers"] = {**kwargs.get("extra_headers", {}), **copilot_headers}
+    return kwargs
+
+
+def is_copilot_model(model: str | None) -> bool:
+    """Check if a model is a GitHub Copilot model."""
+    return bool(model and model.startswith("github_copilot/"))
+
+
+def ensure_copilot_allowed() -> None:
+    """Raise if Copilot is requested in admin mode."""
+    if get_admin_config().admin_mode:
+        raise HTTPException(
+            status_code=400,
+            detail="GitHub Copilot is not available in admin mode",
+        )
+
+
+def prepare_copilot_openai_request(
+    kwargs: dict, model: str, api_key: str | None
+) -> dict:
+    """Transform Copilot requests into OpenAI-compatible calls."""
+    if not is_copilot_model(model):
+        return kwargs
+
+    ensure_copilot_allowed()
+
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "COPILOT_AUTH_REQUIRED: "
+                "Open Settings → GitHub Copilot authentication "
+                "to connect your account."
+            ),
+        )
+
+    kwargs["model"] = model.split("/", 1)[1]
+    kwargs["base_url"] = GITHUB_COPILOT_API_BASE
+    add_copilot_headers(kwargs, model)
+
     return kwargs
 
 
@@ -1103,6 +1145,12 @@ def inject_admin_credentials(request: T) -> T:
     if model_id is None:
         return request
 
+    if is_copilot_model(model_id):
+        raise HTTPException(
+            status_code=400,
+            detail="GitHub Copilot is not available in admin mode",
+        )
+
     api_key, base_url = config.resolve_credentials(model_id)
 
     if api_key is None:
@@ -1145,6 +1193,12 @@ def inject_admin_credentials_committee(request: CommitteeRequest) -> CommitteeRe
 
     # Collect all models that need credentials
     all_models = list(request.models) + [request.chairman_model]
+
+    if any(is_copilot_model(model_id) for model_id in all_models):
+        raise HTTPException(
+            status_code=400,
+            detail="GitHub Copilot is not available in admin mode",
+        )
 
     # Build api_keys dict from admin config
     admin_api_keys: dict[str, str] = {}
@@ -1191,7 +1245,9 @@ async def get_provider_models(request: ProviderModelsRequest) -> list[ModelInfo]
     provider = request.provider.lower()
     api_key = request.api_key
 
-    if provider != "github_copilot" and not api_key:
+    if provider == "github_copilot":
+        ensure_copilot_allowed()
+    elif not api_key:
         raise HTTPException(status_code=400, detail="API key is required")
 
     models: list[dict] = []
@@ -1244,8 +1300,7 @@ async def chat(request: ChatRequest, http_request: Request):
     if request.base_url:
         kwargs["base_url"] = request.base_url
 
-    # Add GitHub Copilot headers if needed
-    add_copilot_headers(kwargs, request.model)
+    kwargs = prepare_copilot_openai_request(kwargs, request.model, request.api_key)
 
     async def generate():
         """Generate SSE events from the LLM stream."""
@@ -1340,8 +1395,7 @@ Summary:"""
     if request.base_url:
         kwargs["base_url"] = request.base_url
 
-    # Add GitHub Copilot headers if needed
-    add_copilot_headers(kwargs, request.model)
+    kwargs = prepare_copilot_openai_request(kwargs, request.model, request.api_key)
 
     try:
         response = await litellm.acompletion(**kwargs)
@@ -1366,6 +1420,7 @@ Summary:"""
 @app.post("/api/github-copilot/auth/start", response_model=CopilotAuthStartResponse)
 async def start_copilot_auth():
     """Start GitHub Copilot device authentication."""
+    ensure_copilot_allowed()
     data = await request_copilot_device_code()
     return CopilotAuthStartResponse(
         verification_url=data.get("verification_uri")
@@ -1381,6 +1436,7 @@ async def start_copilot_auth():
 @app.post("/api/github-copilot/auth/complete", response_model=CopilotAuthResponse)
 async def complete_copilot_auth(request: CopilotAuthCompleteRequest):
     """Complete GitHub Copilot device authentication."""
+    ensure_copilot_allowed()
     access_token = await poll_copilot_access_token(
         request.device_code, request.interval, request.expires_in
     )
@@ -1396,6 +1452,7 @@ async def complete_copilot_auth(request: CopilotAuthCompleteRequest):
 @app.post("/api/github-copilot/auth/refresh", response_model=CopilotAuthResponse)
 async def refresh_copilot_auth(request: CopilotAuthRefreshRequest):
     """Refresh GitHub Copilot API key using stored access token."""
+    ensure_copilot_allowed()
     api_key_info = await fetch_copilot_api_key(request.access_token)
     expires_at = api_key_info.get("expires_at") or int(time.time()) + 3600
     return CopilotAuthResponse(
@@ -1836,7 +1893,7 @@ async def _llm_text(
     if base_url:
         kwargs["base_url"] = base_url
 
-    add_copilot_headers(kwargs, model)
+    kwargs = prepare_copilot_openai_request(kwargs, model, api_key)
     response = await litellm.acompletion(**kwargs)
     return (response.choices[0].message.content or "").strip()
 
@@ -3002,191 +3059,7 @@ Example 2 output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", 
         if request.base_url:
             kwargs["base_url"] = request.base_url
 
-        # Add GitHub Copilot headers if needed
-        add_copilot_headers(kwargs, request.model)
-
-        response = await litellm.acompletion(**kwargs)
-        content = response.choices[0].message.content.strip()
-
-        # Handle potential markdown code blocks
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-            content = content.strip()
-
-        result = json.loads(content)
-
-        # Validate structure
-        if not isinstance(result, dict):
-            raise ValueError("Response is not an object")
-        if "rows" not in result or "columns" not in result:
-            raise ValueError("Response missing 'rows' or 'columns'")
-
-        rows = [str(item) for item in result["rows"][:10]]
-        columns = [str(item) for item in result["columns"][:10]]
-
-        logger.info(f"Parsed {len(rows)} rows and {len(columns)} columns from content")
-        return {"rows": rows, "columns": columns}
-
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse LLM response as JSON: {e}")
-        raise HTTPException(status_code=500, detail="Failed to parse lists") from e
-    except Exception as e:
-        logger.error(f"Parse two lists failed: {e}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.post("/api/matrix/fill")
-async def matrix_fill(request: MatrixFillRequest):
-    """
-    Fill a single matrix cell by evaluating row item against column item.
-
-    Returns SSE stream with the evaluation content.
-    """
-    # Inject admin credentials if in admin mode
-    inject_admin_credentials(request)
-
-    logger.info(
-        f"Matrix fill request: row_item={request.row_item[:50]}..., "
-        f"col_item={request.col_item[:50]}..."
-    )
-
-    provider = extract_provider(request.model)
-
-    async def generate():
-        try:
-            system_prompt = (
-                f"""You fill matrix cells with BRIEF evaluations. """
-                f"""Context: {request.context}
-
-STRICT FORMAT RULES:
-- MAXIMUM 50 words total
-- NO headers, NO bullet points, NO markdown formatting
-- NO section titles like "Key Points" or "Summary"
-- Plain text only, 2-3 sentences max
-- Start directly with your evaluation
-
-FORBIDDEN patterns:
-- "## " or "### " (markdown headers)
-- "**Bold text**"
-- Starting with "This intersection..." or "When evaluating..."
-- Lists or structured formats
-
-Write like a terse expert jotting a note, not a formal report.
-
-Be extremely concise. Sacrifice grammar for the sake of concision."""
-            )
-
-            # Build messages with history context
-            messages = [{"role": "system", "content": system_prompt}]
-
-            # Add conversation history for context (if any)
-            for msg in request.messages:
-                messages.append({"role": msg.role, "content": msg.content})
-
-            # Add the specific cell evaluation request
-            cell_prompt = f"""Row item: {request.row_item}
-
-Column item: {request.col_item}
-
-Evaluate this intersection:"""
-            messages.append({"role": "user", "content": cell_prompt})
-
-            kwargs = {
-                "model": request.model,
-                "messages": messages,
-                "temperature": 0.7,
-                "stream": True,
-            }
-
-            api_key = get_api_key_for_provider(provider, request.api_key)
-            if api_key:
-                kwargs["api_key"] = api_key
-
-            if request.base_url:
-                kwargs["base_url"] = request.base_url
-
-            # Add GitHub Copilot headers if needed
-            add_copilot_headers(kwargs, request.model)
-
-            response = await litellm.acompletion(**kwargs)
-
-            async for chunk in response:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    yield {"event": "content", "data": content}
-
-            yield {"event": "done", "data": ""}
-
-        except Exception as e:
-            logger.error(f"Matrix fill failed: {e}")
-            logger.error(traceback.format_exc())
-            yield {"event": "error", "data": str(e)}
-
-    return EventSourceResponse(generate())
-
-
-@app.post("/api/generate-title")
-async def generate_title(request: GenerateTitleRequest):
-    """
-    Generate a session title based on conversation content.
-
-    Returns a short, descriptive title for the canvas session.
-    """
-    # Inject admin credentials if in admin mode
-    inject_admin_credentials(request)
-
-    logger.info(f"Generate title request: content length={len(request.content)}")
-
-    provider = extract_provider(request.model)
-
-    system_prompt = (
-        """Generate a short, descriptive title for a conversation/session """
-        """based on the content provided.
-
-Rules:
-- Return ONLY the title text, no quotes or extra formatting
-- Keep it concise: 3-6 words is ideal
-- Make it descriptive of the main topic or theme
-- Use title case
-- Do not include generic words like "Discussion" or "Chat" unless truly relevant
-- If content mentions specific topics, technologies, or concepts, include them
-
-Examples of good titles:
-- "Python API Design Patterns"
-- "Marketing Strategy Q1 2025"
-- "Machine Learning Model Optimization"
-- "React Component Architecture"
-"""
-    )
-
-    try:
-        kwargs = {
-            "model": request.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": (
-                        f"Generate a title for this conversation:\n\n{request.content}"
-                    ),
-                },
-            ],
-            "temperature": 0.7,
-            "max_tokens": 50,
-        }
-
-        api_key = get_api_key_for_provider(provider, request.api_key)
-        if api_key:
-            kwargs["api_key"] = api_key
-
-        if request.base_url:
-            kwargs["base_url"] = request.base_url
-
-        # Add GitHub Copilot headers if needed
-        add_copilot_headers(kwargs, request.model)
+        kwargs = prepare_copilot_openai_request(kwargs, request.model, api_key)
 
         response = await litellm.acompletion(**kwargs)
         title = response.choices[0].message.content.strip()
@@ -3257,8 +3130,7 @@ Examples:
         if request.base_url:
             kwargs["base_url"] = request.base_url
 
-        # Add GitHub Copilot headers if needed
-        add_copilot_headers(kwargs, request.model)
+        kwargs = prepare_copilot_openai_request(kwargs, request.model, api_key)
 
         response = await litellm.acompletion(**kwargs)
         content = response.choices[0].message.content
@@ -3413,7 +3285,7 @@ async def generate_code(request: GenerateCodeRequest, http_request: Request):
         if request.base_url:
             kwargs["base_url"] = request.base_url
 
-        add_copilot_headers(kwargs, request.model)
+        kwargs = prepare_copilot_openai_request(kwargs, request.model, api_key)
 
         async def generate():
             try:
@@ -3509,7 +3381,7 @@ async def stream_single_opinion(
         if base_url:
             kwargs["base_url"] = base_url
 
-        add_copilot_headers(kwargs, model)
+        kwargs = prepare_copilot_openai_request(kwargs, model, api_key)
 
         response = await litellm.acompletion(**kwargs)
         full_content = ""
@@ -3602,7 +3474,7 @@ Please review and rank these opinions.""",
         if base_url:
             kwargs["base_url"] = base_url
 
-        add_copilot_headers(kwargs, reviewer_model)
+        kwargs = prepare_copilot_openai_request(kwargs, reviewer_model, api_key)
 
         response = await litellm.acompletion(**kwargs)
         full_content = ""
@@ -3862,7 +3734,9 @@ Provide your own assessment of the most accurate and helpful response."""
             if request.base_url:
                 kwargs["base_url"] = request.base_url
 
-            add_copilot_headers(kwargs, request.chairman_model)
+            kwargs = prepare_copilot_openai_request(
+                kwargs, request.chairman_model, chairman_api_key
+            )
 
             response = await litellm.acompletion(**kwargs)
             synthesis_content = ""
