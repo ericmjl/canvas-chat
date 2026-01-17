@@ -3,14 +3,7 @@
  * Tests localStorage functions: RecentModels, Provider mapping, Custom Models, etc.
  */
 
-import {
-    test,
-    assertEqual,
-    assertTrue,
-    assertFalse,
-    assertNull,
-    assertDeepEqual
-} from './test_setup.js';
+import { test, assertEqual, assertTrue, assertFalse, assertNull, assertDeepEqual } from './test_setup.js';
 
 // ============================================================
 // Mock localStorage for testing
@@ -57,7 +50,7 @@ function createRecentModelsStorage(localStorage) {
             const recent = this.getRecentModels();
 
             // Remove if already exists (will re-add at front)
-            const filtered = recent.filter(id => id !== modelId);
+            const filtered = recent.filter((id) => id !== modelId);
 
             // Add to front
             filtered.unshift(modelId);
@@ -66,7 +59,7 @@ function createRecentModelsStorage(localStorage) {
             const trimmed = filtered.slice(0, 10);
 
             localStorage.setItem('canvas-chat-recent-models', JSON.stringify(trimmed));
-        }
+        },
     };
 }
 
@@ -110,7 +103,7 @@ test('addRecentModel: moves existing model to front', () => {
     assertEqual(storage.getRecentModels(), [
         'openai/gpt-4o',
         'groq/llama-3.1-70b-versatile',
-        'anthropic/claude-sonnet-4-20250514'
+        'anthropic/claude-sonnet-4-20250514',
     ]);
 });
 
@@ -160,14 +153,14 @@ function createProviderMappingStorage(localStorage) {
     return {
         _getStorageKeyForProvider(provider) {
             const providerMap = {
-                'openai': 'openai',
-                'anthropic': 'anthropic',
-                'gemini': 'google',
-                'google': 'google',
-                'groq': 'groq',
-                'github': 'github',
-                'github_copilot': 'github',
-                'exa': 'exa'
+                openai: 'openai',
+                anthropic: 'anthropic',
+                gemini: 'google',
+                google: 'google',
+                groq: 'groq',
+                github: 'github',
+                github_copilot: 'github_copilot',
+                exa: 'exa',
             };
             return providerMap[provider.toLowerCase()] || provider.toLowerCase();
         },
@@ -181,7 +174,24 @@ function createProviderMappingStorage(localStorage) {
             localStorage.setItem('canvas-chat-api-keys', JSON.stringify(keys));
         },
 
+        getCopilotAuth() {
+            const data = localStorage.getItem('canvas-chat-copilot-auth');
+            return data ? JSON.parse(data) : null;
+        },
+
+        saveCopilotAuth(auth) {
+            localStorage.setItem('canvas-chat-copilot-auth', JSON.stringify(auth));
+        },
+
+        getCopilotApiKey() {
+            return this.getCopilotAuth()?.apiKey || null;
+        },
+
         getApiKeyForProvider(provider) {
+            const normalizedProvider = provider.toLowerCase();
+            if (normalizedProvider === 'github_copilot') {
+                return this.getCopilotApiKey();
+            }
             const keys = this.getApiKeys();
             const storageKey = this._getStorageKeyForProvider(provider);
             return keys[storageKey] || null;
@@ -198,7 +208,7 @@ function createProviderMappingStorage(localStorage) {
                 }
             }
             return apiKeys;
-        }
+        },
     };
 }
 
@@ -219,12 +229,12 @@ test('_getStorageKeyForProvider: gemini maps to google', () => {
     assertEqual(storage._getStorageKeyForProvider('google'), 'google');
 });
 
-test('_getStorageKeyForProvider: github_copilot maps to github', () => {
+test('_getStorageKeyForProvider: github_copilot maps to github_copilot', () => {
     const mockStorage = new MockLocalStorage();
     const storage = createProviderMappingStorage(mockStorage);
 
     assertEqual(storage._getStorageKeyForProvider('github'), 'github');
-    assertEqual(storage._getStorageKeyForProvider('github_copilot'), 'github');
+    assertEqual(storage._getStorageKeyForProvider('github_copilot'), 'github_copilot');
 });
 
 test('_getStorageKeyForProvider: case insensitive', () => {
@@ -233,7 +243,7 @@ test('_getStorageKeyForProvider: case insensitive', () => {
 
     assertEqual(storage._getStorageKeyForProvider('OpenAI'), 'openai');
     assertEqual(storage._getStorageKeyForProvider('GEMINI'), 'google');
-    assertEqual(storage._getStorageKeyForProvider('GitHub_Copilot'), 'github');
+    assertEqual(storage._getStorageKeyForProvider('GitHub_Copilot'), 'github_copilot');
 });
 
 test('_getStorageKeyForProvider: unknown provider returns lowercase', () => {
@@ -249,21 +259,22 @@ test('getApiKeyForProvider: returns key using mapping', () => {
     const storage = createProviderMappingStorage(mockStorage);
 
     storage.saveApiKeys({
-        'openai': 'sk-openai-key',
-        'google': 'google-key',
-        'github': 'gh-token'
+        openai: 'sk-openai-key',
+        google: 'google-key',
+        github: 'gh-token',
     });
+    storage.saveCopilotAuth({ apiKey: 'copilot-token' });
 
     assertEqual(storage.getApiKeyForProvider('openai'), 'sk-openai-key');
     assertEqual(storage.getApiKeyForProvider('gemini'), 'google-key');
-    assertEqual(storage.getApiKeyForProvider('github_copilot'), 'gh-token');
+    assertEqual(storage.getApiKeyForProvider('github_copilot'), 'copilot-token');
 });
 
 test('getApiKeyForProvider: returns null for unconfigured provider', () => {
     const mockStorage = new MockLocalStorage();
     const storage = createProviderMappingStorage(mockStorage);
 
-    storage.saveApiKeys({ 'openai': 'sk-key' });
+    storage.saveApiKeys({ openai: 'sk-key' });
 
     assertNull(storage.getApiKeyForProvider('anthropic'));
     assertNull(storage.getApiKeyForProvider('mistral'));
@@ -274,19 +285,16 @@ test('getApiKeysForModels: builds dict from model IDs', () => {
     const storage = createProviderMappingStorage(mockStorage);
 
     storage.saveApiKeys({
-        'openai': 'sk-openai',
-        'anthropic': 'sk-anthropic',
-        'google': 'google-key'
+        openai: 'sk-openai',
+        anthropic: 'sk-anthropic',
+        google: 'google-key',
     });
 
-    const result = storage.getApiKeysForModels([
-        'openai/gpt-4o',
-        'anthropic/claude-sonnet-4-20250514'
-    ]);
+    const result = storage.getApiKeysForModels(['openai/gpt-4o', 'anthropic/claude-sonnet-4-20250514']);
 
     assertDeepEqual(result, {
-        'openai': 'sk-openai',
-        'anthropic': 'sk-anthropic'
+        openai: 'sk-openai',
+        anthropic: 'sk-anthropic',
     });
 });
 
@@ -295,18 +303,28 @@ test('getApiKeysForModels: maps gemini to google', () => {
     const storage = createProviderMappingStorage(mockStorage);
 
     storage.saveApiKeys({
-        'openai': 'sk-openai',
-        'google': 'google-key'
+        openai: 'sk-openai',
+        google: 'google-key',
     });
 
-    const result = storage.getApiKeysForModels([
-        'openai/gpt-4o',
-        'gemini/gemini-1.5-pro'
-    ]);
+    const result = storage.getApiKeysForModels(['openai/gpt-4o', 'gemini/gemini-1.5-pro']);
 
     assertDeepEqual(result, {
-        'openai': 'sk-openai',
-        'google': 'google-key'
+        openai: 'sk-openai',
+        google: 'google-key',
+    });
+});
+
+test('getApiKeysForModels: includes github_copilot auth', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createProviderMappingStorage(mockStorage);
+
+    storage.saveCopilotAuth({ apiKey: 'copilot-token' });
+
+    const result = storage.getApiKeysForModels(['github_copilot/gpt-4']);
+
+    assertDeepEqual(result, {
+        github_copilot: 'copilot-token',
     });
 });
 
@@ -315,17 +333,17 @@ test('getApiKeysForModels: skips models without configured keys', () => {
     const storage = createProviderMappingStorage(mockStorage);
 
     storage.saveApiKeys({
-        'openai': 'sk-openai'
+        openai: 'sk-openai',
     });
 
     const result = storage.getApiKeysForModels([
         'openai/gpt-4o',
-        'anthropic/claude-sonnet-4-20250514',  // No key configured
-        'mistral/mistral-large'  // Unknown provider, no key
+        'anthropic/claude-sonnet-4-20250514', // No key configured
+        'mistral/mistral-large', // Unknown provider, no key
     ]);
 
     assertDeepEqual(result, {
-        'openai': 'sk-openai'
+        openai: 'sk-openai',
     });
 });
 
@@ -334,18 +352,14 @@ test('getApiKeysForModels: deduplicates providers', () => {
     const storage = createProviderMappingStorage(mockStorage);
 
     storage.saveApiKeys({
-        'openai': 'sk-openai'
+        openai: 'sk-openai',
     });
 
     // Multiple models from same provider
-    const result = storage.getApiKeysForModels([
-        'openai/gpt-4o',
-        'openai/gpt-4o-mini',
-        'openai/gpt-3.5-turbo'
-    ]);
+    const result = storage.getApiKeysForModels(['openai/gpt-4o', 'openai/gpt-4o-mini', 'openai/gpt-3.5-turbo']);
 
     assertDeepEqual(result, {
-        'openai': 'sk-openai'
+        openai: 'sk-openai',
     });
 });
 
@@ -354,7 +368,7 @@ test('getApiKeysForModels: empty array returns empty object', () => {
     const storage = createProviderMappingStorage(mockStorage);
 
     storage.saveApiKeys({
-        'openai': 'sk-openai'
+        openai: 'sk-openai',
     });
 
     const result = storage.getApiKeysForModels([]);
@@ -390,14 +404,14 @@ function createCustomModelsStorage(localStorage) {
             const models = this.getCustomModels();
 
             // Check if model already exists (update) or is new (add)
-            const existingIndex = models.findIndex(m => m.id === model.id);
+            const existingIndex = models.findIndex((m) => m.id === model.id);
 
             const customModel = {
                 id: model.id,
-                name: model.name || model.id,  // Default to ID if no name
+                name: model.name || model.id, // Default to ID if no name
                 provider: 'Custom',
                 context_window: model.context_window || 128000,
-                base_url: model.base_url || null
+                base_url: model.base_url || null,
             };
 
             if (existingIndex >= 0) {
@@ -412,10 +426,10 @@ function createCustomModelsStorage(localStorage) {
 
         deleteCustomModel(modelId) {
             const models = this.getCustomModels();
-            const filtered = models.filter(m => m.id !== modelId);
+            const filtered = models.filter((m) => m.id !== modelId);
             localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-            return filtered.length < models.length;  // Return true if deleted
-        }
+            return filtered.length < models.length; // Return true if deleted
+        },
     };
 }
 
@@ -434,7 +448,7 @@ test('saveCustomModel: adds model with all fields', () => {
         id: 'openai/gpt-4.1-mini',
         name: 'GPT-4.1 Mini',
         context_window: 200000,
-        base_url: 'https://my-proxy.com/v1'
+        base_url: 'https://my-proxy.com/v1',
     });
 
     assertEqual(model.id, 'openai/gpt-4.1-mini');
@@ -481,7 +495,7 @@ test('saveCustomModel: always sets provider to Custom', () => {
 
     const model = storage.saveCustomModel({
         id: 'anthropic/claude-custom',
-        provider: 'ShouldBeIgnored'
+        provider: 'ShouldBeIgnored',
     });
 
     assertEqual(model.provider, 'Custom');
@@ -494,13 +508,13 @@ test('saveCustomModel: updates existing model with same id', () => {
     storage.saveCustomModel({
         id: 'openai/my-model',
         name: 'Original Name',
-        context_window: 100000
+        context_window: 100000,
     });
 
     storage.saveCustomModel({
         id: 'openai/my-model',
         name: 'Updated Name',
-        context_window: 200000
+        context_window: 200000,
     });
 
     const models = storage.getCustomModels();
@@ -576,7 +590,7 @@ test('deleteCustomModel: removes model by id', () => {
 
     assertTrue(deleted, 'Should return true when model deleted');
     assertEqual(storage.getCustomModels().length, 2);
-    assertFalse(storage.getCustomModels().some(m => m.id === 'openai/model-2'));
+    assertFalse(storage.getCustomModels().some((m) => m.id === 'openai/model-2'));
 });
 
 test('deleteCustomModel: returns false for non-existent model', () => {
@@ -644,7 +658,7 @@ function createBaseUrlHelper(localStorage) {
         getBaseUrlForModel(modelId) {
             // Check if model is a custom model with per-model base_url
             const customModels = customModelsStorage.getCustomModels();
-            const customModel = customModels.find(m => m.id === modelId);
+            const customModel = customModels.find((m) => m.id === modelId);
 
             if (customModel && customModel.base_url) {
                 return customModel.base_url;
@@ -655,7 +669,7 @@ function createBaseUrlHelper(localStorage) {
         },
 
         // Expose for test setup
-        saveCustomModel: customModelsStorage.saveCustomModel.bind(customModelsStorage)
+        saveCustomModel: customModelsStorage.saveCustomModel.bind(customModelsStorage),
     };
 }
 
@@ -682,7 +696,7 @@ test('getBaseUrlForModel: returns per-model base URL for custom models', () => {
     helper.setBaseUrl('https://global-proxy.com/v1');
     helper.saveCustomModel({
         id: 'openai/my-custom',
-        base_url: 'https://my-custom-proxy.com/v1'
+        base_url: 'https://my-custom-proxy.com/v1',
     });
 
     assertEqual(helper.getBaseUrlForModel('openai/my-custom'), 'https://my-custom-proxy.com/v1');
@@ -695,7 +709,7 @@ test('getBaseUrlForModel: per-model base URL overrides global', () => {
     helper.setBaseUrl('https://global.com/v1');
     helper.saveCustomModel({
         id: 'openai/custom',
-        base_url: 'https://custom.com/v1'
+        base_url: 'https://custom.com/v1',
     });
 
     // Custom model uses its own URL
@@ -745,7 +759,7 @@ function createStrictnessStorage(localStorage) {
 
         setFlashcardStrictness(value) {
             localStorage.setItem('canvas-chat-flashcard-strictness', value);
-        }
+        },
     };
 }
 

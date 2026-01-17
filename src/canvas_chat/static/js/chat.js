@@ -98,10 +98,14 @@ class Chat {
      */
     async fetchProviderModels(provider, apiKey) {
         try {
+            const payload = { provider };
+            if (provider !== 'github_copilot') {
+                payload.api_key = apiKey;
+            }
             const response = await fetch(apiUrl('/api/provider-models'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider, api_key: apiKey }),
+                body: JSON.stringify(payload),
             });
             if (response.ok) {
                 return await response.json();
@@ -137,6 +141,63 @@ class Chat {
         return storage.getBaseUrlForModel(modelId);
     }
 
+    async ensureCopilotAuthFresh(model) {
+        if (!model?.startsWith('github_copilot/')) {
+            return this.getApiKeyForModel(model);
+        }
+
+        const auth = storage.getCopilotAuth();
+        if (!auth?.accessToken) {
+            return this.getApiKeyForModel(model);
+        }
+
+        const now = Math.floor(Date.now() / 1000);
+        const expiresAt = auth.expiresAt || 0;
+        const shouldRefresh = !auth.apiKey || (expiresAt > 0 && expiresAt - now <= 120);
+        if (!shouldRefresh) {
+            return auth.apiKey;
+        }
+
+        try {
+            const response = await fetch(apiUrl('/api/github-copilot/auth/refresh'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ access_token: auth.accessToken }),
+            });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.detail || 'Failed to refresh Copilot token');
+            }
+            const data = await response.json();
+            storage.saveCopilotAuth({
+                accessToken: auth.accessToken,
+                apiKey: data.api_key,
+                expiresAt: data.expires_at,
+            });
+            return data.api_key;
+        } catch (err) {
+            console.error('Copilot auto-refresh failed:', err);
+            return auth.apiKey || null;
+        }
+    }
+
+    handleCopilotAuthError(err) {
+        if (!err?.message) {
+            return err;
+        }
+        const marker = 'COPILOT_AUTH_REQUIRED';
+        if (!err.message.includes(marker)) {
+            return err;
+        }
+        const cleaned = err.message.replace(marker, '').replace(':', '').trim();
+        window.dispatchEvent(
+            new CustomEvent('copilot-auth-required', {
+                detail: { message: cleaned || 'GitHub Copilot authentication required.' },
+            })
+        );
+        return new Error(cleaned || 'GitHub Copilot authentication required.');
+    }
+
     /**
      * Get context window size for a model
      */
@@ -160,74 +221,7 @@ class Chat {
             abortController = new AbortController();
         }
 
-        const apiKey = this.getApiKeyForModel(model);
-        const baseUrl = this.getBaseUrl();
-
-        try {
-            const requestBody = {
-                messages,
-                model,
-                api_key: apiKey,
-                temperature: 0.7,
-            };
-
-            if (baseUrl) {
-                requestBody.base_url = baseUrl;
-            }
-
-            const response = await fetch(apiUrl('/api/chat'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestBody),
-                signal: abortController.signal,
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error: ${response.status}`);
-            }
-
-            let fullContent = '';
-
-            await readSSEStream(response, {
-                onEvent: (eventType, data) => {
-                    if (eventType === 'message' && data) {
-                        fullContent += data;
-                        onChunk(data, fullContent);
-                    }
-                },
-                onDone: () => {
-                    onDone(fullContent);
-                },
-                onError: (err) => {
-                    throw err;
-                },
-            });
-        } catch (err) {
-            if (err.name === 'AbortError') {
-                console.log('Request aborted');
-                onError(err); // Call onError so callers can handle cleanup
-                return;
-            }
-
-            console.error('Chat error:', err);
-            onError(err);
-        }
-
-        return abortController;
-    }
-
-    /**
-     * Send a chat message and get a non-streaming response
-     * Useful for structured outputs like JSON parsing
-     * @param {Array} messages - Array of {role, content} messages
-     * @param {string} model - Model ID
-     * @param {string} [apiKeyOverride] - Optional API key override (otherwise uses stored key)
-     * @returns {Promise<string>} - The full response content
-     */
-    async sendMessageNonStreaming(messages, model, apiKeyOverride = null) {
-        const apiKey = apiKeyOverride || this.getApiKeyForModel(model);
+        const apiKey = await this.ensureCopilotAuthFresh(model);
         const baseUrl = this.getBaseUrl();
 
         const requestBody = {
@@ -241,42 +235,48 @@ class Chat {
             requestBody.base_url = baseUrl;
         }
 
-        const response = await fetch(apiUrl('/api/chat'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody),
-        });
+        try {
+            const response = await fetch(apiUrl('/api/chat'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
+            });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `HTTP error: ${response.status}`);
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || `HTTP error: ${response.status}`);
+            }
+
+            // Collect full response from SSE stream
+            let fullContent = '';
+
+            await readSSEStream(response, {
+                onEvent: (eventType, data) => {
+                    if (eventType === 'message' && data) {
+                        fullContent += data;
+                    }
+                },
+                onDone: () => {},
+                onError: (err) => {
+                    throw err;
+                },
+            });
+
+            return normalizeText(fullContent);
+        } catch (err) {
+            const handledError = this.handleCopilotAuthError(err);
+            console.error('Chat error:', handledError);
+            throw handledError;
         }
-
-        // Collect full response from SSE stream
-        let fullContent = '';
-
-        await readSSEStream(response, {
-            onEvent: (eventType, data) => {
-                if (eventType === 'message' && data) {
-                    fullContent += data;
-                }
-            },
-            onDone: () => {},
-            onError: (err) => {
-                throw err;
-            },
-        });
-
-        return normalizeText(fullContent);
     }
 
     /**
      * Summarize a branch of conversation
      */
     async summarize(messages, model) {
-        const apiKey = this.getApiKeyForModel(model);
+        const apiKey = await this.ensureCopilotAuthFresh(model);
         const baseUrl = this.getBaseUrl();
 
         try {
@@ -306,8 +306,9 @@ class Chat {
             const data = await response.json();
             return data.summary;
         } catch (err) {
-            console.error('Summarize error:', err);
-            throw err;
+            const handledError = this.handleCopilotAuthError(err);
+            console.error('Summarize error:', handledError);
+            throw handledError;
         }
     }
 

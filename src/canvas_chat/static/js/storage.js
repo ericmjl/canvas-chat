@@ -34,8 +34,16 @@
  * @property {string} [anthropic] - Anthropic API key
  * @property {string} [google] - Google (Gemini) API key
  * @property {string} [groq] - Groq API key
- * @property {string} [github] - GitHub (Copilot) API key
+ * @property {string} [github] - GitHub Models API key
  * @property {string} [exa] - Exa search API key
+ */
+
+/**
+ * GitHub Copilot auth data stored in localStorage
+ * @typedef {Object} CopilotAuth
+ * @property {string} accessToken - GitHub OAuth access token
+ * @property {string} apiKey - Copilot API key
+ * @property {number} expiresAt - Unix timestamp (seconds)
  */
 
 /**
@@ -60,6 +68,7 @@
 const DB_NAME = 'canvas-chat';
 const DB_VERSION = 1;
 const SESSIONS_STORE = 'sessions';
+const COPILOT_AUTH_KEY = 'canvas-chat-copilot-auth';
 
 class Storage {
     constructor() {
@@ -265,6 +274,65 @@ class Storage {
     }
 
     /**
+     * Get GitHub Copilot auth data
+     * @returns {CopilotAuth|null}
+     */
+    getCopilotAuth() {
+        const auth = localStorage.getItem(COPILOT_AUTH_KEY);
+        return auth ? JSON.parse(auth) : null;
+    }
+
+    /**
+     * Save GitHub Copilot auth data
+     * @param {CopilotAuth} auth
+     */
+    saveCopilotAuth(auth) {
+        localStorage.setItem(COPILOT_AUTH_KEY, JSON.stringify(auth));
+    }
+
+    /**
+     * Clear GitHub Copilot auth data
+     */
+    clearCopilotAuth() {
+        localStorage.removeItem(COPILOT_AUTH_KEY);
+    }
+
+    /**
+     * Get Copilot API key
+     */
+    getCopilotApiKey() {
+        return this.getCopilotAuth()?.apiKey || null;
+    }
+
+    /**
+     * Get Copilot access token
+     */
+    getCopilotAccessToken() {
+        return this.getCopilotAuth()?.accessToken || null;
+    }
+
+    /**
+     * Get Copilot token expiry timestamp (seconds)
+     */
+    getCopilotExpiresAt() {
+        return this.getCopilotAuth()?.expiresAt || null;
+    }
+
+    /**
+     * Check if Copilot auth is available and not expired
+     */
+    hasCopilotAuth() {
+        const auth = this.getCopilotAuth();
+        if (!auth?.apiKey) {
+            return false;
+        }
+        if (auth.expiresAt && auth.expiresAt <= Math.floor(Date.now() / 1000)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Map provider name to storage key name.
      * This is the canonical mapping - all other methods should use this.
      * @param {string} provider - Provider name (e.g., "openai", "gemini", "github_copilot")
@@ -278,7 +346,7 @@ class Storage {
             google: 'google',
             groq: 'groq',
             github: 'github',
-            github_copilot: 'github', // Copilot uses the same GitHub token
+            github_copilot: 'github_copilot',
             exa: 'exa',
         };
         return providerMap[provider.toLowerCase()] || provider.toLowerCase();
@@ -290,6 +358,10 @@ class Storage {
      * @returns {string|null} - API key or null if not configured
      */
     getApiKeyForProvider(provider) {
+        const normalizedProvider = provider.toLowerCase();
+        if (normalizedProvider === 'github_copilot') {
+            return this.getCopilotApiKey();
+        }
         const keys = this.getApiKeys();
         const storageKey = this._getStorageKeyForProvider(provider);
         return keys[storageKey] || null;
@@ -302,7 +374,8 @@ class Storage {
     hasAnyLLMApiKey() {
         const keys = this.getApiKeys();
         const llmProviders = ['openai', 'anthropic', 'google', 'groq', 'github'];
-        return llmProviders.some((provider) => keys[provider] && keys[provider].trim() !== '');
+        const hasStandardKey = llmProviders.some((provider) => keys[provider] && keys[provider].trim() !== '');
+        return hasStandardKey || this.hasCopilotAuth();
     }
 
     /**
@@ -335,6 +408,10 @@ class Storage {
         // Ollama is only available on localhost (local models, no API key needed)
         if (normalizedProvider === 'ollama') {
             return this.isLocalhost();
+        }
+
+        if (normalizedProvider === 'github_copilot') {
+            return this.hasCopilotAuth();
         }
 
         // Use the canonical mapping to get the storage key
@@ -371,6 +448,7 @@ class Storage {
         if (keys.google) configured.push('Google');
         if (keys.groq) configured.push('Groq');
         if (keys.github) configured.push('GitHub');
+        if (this.hasCopilotAuth()) configured.push('GitHub Copilot');
 
         return configured;
     }

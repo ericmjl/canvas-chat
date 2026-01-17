@@ -238,7 +238,7 @@
                         </div>
 
                         <div class="api-key-group">
-                            <label for="github-key">GitHub Token (for GitHub Models)</label>
+                            <label for="github-key">GitHub Models PAT</label>
                             <input type="password" id="github-key" placeholder="ghp_... or github_pat_..." />
                             <small class="key-hint"
                                 >PAT with <code>models:read</code> scope.
@@ -246,13 +246,18 @@
                             >
                         </div>
 
-                        <div class="api-key-group copilot-note">
-                            <strong>GitHub Copilot Models</strong>
-                            <small class="key-hint"
-                                >Copilot models (e.g., <code>github_copilot/gpt-4</code>) require device authentication.
-                                On first use, check your <strong>server terminal</strong> for a device code and URL to
-                                authenticate with GitHub.</small
-                            >
+                        <div class="api-key-group">
+                            <label>GitHub Copilot authentication</label>
+                            <span id="copilot-auth-status" class="key-hint">Not authenticated</span>
+                            <div class="copilot-auth-actions">
+                                <button id="copilot-auth-start" class="secondary-btn">Authenticate</button>
+                                <button id="copilot-auth-refresh" class="secondary-btn">Check status</button>
+                                <button id="copilot-auth-clear" class="secondary-btn">Clear</button>
+                            </div>
+                            <small class="key-hint">
+                                Uses device flow and stores tokens in this browser. Models look like
+                                <code>github_copilot/gpt-4</code>.
+                            </small>
                         </div>
 
                         <div class="api-key-group">
@@ -338,6 +343,38 @@
                     </div>
 
                     <button id="save-settings-btn" class="primary-btn">Save Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Copilot Auth Modal -->
+        <div id="copilot-auth-modal" class="modal" style="display: none">
+            <div class="modal-content modal-narrow">
+                <div class="modal-header">
+                    <h2>GitHub Copilot Authentication</h2>
+                    <button class="modal-close" id="copilot-auth-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="settings-note">Open GitHub and enter the code to link your Copilot subscription.</p>
+                    <div class="api-key-group">
+                        <label>Verification URL</label>
+                        <div class="copilot-auth-link-row">
+                            <a id="copilot-auth-url" class="copilot-auth-link" href="#" target="_blank">-</a>
+                            <button id="copilot-auth-open" class="secondary-btn">Open</button>
+                        </div>
+                    </div>
+                    <div class="api-key-group">
+                        <label>Device code</label>
+                        <div class="copilot-auth-code-row">
+                            <input type="text" id="copilot-auth-code" class="modal-text-input" readonly />
+                            <button id="copilot-auth-copy" class="secondary-btn">Copy</button>
+                        </div>
+                    </div>
+                    <span id="copilot-auth-message" class="key-hint"></span>
+                    <div class="modal-actions">
+                        <button id="copilot-auth-complete" class="primary-btn">I’ve authenticated</button>
+                        <button id="copilot-auth-cancel" class="secondary-btn">Cancel</button>
+                    </div>
                 </div>
             </div>
         </div>

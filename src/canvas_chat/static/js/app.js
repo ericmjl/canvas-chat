@@ -3,68 +3,62 @@
  */
 
 // Import dependencies
-import { NodeType, EdgeType, createNode, createEdge, TAG_COLORS, getDefaultNodeSize } from './graph-types.js';
-import { CRDTGraph } from './crdt-graph.js';
 import { Canvas } from './canvas.js';
-import { Chat, chat } from './chat.js';
-import { Storage, storage } from './storage.js';
-import { EventEmitter } from './event-emitter.js';
-import { UndoManager } from './undo-manager.js';
-import { SlashCommandMenu, SLASH_COMMANDS, setFeatureRegistry } from './slash-command-menu.js';
-import { NodeRegistry } from './node-registry.js';
-import { ModalManager } from './modal-manager.js';
+import { chat } from './chat.js';
+import { CRDTGraph } from './crdt-graph.js';
 import { FileUploadHandler } from './file-upload-handler.js';
-import { FlashcardFeature } from './plugins/flashcards.js';
+import { EdgeType, NodeType, TAG_COLORS, createEdge, createNode, getDefaultNodeSize } from './graph-types.js';
+import { ModalManager } from './modal-manager.js';
+import { NodeRegistry } from './node-registry.js';
 import { CommitteeFeature } from './plugins/committee.js';
-import { MatrixFeature } from './plugins/matrix.js';
 import { FactcheckFeature } from './plugins/factcheck.js';
+import { FlashcardFeature } from './plugins/flashcards.js';
+import { MatrixFeature } from './plugins/matrix.js';
 import { ResearchFeature } from './plugins/research.js';
+import { SlashCommandMenu, setFeatureRegistry } from './slash-command-menu.js';
+import { storage } from './storage.js';
+import { UndoManager } from './undo-manager.js';
 // CodeFeature is now in code.js (consolidated plugin)
-import './plugins/note.js'; // Side-effect import for NoteNode plugin registration (NoteFeature imported by feature-registry.js) - consolidated plugin
-import './plugins/summary.js'; // Side-effect import for SummaryNode plugin registration
-import './plugins/human-node.js'; // Side-effect import for HumanNode plugin registration
 import './plugins/ai-node.js'; // Side-effect import for AINode plugin registration
-import './plugins/reference.js'; // Side-effect import for ReferenceNode plugin registration
-import './plugins/pdf-node.js'; // Side-effect import for PdfNode plugin registration
-import './plugins/research-node.js'; // Side-effect import for ResearchNode plugin registration
-import './plugins/opinion-node.js'; // Side-effect import for OpinionNode plugin registration
-import './plugins/synthesis-node.js'; // Side-effect import for SynthesisNode plugin registration
-import './plugins/review-node.js'; // Side-effect import for ReviewNode plugin registration
-import './plugins/image-node.js'; // Side-effect import for ImageNode plugin registration
-import './plugins/csv-node.js'; // Side-effect import for CsvNode plugin registration
-import './plugins/flashcard-node.js'; // Side-effect import for FlashcardNode plugin registration
-import './plugins/factcheck.js'; // Side-effect import for FactcheckNode plugin registration
-import './plugins/search-node.js'; // Side-effect import for SearchNode plugin registration
-import './plugins/highlight-node.js'; // Side-effect import for HighlightNode plugin registration
-import './plugins/fetch-result-node.js'; // Side-effect import for FetchResultNode plugin registration
-import './plugins/youtube-node.js'; // Side-effect import for YouTubeNode plugin registration
-import './plugins/matrix.js'; // Side-effect import for MatrixNode plugin registration
 import './plugins/cell-node.js'; // Side-effect import for CellNode plugin registration
-import './plugins/row-node.js'; // Side-effect import for RowNode plugin registration
-import './plugins/column-node.js'; // Side-effect import for ColumnNode plugin registration
 import './plugins/code.js'; // Side-effect import for CodeNode plugin registration and CodeFeature
+import './plugins/column-node.js'; // Side-effect import for ColumnNode plugin registration
+import './plugins/csv-node.js'; // Side-effect import for CsvNode plugin registration
+import './plugins/factcheck.js'; // Side-effect import for FactcheckNode plugin registration
+import './plugins/fetch-result-node.js'; // Side-effect import for FetchResultNode plugin registration
+import './plugins/flashcard-node.js'; // Side-effect import for FlashcardNode plugin registration
+import './plugins/highlight-node.js'; // Side-effect import for HighlightNode plugin registration
+import './plugins/human-node.js'; // Side-effect import for HumanNode plugin registration
+import './plugins/image-node.js'; // Side-effect import for ImageNode plugin registration
+import './plugins/matrix.js'; // Side-effect import for MatrixNode plugin registration
+import './plugins/note.js'; // Side-effect import for NoteNode plugin registration (NoteFeature imported by feature-registry.js) - consolidated plugin
+import './plugins/opinion-node.js'; // Side-effect import for OpinionNode plugin registration
+import './plugins/pdf-node.js'; // Side-effect import for PdfNode plugin registration
+import './plugins/reference.js'; // Side-effect import for ReferenceNode plugin registration
+import './plugins/research-node.js'; // Side-effect import for ResearchNode plugin registration
+import './plugins/review-node.js'; // Side-effect import for ReviewNode plugin registration
+import './plugins/row-node.js'; // Side-effect import for RowNode plugin registration
+import './plugins/search-node.js'; // Side-effect import for SearchNode plugin registration
+import './plugins/summary.js'; // Side-effect import for SummaryNode plugin registration
+import './plugins/synthesis-node.js'; // Side-effect import for SynthesisNode plugin registration
+import './plugins/youtube-node.js'; // Side-effect import for YouTubeNode plugin registration
 // Note: poll.js is an external plugin - load via config.yaml
-import { SearchIndex, getNodeTypeIcon } from './search.js';
+import { extractExcerptText } from './highlight-utils.js';
 import { wrapNode } from './node-protocols.js';
+import { SearchIndex, getNodeTypeIcon } from './search.js';
+import { readSSEStream } from './sse.js';
 import {
-    isUrlContent,
+    apiUrl,
+    buildMessagesForApi,
+    escapeHtmlText,
     extractUrlFromReferenceNode,
+    formatMatrixAsText,
     formatUserError,
     truncateText,
-    escapeHtmlText,
-    formatMatrixAsText,
-    buildMessagesForApi,
-    applySM2,
-    isFlashcardDue,
-    getDueFlashcards,
-    resizeImage,
-    apiUrl,
 } from './utils.js';
-import { highlightTextInHtml, extractExcerptText } from './highlight-utils.js';
-import { streamSSEContent, readSSEStream } from './sse.js';
 // Plugin system
-import { FeatureRegistry } from './feature-registry.js';
 import { AppContext } from './feature-plugin.js';
+import { FeatureRegistry } from './feature-registry.js';
 import { StreamingManager } from './streaming-manager.js';
 
 /* global pyodideRunner */
@@ -353,6 +347,10 @@ class App {
         const fetchPromises = providers
             .filter((p) => p.key) // Only providers with keys
             .map((p) => chat.fetchProviderModels(p.name, p.key));
+
+        if (storage.getCopilotAccessToken()) {
+            fetchPromises.push(chat.fetchProviderModels('github_copilot'));
+        }
 
         // Also fetch Ollama models if on localhost
         if (storage.isLocalhost()) {
@@ -751,6 +749,36 @@ class App {
         });
         document.getElementById('save-settings-btn').addEventListener('click', () => {
             this.saveSettings();
+        });
+
+        document.getElementById('copilot-auth-start').addEventListener('click', () => {
+            this.modalManager.startCopilotAuth();
+        });
+        document.getElementById('copilot-auth-refresh').addEventListener('click', () => {
+            this.modalManager.refreshCopilotAuth();
+        });
+        document.getElementById('copilot-auth-clear').addEventListener('click', () => {
+            this.modalManager.clearCopilotAuth();
+        });
+        document.getElementById('copilot-auth-close').addEventListener('click', () => {
+            this.modalManager.hideCopilotAuthModal();
+        });
+        document.getElementById('copilot-auth-cancel').addEventListener('click', () => {
+            this.modalManager.hideCopilotAuthModal();
+        });
+        document.getElementById('copilot-auth-copy').addEventListener('click', () => {
+            this.modalManager.copyCopilotCode();
+        });
+        document.getElementById('copilot-auth-open').addEventListener('click', () => {
+            this.modalManager.openCopilotVerificationUrl();
+        });
+        document.getElementById('copilot-auth-complete').addEventListener('click', () => {
+            this.modalManager.completeCopilotAuth();
+        });
+
+        window.addEventListener('copilot-auth-required', (event) => {
+            const message = event?.detail?.message || 'GitHub Copilot authentication required.';
+            this.modalManager.showCopilotAuthModal(message);
         });
 
         // Custom models in settings
@@ -2490,9 +2518,27 @@ df.head()
         // Get ancestor context (conversation history)
         const ancestors = this.graph.getAncestors(nodeId);
         const ancestorContext = ancestors
-            .filter((n) => [NodeType.HUMAN, NodeType.AI, NodeType.NOTE, NodeType.PDF, NodeType.FETCH_RESULT, NodeType.YOUTUBE, NodeType.GIT_REPO].includes(n.type))
+            .filter((n) =>
+                [
+                    NodeType.HUMAN,
+                    NodeType.AI,
+                    NodeType.NOTE,
+                    NodeType.PDF,
+                    NodeType.FETCH_RESULT,
+                    NodeType.YOUTUBE,
+                    NodeType.GIT_REPO,
+                ].includes(n.type)
+            )
             .map((n) => ({
-                role: [NodeType.HUMAN, NodeType.PDF, NodeType.FETCH_RESULT, NodeType.YOUTUBE, NodeType.GIT_REPO].includes(n.type) ? 'user' : 'assistant',
+                role: [
+                    NodeType.HUMAN,
+                    NodeType.PDF,
+                    NodeType.FETCH_RESULT,
+                    NodeType.YOUTUBE,
+                    NodeType.GIT_REPO,
+                ].includes(n.type)
+                    ? 'user'
+                    : 'assistant',
                 content: n.content,
             }));
 
@@ -4077,7 +4123,6 @@ df.head()
         if (node.type !== NodeType.MATRIX && !contentForSummary) return;
 
         try {
-
             const requestBody = this.buildLLMRequest({
                 content: contentForSummary,
             });
@@ -4454,7 +4499,6 @@ df.head()
 
         return false;
     }
-
 
     /**
      * Animate node positions and sizes for remote changes.

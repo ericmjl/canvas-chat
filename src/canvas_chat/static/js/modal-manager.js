@@ -12,7 +12,7 @@
  */
 
 import { storage } from './storage.js';
-import { escapeHtmlText } from './utils.js';
+import { escapeHtmlText, apiUrl } from './utils.js';
 import { NodeType } from './graph-types.js';
 import { wrapNode } from './node-protocols.js';
 
@@ -25,6 +25,13 @@ class ModalManager {
         this.app = app;
         // Map of plugin modals: Map<`${pluginId}:${modalId}`, HTMLElement>
         this._pluginModals = new Map();
+        this.copilotDeviceCode = null;
+        this.copilotVerificationUrl = null;
+        this.copilotInterval = 5;
+        this.copilotExpiresIn = 900;
+
+        this.updateCopilotStatus();
+        this.app.loadModels();
     }
 
     // --- Plugin Modal Registration API ---
@@ -43,17 +50,14 @@ class ModalManager {
             console.warn(`[ModalManager] Modal ${key} already registered, overwriting`);
         }
 
-        // Create a temporary container to parse HTML
         const temp = document.createElement('div');
         temp.innerHTML = htmlTemplate.trim();
 
-        // Get the modal element (should be the first child)
         const modal = temp.firstElementChild;
         if (!modal) {
             throw new Error(`[ModalManager] Invalid modal template for ${key}: no root element`);
         }
 
-        // Ensure modal has the correct ID format
         const expectedId = `${pluginId}-${modalId}-modal`;
         if (modal.id && modal.id !== expectedId) {
             console.warn(
@@ -63,16 +67,13 @@ class ModalManager {
             modal.id = expectedId;
         }
 
-        // Ensure modal has base classes
         if (!modal.classList.contains('modal')) {
             modal.classList.add('modal');
         }
         modal.style.display = 'none';
 
-        // Append to document body
         document.body.appendChild(modal);
 
-        // Store reference
         this._pluginModals.set(key, modal);
 
         console.log(`[ModalManager] Registered plugin modal: ${key}`);
@@ -119,6 +120,203 @@ class ModalManager {
         return this._pluginModals.get(key) || null;
     }
 
+    // --- Copilot Auth ---
+
+    updateCopilotStatus() {
+        const statusEl = document.getElementById('copilot-auth-status');
+        if (!statusEl) {
+            return;
+        }
+        statusEl.textContent = this.formatCopilotStatus();
+    }
+
+    formatCopilotStatus() {
+        const auth = storage.getCopilotAuth();
+        if (!auth?.apiKey) {
+            return 'Not authenticated';
+        }
+        const now = Math.floor(Date.now() / 1000);
+        if (auth.expiresAt && auth.expiresAt <= now) {
+            return 'Expired - re-authenticate';
+        }
+        if (auth.expiresAt) {
+            const remaining = auth.expiresAt - now;
+            const hours = Math.floor(remaining / 3600);
+            const minutes = Math.floor((remaining % 3600) / 60);
+            const parts = [];
+            if (hours > 0) parts.push(`${hours}h`);
+            if (minutes > 0) parts.push(`${minutes}m`);
+            const suffix = parts.length > 0 ? ` (expires in ${parts.join(' ')})` : '';
+            return `Authenticated${suffix}`;
+        }
+        return 'Authenticated';
+    }
+
+    showCopilotAuthModal(message = '') {
+        const modal = document.getElementById('copilot-auth-modal');
+        if (!modal) {
+            return;
+        }
+        modal.style.display = 'flex';
+        const messageEl = document.getElementById('copilot-auth-message');
+        if (messageEl) {
+            messageEl.textContent = message;
+        }
+    }
+
+    hideCopilotAuthModal() {
+        const modal = document.getElementById('copilot-auth-modal');
+        if (!modal) {
+            return;
+        }
+        modal.style.display = 'none';
+    }
+
+    async startCopilotAuth() {
+        const messageEl = document.getElementById('copilot-auth-message');
+        if (messageEl) {
+            messageEl.textContent = 'Requesting device code...';
+        }
+        try {
+            const response = await fetch(apiUrl('/api/github-copilot/auth/start'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.detail || 'Failed to start Copilot authentication');
+            }
+            const data = await response.json();
+            this.copilotDeviceCode = data.device_code;
+            this.copilotVerificationUrl = data.verification_url;
+            this.copilotInterval = data.interval || 5;
+            this.copilotExpiresIn = data.expires_in || 900;
+            const urlEl = document.getElementById('copilot-auth-url');
+            if (urlEl) {
+                urlEl.href = data.verification_url;
+                urlEl.textContent = data.verification_url;
+            }
+            const codeEl = document.getElementById('copilot-auth-code');
+            if (codeEl) {
+                codeEl.value = data.user_code;
+            }
+            if (messageEl) {
+                messageEl.textContent = 'After authenticating, return here and click “I’ve authenticated”.';
+            }
+            this.showCopilotAuthModal();
+        } catch (err) {
+            console.error('Copilot auth start failed:', err);
+            if (messageEl) {
+                messageEl.textContent = err.message || 'Failed to start Copilot authentication';
+            }
+            this.showCopilotAuthModal();
+        }
+    }
+
+    async completeCopilotAuth() {
+        const messageEl = document.getElementById('copilot-auth-message');
+        if (!this.copilotDeviceCode) {
+            if (messageEl) {
+                messageEl.textContent = 'Start authentication to get a device code.';
+            }
+            return;
+        }
+        if (messageEl) {
+            messageEl.textContent = 'Completing authentication...';
+        }
+        try {
+            const response = await fetch(apiUrl('/api/github-copilot/auth/complete'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    device_code: this.copilotDeviceCode,
+                    interval: this.copilotInterval,
+                    expires_in: this.copilotExpiresIn,
+                }),
+            });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.detail || 'Failed to complete Copilot authentication');
+            }
+            const data = await response.json();
+            storage.saveCopilotAuth({
+                accessToken: data.access_token,
+                apiKey: data.api_key,
+                expiresAt: data.expires_at,
+            });
+            this.updateCopilotStatus();
+            await this.app.loadModels();
+            this.hideCopilotAuthModal();
+        } catch (err) {
+            console.error('Copilot auth completion failed:', err);
+            if (messageEl) {
+                messageEl.textContent = err.message || 'Failed to complete Copilot authentication';
+            }
+        }
+    }
+
+    async refreshCopilotAuth() {
+        const accessToken = storage.getCopilotAccessToken();
+        const statusEl = document.getElementById('copilot-auth-status');
+        if (!accessToken) {
+            if (statusEl) {
+                statusEl.textContent = 'Not authenticated';
+            }
+            return;
+        }
+        try {
+            const response = await fetch(apiUrl('/api/github-copilot/auth/refresh'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ access_token: accessToken }),
+            });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.detail || 'Failed to refresh Copilot token');
+            }
+            const data = await response.json();
+            storage.saveCopilotAuth({
+                accessToken: accessToken,
+                apiKey: data.api_key,
+                expiresAt: data.expires_at,
+            });
+            this.updateCopilotStatus();
+            await this.app.loadModels();
+        } catch (err) {
+            console.error('Copilot auth refresh failed:', err);
+            if (statusEl) {
+                statusEl.textContent = 'Auth check failed';
+            }
+        }
+    }
+
+    clearCopilotAuth() {
+        storage.clearCopilotAuth();
+        this.copilotDeviceCode = null;
+        this.copilotVerificationUrl = null;
+        this.copilotInterval = 5;
+        this.copilotExpiresIn = 900;
+        this.updateCopilotStatus();
+    }
+
+    copyCopilotCode() {
+        const codeEl = document.getElementById('copilot-auth-code');
+        if (!codeEl?.value) {
+            return;
+        }
+        navigator.clipboard.writeText(codeEl.value).catch((err) => {
+            console.error('Failed to copy copilot code:', err);
+        });
+    }
+
+    openCopilotVerificationUrl() {
+        const url = this.copilotVerificationUrl;
+        if (url) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+        }
+    }
+
     // --- Settings Modal ---
 
     showSettingsModal() {
@@ -134,6 +332,7 @@ class ModalManager {
         document.getElementById('github-key').value = keys.github || '';
         document.getElementById('exa-key').value = keys.exa || '';
 
+        this.updateCopilotStatus();
 
         // Load base URL
         document.getElementById('base-url').value = storage.getBaseUrl() || '';
@@ -149,10 +348,10 @@ class ModalManager {
         document.getElementById('settings-modal').style.display = 'none';
     }
 
-
     /**
      * Render the custom models list in the settings modal
      */
+
     renderCustomModelsList() {
         const container = document.getElementById('custom-models-list');
         const models = storage.getCustomModels();
@@ -281,13 +480,7 @@ class ModalManager {
         }
 
         // Then check core app modals
-        const modalIds = [
-            'edit-title-modal',
-            'edit-content-modal',
-            'session-modal',
-            'settings-modal',
-            'help-modal',
-        ];
+        const modalIds = ['edit-title-modal', 'edit-content-modal', 'session-modal', 'settings-modal', 'help-modal'];
 
         for (const id of modalIds) {
             const modal = document.getElementById(id);

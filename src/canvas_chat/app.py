@@ -21,9 +21,11 @@ import json
 import logging
 import os
 import sys
+import time
 import traceback
 from pathlib import Path
 from typing import Any, TypeVar
+from uuid import uuid4
 
 import httpx
 import litellm
@@ -216,6 +218,38 @@ class SummarizeRequest(BaseModel):
     base_url: str | None = None
 
 
+class CopilotAuthStartResponse(BaseModel):
+    """Response body for starting Copilot device flow."""
+
+    verification_url: str
+    user_code: str
+    device_code: str
+    interval: int
+    expires_in: int
+
+
+class CopilotAuthCompleteRequest(BaseModel):
+    """Request body for completing Copilot device flow."""
+
+    device_code: str
+    interval: int = 5
+    expires_in: int = 900
+
+
+class CopilotAuthRefreshRequest(BaseModel):
+    """Request body for refreshing Copilot API key."""
+
+    access_token: str
+
+
+class CopilotAuthResponse(BaseModel):
+    """Response body for Copilot auth completion/refresh."""
+
+    access_token: str
+    api_key: str
+    expires_at: int
+
+
 class ModelInfo(BaseModel):
     """Information about an available model."""
 
@@ -317,8 +351,8 @@ class DDGResearchSource(BaseModel):
 class ProviderModelsRequest(BaseModel):
     """Request body for fetching models from a provider."""
 
-    provider: str  # "openai", "anthropic", "google", "groq", "github"
-    api_key: str
+    provider: str  # "openai", "anthropic", "google", "groq", "github", "github_copilot"
+    api_key: str | None = None
 
 
 class CommitteeRequest(BaseModel):
@@ -505,6 +539,16 @@ def extract_provider(model: str) -> str:
     return "openai"
 
 
+GITHUB_COPILOT_API_BASE = "https://api.githubcopilot.com"
+GITHUB_COPILOT_CLIENT_ID = "Iv1.b507a08c87ecfe98"
+GITHUB_COPILOT_DEVICE_CODE_URL = "https://github.com/login/device/code"
+GITHUB_COPILOT_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
+GITHUB_COPILOT_API_KEY_URL = "https://api.github.com/copilot_internal/v2/token"
+GITHUB_COPILOT_EDITOR_VERSION = "vscode/1.85.1"
+GITHUB_COPILOT_PLUGIN_VERSION = "copilot/1.155.0"
+GITHUB_COPILOT_USER_AGENT = "GithubCopilot/1.155.0"
+
+
 def get_copilot_headers(model: str) -> dict:
     """Return extra headers needed for GitHub Copilot models.
 
@@ -513,18 +557,106 @@ def get_copilot_headers(model: str) -> dict:
     """
     if model.startswith("github_copilot/"):
         return {
-            "editor-version": "vscode/1.85.1",
-            "Copilot-Integration-Id": "vscode-chat",
+            "editor-version": GITHUB_COPILOT_EDITOR_VERSION,
+            "editor-plugin-version": GITHUB_COPILOT_PLUGIN_VERSION,
+            "user-agent": GITHUB_COPILOT_USER_AGENT,
+            "copilot-integration-id": "vscode-chat",
+            "openai-intent": "conversation-panel",
+            "x-github-api-version": "2025-04-01",
+            "x-request-id": str(uuid4()),
+            "x-vscode-user-agent-library-version": "electron-fetch",
+            "x-initiator": "user",
         }
     return {}
 
 
 def add_copilot_headers(kwargs: dict, model: str) -> dict:
-    """Add GitHub Copilot headers to kwargs if needed."""
+    """Add GitHub Copilot headers if needed."""
     copilot_headers = get_copilot_headers(model)
     if copilot_headers:
-        kwargs["extra_headers"] = copilot_headers
+        kwargs["extra_headers"] = {**kwargs.get("extra_headers", {}), **copilot_headers}
     return kwargs
+
+
+def get_copilot_auth_headers(access_token: str | None = None) -> dict:
+    """Headers for GitHub Copilot device flow + token exchange."""
+    headers = {
+        "accept": "application/json",
+        "editor-version": GITHUB_COPILOT_EDITOR_VERSION,
+        "editor-plugin-version": GITHUB_COPILOT_PLUGIN_VERSION,
+        "user-agent": GITHUB_COPILOT_USER_AGENT,
+        "content-type": "application/json",
+    }
+    if access_token:
+        headers["authorization"] = f"token {access_token}"
+    return headers
+
+
+async def request_copilot_device_code() -> dict[str, Any]:
+    """Request a GitHub Copilot device code."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            GITHUB_COPILOT_DEVICE_CODE_URL,
+            headers=get_copilot_auth_headers(),
+            json={"client_id": GITHUB_COPILOT_CLIENT_ID, "scope": "read:user"},
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("device_code") or not data.get("user_code"):
+            raise HTTPException(status_code=400, detail="Invalid device code response")
+        return data
+
+
+async def poll_copilot_access_token(
+    device_code: str, interval: int, expires_in: int
+) -> str:
+    """Poll for Copilot access token after device auth."""
+    deadline = time.monotonic() + expires_in
+    poll_interval = max(interval, 1)
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        while time.monotonic() < deadline:
+            response = await client.post(
+                GITHUB_COPILOT_ACCESS_TOKEN_URL,
+                headers=get_copilot_auth_headers(),
+                json={
+                    "client_id": GITHUB_COPILOT_CLIENT_ID,
+                    "device_code": device_code,
+                    "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            if data.get("access_token"):
+                return data["access_token"]
+            error = data.get("error")
+            if error == "authorization_pending":
+                await asyncio.sleep(poll_interval)
+                continue
+            if error == "slow_down":
+                poll_interval += 5
+                await asyncio.sleep(poll_interval)
+                continue
+            raise HTTPException(status_code=400, detail=f"Copilot auth failed: {error}")
+    raise HTTPException(
+        status_code=400, detail="Timed out waiting for Copilot authentication"
+    )
+
+
+async def fetch_copilot_api_key(access_token: str) -> dict[str, Any]:
+    """Exchange GitHub access token for Copilot API key."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            GITHUB_COPILOT_API_KEY_URL,
+            headers=get_copilot_auth_headers(access_token),
+        )
+        response.raise_for_status()
+        data = response.json()
+        token = data.get("token")
+        if not token:
+            raise HTTPException(
+                status_code=400, detail="Copilot token response missing API key"
+            )
+        return data
 
 
 OLLAMA_BASE_URL = "http://localhost:11434"
@@ -714,6 +846,24 @@ async def fetch_github_models(api_key: str) -> list[dict]:
     except (httpx.RequestError, httpx.TimeoutException) as e:
         logger.warning(f"Failed to fetch GitHub models: {e}")
     return []
+
+
+async def fetch_github_copilot_models() -> list[dict]:
+    """Fetch available models from LiteLLM's GitHub Copilot registry."""
+    models = []
+    for model_id in sorted(litellm.github_copilot_models):
+        if not is_chat_model(model_id):
+            continue
+        name = model_id.split("/", 1)[1] if "/" in model_id else model_id
+        models.append(
+            {
+                "id": model_id,
+                "name": name,
+                "provider": "GitHub Copilot",
+                "context_window": get_context_window(name),
+            }
+        )
+    return models
 
 
 async def fetch_google_models(api_key: str) -> list[dict]:
@@ -1041,7 +1191,7 @@ async def get_provider_models(request: ProviderModelsRequest) -> list[ModelInfo]
     provider = request.provider.lower()
     api_key = request.api_key
 
-    if not api_key:
+    if provider != "github_copilot" and not api_key:
         raise HTTPException(status_code=400, detail="API key is required")
 
     models: list[dict] = []
@@ -1056,6 +1206,8 @@ async def get_provider_models(request: ProviderModelsRequest) -> list[ModelInfo]
         models = await fetch_groq_models(api_key)
     elif provider == "github":
         models = await fetch_github_models(api_key)
+    elif provider == "github_copilot":
+        models = await fetch_github_copilot_models()
     else:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 
@@ -1118,15 +1270,15 @@ async def chat(request: ChatRequest, http_request: Request):
                 yield {
                     "event": "error",
                     "data": (
-                        f"GitHub Copilot authentication required. Please run "
-                        f"'python -c \"import litellm; litellm.completion("
-                        f'model=\\"github_copilot/gpt-4\\", messages=[{{'
-                        f'{{\\"role\\": \\"user\\", \\"content\\": \\"test\\"}}}}])"\' '
-                        f"in your terminal to authenticate. Original error: {error_msg}"
+                        "COPILOT_AUTH_REQUIRED: "
+                        "Open Settings → GitHub Copilot authentication "
+                        "to connect your account. "
+                        f"Original error: {error_msg}"
                     ),
                 }
             else:
                 yield {"event": "error", "data": f"Authentication failed: {error_msg}"}
+
         except litellm.RateLimitError as e:
             yield {"event": "error", "data": f"Rate limit exceeded: {e}"}
         except litellm.APIError as e:
@@ -1142,9 +1294,10 @@ async def chat(request: ChatRequest, http_request: Request):
                 yield {
                     "event": "error",
                     "data": (
-                        f"GitHub Copilot authentication required. Please check "
-                        f"your terminal/server logs for the device code and URL "
-                        f"to authenticate. Error: {error_msg}"
+                        "COPILOT_AUTH_REQUIRED: "
+                        "Open Settings → GitHub Copilot authentication "
+                        "to connect your account. "
+                        f"Error: {error_msg}"
                     ),
                 }
             else:
@@ -1195,7 +1348,61 @@ Summary:"""
         summary = response.choices[0].message.content
         return {"summary": summary}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        error_msg = str(e)
+        if request.model.startswith("github_copilot/") and (
+            "auth" in error_msg.lower() or "token" in error_msg.lower()
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail=(
+                    "COPILOT_AUTH_REQUIRED: "
+                    "Open Settings → GitHub Copilot authentication "
+                    "to connect your account."
+                ),
+            ) from e
+        raise HTTPException(status_code=500, detail=error_msg) from e
+
+
+@app.post("/api/github-copilot/auth/start", response_model=CopilotAuthStartResponse)
+async def start_copilot_auth():
+    """Start GitHub Copilot device authentication."""
+    data = await request_copilot_device_code()
+    return CopilotAuthStartResponse(
+        verification_url=data.get("verification_uri")
+        or data.get("verification_url")
+        or "https://github.com/login/device",
+        user_code=data["user_code"],
+        device_code=data["device_code"],
+        interval=int(data.get("interval", 5)),
+        expires_in=int(data.get("expires_in", 900)),
+    )
+
+
+@app.post("/api/github-copilot/auth/complete", response_model=CopilotAuthResponse)
+async def complete_copilot_auth(request: CopilotAuthCompleteRequest):
+    """Complete GitHub Copilot device authentication."""
+    access_token = await poll_copilot_access_token(
+        request.device_code, request.interval, request.expires_in
+    )
+    api_key_info = await fetch_copilot_api_key(access_token)
+    expires_at = api_key_info.get("expires_at") or int(time.time()) + 3600
+    return CopilotAuthResponse(
+        access_token=access_token,
+        api_key=api_key_info["token"],
+        expires_at=int(expires_at),
+    )
+
+
+@app.post("/api/github-copilot/auth/refresh", response_model=CopilotAuthResponse)
+async def refresh_copilot_auth(request: CopilotAuthRefreshRequest):
+    """Refresh GitHub Copilot API key using stored access token."""
+    api_key_info = await fetch_copilot_api_key(request.access_token)
+    expires_at = api_key_info.get("expires_at") or int(time.time()) + 3600
+    return CopilotAuthResponse(
+        access_token=request.access_token,
+        api_key=api_key_info["token"],
+        expires_at=int(expires_at),
+    )
 
 
 @app.get("/api/token-count")
@@ -3249,7 +3456,7 @@ def get_api_key_for_model(model: str, api_keys: dict[str, str]) -> str | None:
         "google": "google",
         "groq": "groq",
         "github": "github",
-        "github_copilot": "github",
+        "github_copilot": "github_copilot",
         "ollama": None,  # Ollama doesn't need API key
         "ollama_chat": None,
     }

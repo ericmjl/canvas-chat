@@ -150,6 +150,37 @@
     text-decoration: underline;
 }
 
+.copilot-auth-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.copilot-auth-code-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.copilot-auth-code-row .modal-text-input {
+    flex: 1;
+}
+
+.copilot-auth-link-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.copilot-auth-link {
+    display: inline-block;
+    flex: 1;
+    font-size: 12px;
+    color: var(--accent);
+    word-break: break-all;
+}
+
 .api-key-group.copilot-note {
     background: var(--node-highlight);
     border: 1px solid var(--node-highlight-border);
