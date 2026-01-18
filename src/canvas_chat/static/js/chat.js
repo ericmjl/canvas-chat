@@ -120,6 +120,12 @@ class Chat {
      * Get API key for the current model's provider
      */
     getApiKeyForModel(model) {
+        if (!model) return null;
+
+        if (model.startsWith('dall-e')) {
+            return storage.getApiKeyForProvider('openai');
+        }
+
         const provider = model.split('/')[0].toLowerCase();
         return storage.getApiKeyForProvider(provider);
     }

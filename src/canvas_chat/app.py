@@ -16,6 +16,7 @@ merging, and exploration of topics as a DAG.
 """
 
 import asyncio
+import base64
 import importlib.util
 import json
 import logging
@@ -1664,6 +1665,101 @@ Examples:
             "original_query": request.user_query,
             "refined_query": request.user_query,
         }
+
+
+class ImageGenerationRequest(BaseModel):
+    """Request body for AI image generation."""
+
+    prompt: str  # Text description of the desired image
+    model: str = "dall-e-3"  # Image generation model
+    size: str = "1024x1024"  # Image dimensions
+    quality: str = "hd"  # "standard" or "hd" (DALL-E 3)
+    n: int = 1  # Number of images to generate
+    api_key: str | None = None  # User's API key
+    base_url: str | None = None  # Optional base URL
+
+
+@app.post("/api/generate-image")
+async def generate_image(request: ImageGenerationRequest):
+    """
+    Generate an image from a text prompt using AI.
+
+    Supports multiple providers:
+    - OpenAI: dall-e-3, dall-e-2
+    - Google: gemini/imagen-4.0-generate-001
+    """
+    # Inject admin credentials if in admin mode
+    inject_admin_credentials(request)
+
+    # Validate API key exists
+    if not request.api_key and not get_admin_config().admin_mode:
+        raise HTTPException(
+            status_code=400,
+            detail="API key required. Please configure in Settings.",
+        )
+
+    logger.info(
+        f"Image generation request: model={request.model}, "
+        f"size={request.size}, quality={request.quality}"
+    )
+
+    try:
+        # Call litellm.aimage_generation
+        response = await litellm.aimage_generation(
+            prompt=request.prompt,
+            model=request.model,
+            size=request.size,
+            quality=request.quality,
+            n=request.n,
+            api_key=request.api_key,
+            api_base=request.base_url,
+        )
+
+        # Get the generated image
+        image_data = response.data[0]
+
+        # Handle URL or base64 response
+        if image_data.url:
+            # Download image from URL and convert to base64
+            logger.info(f"Downloading image from URL: {image_data.url[:50]}...")
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                img_response = await client.get(image_data.url)
+                img_response.raise_for_status()
+                image_bytes = img_response.content
+                image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+        elif image_data.b64_json:
+            # Already base64
+            image_base64 = image_data.b64_json
+        else:
+            raise HTTPException(
+                status_code=500, detail="No image data returned from provider"
+            )
+
+        logger.info("Image generated successfully")
+
+        # Return base64 image
+        return {
+            "imageData": image_base64,
+            "mimeType": "image/png",
+            "revised_prompt": getattr(image_data, "revised_prompt", None),
+        }
+
+    except litellm.AuthenticationError as e:
+        logger.error(f"Authentication error: {e}")
+        raise HTTPException(
+            status_code=401,
+            detail=f"Authentication failed: {str(e)}. Please check your API key.",
+        ) from e
+    except litellm.RateLimitError as e:
+        logger.error(f"Rate limit error: {e}")
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please try again later.",
+        ) from e
+    except Exception as e:
+        logger.error(f"Image generation error: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/exa/search")

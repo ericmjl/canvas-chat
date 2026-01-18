@@ -323,6 +323,14 @@ class App {
         return this._getFeature('code', 'CodeFeature');
     }
 
+    /**
+     * Get image generation feature instance.
+     * @returns {ImageGenerationFeature}
+     */
+    get imageGenerationFeature() {
+        return this._getFeature('image-generation', 'ImageGenerationFeature');
+    }
+
     async loadModels() {
         // In admin mode, use admin-configured models
         if (this.adminMode) {
