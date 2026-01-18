@@ -256,14 +256,23 @@ class ModalManager {
         }
     }
 
-    async refreshCopilotAuth() {
+    async refreshCopilotAuth(options = {}) {
+        const {
+            clearAuthOnFailure = false,
+            openModalOnFailure = false,
+            message = 'GitHub Copilot authentication required.',
+            skipModelReload = false,
+        } = options;
         const accessToken = storage.getCopilotAccessToken();
         const statusEl = document.getElementById('copilot-auth-status');
         if (!accessToken) {
             if (statusEl) {
                 statusEl.textContent = 'Not authenticated';
             }
-            return;
+            if (openModalOnFailure) {
+                this.showCopilotAuthModal(message);
+            }
+            return false;
         }
         try {
             const response = await fetch(apiUrl('/api/github-copilot/auth/refresh'), {
@@ -282,12 +291,25 @@ class ModalManager {
                 expiresAt: data.expires_at,
             });
             this.updateCopilotStatus();
-            await this.app.loadModels();
+            if (!skipModelReload) {
+                await this.app.loadModels();
+            }
+            return true;
         } catch (err) {
             console.error('Copilot auth refresh failed:', err);
-            if (statusEl) {
-                statusEl.textContent = 'Auth check failed';
+            if (clearAuthOnFailure) {
+                storage.clearCopilotAuth();
             }
+            if (statusEl) {
+                statusEl.textContent = clearAuthOnFailure ? 'Not authenticated' : 'Auth check failed';
+            }
+            if (!skipModelReload) {
+                await this.app.loadModels();
+            }
+            if (openModalOnFailure) {
+                this.showCopilotAuthModal(message);
+            }
+            return false;
         }
     }
 

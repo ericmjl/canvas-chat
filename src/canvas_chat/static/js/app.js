@@ -154,6 +154,8 @@ class App {
         // Load admin config first (determines if admin mode is enabled)
         await this.loadConfig();
 
+        await this.handleCopilotAuthOnLoad();
+
         // Load models (behavior differs based on admin mode)
         await this.loadModels();
 
@@ -215,6 +217,28 @@ class App {
             this.adminMode = false;
             this.adminModels = [];
         }
+    }
+
+    async handleCopilotAuthOnLoad() {
+        if (this.adminMode) {
+            return;
+        }
+
+        const auth = storage.getCopilotAuth();
+        if (!auth?.accessToken) {
+            return;
+        }
+
+        if (!storage.isCopilotAuthExpired()) {
+            return;
+        }
+
+        await this.modalManager.refreshCopilotAuth({
+            clearAuthOnFailure: true,
+            openModalOnFailure: true,
+            message: 'Your Copilot session expired. Please re-authenticate to continue.',
+            skipModelReload: true,
+        });
     }
 
     /**
@@ -348,7 +372,7 @@ class App {
             .filter((p) => p.key) // Only providers with keys
             .map((p) => chat.fetchProviderModels(p.name, p.key));
 
-        if (storage.getCopilotAccessToken()) {
+        if (storage.hasCopilotAuth()) {
             fetchPromises.push(chat.fetchProviderModels('github_copilot'));
         }
 
