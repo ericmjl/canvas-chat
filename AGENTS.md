@@ -29,6 +29,7 @@ This includes:
 
 - 2026-01-16: Use `pixi run python` instead of `python` for project commands.
 - 2026-01-17: Always run tests after adding tests.
+- 2026-01-17: Always run tests after making changes.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 

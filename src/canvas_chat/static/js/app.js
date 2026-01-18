@@ -649,7 +649,6 @@ class App {
                     this.modalManager.handleNodeEditContent(nodeId);
                 }
             })
-            .on('nodeSummarize', this.handleNodeSummarize.bind(this))
             // Flashcard events
             .on('createFlashcards', this.handleCreateFlashcards.bind(this))
             .on('reviewCard', this.reviewSingleCard.bind(this))
