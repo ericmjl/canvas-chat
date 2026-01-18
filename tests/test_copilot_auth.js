@@ -63,8 +63,6 @@ await asyncTest('loadModels adds Copilot options when authenticated', async () =
     const originalGetCustomModels = storage.getCustomModels;
     const originalGetCurrentModel = storage.getCurrentModel;
     const originalIsLocalhost = storage.isLocalhost;
-    const originalGetCopilotAccessToken = storage.getCopilotAccessToken;
-
     const app = createAppForLoadModels();
 
     const { chat } = await import('../src/canvas_chat/static/js/chat.js');
@@ -75,7 +73,11 @@ await asyncTest('loadModels adds Copilot options when authenticated', async () =
     storage.getCustomModels = () => [];
     storage.getCurrentModel = () => null;
     storage.isLocalhost = () => false;
-    storage.getCopilotAccessToken = () => 'copilot-access-token';
+    storage.saveCopilotAuth({
+        accessToken: 'copilot-access-token',
+        apiKey: 'copilot-api-key',
+        expiresAt: Math.floor(Date.now() / 1000) + 600,
+    });
 
     chat.fetchProviderModels = async (provider) => {
         if (provider === 'github_copilot') {
@@ -101,9 +103,51 @@ await asyncTest('loadModels adds Copilot options when authenticated', async () =
         storage.getCustomModels = originalGetCustomModels;
         storage.getCurrentModel = originalGetCurrentModel;
         storage.isLocalhost = originalIsLocalhost;
-        storage.getCopilotAccessToken = originalGetCopilotAccessToken;
+        storage.clearCopilotAuth();
         chat.fetchProviderModels = originalFetchProviderModels;
         chat.fetchModels = originalFetchModels;
+    }
+});
+
+await asyncTest('expired Copilot auth opens modal on load', async () => {
+    resetStorage();
+
+    document.body.innerHTML = `
+        <div id="copilot-auth-modal" style="display: none"></div>
+        <span id="copilot-auth-status"></span>
+        <span id="copilot-auth-message"></span>
+    `;
+
+    const now = Math.floor(Date.now() / 1000);
+    storage.saveCopilotAuth({
+        accessToken: 'access-token',
+        apiKey: 'old-api-key',
+        expiresAt: now - 10,
+    });
+
+    const app = Object.create(App.prototype);
+    app.adminMode = false;
+    app.loadModels = async () => {};
+    app.modalManager = new ModalManager(app);
+
+    const originalFetch = global.fetch;
+    const originalConsoleError = console.error;
+    global.fetch = async () => ({
+        ok: false,
+        json: async () => ({ detail: 'expired' }),
+    });
+    console.error = () => {};
+
+    try {
+        await app.handleCopilotAuthOnLoad();
+        const modal = document.getElementById('copilot-auth-modal');
+        assertEqual(modal.style.display, 'flex');
+        const message = document.getElementById('copilot-auth-message').textContent;
+        assertTrue(message.includes('expired'));
+    } finally {
+        global.fetch = originalFetch;
+        console.error = originalConsoleError;
+        storage.clearCopilotAuth();
     }
 });
 
