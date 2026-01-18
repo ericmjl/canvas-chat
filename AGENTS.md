@@ -483,6 +483,120 @@ export class MyFeature extends FeaturePlugin {
     });
     ```
 
+#### Plugin Modal Registration
+
+**CRITICAL:** If your plugin needs a modal, you MUST register it in the `onLoad()` lifecycle hook using `this.modalManager.registerModal()`.
+
+**Common Error:**
+
+```text
+Error: [ModalManager] Plugin modal my-plugin:settings not registered.
+Call registerModal() in onLoad().
+```
+
+**Pattern to follow:**
+
+```javascript
+export class MyFeature extends FeaturePlugin {
+    async onLoad() {
+        console.log('[MyFeature] Loaded');
+
+        // Register modal with HTML template
+        const modalTemplate = `
+            <div id="my-feature-settings-modal" class="modal" style="display: none">
+                <div class="modal-content modal-narrow">
+                    <div class="modal-header">
+                        <h2>My Feature Settings</h2>
+                        <button class="modal-close" id="my-feature-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Your modal content here -->
+                        <div class="api-key-group">
+                            <label for="my-setting">Setting Name</label>
+                            <input type="text" id="my-setting" class="modal-text-input" />
+                        </div>
+
+                        <div class="modal-actions">
+                            <button id="my-feature-save" class="primary-btn">Save</button>
+                            <button id="my-feature-cancel" class="secondary-btn">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Register with modalManager (pluginId, modalId, htmlTemplate)
+        this.modalManager.registerModal('my-feature', 'settings', modalTemplate);
+
+        // Setup event listeners
+        const closeBtn = document.getElementById('my-feature-close');
+        const saveBtn = document.getElementById('my-feature-save');
+        const cancelBtn = document.getElementById('my-feature-cancel');
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                this.modalManager.hidePluginModal('my-feature', 'settings');
+            });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => this.handleSave());
+        }
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                this.modalManager.hidePluginModal('my-feature', 'settings');
+            });
+        }
+    }
+
+    // Show modal in your command handler
+    async handleCommand(command, args, context) {
+        // ... your logic ...
+
+        // Show the modal using showPluginModal(pluginId, modalId)
+        this.modalManager.showPluginModal('my-feature', 'settings');
+    }
+
+    // Hide modal when done
+    handleSave() {
+        // Save logic...
+
+        // Hide using hidePluginModal(pluginId, modalId)
+        this.modalManager.hidePluginModal('my-feature', 'settings');
+    }
+}
+```
+
+**Key points:**
+
+- ✅ Register modal in `onLoad()`, not in constructor or command handler
+- ✅ Use `registerModal(pluginId, modalId, htmlTemplate)` with complete HTML
+- ✅ Use `showPluginModal(pluginId, modalId)` to show (NOT `showModal`)
+- ✅ Use `hidePluginModal(pluginId, modalId)` to hide (NOT `hideModal`)
+- ✅ Setup event listeners in `onLoad()` after registration
+- ❌ DON'T use `showModal()` or `hideModal()` - those don't exist for plugins
+- ❌ DON'T use `getModals()` - that's an older pattern
+- ❌ DON'T try to show modal before registering it
+
+**Common errors to avoid:**
+
+```javascript
+// ❌ WRONG - these methods don't exist
+this.modalManager.showModal('my-plugin:settings');
+this.modalManager.hideModal('my-plugin:settings');
+
+// ✅ CORRECT - use Plugin versions
+this.modalManager.showPluginModal('my-plugin', 'settings');
+this.modalManager.hidePluginModal('my-plugin', 'settings');
+```
+
+**Existing examples:**
+
+- `src/canvas_chat/static/js/plugins/committee.js` - Complex modal with multiple inputs
+- `src/canvas_chat/static/js/plugins/matrix.js` - Multiple modals for different actions
+- `src/canvas_chat/static/js/plugins/image-generation.js` - Simple settings modal
+
 ### StreamingManager for concurrent operations
 
 When a feature needs to manage multiple concurrent LLM streaming operations, **always use StreamingManager**.
@@ -1011,6 +1125,59 @@ _getFeature(featureId, featureName) {
 2. Create getter using `_getFeature()` helper
 3. Never instantiate the feature class directly in app.js
 4. Never create private `_featureName` instance variables
+
+### Verify APIs exist before using them
+
+**Before calling any method on `chat`, `canvas`, `storage`, or `graph` objects, verify the method exists.**
+
+AI agents often hallucinate plausible-sounding method names that don't exist. This causes runtime errors
+that are hard to debug because they only appear when the code path is triggered.
+
+**Verification steps:**
+
+1. Search for the method definition in the source file:
+
+    ```bash
+    grep -n "methodName\s*(" static/js/chat.js
+    ```
+
+2. If the method doesn't exist, look for similar methods that do exist, or implement the functionality
+   using methods that are documented below.
+
+**Common mistakes (do NOT use these - they don't exist):**
+
+| Wrong (doesn't exist)       | Correct alternative                                       |
+| --------------------------- | --------------------------------------------------------- |
+| `chat.streamChat()`         | Use `chat.sendMessage()` with callbacks                   |
+| `canvas.setNodeStreaming()` | Use `canvas.showStopButton()` / `canvas.hideStopButton()` |
+| `canvas.getSelectedNodes()` | Use `canvas.getSelectedNodeIds()`                         |
+| `storage.getApiKey()`       | Use `chat.getApiKeyForModel(model)`                       |
+
+**Key methods that DO exist:**
+
+`chat.js`:
+
+- `getApiKeyForModel(model)` - Get API key for a model
+- `sendMessage(messages, model, onChunk, onDone, onError)` - Stream LLM response
+- `summarize(messages, model)` - Get a summary (non-streaming)
+- `estimateTokens(text, model)` - Estimate token count
+
+`canvas.js`:
+
+- `getSelectedNodeIds()` - Get array of selected node IDs
+- `updateNodeContent(nodeId, content, isStreaming)` - Update node text
+- `showStopButton(nodeId)` / `hideStopButton(nodeId)` - Streaming controls
+- `showContinueButton(nodeId)` / `hideContinueButton(nodeId)` - Resume controls
+- `renderNode(node)` / `removeNode(nodeId)` - Node lifecycle
+- `panToNodeAnimated(nodeId)` - Navigate to a node
+- `selectGitRepoFile(nodeId, filePath)` - Select a file in a git repo node and open drawer
+
+`storage.js`:
+
+- `getApiKeys()` - Get all stored API keys object
+- `getApiKeyForProvider(provider)` - Get key for specific provider
+- `getExaApiKey()` - Get Exa search API key
+- `saveSession(session)` / `getSession(id)` - Session persistence
 
 ### Node content updates
 
@@ -1552,59 +1719,6 @@ Common issues to watch for:
 **Example pattern:** File path mismatches between backend (normalized paths) and frontend (display paths) - always normalize or match flexibly.
 
 **Meta-reminder:** After solving any bug, update this section with what you learned, and remember to follow this meta-loop for future bugs!
-
-### Verify APIs exist before using them
-
-**Before calling any method on `chat`, `canvas`, `storage`, or `graph` objects, verify the method exists.**
-
-AI agents often hallucinate plausible-sounding method names that don't exist. This causes runtime errors
-that are hard to debug because they only appear when the code path is triggered.
-
-**Verification steps:**
-
-1. Search for the method definition in the source file:
-
-    ```bash
-    grep -n "methodName\s*(" static/js/chat.js
-    ```
-
-2. If the method doesn't exist, look for similar methods that do exist, or implement the functionality
-   using methods that are documented below.
-
-**Common mistakes (do NOT use these - they don't exist):**
-
-| Wrong (doesn't exist)       | Correct alternative                                       |
-| --------------------------- | --------------------------------------------------------- |
-| `chat.streamChat()`         | Use `chat.sendMessage()` with callbacks                   |
-| `canvas.setNodeStreaming()` | Use `canvas.showStopButton()` / `canvas.hideStopButton()` |
-| `canvas.getSelectedNodes()` | Use `canvas.getSelectedNodeIds()`                         |
-| `storage.getApiKey()`       | Use `chat.getApiKeyForModel(model)`                       |
-
-**Key methods that DO exist:**
-
-`chat.js`:
-
-- `getApiKeyForModel(model)` - Get API key for a model
-- `sendMessage(messages, model, onChunk, onDone, onError)` - Stream LLM response
-- `summarize(messages, model)` - Get a summary (non-streaming)
-- `estimateTokens(text, model)` - Estimate token count
-
-`canvas.js`:
-
-- `getSelectedNodeIds()` - Get array of selected node IDs
-- `updateNodeContent(nodeId, content, isStreaming)` - Update node text
-- `showStopButton(nodeId)` / `hideStopButton(nodeId)` - Streaming controls
-- `showContinueButton(nodeId)` / `hideContinueButton(nodeId)` - Resume controls
-- `renderNode(node)` / `removeNode(nodeId)` - Node lifecycle
-- `panToNodeAnimated(nodeId)` - Navigate to a node
-- `selectGitRepoFile(nodeId, filePath)` - Select a file in a git repo node and open drawer
-
-`storage.js`:
-
-- `getApiKeys()` - Get all stored API keys object
-- `getApiKeyForProvider(provider)` - Get key for specific provider
-- `getExaApiKey()` - Get Exa search API key
-- `saveSession(session)` / `getSession(id)` - Session persistence
 
 ### Common debugging patterns
 

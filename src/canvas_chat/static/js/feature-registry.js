@@ -15,6 +15,7 @@ import { NoteFeature } from './plugins/note.js';
 import { GitRepoFeature } from './plugins/git-repo.js';
 import { UrlFetchFeature } from './plugins/url-fetch.js';
 import { YouTubeFeature } from './plugins/youtube.js';
+import { ImageGenerationFeature } from './plugins/image-generation.js';
 
 /**
  * Priority levels for slash command resolution
@@ -169,6 +170,17 @@ class FeatureRegistry {
                 ],
                 priority: PRIORITY.BUILTIN,
             },
+            {
+                id: 'image-generation',
+                feature: ImageGenerationFeature,
+                slashCommands: [
+                    {
+                        command: '/image',
+                        handler: 'handleCommand',
+                    },
+                ],
+                priority: PRIORITY.BUILTIN,
+            },
         ];
 
         console.log('[FeatureRegistry] Registering built-in features...');
@@ -298,10 +310,16 @@ class FeatureRegistry {
     async handleSlashCommand(command, args, context) {
         const cmd = this._slashCommands.get(command);
         if (!cmd) {
-            console.log(`[FeatureRegistry] Command "${command}" not found in registry. Available commands:`, Array.from(this._slashCommands.keys()));
+            console.log(
+                `[FeatureRegistry] Command "${command}" not found in registry. Available commands:`,
+                Array.from(this._slashCommands.keys())
+            );
             return false; // Command not found
         }
-        console.log(`[FeatureRegistry] Handling command "${command}" with args: "${args}"`, { featureId: cmd.featureId, handler: cmd.handler });
+        console.log(`[FeatureRegistry] Handling command "${command}" with args: "${args}"`, {
+            featureId: cmd.featureId,
+            handler: cmd.handler,
+        });
 
         // Emit before event (cancellable)
         const beforeEvent = new CancellableEvent('command:before', { command, args, context });
