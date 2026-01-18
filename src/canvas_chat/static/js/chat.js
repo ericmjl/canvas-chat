@@ -183,8 +183,21 @@ class Chat {
             return data.api_key;
         } catch (err) {
             console.error('Copilot auto-refresh failed:', err);
+            if (storage.isCopilotAuthExpired()) {
+                storage.clearCopilotAuth();
+                this.notifyCopilotAuthRequired('Your Copilot session expired. Please re-authenticate to continue.');
+                return null;
+            }
             return auth.apiKey || null;
         }
+    }
+
+    notifyCopilotAuthRequired(message) {
+        window.dispatchEvent(
+            new CustomEvent('copilot-auth-required', {
+                detail: { message },
+            })
+        );
     }
 
     handleCopilotAuthError(err) {
@@ -196,11 +209,7 @@ class Chat {
             return err;
         }
         const cleaned = err.message.replace(marker, '').replace(':', '').trim();
-        window.dispatchEvent(
-            new CustomEvent('copilot-auth-required', {
-                detail: { message: cleaned || 'GitHub Copilot authentication required.' },
-            })
-        );
+        this.notifyCopilotAuthRequired(cleaned || 'GitHub Copilot authentication required.');
         return new Error(cleaned || 'GitHub Copilot authentication required.');
     }
 

@@ -319,6 +319,17 @@ class Storage {
     }
 
     /**
+     * Check if Copilot auth is expired
+     */
+    isCopilotAuthExpired() {
+        const auth = this.getCopilotAuth();
+        if (!auth?.expiresAt) {
+            return false;
+        }
+        return auth.expiresAt <= Math.floor(Date.now() / 1000);
+    }
+
+    /**
      * Check if Copilot auth is available and not expired
      */
     hasCopilotAuth() {
@@ -326,7 +337,7 @@ class Storage {
         if (!auth?.apiKey) {
             return false;
         }
-        if (auth.expiresAt && auth.expiresAt <= Math.floor(Date.now() / 1000)) {
+        if (this.isCopilotAuthExpired()) {
             return false;
         }
         return true;
