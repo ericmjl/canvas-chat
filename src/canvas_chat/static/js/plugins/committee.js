@@ -273,13 +273,26 @@ class CommitteeFeature extends FeaturePlugin {
         const container = modal.querySelector('#committee-suggestions-container');
         const regenerateBtn = modal.querySelector('#committee-regenerate-btn');
 
-        // Show loading state
+        // Create abort controller for cancellation
+        const abortController = new AbortController();
+
+        // Show loading state with cancel button
         container.innerHTML = `
             <div class="committee-suggestions-loading">
-                <span class="spinner">⟳</span> Generating persona suggestions...
+                <span class="loading-spinner"></span>
+                <span>Generating persona suggestions...</span>
+                <button class="committee-cancel-suggestions-btn" style="margin-left: 12px;">
+                    Cancel
+                </button>
             </div>
         `;
         regenerateBtn.style.display = 'none';
+
+        // Handle cancel button click
+        const cancelBtn = container.querySelector('.committee-cancel-suggestions-btn');
+        cancelBtn.addEventListener('click', () => {
+            abortController.abort();
+        });
 
         const model = this.modelPicker.value;
 
@@ -306,7 +319,8 @@ ${question}`;
                         fullResponse += chunk;
                     },
                     () => resolve(),
-                    (err) => reject(err)
+                    (err) => reject(err),
+                    { signal: abortController.signal }
                 );
             });
 
@@ -335,10 +349,21 @@ ${question}`;
             this.renderPersonaSuggestions(suggestions);
             regenerateBtn.style.display = 'inline-block';
         } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('[Committee] Persona suggestions cancelled by user');
+                container.innerHTML = `
+                    <div class="committee-suggestions-error">
+                        Cancelled. Add members manually or click "Regenerate suggestions" to try again.
+                    </div>
+                `;
+                regenerateBtn.style.display = 'inline-block';
+                regenerateBtn.textContent = 'Regenerate';
+                return;
+            }
             console.error('Failed to generate persona suggestions:', error);
             container.innerHTML = `
                 <div class="committee-suggestions-error">
-                    ⚠️ Couldn't generate suggestions. Add members manually or try again.
+                    Couldn't generate suggestions. Add members manually or try again.
                 </div>
             `;
             regenerateBtn.style.display = 'inline-block';
