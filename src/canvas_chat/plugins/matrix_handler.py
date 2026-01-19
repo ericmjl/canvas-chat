@@ -1,7 +1,8 @@
 """
 Matrix Feature Plugin - Python Backend
 
-Handles matrix-specific API endpoints for parsing rows/columns from context.
+Handles matrix-specific API endpoints for parsing rows/columns from context
+and filling matrix cells.
 """
 
 import json
@@ -11,6 +12,7 @@ import traceback
 
 from fastapi import HTTPException
 from pydantic import BaseModel
+from sse_starlette.sse import EventSourceResponse
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,25 @@ class ParseTwoListsRequest(BaseModel):
 
     contents: list[str]
     context: str
+    model: str = "openai/gpt-4o-mini"
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+class Message(BaseModel):
+    """Message for conversation context."""
+
+    role: str
+    content: str
+
+
+class MatrixFillRequest(BaseModel):
+    """Request body for filling a matrix cell."""
+
+    row_item: str
+    col_item: str
+    context: str  # User-provided matrix context
+    messages: list[Message]  # DAG history for additional context
     model: str = "openai/gpt-4o-mini"
     api_key: str | None = None
     base_url: str | None = None
@@ -136,3 +157,85 @@ Example 2 output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", 
             logger.error(f"Generate title failed: {e}")
             logger.error(traceback.format_exc())
             raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/api/matrix/fill")
+    async def matrix_fill(request: MatrixFillRequest):
+        """
+        Fill a single matrix cell by evaluating row item against column item.
+
+        Returns SSE stream with the evaluation content.
+        """
+        from canvas_chat.app import (
+            extract_provider,
+            get_api_key_for_provider,
+            inject_admin_credentials,
+            prepare_copilot_openai_request,
+        )
+
+        inject_admin_credentials(request)
+
+        logger.info(
+            f"Matrix fill request: row_item={request.row_item[:50]}..., "
+            f"col_item={request.col_item[:50]}..."
+        )
+
+        provider = extract_provider(request.model)
+
+        async def generate():
+            try:
+                import litellm
+
+                system_prompt = f"""You are evaluating items in a matrix.
+Matrix context: {request.context}
+
+You will be given a row item and a column item. Evaluate or analyze the row
+item against the column item. Be concise (2-3 sentences). Focus on the specific
+intersection of these two items. Do not repeat the item names in your response
+- get straight to the evaluation."""
+
+                messages = [{"role": "system", "content": system_prompt}]
+
+                for msg in request.messages:
+                    messages.append({"role": msg.role, "content": msg.content})
+
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Row item: {request.row_item}\n"
+                            f"Column item: {request.col_item}"
+                        ),
+                    }
+                )
+
+                kwargs = {
+                    "model": request.model,
+                    "messages": messages,
+                    "temperature": 0.5,
+                    "stream": True,
+                }
+
+                api_key = get_api_key_for_provider(provider, request.api_key)
+                if api_key:
+                    kwargs["api_key"] = api_key
+
+                if request.base_url:
+                    kwargs["base_url"] = request.base_url
+
+                kwargs = prepare_copilot_openai_request(kwargs, request.model, api_key)
+
+                response = await litellm.acompletion(**kwargs)
+
+                async for chunk in response:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        yield {"event": "message", "data": content}
+
+                yield {"event": "done", "data": ""}
+
+            except Exception as e:
+                logger.error(f"Matrix fill error: {e}")
+                logger.error(traceback.format_exc())
+                yield {"event": "error", "data": str(e)}
+
+        return EventSourceResponse(generate())

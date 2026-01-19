@@ -3044,18 +3044,6 @@ async def fetch_pdf(request: FetchPdfRequest):
 # --- Matrix Endpoints ---
 
 
-class MatrixFillRequest(BaseModel):
-    """Request body for filling a matrix cell."""
-
-    row_item: str
-    col_item: str
-    context: str  # User-provided matrix context
-    messages: list[Message]  # DAG history for additional context
-    model: str = "openai/gpt-4o-mini"
-    api_key: str | None = None
-    base_url: str | None = None
-
-
 class GenerateTitleRequest(BaseModel):
     """Request body for generating a session title."""
 
