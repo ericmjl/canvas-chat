@@ -3140,7 +3140,7 @@ Example 2 output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", 
         if request.base_url:
             kwargs["base_url"] = request.base_url
 
-        kwargs = prepare_copilot_openai_request(kwargs, request.model, api_key)
+            kwargs = prepare_copilot_openai_request(kwargs, request.model, api_key)
 
         response = await litellm.acompletion(**kwargs)
         title = response.choices[0].message.content.strip()
@@ -3149,7 +3149,40 @@ Example 2 output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", 
         title = title.strip("\"'")
 
         logger.info(f"Generated title: {title}")
-        return {"title": title}
+
+        # Parse the JSON response to extract rows and columns
+        try:
+            parsed = json.loads(title)
+            # Return rows and columns directly (frontend expects these fields)
+            return {
+                "rows": parsed.get("rows", []),
+                "columns": parsed.get("columns", []),
+            }
+        except json.JSONDecodeError:
+            # If response isn't valid JSON, extract rows/cols using regex
+            import re
+
+            rows_match = re.search(r'"rows"\s*:\s*\[([^\]]*)\]', title)
+            cols_match = re.search(r'"columns"\s*:\s*\[([^\]]*)\]', title)
+
+            rows = []
+            cols = []
+
+            if rows_match:
+                rows = [
+                    m.strip().strip('"')
+                    for m in rows_match.group(1).split(",")
+                    if m.strip()
+                ]
+
+            if cols_match:
+                cols = [
+                    m.strip().strip('"')
+                    for m in cols_match.group(1).split(",")
+                    if m.strip()
+                ]
+
+            return {"rows": rows, "columns": cols}
 
     except Exception as e:
         logger.error(f"Generate title failed: {e}")
