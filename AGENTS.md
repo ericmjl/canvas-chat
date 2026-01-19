@@ -1072,7 +1072,7 @@ for (const member of members) {
 
 ### Feature instance access (plugin architecture)
 
-**CRITICAL:** All feature instances MUST be accessed through the FeatureRegistry, never instantiated directly.
+**CRITICAL:** All feature instances MUST be accessed through the FeatureRegistry using `this.featureRegistry.getFeature(id)` directly.
 
 **The problem:** Direct instantiation creates duplicate instances with separate state:
 
@@ -1080,36 +1080,16 @@ for (const member of members) {
 - Instance #2: Created by lazy getter (handles modal buttons)
 - Result: Modal state lives in instance #1, but buttons call methods on instance #2
 
-**The pattern:** Use `_getFeature()` helper for all feature getters:
+**The pattern:** Always use `this.featureRegistry.getFeature(id)` directly:
 
 ```javascript
-// WRONG: Direct instantiation creates dual instances
-get committeeFeature() {
-    if (!this._committeeFeature) {
-        this._committeeFeature = new CommitteeFeature({...});
-    }
-    return this._committeeFeature;
-}
-
-// CORRECT: Always use FeatureRegistry instance
+// WRONG: Old pattern with typed getters
 get committeeFeature() {
     return this._getFeature('committee', 'CommitteeFeature');
 }
-```
 
-**The `_getFeature()` helper:**
-
-```javascript
-_getFeature(featureId, featureName) {
-    const feature = this.featureRegistry.getFeature(featureId);
-    if (!feature) {
-        throw new Error(
-            `Feature "${featureName}" not found in FeatureRegistry. ` +
-            `Check initialization order in App.init().`
-        );
-    }
-    return feature;
-}
+// CORRECT: Direct access via FeatureRegistry
+this.featureRegistry.getFeature('committee').handleCommittee(...);
 ```
 
 **Why this matters:**
@@ -1118,13 +1098,70 @@ _getFeature(featureId, featureName) {
 - Prevents state desynchronization between slash commands and UI
 - Fails fast with clear error if initialization order is wrong
 - Forces correct architecture (no backwards compatibility trap)
+- App.js stays small - no typed getters needed for each feature
+- Features are self-contained - no tight coupling to App class
 
 **When adding new features:**
 
 1. Register feature in `FeatureRegistry.registerBuiltInFeatures()`
-2. Create getter using `_getFeature()` helper
-3. Never instantiate the feature class directly in app.js
-4. Never create private `_featureName` instance variables
+2. Never instantiate the feature class directly in app.js
+3. Never create private `_featureName` instance variables
+
+### Node protocol action methods
+
+**Pattern for tight coupling between node types:**
+
+Some node types have tight coupling that's by design (e.g., CSV→Code via Analyze button). Handle this via **node protocol methods**:
+
+```javascript
+// CSV node protocol handles creating Code nodes to analyze CSV data
+class CsvNode extends BaseNode {
+    analyze(nodeId, canvas, graph) {
+        // Create Code node from CSV data
+        // Access graph, canvas via parameters
+        // Return when done
+    }
+}
+
+// In app.js, when canvas emits 'nodeAnalyze' event:
+.on('nodeAnalyze', (nodeId) => {
+    const node = this.graph.getNode(nodeId);
+    if (node) {
+        const wrapped = wrapNode(node);
+        if (typeof wrapped.analyze === 'function') {
+            wrapped.analyze(nodeId, this.canvas, this.graph);
+        }
+    }
+})
+```
+
+**Why use node protocol methods:**
+
+- Self-contained - node type owns its coupling logic
+- Testable - protocol can be tested in isolation
+- No app.js bloat - tight coupling lives in node protocol file
+
+**When to use this pattern:**
+
+- CSV→Code, PDF→Code, etc. (desirable tight coupling)
+- Analyze, Edit, and other node-type-specific operations
+- Any operation that only makes sense for that node type
+
+**When NOT to use this pattern:**
+
+- Global UI handlers (toolbar buttons, keyboard shortcuts)
+- File upload handlers
+- Multi-node operations (bulk delete, export, etc.)
+
+**Note:** When adding/removing methods in app.js, update `tests/test_app_init.js`:
+
+- Add removed methods to delegatedMethods list with comments
+- Add new methods to requiredMethods or delegatedMethods lists
+
+**Note:** When adding/removing methods in app.js, update `tests/test_app_init.js`:
+
+- Add removed methods to delegatedMethods list with comments
+- Add new methods to requiredMethods or delegatedMethods lists
 
 ### Verify APIs exist before using them
 

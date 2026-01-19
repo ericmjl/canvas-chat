@@ -10,11 +10,6 @@ import { FileUploadHandler } from './file-upload-handler.js';
 import { EdgeType, NodeType, TAG_COLORS, createEdge, createNode, getDefaultNodeSize } from './graph-types.js';
 import { ModalManager } from './modal-manager.js';
 import { NodeRegistry } from './node-registry.js';
-import { CommitteeFeature } from './plugins/committee.js';
-import { FactcheckFeature } from './plugins/factcheck.js';
-import { FlashcardFeature } from './plugins/flashcards.js';
-import { MatrixFeature } from './plugins/matrix.js';
-import { ResearchFeature } from './plugins/research.js';
 import { SlashCommandMenu, setFeatureRegistry } from './slash-command-menu.js';
 import { storage } from './storage.js';
 import { UndoManager } from './undo-manager.js';
@@ -134,6 +129,8 @@ class App {
 
         // Setup canvas event listeners (using EventEmitter pattern)
         this.setupCanvasEventListeners();
+        // Note: Feature canvas handlers are registered in initializePluginSystem()
+        // This ensures features are loaded before registering their handlers
 
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
@@ -265,94 +262,6 @@ class App {
         }
 
         console.log('[App] Hidden admin-restricted UI elements (API keys, proxy, custom models)');
-    }
-
-    /**
-     * Get a feature from the FeatureRegistry.
-     *
-     * ARCHITECTURAL PATTERN: Feature Getter Singleton
-     * ================================================
-     * All features MUST be retrieved from the FeatureRegistry to ensure single instance.
-     * This prevents the "dual instance" bug where:
-     * 1. FeatureRegistry creates instance #1 (for slash commands)
-     * 2. Lazy getter creates instance #2 (for modal buttons)
-     * 3. Modal state lives in instance #1, but buttons call methods on instance #2
-     *
-     * If a feature is not found in the registry, this indicates a serious initialization
-     * error and should fail fast with a clear error message.
-     *
-     * @param {string} featureId - Feature ID in FeatureRegistry (e.g., 'committee', 'matrix')
-     * @param {string} featureName - Human-readable feature name for error messages
-     * @returns {FeaturePlugin} The feature instance
-     * @throws {Error} If feature is not registered (initialization order bug)
-     * @private
-     */
-    _getFeature(featureId, featureName) {
-        const feature = this.featureRegistry.getFeature(featureId);
-        if (!feature) {
-            throw new Error(
-                `Feature "${featureName}" (${featureId}) not found in FeatureRegistry. ` +
-                    `This indicates initializePluginSystem() was not called before accessing the feature. ` +
-                    `Check initialization order in App.init().`
-            );
-        }
-        return feature;
-    }
-
-    /**
-     * Get the flashcard feature module.
-     * @returns {FlashcardFeature}
-     */
-    get flashcardFeature() {
-        return this._getFeature('flashcards', 'FlashcardFeature');
-    }
-
-    /**
-     * Get the committee feature module.
-     * @returns {CommitteeFeature}
-     */
-    get committeeFeature() {
-        return this._getFeature('committee', 'CommitteeFeature');
-    }
-
-    /**
-     * Get the matrix feature module.
-     * @returns {MatrixFeature}
-     */
-    get matrixFeature() {
-        return this._getFeature('matrix', 'MatrixFeature');
-    }
-
-    /**
-     * Get the factcheck feature module.
-     * @returns {FactcheckFeature}
-     */
-    get factcheckFeature() {
-        return this._getFeature('factcheck', 'FactcheckFeature');
-    }
-
-    /**
-     * Get the research feature module.
-     * @returns {ResearchFeature}
-     */
-    get researchFeature() {
-        return this._getFeature('research', 'ResearchFeature');
-    }
-
-    /**
-     * Get code feature instance.
-     * @returns {CodeFeature}
-     */
-    get codeFeature() {
-        return this._getFeature('code', 'CodeFeature');
-    }
-
-    /**
-     * Get image generation feature instance.
-     * @returns {ImageGenerationFeature}
-     */
-    get imageGenerationFeature() {
-        return this._getFeature('image-generation', 'ImageGenerationFeature');
     }
 
     async loadModels() {
@@ -643,17 +552,11 @@ class App {
             .on('nodeFetchSummarize', this.handleNodeFetchSummarize.bind(this))
             .on('nodeDelete', this.handleNodeDelete.bind(this))
             .on('nodeCopy', this.copyNodeContent.bind(this))
-            .on('nodeTitleEdit', (nodeId) => this.modalManager.handleNodeTitleEdit(nodeId))
-            // Matrix-specific events
-            .on('matrixCellFill', this.handleMatrixCellFill.bind(this))
-            .on('matrixCellView', this.handleMatrixCellView.bind(this))
-            .on('matrixFillAll', this.handleMatrixFillAll.bind(this))
-            .on('matrixRowExtract', this.handleMatrixRowExtract.bind(this))
-            .on('matrixColExtract', this.handleMatrixColExtract.bind(this))
-            .on('matrixEdit', this.handleMatrixEdit.bind(this))
-            .on('matrixIndexColResize', this.handleMatrixIndexColResize.bind(this))
-            // Streaming control events (now handled by StreamingManager via setCanvas)
-            // Error handling events
+            .on('nodeTitleEdit', (nodeId) => this.modalManager.handleNodeTitleEdit(nodeId));
+        // Register feature canvas event handlers
+        this.registerFeatureCanvasHandlers();
+        // Streaming control events (now handled by StreamingManager via setCanvas)
+        this.canvas
             .on('nodeRetry', this.handleNodeRetry.bind(this))
             .on('nodeDismissError', this.handleNodeDismissError.bind(this))
             // Node resize to viewport events
@@ -681,10 +584,6 @@ class App {
                     this.modalManager.handleNodeEditContent(nodeId);
                 }
             })
-            // Flashcard events
-            .on('createFlashcards', this.handleCreateFlashcards.bind(this))
-            .on('reviewCard', this.reviewSingleCard.bind(this))
-            .on('flipCard', this.handleFlipCard.bind(this))
             // Poll plugin events are now handled by PollFeature plugin
             // File drop events (plugin-based system)
             .on('fileDrop', (file, position) => this.fileUploadHandler.handleFileUpload(file, position))
@@ -695,23 +594,32 @@ class App {
             // Image and tag click events
             .on('imageClick', this.handleImageClick.bind(this))
             .on('tagChipClick', this.handleTagChipClick.bind(this))
-            .on('tagRemove', this.handleTagRemove.bind(this))
-            // Navigation events for parent/child traversal
-            .on('navParentClick', this.handleNavParentClick.bind(this))
-            .on('navChildClick', this.handleNavChildClick.bind(this))
-            .on('nodeNavigate', this.handleNodeNavigate.bind(this))
-            // Collapse/expand event for hiding/showing descendants
-            .on('nodeCollapse', this.handleNodeCollapse.bind(this))
-            // CSV/Code execution events
-            .on('nodeAnalyze', this.handleNodeAnalyze.bind(this))
-            .on('nodeRunCode', this.handleNodeRunCode.bind(this))
-            .on('nodeCodeChange', this.handleNodeCodeChange.bind(this))
-            .on('nodeEditCode', (nodeId) => this.modalManager.handleNodeEditCode(nodeId))
-            .on('nodeGenerate', this.handleNodeGenerate.bind(this))
-            .on('nodeGenerateSubmit', this.handleNodeGenerateSubmit.bind(this))
-            .on('nodeOutputToggle', this.handleNodeOutputToggle.bind(this))
-            .on('nodeOutputClear', this.handleNodeOutputClear.bind(this))
-            .on('nodeOutputResize', this.handleNodeOutputResize.bind(this));
+            .on('tagRemove', this.handleTagRemove.bind(this));
+        // Navigation events for parent/child traversal
+        this.canvas.on('navParentClick', this.handleNavParentClick.bind(this));
+        this.canvas.on('navChildClick', this.handleNavChildClick.bind(this));
+        this.canvas.on('nodeNavigate', this.handleNodeNavigate.bind(this));
+        // Collapse/expand event for hiding/showing descendants
+        this.canvas.on('nodeCollapse', this.handleNodeCollapse.bind(this));
+        // Register modal canvas handlers
+        this.modalManager.setupCanvasEventListeners();
+        // Node protocol handlers - CSV node Analyze button
+        this.canvas.on('nodeAnalyze', (nodeId) => this.handleNodeAnalyze(nodeId));
+    }
+
+    /**
+     * Register canvas event handlers from all features.
+     * Iterates through registered features and registers their handlers if they provide getCanvasEventHandlers().
+     */
+    registerFeatureCanvasHandlers() {
+        for (const feature of this.featureRegistry.getAllFeatures()) {
+            if (typeof feature.getCanvasEventHandlers === 'function') {
+                const handlers = feature.getCanvasEventHandlers();
+                for (const [eventName, handler] of Object.entries(handlers)) {
+                    this.canvas.on(eventName, handler);
+                }
+            }
+        }
     }
 
     setupEventListeners() {
@@ -970,127 +878,6 @@ class App {
         document.getElementById('new-session-btn').addEventListener('click', async () => {
             this.modalManager.hideSessionsModal();
             await this.createNewSession();
-        });
-
-        // Matrix modal
-        document.getElementById('matrix-close').addEventListener('click', () => {
-            document.getElementById('matrix-modal').style.display = 'none';
-            this.matrixFeature._matrixData = null;
-        });
-        document.getElementById('matrix-cancel-btn').addEventListener('click', () => {
-            document.getElementById('matrix-modal').style.display = 'none';
-            this.matrixFeature._matrixData = null;
-        });
-        document.getElementById('swap-axes-btn').addEventListener('click', () => {
-            this.matrixFeature.swapMatrixAxes();
-        });
-        document.getElementById('matrix-create-btn').addEventListener('click', () => {
-            this.matrixFeature.createMatrixNode();
-        });
-        document.getElementById('add-row-btn').addEventListener('click', () => {
-            this.matrixFeature.addAxisItem('row-items');
-        });
-        document.getElementById('add-col-btn').addEventListener('click', () => {
-            this.matrixFeature.addAxisItem('col-items');
-        });
-
-        // Edit matrix modal
-        document.getElementById('edit-matrix-close').addEventListener('click', () => {
-            document.getElementById('edit-matrix-modal').style.display = 'none';
-            this.matrixFeature._editMatrixData = null;
-        });
-        document.getElementById('edit-matrix-cancel-btn').addEventListener('click', () => {
-            document.getElementById('edit-matrix-modal').style.display = 'none';
-            this.matrixFeature._editMatrixData = null;
-        });
-        document.getElementById('edit-matrix-save-btn').addEventListener('click', () => {
-            this.matrixFeature.saveMatrixEdits();
-        });
-        document.getElementById('edit-swap-axes-btn').addEventListener('click', () => {
-            this.matrixFeature.swapEditMatrixAxes();
-        });
-        document.getElementById('edit-add-row-btn').addEventListener('click', () => {
-            this.matrixFeature.addAxisItem('edit-row-items');
-        });
-        document.getElementById('edit-add-col-btn').addEventListener('click', () => {
-            this.matrixFeature.addAxisItem('edit-col-items');
-        });
-
-        // Committee modal
-        document.getElementById('committee-close').addEventListener('click', () => {
-            this.committeeFeature.closeModal();
-        });
-        document.getElementById('committee-cancel-btn').addEventListener('click', () => {
-            this.committeeFeature.closeModal();
-        });
-        document.getElementById('committee-execute-btn').addEventListener('click', () => {
-            this.committeeFeature.executeCommittee();
-        });
-
-        // Factcheck modal
-        document.getElementById('factcheck-close').addEventListener('click', () => {
-            this.factcheckFeature.closeFactcheckModal();
-        });
-        document.getElementById('factcheck-cancel-btn').addEventListener('click', () => {
-            this.factcheckFeature.closeFactcheckModal();
-        });
-        document.getElementById('factcheck-execute-btn').addEventListener('click', () => {
-            this.factcheckFeature.executeFactcheckFromModal();
-        });
-        document.getElementById('factcheck-select-all').addEventListener('change', (e) => {
-            this.factcheckFeature.handleFactcheckSelectAll(e.target.checked);
-        });
-
-        // Cell detail modal
-        document.getElementById('cell-close').addEventListener('click', () => {
-            document.getElementById('cell-modal').style.display = 'none';
-        });
-        document.getElementById('cell-close-btn').addEventListener('click', () => {
-            document.getElementById('cell-modal').style.display = 'none';
-        });
-        document.getElementById('cell-pin-btn').addEventListener('click', () => {
-            this.matrixFeature.pinCellToCanvas();
-        });
-        document.getElementById('cell-copy-btn').addEventListener('click', async () => {
-            const content = document.getElementById('cell-content').textContent;
-            const btn = document.getElementById('cell-copy-btn');
-            try {
-                await navigator.clipboard.writeText(content);
-                const originalText = btn.textContent;
-                btn.textContent = '✓';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                }, 1500);
-            } catch (err) {
-                console.error('Failed to copy:', err);
-            }
-        });
-
-        // Row/Column (slice) detail modal
-        document.getElementById('slice-close').addEventListener('click', () => {
-            document.getElementById('slice-modal').style.display = 'none';
-            this.matrixFeature._currentSliceData = null;
-        });
-        document.getElementById('slice-close-btn').addEventListener('click', () => {
-            document.getElementById('slice-modal').style.display = 'none';
-            this.matrixFeature._currentSliceData = null;
-        });
-        document.getElementById('slice-pin-btn').addEventListener('click', () => {
-            this.matrixFeature.pinSliceToCanvas();
-        });
-        document.getElementById('slice-copy-btn').addEventListener('click', async () => {
-            const content = document.getElementById('slice-content').textContent;
-            const btn = document.getElementById('slice-copy-btn');
-            try {
-                await navigator.clipboard.writeText(content);
-                const originalText = btn.textContent;
-                btn.textContent = '✓';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                }, 1500);
-            } catch (err) {
-                console.error('Failed to copy:', err);
-            }
         });
 
         // Tag drawer
@@ -1581,7 +1368,7 @@ class App {
      * @param {string} context - Optional context to help refine the query (e.g., selected text)
      */
     async handleSearch(query, context = null) {
-        return this.researchFeature.handleSearch(query, context);
+        return this.featureRegistry.getFeature('research').handleSearch(query, context);
     }
 
     // Note: Note handling has been moved to NoteFeature plugin
@@ -2052,16 +1839,47 @@ class App {
      * @param {string} context - Optional context to help refine the instructions (e.g., selected text)
      */
     async handleResearch(instructions, context = null) {
-        return this.researchFeature.handleResearch(instructions, context);
+        return this.featureRegistry.getFeature('research').handleResearch(instructions, context);
     }
 
     /**
-     * Handle /factcheck slash command - verify claims with web search
-     * @param {string} input - The user's input (claim or vague reference)
-     * @param {string} context - Optional context from selected nodes
+     * Handle creating flashcards from a content node.
+     * Shows modal with generated flashcard candidates for user selection.
+     * @param {string} nodeId - ID of source node
      */
-    async handleFactcheck(input, context = null) {
-        return this.factcheckFeature.handleFactcheck(input, context);
+    async handleCreateFlashcards(nodeId) {
+        return this.featureRegistry.getFeature('flashcards').handleCreateFlashcards(nodeId);
+    }
+
+    /**
+     * Show flashcard review modal with due cards.
+     * @param {string[]} dueCardIds - Array of flashcard node IDs to review
+     */
+    showReviewModal(dueCardIds) {
+        return this.featureRegistry.getFeature('flashcards').showReviewModal(dueCardIds);
+    }
+
+    /**
+     * Start a review session with all due flashcards.
+     */
+    startFlashcardReview() {
+        return this.featureRegistry.getFeature('flashcards').startFlashcardReview();
+    }
+
+    /**
+     * Review a single flashcard (flip and grade).
+     * @param {string} cardId - The flashcard node ID
+     */
+    reviewSingleCard(cardId) {
+        return this.featureRegistry.getFeature('flashcards').reviewSingleCard(cardId);
+    }
+
+    /**
+     * Handle flip card action in review modal.
+     * @param {string} cardId - The flashcard node ID
+     */
+    handleFlipCard(cardId) {
+        return this.featureRegistry.getFeature('flashcards').handleFlipCard(cardId);
     }
 
     // =========================================================================
@@ -2070,8 +1888,8 @@ class App {
 
     /**
      * Handle /committee slash command - show modal to configure LLM committee.
-     * Delegates to the committee feature plugin via FeatureRegistry.
-     * @param {string} question - The question to ask the committee
+     * Delegates to committee feature plugin via FeatureRegistry.
+     * @param {string} question - The question to ask committee
      * @param {string|null} context - Optional context text
      */
     async handleCommittee(question, context = null) {
@@ -2080,19 +1898,21 @@ class App {
             return feature.handleCommittee('/committee', question, { text: context });
         }
         // Fallback to old pattern if plugin system not initialized
-        return this.committeeFeature.handleCommittee('/committee', question, { text: context });
+        return this.featureRegistry.getFeature('committee').handleCommittee('/committee', question, { text: context });
     }
 
     /**
      * Get display name for a model ID.
+     * Delegates to committee feature plugin via FeatureRegistry.
      * @param {string} modelId - The model ID
-     * @returns {string} - Display name for the model
+     * @returns {string} - Display name for model
      */
     getModelDisplayName(modelId) {
-        return this.committeeFeature.getModelDisplayName(modelId);
+        return this.featureRegistry.getFeature('committee').getModelDisplayName(modelId);
     }
 
-    // --- CSV/Code Execution Methods ---
+    // --- Code Node Execution Methods ---
+    // Handle Run Code button click from CSV node (now handled via CSV node protocol)
 
     /**
      * Handle /code slash command - creates a Code node, optionally with AI-generated code
@@ -2168,42 +1988,16 @@ print("Hello from Pyodide!")
     }
 
     /**
-     * Handle Analyze button click on CSV node - creates a Code node for that CSV
+     * Handle Analyze button click on CSV node - delegates to CsvNode protocol.
      * @param {string} nodeId - The CSV node ID
      */
     async handleNodeAnalyze(nodeId) {
-        const csvNode = this.graph.getNode(nodeId);
-        if (!csvNode || csvNode.type !== NodeType.CSV) return;
-
-        // Create code node with starter template
-        const starterCode = `# Analyzing: ${csvNode.title || 'CSV data'}
-import pandas as pd
-
-# DataFrame is pre-loaded as 'df'
-df.head()
-`;
-
-        const position = this.graph.autoPosition([nodeId]);
-
-        const codeNode = createNode(NodeType.CODE, starterCode, {
-            position,
-            csvNodeIds: [nodeId], // Link to source CSV node
-        });
-
-        this.graph.addNode(codeNode);
-
-        // Create edge from CSV to code node
-        const edge = createEdge(nodeId, codeNode.id, EdgeType.GENERATES);
-        this.graph.addEdge(edge);
-
-        this.canvas.renderNode(codeNode);
-        this.canvas.updateAllEdges(this.graph);
-        this.canvas.updateAllNavButtonStates(this.graph);
-        this.canvas.panToNodeAnimated(codeNode.id);
-        this.saveSession();
-
-        // Preload Pyodide in the background so it's ready when user clicks Run
-        pyodideRunner.preload();
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (typeof wrapped.analyze === 'function') {
+            wrapped.analyze(nodeId, this.canvas, this.graph);
+        }
     }
 
     /**
@@ -2480,7 +2274,10 @@ df.head()
                     this.saveSession();
 
                     // Self-healing: Auto-run and fix errors (max 3 attempts)
-                    await this.codeFeature.selfHealCode(nodeId, prompt, model, context, 1);
+                    const codeFeature = this.featureRegistry.getFeature('code');
+                    if (codeFeature && codeFeature.selfHealCode) {
+                        await codeFeature.selfHealCode(nodeId, prompt, model, context, 1);
+                    }
                 },
                 onError: (err) => {
                     throw err;
@@ -2576,57 +2373,6 @@ df.head()
         return { dataframeInfo, ancestorContext, existingCode };
     }
 
-    // --- Code Feature Wrappers ---
-    // Code feature is implemented in code-feature.js with CodeFeature class
-
-    /**
-     * Self-heal code by executing it and auto-fixing errors through LLM iterations.
-     * Delegates to CodeFeature plugin.
-     */
-    async selfHealCode(nodeId, originalPrompt, model, context, attemptNum = 1, maxAttempts = 3) {
-        return this.codeFeature.selfHealCode(nodeId, originalPrompt, model, context, attemptNum, maxAttempts);
-    }
-
-    /**
-     * Ask LLM to fix code errors and regenerate.
-     * Delegates to CodeFeature plugin.
-     */
-    async fixCodeError(nodeId, originalPrompt, model, context, failedCode, errorMessage, attemptNum, maxAttempts) {
-        return this.codeFeature.fixCodeError(
-            nodeId,
-            originalPrompt,
-            model,
-            context,
-            failedCode,
-            errorMessage,
-            attemptNum,
-            maxAttempts
-        );
-    }
-
-    /**
-     * Handle output drawer toggle (expand/collapse) with animation
-     * @param {string} nodeId - The Code node ID
-     */
-    handleNodeOutputToggle(nodeId) {
-        const node = this.graph.getNode(nodeId);
-        if (!node) return;
-        const wrapped = wrapNode(node);
-        if (!wrapped.hasOutput || !wrapped.hasOutput()) return;
-
-        const currentExpanded = node.outputExpanded !== false;
-        const newExpanded = !currentExpanded;
-
-        // Animate the panel
-        this.canvas.animateOutputPanel(nodeId, newExpanded, () => {
-            // After animation completes, update state and toggle button (no full re-render)
-            this.graph.updateNode(nodeId, { outputExpanded: newExpanded });
-            this.canvas.updateOutputToggleButton(nodeId, newExpanded);
-        });
-        this.saveSession();
-        this.updateEmptyState();
-    }
-
     /**
      * Initialize the plugin system and register built-in features.
      * MUST be called before loadSession() since features may be accessed during session loading.
@@ -2638,6 +2384,9 @@ df.head()
 
         // Register all built-in features (handles 6 features automatically)
         await this.featureRegistry.registerBuiltInFeatures();
+
+        // Register feature canvas event handlers (must happen after features are registered)
+        this.registerFeatureCanvasHandlers();
 
         // Inject FeatureRegistry into slash command menu so it can show feature plugin commands
         setFeatureRegistry(this.featureRegistry);
@@ -2703,41 +2452,6 @@ df.head()
 
         this.graph.updateNode(nodeId, { outputPanelHeight: height });
         this.saveSession();
-    }
-
-    // --- Matrix Feature Wrappers ---
-    // Matrix feature is implemented in matrix.js with MatrixFeature class
-
-    async handleMatrix(matrixContext) {
-        return this.matrixFeature.handleMatrix(matrixContext);
-    }
-
-    async handleMatrixCellFill(nodeId, row, col, abortController = null) {
-        return this.matrixFeature.handleMatrixCellFill(nodeId, row, col, abortController);
-    }
-
-    handleMatrixCellView(nodeId, row, col) {
-        return this.matrixFeature.handleMatrixCellView(nodeId, row, col);
-    }
-
-    async handleMatrixFillAll(nodeId) {
-        return this.matrixFeature.handleMatrixFillAll(nodeId);
-    }
-
-    handleMatrixEdit(nodeId) {
-        return this.matrixFeature.handleMatrixEdit(nodeId);
-    }
-
-    handleMatrixIndexColResize(nodeId, width) {
-        return this.matrixFeature.handleMatrixIndexColResize(nodeId, width);
-    }
-
-    handleMatrixRowExtract(nodeId, rowIndex) {
-        return this.matrixFeature.handleMatrixRowExtract(nodeId, rowIndex);
-    }
-
-    handleMatrixColExtract(nodeId, colIndex) {
-        return this.matrixFeature.handleMatrixColExtract(nodeId, colIndex);
     }
 
     truncate(text, maxLength) {
@@ -3831,75 +3545,49 @@ df.head()
     // =========================================================================
 
     /**
-     * Handle creating flashcards from a content node.
-     * @param {string} nodeId - ID of the source node
+     * Highlight's source text in parent node when a highlight excerpt is selected
+     * @param {Object} highlightNode - The highlight node that was selected
      */
     async handleCreateFlashcards(nodeId) {
-        return this.flashcardFeature.handleCreateFlashcards(nodeId);
+        return this.featureRegistry.getFeature('flashcards').handleCreateFlashcards(nodeId);
     }
 
     /**
-     * Show the flashcard review modal with due cards.
+     * Show flashcard review modal with due cards.
      * @param {string[]} dueCardIds - Array of flashcard node IDs to review
      */
     showReviewModal(dueCardIds) {
-        return this.flashcardFeature.showReviewModal(dueCardIds);
+        return this.featureRegistry.getFeature('flashcards').showReviewModal(dueCardIds);
     }
 
     /**
      * Start a review session with all due flashcards.
      */
     startFlashcardReview() {
-        return this.flashcardFeature.startFlashcardReview();
+        return this.featureRegistry.getFeature('flashcards').startFlashcardReview();
     }
 
     /**
-     * Review a single flashcard.
-     * @param {string} cardId - Flashcard node ID
+     * Review a single flashcard (flip and grade).
+     * @param {string} cardId - The flashcard node ID
      */
     reviewSingleCard(cardId) {
-        return this.flashcardFeature.reviewSingleCard(cardId);
+        return this.featureRegistry.getFeature('flashcards').reviewSingleCard(cardId);
     }
 
     /**
-     * Handle flipping a flashcard to show/hide the answer.
-     * @param {string} cardId - Flashcard node ID
+     * Handle flipping a flashcard to show/hide answer.
+     * @param {string} cardId - The flashcard node ID
      */
     handleFlipCard(cardId) {
-        return this.flashcardFeature.handleFlipCard(cardId);
+        return this.featureRegistry.getFeature('flashcards').handleFlipCard(cardId);
     }
 
     /**
      * Check for due flashcards and show toast notification if any.
      */
     checkDueFlashcardsOnLoad() {
-        return this.flashcardFeature.checkDueFlashcardsOnLoad();
-    }
-
-    /**
-     * Handle voting on a poll option (plugin event)
-     */
-    // Poll event handlers have been moved to PollFeature plugin
-    // See src/canvas_chat/static/js/poll.js
-
-    /**
-     * Highlight the source text in the parent node when a highlight excerpt is selected
-     * @param {Object} highlightNode - The highlight node that was selected
-     */
-    highlightSourceTextInParent(highlightNode) {
-        // Get the parent node (source of the excerpt)
-        const parents = this.graph.getParents(highlightNode.id);
-        if (parents.length === 0) return;
-
-        const parentNode = parents[0];
-
-        // Extract the excerpted text using the utility function
-        const excerptText = extractExcerptText(highlightNode.content);
-
-        if (!excerptText.trim()) return;
-
-        // Highlight the text in the parent node
-        this.canvas.highlightTextInNode(parentNode.id, excerptText);
+        return this.featureRegistry.getFeature('flashcards').checkDueFlashcardsOnLoad();
     }
 
     async copyNodeContent(nodeId) {
@@ -4931,7 +4619,7 @@ df.head()
                 <div class="tag-slot-content">
                     ${
                         tag
-                            ? `<span class="tag-slot-name">${this.escapeHtml(tag.name)}</span>`
+                            ? `<span class="tag-slot-name">${escapeHtmlText(tag.name)}</span>`
                             : `<span class="tag-slot-empty">+ Add tag</span>`
                     }
                 </div>
@@ -5000,7 +4688,7 @@ df.head()
 
         contentEl.innerHTML = `
             <input type="text" class="tag-slot-input"
-                value="${this.escapeHtml(currentName)}"
+                value="${escapeHtmlText(currentName)}"
                 placeholder="Tag name..."
                 maxlength="20">
         `;
@@ -5262,7 +4950,7 @@ df.head()
                 const typeName = result.type.charAt(0).toUpperCase() + result.type.slice(1);
 
                 // Highlight matching terms in snippet
-                let snippet = this.escapeHtml(result.snippet);
+                let snippet = escapeHtmlText(result.snippet);
                 for (const token of queryTokens) {
                     const regex = new RegExp(`(${this.escapeRegex(token)})`, 'gi');
                     snippet = snippet.replace(regex, '<mark>$1</mark>');
