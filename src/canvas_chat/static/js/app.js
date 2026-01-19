@@ -172,6 +172,13 @@ class App {
             .on('nodeAdded', (node) => {
                 this.canvas.renderNode(node);
                 this.updateEmptyState();
+
+                // Auto-zoom to user-created nodes (not during session load or bulk operations)
+                if (this._userNodeCreation) {
+                    this._userNodeCreation = false;
+                    // Use zoomToSelectionAnimated to match 'z' shortcut behavior
+                    this.canvas.zoomToSelectionAnimated([node.id], 0.8, 300);
+                }
             })
             .on('nodeRemoved', () => this.updateEmptyState())
             .on('edgeAdded', (edge) => {
@@ -1263,7 +1270,7 @@ class App {
             position: this.graph.autoPosition(parentIds.length > 0 ? parentIds : []),
         });
 
-        this.graph.addNode(humanNode);
+        this.addUserNode(humanNode);
 
         // Create edges from parents (only if nodes are selected)
         if (parentIds.length > 0) {
@@ -1279,85 +1286,17 @@ class App {
 
         // Clear input and selection
         this.chatInput.value = '';
-        this.chatInput.style.height = 'auto';
         this.canvas.clearSelection();
+    }
 
-        // Save
-        this.saveSession();
-        this.updateEmptyState();
-
-        // Create AI response node (placeholder)
-        const model = this.modelPicker.value;
-        const aiNode = createNode(NodeType.AI, '', {
-            position: this.graph.autoPosition([humanNode.id]),
-            model: model.split('/').pop(), // Just the model name
-        });
-
-        this.graph.addNode(aiNode);
-
-        // Create edge from human to AI
-        const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
-        this.graph.addEdge(aiEdge);
-
-        // Update collapse button for human node (now has AI child)
-        this.updateCollapseButtonForNode(humanNode.id);
-
-        // Smoothly pan to the new AI node
-        this.canvas.centerOnAnimated(aiNode.position.x + 160, aiNode.position.y + 100, 300);
-
-        // Build context and send to LLM
-        const context = this.graph.resolveContext([humanNode.id]);
-        const messages = buildMessagesForApi(context);
-
-        // Create AbortController for this stream
-        const abortController = new AbortController();
-
-        // Register with StreamingManager (auto-shows stop button)
-        this.streamingManager.register(aiNode.id, {
-            abortController,
-            featureId: 'ai',
-            context: { messages, model, humanNodeId: humanNode.id },
-            onContinue: async (nodeId, state) => {
-                // Resume streaming from where we left off
-                await this.continueAIResponse(nodeId, state.context);
-            },
-        });
-
-        // Stream response
-        this.streamWithAbort(
-            aiNode.id,
-            abortController,
-            messages,
-            model,
-            // onChunk
-            (chunk, fullContent) => {
-                this.canvas.updateNodeContent(aiNode.id, fullContent, true);
-                this.graph.updateNode(aiNode.id, { content: fullContent });
-            },
-            // onDone
-            (fullContent) => {
-                this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
-                this.canvas.updateNodeContent(aiNode.id, fullContent, false);
-                this.graph.updateNode(aiNode.id, { content: fullContent });
-                this.saveSession();
-
-                // Generate summary async (don't await - let it happen in background)
-                this.generateNodeSummary(aiNode.id);
-            },
-            // onError
-            (err) => {
-                this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
-
-                // Format and display user-friendly error
-                const errorInfo = formatUserError(err);
-                this.showNodeError(aiNode.id, errorInfo, {
-                    type: 'chat',
-                    messages,
-                    model,
-                    humanNodeId: humanNode.id,
-                });
-            }
-        );
+    /**
+     * Add a node with automatic zoom-to-node for user-created nodes.
+     * This should be used for user-initiated node creation (not during session load or bulk operations).
+     * @param {Object} node - The node to add
+     */
+    addUserNode(node) {
+        this._userNodeCreation = true;
+        this.graph.addNode(node);
     }
 
     /**
@@ -1771,18 +1710,11 @@ class App {
                 mimeType: mimeType,
             });
 
-            this.graph.addNode(imageNode);
+            this.addUserNode(imageNode);
 
             // Create edge from parent
             const edge = createEdge(parentNodeId, imageNode.id, EdgeType.HIGHLIGHT);
             this.graph.addEdge(edge);
-
-            // Select the new image node
-            this.canvas.clearSelection();
-            this.canvas.selectNode(imageNode.id);
-
-            // Pan to the new node
-            this.canvas.centerOnAnimated(imageNode.position.x + 160, imageNode.position.y + 100, 300);
 
             this.saveSession();
         } catch (err) {
@@ -1960,7 +1892,7 @@ print("Hello from Pyodide!")
             csvNodeIds: csvNodeIds, // Empty array if no CSVs
         });
 
-        this.graph.addNode(codeNode);
+        this.addUserNode(codeNode);
 
         // Create edges from all selected nodes to code node
         for (const nodeId of selectedIds) {
@@ -1968,10 +1900,8 @@ print("Hello from Pyodide!")
             this.graph.addEdge(edge);
         }
 
-        this.canvas.renderNode(codeNode);
         this.canvas.updateAllEdges(this.graph);
         this.canvas.updateAllNavButtonStates(this.graph);
-        this.canvas.panToNodeAnimated(codeNode.id);
         this.saveSession();
 
         // Preload Pyodide in the background so it's ready when user clicks Run
@@ -2580,7 +2510,7 @@ print("Hello from Pyodide!")
                 },
             });
 
-            this.graph.addNode(highlightNode);
+            this.addUserNode(highlightNode);
 
             // Create highlight edge (dashed connection)
             const edge = createEdge(nodeId, highlightNode.id, EdgeType.HIGHLIGHT);
@@ -2610,7 +2540,7 @@ print("Hello from Pyodide!")
                     position: this.graph.autoPosition([highlightNode.id]),
                 });
 
-                this.graph.addNode(humanNode);
+                this.addUserNode(humanNode);
 
                 // Edge from highlight to user message
                 const humanEdge = createEdge(highlightNode.id, humanNode.id, EdgeType.REPLY);
@@ -2628,16 +2558,13 @@ print("Hello from Pyodide!")
                     model: model.split('/').pop(),
                 });
 
-                this.graph.addNode(aiNode);
+                this.addUserNode(aiNode);
 
                 const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
                 this.graph.addEdge(aiEdge);
 
                 // Update collapse button for human node (now has AI child)
                 this.updateCollapseButtonForNode(humanNode.id);
-
-                // Smoothly pan to the AI node
-                this.canvas.centerOnAnimated(aiNode.position.x + 160, aiNode.position.y + 100, 300);
 
                 // Build context and stream LLM response
                 const context = this.graph.resolveContext([humanNode.id]);
@@ -2726,7 +2653,7 @@ print("Hello from Pyodide!")
             },
         });
 
-        this.graph.addNode(summaryNode);
+        this.addUserNode(summaryNode);
 
         const edge = createEdge(nodeId, summaryNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(edge);
@@ -2784,16 +2711,13 @@ print("Hello from Pyodide!")
             },
         });
 
-        this.graph.addNode(fetchResultNode);
+        this.addUserNode(fetchResultNode);
 
         const fetchEdge = createEdge(nodeId, fetchResultNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(fetchEdge);
 
         // Update collapse button for source node (now has children)
         this.updateCollapseButtonForNode(nodeId);
-
-        // Smoothly pan to the fetch result node
-        this.canvas.centerOnAnimated(fetchResultNode.position.x + 200, fetchResultNode.position.y + 100, 300);
 
         try {
             // Fetch content from URL via Exa or fallback to direct fetch
@@ -2865,16 +2789,13 @@ print("Hello from Pyodide!")
                 },
             });
 
-            this.graph.addNode(summaryNode);
+            this.addUserNode(summaryNode);
 
             const summaryEdge = createEdge(fetchResultNode.id, summaryNode.id, EdgeType.REFERENCE);
             this.graph.addEdge(summaryEdge);
 
             // Update collapse button for fetch result node (now has children)
             this.updateCollapseButtonForNode(fetchResultNode.id);
-
-            // Smoothly pan to the summary node
-            this.canvas.centerOnAnimated(summaryNode.position.x + 200, summaryNode.position.y + 100, 300);
 
             // Now summarize the content with LLM
             const messages = [
@@ -3475,16 +3396,9 @@ print("Hello from Pyodide!")
             model: model.split('/').pop(),
         });
 
-        this.graph.addNode(summaryNode);
+        this.addUserNode(summaryNode);
         const edge = createEdge(nodeId, summaryNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(edge);
-
-        // Pan to new node
-        this.canvas.centerOnAnimated(summaryNode.position.x + 200, summaryNode.position.y + 100, 300);
-
-        // Select the new node
-        this.canvas.clearSelection();
-        this.canvas.selectNode(summaryNode.id);
 
         // Build messages for summarization
         const messages = [
@@ -5015,7 +4929,7 @@ print("Hello from Pyodide!")
      */
     createAndAddNode(type, content = '', options = {}) {
         const node = createNode(type, content, options);
-        this.graph.addNode(node); // Emits 'nodeAdded', canvas auto-renders
+        this.addUserNode(node);
         return node;
     }
 
