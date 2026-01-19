@@ -553,8 +553,6 @@ class App {
             .on('nodeDelete', this.handleNodeDelete.bind(this))
             .on('nodeCopy', this.copyNodeContent.bind(this))
             .on('nodeTitleEdit', (nodeId) => this.modalManager.handleNodeTitleEdit(nodeId));
-        // Register feature canvas event handlers
-        this.registerFeatureCanvasHandlers();
         // Streaming control events (now handled by StreamingManager via setCanvas)
         this.canvas
             .on('nodeRetry', this.handleNodeRetry.bind(this))
