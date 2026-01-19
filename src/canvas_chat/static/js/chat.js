@@ -68,7 +68,14 @@ import { readSSEStream, normalizeText } from './sse.js';
 // Chat Class
 // =============================================================================
 
+/**
+ * Chat class for LLM communication with SSE streaming
+ * @class
+ */
 class Chat {
+    /**
+     *
+     */
     constructor() {
         this.currentModel = null;
         this.models = [];
@@ -76,6 +83,7 @@ class Chat {
 
     /**
      * Fetch available models from the server
+     * @returns {Promise<Array<ModelInfo>>} List of available models
      */
     async fetchModels() {
         try {
@@ -94,7 +102,7 @@ class Chat {
      * Fetch models available for a specific provider using an API key
      * @param {string} provider - Provider name (openai, anthropic, google, groq, github)
      * @param {string} apiKey - The API key for the provider
-     * @returns {Promise<Array>} - List of available models
+     * @returns {Promise<Array<ModelInfo>>} List of available models
      */
     async fetchProviderModels(provider, apiKey) {
         try {
@@ -118,6 +126,8 @@ class Chat {
 
     /**
      * Get API key for the current model's provider
+     * @param {string} model - Model ID (e.g., "openai/gpt-4o")
+     * @returns {string|null} API key or null if not found
      */
     getApiKeyForModel(model) {
         if (!model) return null;
@@ -132,6 +142,7 @@ class Chat {
 
     /**
      * Get the custom base URL if configured
+     * @returns {string|null} Base URL or null if not configured
      */
     getBaseUrl() {
         return storage.getBaseUrl();
@@ -141,12 +152,17 @@ class Chat {
      * Get base URL for a specific model.
      * Custom models may have per-model base URLs that override the global setting.
      * @param {string} modelId - The model ID
-     * @returns {string|null} - Base URL to use, or null if none configured
+     * @returns {string|null} Base URL to use, or null if none configured
      */
     getBaseUrlForModel(modelId) {
         return storage.getBaseUrlForModel(modelId);
     }
 
+    /**
+     * Ensure GitHub Copilot authentication is fresh
+     * @param {string} model - Model ID
+     * @returns {Promise<string|null>} API key or null
+     */
     async ensureCopilotAuthFresh(model) {
         if (!model?.startsWith('github_copilot/')) {
             return this.getApiKeyForModel(model);
@@ -192,6 +208,10 @@ class Chat {
         }
     }
 
+    /**
+     * Notify that Copilot authentication is required
+     * @param {string} message - Error message
+     */
     notifyCopilotAuthRequired(message) {
         window.dispatchEvent(
             new CustomEvent('copilot-auth-required', {
@@ -200,6 +220,11 @@ class Chat {
         );
     }
 
+    /**
+     * Handle Copilot authentication errors
+     * @param {Error} err - Error object
+     * @returns {Error} Processed error
+     */
     handleCopilotAuthError(err) {
         if (!err?.message) {
             return err;
@@ -215,6 +240,8 @@ class Chat {
 
     /**
      * Get context window size for a model
+     * @param {string} modelId - Model ID
+     * @returns {number} Context window size in tokens
      */
     getContextWindow(modelId) {
         const model = this.models.find((m) => m.id === modelId);
@@ -223,13 +250,13 @@ class Chat {
 
     /**
      * Send a chat message and stream the response
-     * @param {Array} messages - Array of {role, content} messages
-     * @param {string} model - Model ID
-     * @param {Function} onChunk - Callback for each chunk
-     * @param {Function} onDone - Callback when complete
-     * @param {Function} onError - Callback on error
-     * @param {AbortController} [abortController] - Optional abort controller (creates new one if not provided)
-     * @returns {AbortController} - Controller to abort the request
+     * @param {Array<ChatMessage>} messages - Array of {role, content} messages
+     * @param {string} model - Model ID (e.g., "openai/gpt-4o")
+     * @param {OnChunkCallback|null} onChunk - Callback for each chunk, or null
+     * @param {OnDoneCallback} onDone - Callback when complete
+     * @param {OnErrorCallback} onError - Callback on error
+     * @param {AbortController} [abortController] - Optional abort controller
+     * @returns {Promise<string>} Normalized full response content
      */
     async sendMessage(messages, model, onChunk, onDone, onError, abortController = null) {
         if (!abortController) {
@@ -302,6 +329,9 @@ class Chat {
 
     /**
      * Summarize a branch of conversation
+     * @param {Array<ChatMessage>} messages - Conversation messages
+     * @param {string} model - Model ID
+     * @returns {Promise<string>} Summary text
      */
     async summarize(messages, model) {
         const apiKey = await this.ensureCopilotAuthFresh(model);
@@ -342,6 +372,9 @@ class Chat {
 
     /**
      * Estimate tokens for a piece of text
+     * @param {string} text - Text to estimate
+     * @param {string} model - Model ID
+     * @returns {Promise<number>} Estimated token count
      */
     async estimateTokens(text, model) {
         try {

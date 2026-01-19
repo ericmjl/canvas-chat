@@ -24,14 +24,24 @@ import { FeaturePlugin } from '../feature-plugin.js';
  * Defines how factcheck nodes are rendered and what actions they support.
  */
 class FactcheckNode extends BaseNode {
+    /**
+     *
+     */
     getTypeLabel() {
         return 'Factcheck';
     }
 
+    /**
+     *
+     */
     getTypeIcon() {
         return '🔍';
     }
 
+    /**
+     *
+     * @param canvas
+     */
     getSummaryText(canvas) {
         const claims = this.node.claims || [];
         const count = claims.length;
@@ -39,6 +49,10 @@ class FactcheckNode extends BaseNode {
         return `Fact Check · ${count} claim${count !== 1 ? 's' : ''}`;
     }
 
+    /**
+     *
+     * @param canvas
+     */
     renderContent(canvas) {
         const claims = this.node.claims || [];
         if (claims.length === 0) {
@@ -85,6 +99,10 @@ class FactcheckNode extends BaseNode {
         return `<div class="factcheck-claims">${claimsHtml}</div>`;
     }
 
+    /**
+     *
+     * @param status
+     */
     getVerdictBadge(status) {
         const badges = {
             checking: '🔄',
@@ -98,10 +116,16 @@ class FactcheckNode extends BaseNode {
         return badges[status] || '❓';
     }
 
+    /**
+     *
+     */
     getActions() {
         return [Actions.COPY];
     }
 
+    /**
+     *
+     */
     getContentClasses() {
         return 'factcheck-content';
     }
@@ -666,15 +690,15 @@ class FactcheckFeature extends FeaturePlugin {
      * @param {number} claimIndex - Index of the claim in the claims array
      * @param {string} claim - The claim text to verify
      * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
+     * @param {string} _apiKey - API key for the model (unused, fetched internally)
      */
-    async verifyClaim(nodeId, claimIndex, claim, model, apiKey) {
+    async verifyClaim(nodeId, claimIndex, claim, model, _apiKey) {
         const node = this.graph.getNode(nodeId);
         if (!node || !node.claims) return;
 
         try {
             // 1. Generate search queries for this claim
-            const queries = await this.generateFactcheckQueries(claim, model, apiKey);
+            const queries = await this.generateFactcheckQueries(claim, model);
 
             // 2. Perform web searches
             const hasExa = storage.hasExaApiKey();
@@ -727,7 +751,7 @@ class FactcheckFeature extends FeaturePlugin {
 
             // 3. Analyze search results to produce verdict
             console.log(`[Factcheck] Analyzing verdict for claim ${claimIndex + 1}:`, claim);
-            const verdict = await this.analyzeClaimVerdict(claim, uniqueResults, model, apiKey);
+            const verdict = await this.analyzeClaimVerdict(claim, uniqueResults, model);
             console.log(`[Factcheck] Verdict for claim ${claimIndex + 1}:`, verdict);
 
             // 4. Update the claim in the node
@@ -783,7 +807,6 @@ class FactcheckFeature extends FeaturePlugin {
      * Extract verifiable claims from input text using LLM
      * @param {string} input - Text containing potential claims
      * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
      * @returns {Promise<string[]>} - Array of extracted claims (max 10)
      */
     async extractFactcheckClaims(input, model) {
@@ -804,12 +827,11 @@ Rules:
 Respond with a JSON array of claim strings. Example:
 ["The Eiffel Tower is 330 meters tall", "Paris is the capital of France"]
 
-If the input contains no factual content at all (e.g., ONLY greetings or questions with no assertions), respond with an empty array: []`;
+        If the input contains no factual content at all (e.g., ONLY greetings or questions with no assertions), respond with an empty array: []`;
 
         console.log('[Factcheck] Extracting claims from:', input);
 
-        // Get API key (may be null in admin mode, backend handles it)
-        const apiKey = chat.getApiKeyForModel(model);
+        // API key is fetched internally by chat.sendMessage()
 
         const messages = [
             { role: 'system', content: systemPrompt },
@@ -849,10 +871,9 @@ If the input contains no factual content at all (e.g., ONLY greetings or questio
      * Generate search queries to verify a claim
      * @param {string} claim - The claim to verify
      * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
      * @returns {Promise<string[]>} - Array of search queries (2-3)
      */
-    async generateFactcheckQueries(claim, model, apiKey) {
+    async generateFactcheckQueries(claim, model) {
         const systemPrompt = `You are a fact-checking assistant. Generate 2-3 search queries to verify the given claim.
 
 Guidelines:
@@ -898,10 +919,9 @@ Guidelines:
      * @param {string} claim - The claim being verified
      * @param {Object[]} searchResults - Array of search results with title, url, snippet
      * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
      * @returns {Promise<Object>} - Verdict object with status, explanation, sources
      */
-    async analyzeClaimVerdict(claim, searchResults, model, apiKey) {
+    async analyzeClaimVerdict(claim, searchResults, model) {
         if (searchResults.length === 0) {
             return {
                 status: 'unverifiable',
