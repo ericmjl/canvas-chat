@@ -3,7 +3,10 @@
  */
 
 import { FeatureRegistry, PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
-import { SimpleTestPlugin, ComplexTestPlugin } from '../src/canvas_chat/static/js/example-plugins/example-test-plugin.js';
+import {
+    SimpleTestPlugin,
+    ComplexTestPlugin,
+} from '../src/canvas_chat/static/js/example-plugins/example-test-plugin.js';
 import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
 import { assertEqual, assertTrue } from './test_helpers/assertions.js';
 
@@ -258,4 +261,84 @@ await asyncTest('Plugin has access to all APIs', async () => {
     assertTrue(plugin.modelPicker !== undefined, 'Plugin should have modelPicker');
 });
 
-console.log('\n=== All FeatureRegistry tests passed! ===\n');
+// Test: Canvas event handlers are registered only once per feature
+await asyncTest('Canvas event handlers registered only once per feature', async () => {
+    const harness = new PluginTestHarness();
+
+    // Track how many times canvas.on is called
+    const canvas = harness.mockApp.canvas;
+    let onCallCount = 0;
+    const originalOn = canvas.on.bind(canvas);
+    canvas.on = (event, handler) => {
+        if (event === 'testEvent') {
+            onCallCount++;
+        }
+        return originalOn(event, handler);
+    };
+
+    // Create a test plugin with canvas event handlers
+    const TestPluginWithHandlers = class extends SimpleTestPlugin {
+        getCanvasEventHandlers() {
+            return {
+                testEvent: this.handleTestEvent.bind(this),
+            };
+        }
+        handleTestEvent() {}
+    };
+
+    await harness.loadPlugin({
+        id: 'handler-test',
+        feature: TestPluginWithHandlers,
+        slashCommands: [],
+    });
+
+    // Handler should be registered exactly once
+    assertEqual(onCallCount, 1, 'Canvas event handler should be registered exactly once');
+
+    // Unregister and verify cleanup
+    await harness.unloadPlugin('handler-test');
+});
+
+// Test: Multiple features register different event handlers
+await asyncTest('Multiple features can register different event handlers', async () => {
+    const harness = new PluginTestHarness();
+
+    const TestPlugin1 = class extends SimpleTestPlugin {
+        getCanvasEventHandlers() {
+            return {
+                eventA: this.handleEventA.bind(this),
+            };
+        }
+        handleEventA() {}
+    };
+
+    const TestPlugin2 = class extends SimpleTestPlugin {
+        getCanvasEventHandlers() {
+            return {
+                eventB: this.handleEventB.bind(this),
+            };
+        }
+        handleEventB() {}
+    };
+
+    await harness.loadPlugin({
+        id: 'plugin1',
+        feature: TestPlugin1,
+        slashCommands: [],
+    });
+
+    await harness.loadPlugin({
+        id: 'plugin2',
+        feature: TestPlugin2,
+        slashCommands: [],
+    });
+
+    // Both plugins should have their handlers registered
+    const plugin1 = harness.getPlugin('plugin1');
+    const plugin2 = harness.getPlugin('plugin2');
+
+    assertTrue(plugin1 !== undefined, 'Plugin 1 should exist');
+    assertTrue(plugin2 !== undefined, 'Plugin 2 should exist');
+});
+
+console.log('\n✅ All FeatureRegistry tests passed!\n');

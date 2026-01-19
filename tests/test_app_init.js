@@ -227,6 +227,29 @@ test('setupCanvasEventListeners .bind(this) references exist', async () => {
     }
 });
 
+// Test: Verify registerFeatureCanvasHandlers was removed (prevent duplicate handler registration)
+test('registerFeatureCanvasHandlers method removed (fixes duplicate handlers)', async () => {
+    // Read the app.js source code
+    const fs = await import('fs');
+    const appSource = fs.readFileSync('src/canvas_chat/static/js/app.js', 'utf-8');
+
+    // Verify the method doesn't exist
+    if (appSource.includes('registerFeatureCanvasHandlers')) {
+        throw new Error(
+            'registerFeatureCanvasHandlers should be removed to prevent duplicate canvas event handler registration'
+        );
+    }
+
+    // Also verify initializePluginSystem doesn't call it
+    const initMatch = appSource.match(/async initializePluginSystem\(\)[^{]*\{([^]*?)\n    \}/);
+    if (initMatch) {
+        const initBody = initMatch[1];
+        if (initBody.includes('registerFeatureCanvasHandlers')) {
+            throw new Error('initializePluginSystem should not call registerFeatureCanvasHandlers');
+        }
+    }
+});
+
 // Print results
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
