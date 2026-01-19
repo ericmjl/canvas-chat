@@ -1074,6 +1074,85 @@ for (const member of members) {
 
 **No manual rendering needed!** The event system + defensive deferral handles everything.
 
+### Event-Driven vs Imperative Patterns
+
+**Default to event-driven (emitter/subscriber) when:**
+
+- Multiple components need to react to the same state change
+- You need to add/remove handlers dynamically
+- The action is a side effect of a state mutation
+- Future features might want to react to the same event
+
+**Use imperative calls when:**
+
+- One-shot operations with exactly one handler
+- User-triggered actions (clicks, drags, keyboard shortcuts)
+- No other component should ever react to this action
+
+#### Anti-pattern: Flag-based side effects
+
+```javascript
+// WRONG: Hidden global state for side effects
+// In feature-plugin.js:
+this.graph.addNode = (n) => {
+    this._userNodeCreation = n; // Hidden flag!
+    const result = originalAddNode(n);
+    this._userNodeCreation = null;
+    return result;
+};
+
+// In canvas.js:
+if (this._userNodeCreation) {
+    this.panToNodeAnimated(this._userNodeCreation.id);
+}
+```
+
+#### Correct pattern: Explicit events
+
+```javascript
+// In graph.js (state mutation):
+addNode(node) {
+    const result = this._yMap.set(node.id, node);
+    this.emit('nodeCreated', node);  // Explicit event
+    return result;
+}
+
+// In canvas.js (reaction to state change):
+graph.on('nodeCreated', (node) => {
+    if (isUserCreated(node)) {
+        this.panToNodeAnimated(node.id);
+    }
+});
+```
+
+**Why explicit events are better:**
+
+1. **Traceable** - Events are visible in code; flags are hidden
+2. **Extensible** - New handlers can subscribe without modifying emitters
+3. **Testable** - Events are easy to mock and verify
+4. **Decoupled** - Emitter doesn't need to know about handlers
+
+#### Real example: Auto-zoom
+
+Instead of setting a `_userNodeCreation` flag:
+
+```javascript
+// In graph.js:
+addNode(node) {
+    const result = this._yMap.set(node.id, node);
+    const isUserCreated = node.metadata?.createdBy === 'user';
+    this.emit('nodeCreated', { node, isUserCreated });
+    return result;
+}
+
+// In canvas.js:
+graph.on('nodeCreated', ({ node, isUserCreated }) => {
+    if (isUserCreated) {
+        this.panToNodeAnimated(node.id);
+    }
+});
+```
+
 ### Feature instance access (plugin architecture)
 
 **CRITICAL:** All feature instances MUST be accessed through the FeatureRegistry using `this.featureRegistry.getFeature(id)` directly.
