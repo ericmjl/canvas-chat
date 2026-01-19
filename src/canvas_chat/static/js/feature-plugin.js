@@ -67,18 +67,24 @@ class AppContext {
         this.adminModels = app.adminModels;
 
         // Wrap graph.addNode to automatically handle user node creation zoom
-        // This way plugins don't need to call special methods - zoom happens automatically
-        const originalAddNode = app.graph.addNode.bind(app.graph);
-        app.graph.addNode = (node) => {
-            app._userNodeCreation = true;
-            return originalAddNode(node);
+        // Use lazy initialization since app.graph might not exist yet when AppContext is created
+        const wrapGraphAddNode = () => {
+            if (!app.graph || app.graph.addNode._wrapped) return;
+            const originalAddNode = app.graph.addNode.bind(app.graph);
+            app.graph.addNode = (node) => {
+                app._userNodeCreation = true;
+                return originalAddNode(node);
+            };
+            app.graph.addNode._wrapped = true;
         };
+        this._wrapGraphAddNode = wrapGraphAddNode;
     }
 
     /**
      * Get graph instance (live reference, created during session load)
      */
     get graph() {
+        this._wrapGraphAddNode();
         return this._app.graph;
     }
 
