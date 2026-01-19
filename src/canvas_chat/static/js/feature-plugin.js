@@ -65,6 +65,14 @@ class AppContext {
         // Admin mode access
         this.adminMode = app.adminMode;
         this.adminModels = app.adminModels;
+
+        // Wrap graph.addNode to automatically handle user node creation zoom
+        // This way plugins don't need to call special methods - zoom happens automatically
+        const originalAddNode = app.graph.addNode.bind(app.graph);
+        app.graph.addNode = (node) => {
+            app._userNodeCreation = true;
+            return originalAddNode(node);
+        };
     }
 
     /**
@@ -140,7 +148,6 @@ class FeaturePlugin {
         this.updateCollapseButtonForNode = context.updateCollapseButtonForNode;
         this.buildLLMRequest = context.buildLLMRequest;
         this.generateNodeSummary = context.generateNodeSummary;
-        this.addUserNode = context.addUserNode;
 
         // Legacy streaming state management (for backwards compatibility)
         // TODO: Remove after all features migrated to StreamingManager
@@ -156,12 +163,6 @@ class FeaturePlugin {
         // Admin mode (set once during init, safe to copy)
         this.adminMode = context.adminMode;
         this.adminModels = context.adminModels;
-
-        // Method to add nodes with auto-zoom for user-initiated creation
-        this.addUserNode = (node) => {
-            this._app._userNodeCreation = true;
-            this._app.graph.addNode(node);
-        };
     }
 
     /**
@@ -173,7 +174,7 @@ class FeaturePlugin {
     }
 
     /**
-     * Get app instance for internal use (e.g., addUserNode)
+     * Get app instance for internal use
      * @returns {Object|null}
      */
     get _app() {
@@ -186,16 +187,6 @@ class FeaturePlugin {
      */
     get searchIndex() {
         return this._context.searchIndex;
-    }
-
-    /**
-     * Add a node with automatic zoom-to-node for user-initiated creation.
-     * This sets a flag that causes the app's nodeAdded handler to zoom to the new node.
-     *
-     * @param {Object} node - The node to add
-     */
-    addUserNode(node) {
-        this._context.addUserNode(node);
     }
 
     /**

@@ -193,10 +193,10 @@ await asyncTest('direct graph.addNode does not trigger zoom', async () => {
 });
 
 // ============================================================
-// Tests for FeaturePlugin addUserNode integration
+// Tests for FeaturePlugin graph.addNode integration (auto-zoom via wrapper)
 // ============================================================
 
-await asyncTest('FeaturePlugin has addUserNode method', async () => {
+await asyncTest('FeaturePlugin.graph uses wrapped addNode', async () => {
     const harness = new PluginTestHarness();
     const { NoteFeature } = await import('../src/canvas_chat/static/js/plugins/note.js');
 
@@ -207,10 +207,12 @@ await asyncTest('FeaturePlugin has addUserNode method', async () => {
     });
 
     const feature = harness.getPlugin('note');
-    assertTrue(typeof feature.addUserNode === 'function', 'FeaturePlugin should have addUserNode method');
+    // FeaturePlugin no longer has addUserNode - plugins use this.graph.addNode() directly
+    // The auto-zoom is handled by a wrapper in AppContext that intercepts graph.addNode calls
+    assertTrue(typeof feature.graph.addNode === 'function', 'Feature should have graph.addNode');
 });
 
-await asyncTest('FeaturePlugin.addUserNode adds node to graph', async () => {
+await asyncTest('FeaturePlugin.graph.addNode triggers auto-zoom (via wrapper)', async () => {
     const harness = new PluginTestHarness();
     const { NoteFeature } = await import('../src/canvas_chat/static/js/plugins/note.js');
 
@@ -225,9 +227,10 @@ await asyncTest('FeaturePlugin.addUserNode adds node to graph', async () => {
 
     const noteNode = createNode(NodeType.NOTE, 'Test note content', { position: { x: 300, y: 300 } });
 
-    feature.addUserNode(noteNode);
+    // Plugins use this.graph.addNode() - the wrapper handles auto-zoom automatically
+    feature.graph.addNode(noteNode);
 
-    assertTrue(graph.getNode(noteNode.id) !== undefined, 'Node should be added to graph via addUserNode');
+    assertTrue(graph.getNode(noteNode.id) !== undefined, 'Node should be added to graph');
     assertEqual(harness.createdNodes.length, 1, 'Harness should track created node');
     assertEqual(harness.createdNodes[0].id, noteNode.id, 'Created node should be tracked');
 });

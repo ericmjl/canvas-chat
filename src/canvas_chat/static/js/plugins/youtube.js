@@ -48,7 +48,7 @@ export class YouTubeFeature extends FeaturePlugin {
             position: this.graph.autoPosition(parentIds),
         });
 
-        this.addUserNode(fetchNode);
+        this.graph.addNode(fetchNode);
         this.canvas.clearSelection();
 
         // Create edges from parents (if replying to selected nodes)

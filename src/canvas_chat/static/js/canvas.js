@@ -1778,22 +1778,22 @@ class Canvas {
                               : action.id === 'edit-content'
                                 ? 'edit-content-btn'
                                 : action.id === 'copy'
-                                    ? 'copy-btn'
-                                    : action.id === 'create-flashcards'
-                                      ? 'create-flashcards-btn'
-                                      : action.id === 'flip-card'
-                                        ? 'flip-card-btn'
-                                        : action.id === 'review-card'
-                                          ? 'review-card-btn'
-                                          : action.id === 'analyze'
-                                            ? 'analyze-btn'
-                                            : action.id === 'edit-code'
-                                              ? 'edit-code-btn'
-                                              : action.id === 'generate'
-                                                ? 'generate-btn'
-                                                : action.id === 'run-code'
-                                                  ? 'run-code-btn'
-                                                  : '';
+                                  ? 'copy-btn'
+                                  : action.id === 'create-flashcards'
+                                    ? 'create-flashcards-btn'
+                                    : action.id === 'flip-card'
+                                      ? 'flip-card-btn'
+                                      : action.id === 'review-card'
+                                        ? 'review-card-btn'
+                                        : action.id === 'analyze'
+                                          ? 'analyze-btn'
+                                          : action.id === 'edit-code'
+                                            ? 'edit-code-btn'
+                                            : action.id === 'generate'
+                                              ? 'generate-btn'
+                                              : action.id === 'run-code'
+                                                ? 'run-code-btn'
+                                                : '';
                 return `<button class="node-action ${actionClass}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
             })
             .join('');
@@ -2898,7 +2898,7 @@ class Canvas {
                 nodeId,
                 filePath,
                 nodeType: currentNode.type,
-                nodeKeys: Object.keys(currentNode).slice(0, 10)
+                nodeKeys: Object.keys(currentNode).slice(0, 10),
             });
             return;
         }
@@ -2908,7 +2908,7 @@ class Canvas {
                 nodeId,
                 filePath,
                 gitRepoDataKeys: Object.keys(currentNode.gitRepoData),
-                gitRepoDataFilesType: typeof currentNode.gitRepoData.files
+                gitRepoDataFilesType: typeof currentNode.gitRepoData.files,
             });
             return;
         }
@@ -2921,12 +2921,12 @@ class Canvas {
         if (!files[filePath]) {
             // Try case-insensitive match
             const lowerPath = filePath.toLowerCase();
-            actualFilePath = Object.keys(files).find(key => key.toLowerCase() === lowerPath);
+            actualFilePath = Object.keys(files).find((key) => key.toLowerCase() === lowerPath);
 
             // If still not found, try matching by filename (last part of path)
             if (!actualFilePath) {
                 const fileName = filePath.split('/').pop();
-                actualFilePath = Object.keys(files).find(key => key.split('/').pop() === fileName);
+                actualFilePath = Object.keys(files).find((key) => key.split('/').pop() === fileName);
             }
 
             // If still not found, log available keys for debugging
@@ -2934,7 +2934,7 @@ class Canvas {
                 console.warn('[Canvas] selectGitRepoFile: file path not found', {
                     requested: filePath,
                     availableKeys: Object.keys(files).slice(0, 10), // First 10 for debugging
-                    totalFiles: Object.keys(files).length
+                    totalFiles: Object.keys(files).length,
                 });
                 return;
             }
@@ -2963,7 +2963,7 @@ class Canvas {
 
         // Update file selection highlight in the tree (without re-rendering the whole node)
         // Remove previous selection highlight
-        wrapper.querySelectorAll('.git-repo-file-view-selected').forEach(el => {
+        wrapper.querySelectorAll('.git-repo-file-view-selected').forEach((el) => {
             el.classList.remove('git-repo-file-view-selected');
         });
 
@@ -2972,9 +2972,11 @@ class Canvas {
         const fileLabels = wrapper.querySelectorAll('.git-repo-file-fetched-label[data-file-path]');
         for (const label of fileLabels) {
             const labelPath = label.dataset.filePath;
-            if (labelPath === actualFilePath ||
+            if (
+                labelPath === actualFilePath ||
                 labelPath.toLowerCase() === actualFilePath.toLowerCase() ||
-                labelPath.split('/').pop() === actualFilePath.split('/').pop()) {
+                labelPath.split('/').pop() === actualFilePath.split('/').pop()
+            ) {
                 // Add highlight to the parent li element
                 const li = label.closest('.git-repo-file-tree-item');
                 if (li) {
@@ -3064,7 +3066,6 @@ class Canvas {
             summaryTextEl.textContent = displayText;
         }
     }
-
 
     /**
      * Highlight a specific cell in a matrix node
@@ -3207,7 +3208,6 @@ class Canvas {
         const continueBtn = wrapper.querySelector('.continue-btn');
         if (continueBtn) continueBtn.style.display = 'none';
     }
-
 
     /**
      * Update code content in a code node (for AI generation streaming)

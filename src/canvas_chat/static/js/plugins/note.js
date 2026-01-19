@@ -107,7 +107,7 @@ export class NoteFeature extends FeaturePlugin {
             position: this.graph.autoPosition(parentIds),
         });
 
-        this.addUserNode(noteNode);
+        this.graph.addNode(noteNode);
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
