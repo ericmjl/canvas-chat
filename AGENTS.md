@@ -1572,6 +1572,79 @@ global.document = {
 
 **If you're tempted to mock the DOM, use JSDOM instead.**
 
+### When to use jsdom for testing
+
+**CRITICAL:** Don't skip jsdom because tests "seem complex."
+
+In this session, we initially skipped `readSSEStream` tests because mocking Fetch Response seemed hard. This was a mistake - we should have set up jsdom immediately.
+
+**Signs you need jsdom:**
+
+- Code uses `fetch()` or `Response`
+- Code uses `TextEncoder`/`TextDecoder`
+- Code reads from `ReadableStream` or `response.body`
+- Code uses `window.location`, `document`, etc.
+
+**Common mistake to avoid:**
+
+```javascript
+// WRONG: Skipping tests because "mocking is hard"
+console.log('(readSSEStream tests require jsdom setup - skipped for now)');
+// ... later you discover a bug that would have been caught by tests ...
+```
+
+**Correct approach:**
+
+```javascript
+// RIGHT: Set up jsdom even for complex tests
+import { JSDOM } from 'jsdom';
+import { TextEncoder, TextDecoder } from 'util';
+
+// Setup jsdom
+const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
+global.window = dom.window;
+global.document = dom.window.document;
+global.TextEncoder = TextEncoder; // Node.js native
+global.TextDecoder = TextDecoder;
+
+// Create mock response with real TextEncoder
+function createMockResponse(chunks) {
+    const encoder = new TextEncoder();
+    const encodedChunks = chunks.map((chunk) => encoder.encode(chunk));
+    let chunkIndex = 0;
+
+    return {
+        body: {
+            async getReader() {
+                return {
+                    async read() {
+                        if (chunkIndex >= encodedChunks.length) {
+                            return { done: true };
+                        }
+                        return { done: false, value: encodedChunks[chunkIndex++] };
+                    },
+                };
+            },
+        },
+    };
+}
+
+// Now test works with real code
+test('readSSEStream works', async () => {
+    const mockResponse = createMockResponse(['data: hello\n\n']);
+    await readSSEStream(mockResponse, {
+        onEvent: (type, data) => {
+            /* ... */
+        },
+        onDone: () => {
+            /* ... */
+        },
+    });
+});
+```
+
+**Lesson learned:** The initial effort to set up jsdom pays off when tests catch real bugs (like `normalizeText` not handling spaces after apostrophes).
+
 ### When NOT to write unit tests
 
 **Not all code needs unit tests.** Some code is better tested through integration tests, E2E tests, or manual QA.
