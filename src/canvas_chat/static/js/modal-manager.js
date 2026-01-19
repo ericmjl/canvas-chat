@@ -993,6 +993,17 @@ class ModalManager {
         this.app.saveSession();
         this.hideEditTitleModal();
     }
+
+    // --- Canvas Event Registration ---
+
+    /**
+     * Register canvas event listeners for modal interactions.
+     * Called from App.setupCanvasEventListeners().
+     */
+    setupCanvasEventListeners() {
+        // Code node edit event - opens modal editor
+        this.app.canvas.on('nodeEditCode', (nodeId) => this.handleNodeEditCode(nodeId));
+    }
 }
 
 // Export for browser
