@@ -149,6 +149,7 @@ class MatrixNode extends BaseNode {
             <div class="matrix-actions">
                 <button class="matrix-edit-btn" title="Edit rows and columns">Edit</button>
                 <button class="matrix-fill-all-btn" title="Fill all empty cells with concise AI evaluations (2-3 sentences each)">Fill All</button>
+                <button class="matrix-clear-all-btn" title="Clear all cell contents">Clear All</button>
             </div>
         `;
     }
@@ -333,11 +334,21 @@ class MatrixNode extends BaseNode {
                     const cell = e.currentTarget;
                     const row = parseInt(cell.dataset.row);
                     const col = parseInt(cell.dataset.col);
-                    if (cell.classList.contains('filled')) {
+
+                    // Guard: Don't process if already filled (prevents double-generation)
+                    if (cell.classList.contains('filled') && !cell.classList.contains('loading')) {
                         canvas.emit('matrixCellView', nodeId, row, col);
-                    } else {
-                        canvas.emit('matrixCellFill', nodeId, row, col);
+                        return;
                     }
+
+                    // Guard: Don't process if currently loading (prevents double-generation)
+                    if (cell.classList.contains('loading')) {
+                        console.log('[Matrix] Cell is loading, ignoring click');
+                        return;
+                    }
+
+                    // Cell is empty and not loading - start fill
+                    canvas.emit('matrixCellFill', nodeId, row, col);
                 },
             },
             // Edit button
@@ -349,6 +360,11 @@ class MatrixNode extends BaseNode {
             {
                 selector: '.matrix-fill-all-btn',
                 handler: 'matrixFillAll',
+            },
+            // Clear all button
+            {
+                selector: '.matrix-clear-all-btn',
+                handler: 'matrixClearAll',
             },
             // Copy context button
             {
@@ -1094,6 +1110,16 @@ class MatrixFeature extends FeaturePlugin {
         const matrixNode = this.graph.getNode(nodeId);
         if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
 
+        // Guard: Check if cell is already being filled
+        const cellKey = `${row}-${col}`;
+        const groupId = `matrix-${nodeId}`;
+        const cellNodeId = `${nodeId}:cell:${cellKey}`;
+        const groupNodes = this.streamingManager.getGroupNodes(groupId);
+        if (groupNodes.has(cellNodeId)) {
+            console.log(`[MatrixFeature] Cell (${row}, ${col}) is already being filled, skipping`);
+            return;
+        }
+
         const rowItem = matrixNode.rowItems[row];
         const colItem = matrixNode.colItems[col];
         const context = matrixNode.context;
@@ -1101,17 +1127,8 @@ class MatrixFeature extends FeaturePlugin {
         // Get DAG history for context
         const messages = this.graph.resolveContext([nodeId]);
 
-        // Track this cell fill for stop button support
-        const cellKey = `${row}-${col}`;
-        // Use a unique virtual nodeId for each cell to allow individual tracking
-        const cellNodeId = `${nodeId}:cell:${cellKey}`;
-        // Group all cells in this matrix together so stopping one stops all
-        const groupId = `matrix-${nodeId}`;
-
-        // Create abort controller for this cell
-        abortController = abortController || new AbortController();
-
-        // Extension hook: matrix:before:fill - allow plugins to prevent or modify cell fill
+        // Register this cell fill with StreamingManager
+        // Use virtual cell nodeId for tracking, but don't auto-show button on virtual ID
         const beforeEvent = new CancellableEvent('matrix:before:fill', {
             nodeId,
             row,
@@ -1129,6 +1146,9 @@ class MatrixFeature extends FeaturePlugin {
             return;
         }
 
+        // Create abort controller for this cell
+        abortController = abortController || new AbortController();
+
         // Register this cell fill with StreamingManager
         // Use virtual cell nodeId for tracking, but don't auto-show button on virtual ID
         this.streamingManager.register(cellNodeId, {
@@ -1145,7 +1165,6 @@ class MatrixFeature extends FeaturePlugin {
 
         // Show stop button on parent matrix node (not the virtual cell ID)
         // Only show if this is the first cell in the group
-        const groupNodes = this.streamingManager.getGroupNodes(groupId);
         if (groupNodes.size === 1) {
             // First cell - show stop button on parent matrix node
             this.canvas.showStopButton(nodeId);
@@ -1365,7 +1384,7 @@ class MatrixFeature extends FeaturePlugin {
         }
 
         if (emptyCells.length === 0) {
-            // All cells filled - no action needed, button tooltip already indicates this
+            // All cells filled - no action needed
             return;
         }
 
@@ -1379,6 +1398,33 @@ class MatrixFeature extends FeaturePlugin {
         });
 
         await Promise.all(fillPromises);
+    }
+
+    /**
+     * Clear all filled cells in a matrix.
+     * @param {string} nodeId - Matrix node ID
+     */
+    handleMatrixClearAll(nodeId) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        // Check if there are any filled cells
+        const { cells } = matrixNode;
+        const hasFilledCells = Object.values(cells).some((cell) => cell && cell.filled);
+
+        if (!hasFilledCells) {
+            // No cells to clear
+            return;
+        }
+
+        // Clear all cells
+        const emptyCells = {};
+        this.graph.updateNode(nodeId, { cells: emptyCells });
+
+        // Re-render the node to show empty cells
+        this.canvas.renderNode(this.graph.getNode(nodeId));
+
+        this.saveSession();
     }
 
     /**
@@ -1690,6 +1736,7 @@ class MatrixFeature extends FeaturePlugin {
             matrixCellFill: this.handleMatrixCellFill.bind(this),
             matrixCellView: this.handleMatrixCellView.bind(this),
             matrixFillAll: this.handleMatrixFillAll.bind(this),
+            matrixClearAll: this.handleMatrixClearAll.bind(this),
             matrixRowExtract: this.handleMatrixRowExtract.bind(this),
             matrixColExtract: this.handleMatrixColExtract.bind(this),
             matrixEdit: this.handleMatrixEdit.bind(this),

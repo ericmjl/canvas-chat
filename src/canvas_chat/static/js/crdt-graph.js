@@ -572,11 +572,21 @@ class CRDTGraph extends EventEmitter {
                 // This handles plugin-specific nested objects (e.g., gitRepoData) without special casing
                 const yObj = new Y.Map();
                 for (const [objKey, objValue] of Object.entries(value)) {
-                    if (objValue && typeof objValue === 'object' && !Array.isArray(objValue) && objValue.constructor === Object) {
+                    if (
+                        objValue &&
+                        typeof objValue === 'object' &&
+                        !Array.isArray(objValue) &&
+                        objValue.constructor === Object
+                    ) {
                         // Nested object - recursively convert
                         const yNested = new Y.Map();
                         for (const [nestedKey, nestedValue] of Object.entries(objValue)) {
-                            if (nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue) && nestedValue.constructor === Object) {
+                            if (
+                                nestedValue &&
+                                typeof nestedValue === 'object' &&
+                                !Array.isArray(nestedValue) &&
+                                nestedValue.constructor === Object
+                            ) {
                                 // Deeply nested object - convert one more level
                                 const yDeep = new Y.Map();
                                 for (const [deepKey, deepValue] of Object.entries(nestedValue)) {
@@ -896,6 +906,14 @@ class CRDTGraph extends EventEmitter {
                         yCells = new Y.Map();
                         yNode.set('cells', yCells);
                     }
+                    // Remove cells that are not in the new value (for Clear All functionality)
+                    const newCellKeys = new Set(Object.keys(value));
+                    for (const existingKey of yCells.keys()) {
+                        if (!newCellKeys.has(existingKey)) {
+                            yCells.delete(existingKey);
+                        }
+                    }
+                    // Add/update cells from the new value
                     for (const [cellKey, cellValue] of Object.entries(value)) {
                         let yCell = yCells.get(cellKey);
                         if (!isYMap(yCell)) {
@@ -916,7 +934,12 @@ class CRDTGraph extends EventEmitter {
                     for (const [metaKey, metaValue] of Object.entries(value)) {
                         yMetadata.set(metaKey, metaValue);
                     }
-                } else if (value && typeof value === 'object' && !Array.isArray(value) && value.constructor === Object) {
+                } else if (
+                    value &&
+                    typeof value === 'object' &&
+                    !Array.isArray(value) &&
+                    value.constructor === Object
+                ) {
                     // Generic nested object (not position, cells, metadata which have special handling above)
                     // Recursively convert to Y.Map to preserve nested properties
                     // This handles plugin-specific nested objects without special casing
@@ -927,7 +950,12 @@ class CRDTGraph extends EventEmitter {
                     }
                     // Update all object properties
                     for (const [objKey, objValue] of Object.entries(value)) {
-                        if (objValue && typeof objValue === 'object' && !Array.isArray(objValue) && objValue.constructor === Object) {
+                        if (
+                            objValue &&
+                            typeof objValue === 'object' &&
+                            !Array.isArray(objValue) &&
+                            objValue.constructor === Object
+                        ) {
                             // Nested object - recursively convert
                             let yNested = yObj.get(objKey);
                             if (!isYMap(yNested)) {
@@ -936,7 +964,12 @@ class CRDTGraph extends EventEmitter {
                             }
                             // Update nested object properties
                             for (const [nestedKey, nestedValue] of Object.entries(objValue)) {
-                                if (nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue) && nestedValue.constructor === Object) {
+                                if (
+                                    nestedValue &&
+                                    typeof nestedValue === 'object' &&
+                                    !Array.isArray(nestedValue) &&
+                                    nestedValue.constructor === Object
+                                ) {
                                     // Deeply nested object - convert one more level
                                     let yDeep = yNested.get(nestedKey);
                                     if (!isYMap(yDeep)) {
@@ -1331,7 +1364,16 @@ class CRDTGraph extends EventEmitter {
         const sorted = Array.from(allAncestors.values()).sort((a, b) => a.created_at - b.created_at);
 
         // Convert to message format for API
-        const userTypes = [NodeType.HUMAN, NodeType.HIGHLIGHT, NodeType.NOTE, NodeType.IMAGE, NodeType.PDF, NodeType.FETCH_RESULT, NodeType.YOUTUBE, NodeType.GIT_REPO];
+        const userTypes = [
+            NodeType.HUMAN,
+            NodeType.HIGHLIGHT,
+            NodeType.NOTE,
+            NodeType.IMAGE,
+            NodeType.PDF,
+            NodeType.FETCH_RESULT,
+            NodeType.YOUTUBE,
+            NodeType.GIT_REPO,
+        ];
         return sorted.map((node) => {
             const msg = {
                 role: userTypes.includes(node.type) ? 'user' : 'assistant',
