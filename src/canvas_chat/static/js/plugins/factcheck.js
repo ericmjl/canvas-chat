@@ -811,14 +811,21 @@ If the input contains no factual content at all (e.g., ONLY greetings or questio
         // Get API key (may be null in admin mode, backend handles it)
         const apiKey = chat.getApiKeyForModel(model);
 
-        const response = await chat.sendMessageNonStreaming(
-            [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: input },
-            ],
-            model,
-            apiKey
-        );
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: input },
+        ];
+
+        // Use streaming API with onDone callback to get full response
+        const response = await new Promise((resolve, reject) => {
+            chat.sendMessage(
+                messages,
+                model,
+                null, // onChunk - not needed
+                (fullContent) => resolve(fullContent), // onDone - get full response
+                (error) => reject(error) // onError
+            );
+        });
 
         console.log('[Factcheck] LLM response:', response);
 
@@ -854,17 +861,24 @@ Guidelines:
 3. Vary query phrasing to find different perspectives
 4. Add keywords like "fact check", "true", or "false" if helpful
 
-Respond with a JSON array of query strings. Example:
+        Respond with a JSON array of query strings. Example:
 ["Eiffel Tower height meters", "How tall is Eiffel Tower Wikipedia", "Eiffel Tower official dimensions"]`;
 
-        const response = await chat.sendMessageNonStreaming(
-            [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: claim },
-            ],
-            model,
-            apiKey
-        );
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: claim },
+        ];
+
+        // Use streaming API with onDone callback to get full response
+        const response = await new Promise((resolve, reject) => {
+            chat.sendMessage(
+                messages,
+                model,
+                null,
+                (fullContent) => resolve(fullContent),
+                (error) => reject(error)
+            );
+        });
 
         try {
             const jsonMatch = response.match(/\[[\s\S]*\]/);
@@ -929,14 +943,23 @@ SEARCH RESULTS:
 ${resultsText}`;
 
         console.log(`[Factcheck] Calling LLM to analyze verdict for claim: ${claim.substring(0, 50)}...`);
-        const response = await chat.sendMessageNonStreaming(
-            [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userPrompt },
-            ],
-            model,
-            apiKey
-        );
+
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+        ];
+
+        // Use streaming API with onDone callback to get full response
+        const response = await new Promise((resolve, reject) => {
+            chat.sendMessage(
+                messages,
+                model,
+                null,
+                (fullContent) => resolve(fullContent),
+                (error) => reject(error)
+            );
+        });
+
         console.log(`[Factcheck] LLM response received (length: ${response.length})`);
 
         try {
