@@ -85,6 +85,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/search.js`      | Node search functionality                                              | Search UI, filtering logic                                                                               |
 | `src/canvas_chat/static/js/sse.js`         | Server-sent events utilities                                           | Streaming connection handling                                                                            |
 | `src/canvas_chat/static/js/utils.js`       | Pure utility functions                                                 | Image resizing, error formatting, text processing                                                        |
+| `src/canvas_chat/static/js/model-utils.js` | Model utility functions                                                | Model-related utilities                                                                                  |
 
 #### Plugin architecture modules
 
@@ -152,16 +153,16 @@ canvas-chat/
 
 ### Backend (Python/FastAPI)
 
-| File                                            | Purpose                            | Edit for...                             |
-| ----------------------------------------------- | ---------------------------------- | --------------------------------------- |
-| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints, backend logic            |
-| `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode  |
-| `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server      |
-| `src/canvas_chat/__init__.py`                   | Package initialization             | Package metadata, version               |
-| `src/canvas_chat/file_upload_registry.py`       | File upload handler registration   | Registering Python file upload handlers |
-| `src/canvas_chat/file_upload_handler_plugin.py` | FileUploadHandlerPlugin base class | File upload handler plugin base class   |
-| `src/canvas_chat/plugins/`                      | Python plugin modules              | Backend plugins (e.g., pdf_handler.py)  |
-| `modal_app.py`                                  | Modal deployment config            | Deployment settings                     |
+| File                                            | Purpose                            | Edit for...                                          |
+| ----------------------------------------------- | ---------------------------------- | ---------------------------------------------------- |
+| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints, backend logic                         |
+| `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode               |
+| `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server                   |
+| `src/canvas_chat/__init__.py`                   | Package initialization             | Package metadata, version                            |
+| `src/canvas_chat/file_upload_registry.py`       | File upload handler registration   | Registering Python file upload handlers              |
+| `src/canvas_chat/file_upload_handler_plugin.py` | FileUploadHandlerPlugin base class | File upload handler plugin base class                |
+| `src/canvas_chat/plugins/`                      | Python plugin modules              | Backend plugins (matrix_handler, code_handler, etc.) |
+| `modal_app.py`                                  | Modal deployment config            | Deployment settings                                  |
 
 ### Key constants and their locations
 
@@ -248,13 +249,16 @@ Quick reference guide for finding the right documentation based on what you need
 
 #### Code Reference
 
-| Task/Question                                    | Where to Look                                                     | Description                          |
-| ------------------------------------------------ | ----------------------------------------------------------------- | ------------------------------------ |
-| **What methods are available on FeaturePlugin?** | [feature-plugin-api.md](docs/reference/feature-plugin-api.md)     | Complete FeaturePlugin API reference |
-| **What APIs can I access via AppContext?**       | [app-context-api.md](docs/reference/app-context-api.md)           | Graph, Canvas, Chat, Storage APIs    |
-| **How do I register a plugin?**                  | [feature-registry-api.md](docs/reference/feature-registry-api.md) | FeatureRegistry registration methods |
-| **What events can I subscribe to?**              | [extension-hooks.md](docs/reference/extension-hooks.md)           | Available events and hooks           |
-| **What keyboard shortcuts exist?**               | [keyboard-shortcuts.md](docs/reference/keyboard-shortcuts.md)     | Complete keyboard shortcut reference |
+| Task/Question                                    | Where to Look                                                       | Description                          |
+| ------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------ |
+| **What methods are available on FeaturePlugin?** | [feature-plugin-api.md](docs/reference/feature-plugin-api.md)       | Complete FeaturePlugin API reference |
+| **What APIs can I access via AppContext?**       | [app-context-api.md](docs/reference/app-context-api.md)             | Graph, Canvas, Chat, Storage APIs    |
+| **How do I register a plugin?**                  | [feature-registry-api.md](docs/reference/feature-registry-api.md)   | FeatureRegistry registration methods |
+| **What events can I subscribe to?**              | [extension-hooks.md](docs/reference/extension-hooks.md)             | Available events and hooks           |
+| **What keyboard shortcuts exist?**               | [keyboard-shortcuts.md](docs/reference/keyboard-shortcuts.md)       | Complete keyboard shortcut reference |
+| **How does auto-zoom work?**                     | [auto-zoom.md](docs/reference/auto-zoom.md)                         | Auto-zoom for plugin node creation   |
+| **How do canvas event handlers work?**           | [canvas-event-handlers.md](docs/reference/canvas-event-handlers.md) | Event handler registration           |
+| **What is the JSDoc linting setup?**             | [jsdoc-linting.md](docs/reference/jsdoc-linting.md)                 | JSDoc validation rules               |
 
 ## Code style
 
@@ -1834,3 +1838,34 @@ pixi run modal serve modal_app.py
 # Deploy to Modal
 pixi run modal deploy modal_app.py
 ```
+
+### Deprecated: registerFeatureCanvasHandlers()
+
+**The `registerFeatureCanvasHandlers()` method in `app.js` has been removed.**
+
+**Old pattern (deprecated):**
+
+- Call `app.registerFeatureCanvasHandlers()` to register canvas event handlers
+- Required modifying both `app.js` and the plugin file
+
+**Current pattern (required):**
+
+- Use `getCanvasEventHandlers()` in your FeaturePlugin class
+- FeatureRegistry handles registration automatically
+- No `app.js` modifications needed
+
+```javascript
+// DEPRECATED - Do NOT do this
+app.registerFeatureCanvasHandlers();
+
+// CORRECT - Use getCanvasEventHandlers() in your plugin
+class MyFeature extends FeaturePlugin {
+    getCanvasEventHandlers() {
+        return {
+            myEvent: this.handleMyEvent.bind(this),
+        };
+    }
+}
+```
+
+See [Canvas Event Handlers Registration](docs/reference/canvas-event-handlers.md) for details.
