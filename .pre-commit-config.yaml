@@ -1,37 +1,39 @@
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
-    hooks:
-      - id: check-yaml
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version.
-    rev: v0.11.10
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-        types_or: [python]
-      - id: ruff-format
-        types_or: [python]
-  - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.17.2
-    hooks:
-      - id: markdownlint-cli2
-        args: ["--fix"]
-  - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v8.56.0
-    hooks:
-      - id: eslint
-        files: ^src/canvas_chat/static/js/.*\.js$
-        types: [file]
-        args: ["--fix"]
-        additional_dependencies:
-          - eslint@8.57.0
-  - repo: local
-    hooks:
-      - id: pixi-lock
-        name: Update pixi.lock
-        entry: pixi lock
-        language: system
-        pass_filenames: false
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v5.0.0
+      hooks:
+          - id: check-yaml
+          - id: end-of-file-fixer
+          - id: trailing-whitespace
+    - repo: https://github.com/astral-sh/ruff-pre-commit
+      # Ruff version.
+      rev: v0.11.10
+      hooks:
+          - id: ruff
+            args: [--fix, --exit-non-zero-on-fix]
+            types_or: [python]
+          - id: ruff-format
+            types_or: [python]
+    - repo: https://github.com/DavidAnson/markdownlint-cli2
+      rev: v0.17.2
+      hooks:
+          - id: markdownlint-cli2
+            args: ['--fix']
+    - repo: https://github.com/pre-commit/mirrors-eslint
+      rev: v8.56.0
+      hooks:
+          - id: eslint
+            files: ^src/canvas_chat/static/js/.*\.js$
+            types: [file]
+            args: ['--fix']
+            additional_dependencies:
+                - eslint@8.57.0
+                - eslint-plugin-jsdoc@48.0.0
+                - jsdom@24.0.0
+    - repo: local
+      hooks:
+          - id: pixi-lock
+            name: Update pixi.lock
+            entry: pixi lock
+            language: system
+            pass_filenames: false
