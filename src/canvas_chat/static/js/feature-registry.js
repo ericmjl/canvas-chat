@@ -362,6 +362,14 @@ class FeatureRegistry {
     }
 
     /**
+     * Get all registered feature instances
+     * @returns {Array<FeaturePlugin>} Array of all feature instances
+     */
+    getAllFeatures() {
+        return Array.from(this._features.values());
+    }
+
+    /**
      * Get all registered slash commands (just command strings)
      * @returns {Array<string>} Array of command strings
      */
