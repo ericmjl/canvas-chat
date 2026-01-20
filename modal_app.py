@@ -34,13 +34,13 @@ image = (
     )
     .add_local_dir("src/canvas_chat", remote_path="/app/canvas_chat")
     .add_local_file("pyproject.toml", remote_path="/app/pyproject.toml")
-    .env({"CANVAS_CHAT_ENABLE_GITHUB_COPILOT": "false"})
 )
 
 
 @app.function(
     image=image,
     scaledown_window=300,
+    secrets=[modal.Secret.from_name("canvas-chat-secrets")],
 )
 @modal.concurrent(max_inputs=100)
 @modal.asgi_app()
