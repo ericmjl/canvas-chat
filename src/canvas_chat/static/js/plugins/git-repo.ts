@@ -378,7 +378,12 @@ export class GitRepoFeature extends FeaturePlugin {
                 label.htmlFor = checkbox.id;
                 label.className = 'git-repo-file-label';
                 label.title = fullPath;
-                label.innerHTML = `<span class="git-repo-file-icon">📄</span> ${displayName}`;
+
+                // Determine icon based on file extension
+                const fileExt = fullPath.split('.').pop()?.toLowerCase() || '';
+                const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp'];
+                const fileIcon = imageExts.includes(fileExt) ? '🖼️' : '📄';
+                label.innerHTML = `<span class="git-repo-file-icon">${fileIcon}</span> ${displayName}`;
 
                 // Make fetched files clickable to open drawer
                 if (isFetched) {
@@ -947,7 +952,7 @@ export class GitRepoFeature extends FeaturePlugin {
 
                 if (filePath && this.node.gitRepoData.files[filePath]) {
                     const fileData = this.node.gitRepoData.files[filePath];
-                    const { content, lang, status } = fileData;
+                    const { content, lang, status, is_image, mime_type } = fileData;
                     const escapedPath = canvas.escapeHtml(filePath);
 
                     let html = `<div class="git-repo-file-panel-content">`;
@@ -964,6 +969,12 @@ export class GitRepoFeature extends FeaturePlugin {
                         html += `<div class="git-repo-file-panel-error">Permission denied</div>`;
                     } else if (status === 'error') {
                         html += `<div class="git-repo-file-panel-error">Failed to read file</div>`;
+                    } else if (is_image && content) {
+                        // Render image from base64 data
+                        const mime = mime_type || 'image/png';
+                        html += `<div class="git-repo-file-panel-image-container">`;
+                        html += `<img src="data:${mime};base64,${content}" alt="${escapedPath}" class="git-repo-file-panel-image" />`;
+                        html += `</div>`;
                     } else if (content) {
                         const escapedContent = canvas.escapeHtml(content);
                         const codeClass = lang ? `language-${lang}` : '';
