@@ -12,7 +12,7 @@ import { FactcheckFeature } from './plugins/factcheck.js';
 import { ResearchFeature } from './plugins/research.js';
 import { CodeFeature } from './plugins/code.js';
 import { NoteFeature } from './plugins/note.js';
-import { GitRepoFeature } from './plugins/git-repo.ts';
+import { GitRepoFeature } from './plugins/git-repo.js';
 import { UrlFetchFeature } from './plugins/url-fetch.js';
 import { YouTubeFeature } from './plugins/youtube.js';
 import { ImageGenerationFeature } from './plugins/image-generation.js';
