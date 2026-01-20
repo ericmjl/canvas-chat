@@ -380,6 +380,31 @@ export class GitRepoFeature extends FeaturePlugin {
                 label.title = fullPath;
                 label.innerHTML = `<span class="git-repo-file-icon">📄</span> ${displayName}`;
 
+                // Make fetched files clickable to open drawer
+                if (isFetched) {
+                    label.classList.add('git-repo-file-fetched-label');
+                    label.style.cursor = 'pointer';
+                    let filePathForLookup = fullPath;
+                    if (fetchedFiles) {
+                        if (fetchedFiles.has(fullPath)) {
+                            filePathForLookup = fullPath;
+                        } else {
+                            const matchingPath = Array.from(fetchedFiles).find(
+                                (p) =>
+                                    p === fullPath ||
+                                    p.toLowerCase() === fullPath.toLowerCase() ||
+                                    p.endsWith(fullPath) ||
+                                    fullPath.endsWith(p) ||
+                                    p.split('/').pop() === fullPath.split('/').pop()
+                            );
+                            if (matchingPath) {
+                                filePathForLookup = matchingPath;
+                            }
+                        }
+                    }
+                    label.dataset.filePath = filePathForLookup;
+                }
+
                 const contentWrapper = document.createElement('span');
                 contentWrapper.className = 'git-repo-file-tree-item-content';
                 contentWrapper.style.display = 'inline-flex';
@@ -1001,6 +1026,7 @@ export class GitRepoFeature extends FeaturePlugin {
                     gitRepoFeatureInstance.renderFileTree(fileTree, selectedPathsSet, treeContainer, 0, {
                         hideCheckboxes: true,
                         fetchedFiles: fetchedFilesSet,
+                        selectedFilePath: this.node.selectedFilePath || null,
                     });
 
                     container.appendChild(treeContainer);
