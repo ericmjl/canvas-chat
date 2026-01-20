@@ -1066,12 +1066,9 @@ def register_endpoints(app):
             except Exception as e:
                 yield {"event": "error", "data": str(e)}
 
-    @app.get("/api/url-fetch/fetch-files-stream")
+    @app.post("/api/url-fetch/fetch-files-stream")
     async def stream_fetch_url_fetch_files(
-        url: str,
-        file_paths: str,  # Comma-separated string
         request: Request,
-        git_credentials: dict[str, str] | None = None,
     ):
         """Stream git clone progress and fetch files using Server-Sent Events.
 
@@ -1081,13 +1078,11 @@ def register_endpoints(app):
         - complete: Final result with content and metadata
         - error: Error message
         """
-        # Parse file_paths from comma-separated string
-        file_paths_list = [fp.strip() for fp in file_paths.split(",") if fp.strip()]
+        body = await request.json()
+        url = body.get("url")
+        file_paths = body.get("file_paths", [])
+        git_credentials = body.get("git_credentials")
 
-        logger.info(
-            f"Stream fetch URL request: url='{url}', files={len(file_paths_list)}"
-        )
+        logger.info(f"Stream fetch URL request: url='{url}', files={len(file_paths)}")
 
-        return EventSourceResponse(
-            stream_git_clone(url, file_paths_list, git_credentials)
-        )
+        return EventSourceResponse(stream_git_clone(url, file_paths, git_credentials))
