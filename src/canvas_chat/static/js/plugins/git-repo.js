@@ -803,58 +803,131 @@ export class GitRepoFeature extends FeaturePlugin {
             return;
         }
 
-        // Disable button and show loading
+        // Use streaming fetch for progress display
+        await this.fetchSelectedFilesStreaming(modal, url, nodeId, selectedPaths, isEdit);
+    }
+
+    /**
+     * Fetch selected files with SSE streaming progress display.
+     * @param {HTMLElement} modal - The modal element
+     * @param {string} url - Repository URL
+     * @param {string} nodeId - Node ID to update
+     * @param {string[]} selectedPaths - Selected file paths
+     * @param {boolean} isEdit - Whether this is editing an existing node
+     */
+    async fetchSelectedFilesStreaming(modal, url, nodeId, selectedPaths, isEdit) {
+        const fetchBtn = modal.querySelector('#git-repo-fetch-btn');
+
+        // Disable button and show spinner
         if (fetchBtn) {
             fetchBtn.disabled = true;
-            fetchBtn.textContent = 'Fetching...';
+            fetchBtn.innerHTML =
+                '<span class="git-repo-fetch-spinner"></span><span class="git-repo-fetch-text">Fetching...</span>';
+            fetchBtn.classList.add('loading');
         }
 
         // Get git credentials for this URL's host
         const gitCreds = this.getGitCredentialsForUrl(url);
 
+        // Build SSE URL with query parameters
+        const params = new URLSearchParams({
+            url: url,
+            file_paths: selectedPaths.join(','),
+        });
+        if (gitCreds && Object.keys(gitCreds).length > 0) {
+            params.append('git_credentials', JSON.stringify(gitCreds));
+        }
+
+        const sseUrl = apiUrl(`/api/url-fetch/fetch-files-stream?${params.toString()}`);
+
         try {
-            const response = await fetch(apiUrl('/api/url-fetch/fetch-files'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    url,
-                    file_paths: selectedPaths,
-                    git_credentials: gitCreds,
-                }),
-            });
+            // Create EventSource for SSE
+            const eventSource = new EventSource(sseUrl);
+            const progressLog = [];
+            let data = null;
+            let error = null;
 
-            if (!response.ok) {
-                let errorDetail = 'Failed to fetch files';
+            eventSource.onmessage = (event) => {
                 try {
-                    const error = await response.json();
-                    errorDetail = error.detail || error.message || errorDetail;
-                    console.error('[GitRepoFeature] Backend error:', error);
+                    const parsed = JSON.parse(event.data);
+
+                    if (event.event === 'status') {
+                        progressLog.push({ type: 'info', text: parsed.data });
+                    } else if (event.event === 'log') {
+                        progressLog.push({ type: 'log', text: parsed.data });
+                    } else if (event.event === 'complete') {
+                        data = parsed.data;
+                        eventSource.close();
+                    } else if (event.event === 'error') {
+                        error = new Error(parsed.data);
+                        eventSource.close();
+                    }
                 } catch (e) {
-                    const text = await response.text();
-                    console.error('[GitRepoFeature] Backend error (non-JSON):', text);
-                    errorDetail = `HTTP ${response.status}: ${text.substring(0, 200)}`;
+                    console.warn('[GitRepoFeature] Failed to parse SSE event:', e);
                 }
-                throw new Error(errorDetail);
-            }
+            };
 
-            const data = await response.json();
+            eventSource.onerror = (err) => {
+                console.error('[GitRepoFeature] SSE error:', err);
+                error = new Error('Connection failed');
+                eventSource.close();
+            };
 
-            // Debug: Log backend response
-            console.log('[GitRepoFeature] Backend fetch response:', {
-                hasMetadata: !!data.metadata,
-                metadataKeys: data.metadata ? Object.keys(data.metadata) : [],
-                hasFiles: !!data.metadata?.files,
-                filesCount: data.metadata?.files ? Object.keys(data.metadata.files).length : 0,
-                filesKeys: data.metadata?.files ? Object.keys(data.metadata.files).slice(0, 5) : [],
+            // Poll for updates and render progress
+            const renderProgress = () => {
+                const progressPanel = modal.querySelector('.git-repo-progress-panel');
+                if (progressPanel) {
+                    const logHtml = progressLog
+                        .slice(-50)
+                        .map((entry) => {
+                            if (entry.type === 'log') {
+                                return `<div class="git-repo-progress-log-entry info">${this.escapeHtml(entry.text)}</div>`;
+                            }
+                            return `<div class="git-repo-progress-log-entry info">${this.escapeHtml(entry.text)}</div>`;
+                        })
+                        .join('');
+                    const logContainer = progressPanel.querySelector('.git-repo-progress-log');
+                    if (logContainer) {
+                        logContainer.innerHTML =
+                            logHtml || '<div class="git-repo-progress-log-entry info">Waiting for git...</div>';
+                        logContainer.scrollTop = logContainer.scrollHeight;
+                    }
+                }
+            };
+
+            // Update progress every 100ms while waiting
+            const progressInterval = setInterval(renderProgress, 100);
+
+            // Wait for completion or error
+            await new Promise((resolve, reject) => {
+                const checkDone = setInterval(() => {
+                    if (data) {
+                        clearInterval(progressInterval);
+                        clearInterval(checkDone);
+                        resolve(data);
+                    } else if (error) {
+                        clearInterval(progressInterval);
+                        clearInterval(checkDone);
+                        reject(error);
+                    }
+                }, 100);
+
+                // Timeout after 5 minutes
+                setTimeout(() => {
+                    clearInterval(progressInterval);
+                    clearInterval(checkDone);
+                    if (!data && !error) {
+                        reject(new Error('Fetch timed out'));
+                    }
+                }, 300000);
             });
 
-            // Get the file tree structure (we need to fetch it again or store it)
-            // For now, let's fetch it again to get the full tree
+            clearInterval(progressInterval);
+
+            // Now we have the data, proceed with node update
+            // Get the file tree structure
             let fileTree = null;
             try {
-                // Get git credentials for this URL's host
-                const gitCreds = this.getGitCredentialsForUrl(url);
-
                 const treeResponse = await fetch(apiUrl('/api/url-fetch/list-files'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -871,44 +944,30 @@ export class GitRepoFeature extends FeaturePlugin {
                 console.warn('[GitRepoFeature] Failed to fetch file tree for rendering:', err);
             }
 
-            // Store git repo data in node instead of markdown content
-            // Read files from metadata (unified fetch response format)
+            // Store git repo data in node
             const metadata = data.metadata || {};
             const files = metadata.files || {};
 
-            // Debug: Log what we're storing
             const fetchedFilePaths = Object.keys(files);
-            console.log('[GitRepoFeature] Storing gitRepoData:', {
-                url,
-                title: data.title,
-                selectedFilesCount: selectedPaths.length,
-                filesCount: fetchedFilePaths.length,
-                fileKeys: fetchedFilePaths.slice(0, 5), // First 5 for debugging
-            });
-
             const gitRepoData = {
-                url,
-                title: data.title,
+                url: data.metadata?.git_repo_data?.url || url,
+                title: data.title || 'Git Repository',
                 fileTree: fileTree || [],
                 selectedFiles: selectedPaths,
                 fetchedFilePaths,
-                files: files, // Map of file paths to file data (content, lang, status)
+                files: files,
             };
 
-            // Update node with git repo data
-            // Use backend's formatted content (includes all file contents) for LLM context
-            // The backend formats it as: "**[title](url)**\n\n## Directory: ...\n\n### file.py\n\n```python\n...\n```"
             const updateData = {
-                content: data.content || `**[${data.title}](${url})**`, // Backend formats with file contents
+                content: data.content || `**[${data.title || 'Git Repository'}](${url})**`,
                 gitRepoData,
             };
 
-            // Only add versions if this is a new node (not an edit)
             if (!isEdit) {
                 const node = this.graph.getNode(nodeId);
                 updateData.versions = [
                     {
-                        content: node?.content || `**[${data.title}](${url})**`,
+                        content: node?.content || `**[${data.title || 'Git Repository'}](${url})**`,
                         timestamp: node?.createdAt || Date.now(),
                         reason: 'initial',
                     },
@@ -917,18 +976,8 @@ export class GitRepoFeature extends FeaturePlugin {
 
             this.graph.updateNode(nodeId, updateData);
 
-            // Re-render the node to show the file tree
             const node = this.graph.getNode(nodeId);
             if (node) {
-                // Debug: Verify data was stored correctly
-                console.log('[GitRepoFeature] After updateNode, node has:', {
-                    hasGitRepoData: !!node.gitRepoData,
-                    gitRepoDataKeys: node.gitRepoData ? Object.keys(node.gitRepoData) : [],
-                    hasFiles: !!node.gitRepoData?.files,
-                    filesType: typeof node.gitRepoData?.files,
-                    filesCount: node.gitRepoData?.files ? Object.keys(node.gitRepoData.files).length : 0,
-                    filesKeys: node.gitRepoData?.files ? Object.keys(node.gitRepoData.files).slice(0, 5) : [],
-                });
                 this.canvas.renderNode(node);
             }
 
@@ -941,7 +990,6 @@ export class GitRepoFeature extends FeaturePlugin {
             this.canvas.panToNodeAnimated(nodeId);
         } catch (err) {
             this.showToast?.(`Failed to fetch files: ${err.message}`, 'error');
-            // Update node with error message
             const errorContent = `**Failed to fetch repository files**\n\n${url}\n\n*Error: ${err.message}*`;
             this.canvas.updateNodeContent(nodeId, errorContent, false);
             this.graph.updateNode(nodeId, { content: errorContent });
@@ -949,7 +997,8 @@ export class GitRepoFeature extends FeaturePlugin {
         } finally {
             if (fetchBtn) {
                 fetchBtn.disabled = false;
-                fetchBtn.textContent = 'Fetch Selected Files';
+                fetchBtn.innerHTML = 'Fetch Selected Files';
+                fetchBtn.classList.remove('loading');
             }
         }
     }
