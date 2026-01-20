@@ -3001,15 +3001,23 @@ class Canvas {
             return;
         }
 
-        // If no filePath specified, nothing to select
-        if (!filePath) {
-            console.warn('[Canvas] selectGitRepoFile: no filePath specified');
-            return;
-        }
-
         const currentNode = graph.getNode(nodeId);
         if (!currentNode) {
             console.warn('[Canvas] selectGitRepoFile: node not found', { nodeId, filePath });
+            return;
+        }
+
+        // If no filePath specified, just open the drawer for progress display (no file selected)
+        if (!filePath) {
+            console.log('[Canvas] selectGitRepoFile: opening drawer for progress (no file selected)');
+            graph.updateNode(nodeId, {
+                outputExpanded: true,
+                outputPanelHeight: currentNode.outputPanelHeight || 300,
+            });
+            const updatedNode = graph.getNode(nodeId);
+            if (updatedNode) {
+                this.renderNode(updatedNode);
+            }
             return;
         }
 

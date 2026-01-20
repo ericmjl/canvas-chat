@@ -902,8 +902,9 @@ export class GitRepoFeature extends FeaturePlugin {
             this.canvas.renderNode(updatedNode);
         }
 
-        // Open the drawer for this node
-        this.canvas.selectGitRepoFile(nodeId, null);
+        // Open the drawer for this node with first selected file
+        const firstSelectedFile = selectedPaths.length > 0 ? selectedPaths[0] : null;
+        this.canvas.selectGitRepoFile(nodeId, firstSelectedFile);
 
         try {
             // Use fetch with ReadableStream for POST-based streaming
@@ -928,7 +929,9 @@ export class GitRepoFeature extends FeaturePlugin {
 
             // Update progress in drawer
             const updateDrawerProgress = () => {
-                const wrapped = wrapNode(this.graph.getNode(nodeId));
+                const node = this.graph.getNode(nodeId);
+                if (!node) return;
+                const wrapped = wrapNode(node);
                 if (wrapped && wrapped.updateFetchProgress) {
                     wrapped.updateFetchProgress(progressLog);
                 }
