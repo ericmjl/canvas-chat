@@ -33,6 +33,11 @@
             "*": ["src/canvas_chat/static/js/*"]
         }
     },
-    "include": ["src/canvas_chat/static/js/**/*.js", "tests/**/*.js"],
+    "include": [
+        "src/canvas_chat/static/js/**/*.js",
+        "src/canvas_chat/static/js/**/*.ts",
+        "tests/**/*.js",
+        "tests/**/*.ts"
+    ],
     "exclude": ["node_modules", "dist", "build"]
 }

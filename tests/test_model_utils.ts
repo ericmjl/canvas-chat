@@ -5,7 +5,44 @@
  * These utilities are extracted from chat.js for plugin reusability.
  */
 
+interface MockLocalStorage {
+    getItem: (key: string) => string | null;
+    setItem: (key: string, value: string) => void;
+    removeItem: (key: string) => void;
+    clear: () => void;
+}
+
+interface MockIDBRequest {
+    onsuccess: ((event: { target: MockIDBRequest }) => void) | null;
+    onerror: ((event: { target: MockIDBRequest }) => void) | null;
+    onupgradeneeded: ((event: { target: MockIDBRequest }) => void) | null;
+    result: unknown;
+}
+
+interface MockIDBDatabase {
+    transaction: (
+        store?: string,
+        mode?: string
+    ) => {
+        objectStore: (name: string) => {
+            get: (key: string) => MockIDBRequest;
+            put: (value: unknown) => MockIDBRequest;
+            delete: (key: string) => MockIDBRequest;
+        };
+    };
+}
+
+interface MockIndexedDB {
+    open: (name: string, version: number) => MockIDBRequest;
+}
+
 // Setup global mocks
+const global = globalThis as unknown as {
+    localStorage: MockLocalStorage;
+    indexedDB: MockIndexedDB;
+    window: { location: { pathname: string } };
+};
+
 if (!global.localStorage) {
     global.localStorage = {
         getItem: () => null,
@@ -18,7 +55,7 @@ if (!global.localStorage) {
 if (!global.indexedDB) {
     global.indexedDB = {
         open: () => {
-            const request = {
+            const request: MockIDBRequest = {
                 onsuccess: null,
                 onerror: null,
                 onupgradeneeded: null,
@@ -42,30 +79,30 @@ if (!global.indexedDB) {
     };
 }
 
-async function asyncTest(name, fn) {
+async function asyncTest(name: string, fn: () => Promise<void> | void): Promise<void> {
     try {
         await fn();
         console.log(`✓ ${name}`);
     } catch (error) {
         console.error(`✗ ${name}`);
-        console.error(`  ${error.message}`);
+        console.error(`  ${(error as Error).message}`);
         process.exit(1);
     }
 }
 
-function assertEqual(actual, expected, message) {
+function assertEqual<T>(actual: T, expected: T, message: string): void {
     if (actual !== expected) {
         throw new Error(`${message}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
     }
 }
 
-function assertTrue(value, message) {
+function assertTrue(value: unknown, message?: string): void {
     if (!value) {
         throw new Error(message || 'Expected true but got false');
     }
 }
 
-function assertNull(value, message) {
+function assertNull(value: unknown, message?: string): void {
     if (value !== null) {
         throw new Error(`${message || 'Expected null'}: got ${JSON.stringify(value)}`);
     }
@@ -101,9 +138,8 @@ asyncTest('getApiKeyForModel handles dall-e models with OpenAI provider', async 
     const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
-    // Mock the storage to return a specific API key
     const originalGetApiKeyForProvider = storage.getApiKeyForProvider;
-    storage.getApiKeyForProvider = (provider) => {
+    storage.getApiKeyForProvider = (provider: string) => {
         if (provider === 'openai') {
             return 'test-openai-key';
         }
@@ -122,9 +158,8 @@ asyncTest('getApiKeyForModel extracts provider from model ID', async () => {
     const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
-    // Mock the storage to return a specific API key
     const originalGetApiKeyForProvider = storage.getApiKeyForProvider;
-    storage.getApiKeyForProvider = (provider) => {
+    storage.getApiKeyForProvider = (provider: string) => {
         if (provider === 'anthropic') {
             return 'test-anthropic-key';
         }
@@ -143,7 +178,6 @@ asyncTest('getApiKeyForModel returns null for unknown provider', async () => {
     const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
-    // Mock the storage to return null for all providers
     const originalGetApiKeyForProvider = storage.getApiKeyForProvider;
     storage.getApiKeyForProvider = () => null;
 
@@ -160,7 +194,7 @@ asyncTest('getApiKeyForModel handles provider with hyphen (e.g., "openrouter")',
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
     const originalGetApiKeyForProvider = storage.getApiKeyForProvider;
-    storage.getApiKeyForProvider = (provider) => {
+    storage.getApiKeyForProvider = (provider: string) => {
         if (provider === 'openrouter') {
             return 'test-openrouter-key';
         }
@@ -232,9 +266,7 @@ asyncTest('getBaseUrlForModel returns null when no base URL configured', async (
 
 asyncTest('apiUrl formats endpoint correctly', async () => {
     const { apiUrl } = await import('../src/canvas_chat/static/js/model-utils.ts');
-    const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
-    // Mock window for apiUrl to work in Node.js
     const originalWindow = global.window;
     global.window = { location: { pathname: '/' } };
 
@@ -248,9 +280,7 @@ asyncTest('apiUrl formats endpoint correctly', async () => {
 
 asyncTest('apiUrl handles endpoints with leading slash', async () => {
     const { apiUrl } = await import('../src/canvas_chat/static/js/model-utils.ts');
-    const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
-    // Mock window for apiUrl to work in Node.js
     const originalWindow = global.window;
     global.window = { location: { pathname: '/' } };
 
