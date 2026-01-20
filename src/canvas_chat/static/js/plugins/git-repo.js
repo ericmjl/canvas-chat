@@ -398,6 +398,12 @@ export class GitRepoFeature extends FeaturePlugin {
                 label.htmlFor = checkbox.id;
                 label.className = 'git-repo-file-label';
                 label.title = fullPath; // Tooltip with full path
+
+                // Determine icon based on file extension
+                const fileExt = fullPath.split('.').pop()?.toLowerCase() || '';
+                const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp'];
+                const fileIcon = imageExts.includes(fileExt) ? '🖼️' : '📄';
+
                 if (isFetched) {
                     label.classList.add('git-repo-file-fetched-label');
                     // Make fetched files clickable to open drawer
@@ -428,7 +434,7 @@ export class GitRepoFeature extends FeaturePlugin {
                     }
                     label.dataset.filePath = filePathForLookup;
                 }
-                label.innerHTML = `<span class="git-repo-file-icon">📄</span> ${displayName}`;
+                label.innerHTML = `<span class="git-repo-file-icon">${fileIcon}</span> ${displayName}`;
 
                 // Wrap content in a container for consistency
                 const contentWrapper = document.createElement('span');
@@ -1117,6 +1123,17 @@ export class GitRepoFeature extends FeaturePlugin {
                         html += `<div class="git-repo-file-panel-error">Permission denied</div>`;
                     } else if (status === 'error') {
                         html += `<div class="git-repo-file-panel-error">Failed to read file</div>`;
+                    } else if (fileData.is_image && content) {
+                        // Render image with base64 data URL
+                        const mimeType = fileData.mime_type || 'image/png';
+                        html += `<div class="git-repo-file-panel-image-container">`;
+                        html += `<img src="data:${mimeType};base64,${content}"
+                                      class="git-repo-file-panel-image"
+                                      alt="${escapedPath}" />`;
+                        html += `</div>`;
+                    } else if (fileData.is_binary) {
+                        // Non-image binary file
+                        html += `<div class="git-repo-file-panel-binary">Binary file not displayed</div>`;
                     } else if (content) {
                         // Syntax-highlighted code display (same pattern as code node)
                         // Escape HTML to prevent XSS, highlight.js will handle the rest

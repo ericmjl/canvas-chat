@@ -3,6 +3,7 @@
 Handles git repository URL fetching with file selection support.
 """
 
+import base64
 import logging
 import subprocess
 import tempfile
@@ -12,6 +13,25 @@ from canvas_chat.url_fetch_handler_plugin import UrlFetchHandlerPlugin
 from canvas_chat.url_fetch_registry import PRIORITY, UrlFetchRegistry
 
 logger = logging.getLogger(__name__)
+
+# Image file extensions that should be base64-encoded
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp"}
+
+# Other binary extensions (not displayed, just flagged)
+BINARY_EXTENSIONS = {
+    ".pdf",
+    ".zip",
+    ".tar",
+    ".gz",
+    ".exe",
+    ".dll",
+    ".so",
+    ".dylib",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".eot",
+}
 
 
 class GitRepoHandler(UrlFetchHandlerPlugin):
@@ -30,8 +50,10 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
         if url.startswith("git@"):
             # Convert SSH URL to HTTPS
             # git@github.com:user/repo.git -> https://github.com/user/repo.git
-            normalized_url = url.replace("git@", "https://").replace(":", "/", 1)
-        if not normalized_url.endswith(".git") and not normalized_url.endswith("/"):
+            normalized_url = "https://" + url[4:].replace(":", "/")
+        # Remove trailing slash before adding .git
+        normalized_url = normalized_url.rstrip("/")
+        if not normalized_url.endswith(".git"):
             normalized_url = normalized_url + ".git"
         return normalized_url
 
@@ -354,32 +376,79 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
                     continue
 
                 try:
-                    file_content = file_path.read_text(
-                        encoding="utf-8", errors="ignore"
-                    )
+                    # Check if file is an image or binary
+                    file_ext = Path(normalized_path).suffix.lower()
+                    is_image = file_ext in IMAGE_EXTENSIONS
+                    is_binary = file_ext in BINARY_EXTENSIONS
 
-                    # Determine file extension for syntax highlighting
-                    file_ext = Path(normalized_path).suffix.lstrip(".")
-                    lang = file_ext if file_ext else ""
+                    if is_image:
+                        # Read as binary and base64 encode
+                        file_bytes = file_path.read_bytes()
+                        file_content = base64.b64encode(file_bytes).decode("utf-8")
+                        # Determine MIME type
+                        mime_map = {
+                            ".png": "image/png",
+                            ".jpg": "image/jpeg",
+                            ".jpeg": "image/jpeg",
+                            ".gif": "image/gif",
+                            ".webp": "image/webp",
+                            ".svg": "image/svg+xml",
+                            ".ico": "image/x-icon",
+                            ".bmp": "image/bmp",
+                        }
+                        mime_type = mime_map.get(file_ext, "application/octet-stream")
 
-                    # Store file data for drawer (use original file_path_str as key)
-                    files_data[file_path_str] = {
-                        "content": file_content,
-                        "lang": lang,
-                        "status": "success",
-                    }
+                        # Store file data for drawer
+                        files_data[file_path_str] = {
+                            "content": file_content,
+                            "lang": file_ext.lstrip("."),
+                            "status": "success",
+                            "is_binary": True,
+                            "is_image": True,
+                            "mime_type": mime_type,
+                        }
+
+                        # Use placeholder for images in markdown (skip binary data)
+                        file_content_for_markdown = f"[Binary image: {file_path.name}]"
+                    elif is_binary:
+                        # Binary file - don't include content, just metadata
+                        files_data[file_path_str] = {
+                            "content": None,
+                            "lang": file_ext.lstrip("."),
+                            "status": "success",
+                            "is_binary": True,
+                            "is_image": False,
+                            "mime_type": "application/octet-stream",
+                        }
+                        file_content_for_markdown = f"[Binary file: {file_path.name}]"
+                    else:
+                        # Text file - read as UTF-8
+                        file_content = file_path.read_text(
+                            encoding="utf-8", errors="ignore"
+                        )
+                        files_data[file_path_str] = {
+                            "content": file_content,
+                            "lang": file_ext.lstrip(".") if file_ext else "",
+                            "status": "success",
+                            "is_binary": False,
+                            "is_image": False,
+                        }
+                        file_content_for_markdown = file_content
+
+                    # Store markdown content (use placeholder for binary files)
+                    lang = file_ext.lstrip(".") if file_ext else ""
 
                     # Group by directory
                     dir_path = str(Path(normalized_path).parent)
                     if dir_path == "." or dir_path == "":
                         root_files.append(
-                            (file_path_str, file_content, "success", lang)  # noqa: E501
+                            (file_path_str, file_content_for_markdown, "success", lang)
                         )
                     else:
                         if dir_path not in files_by_dir:
                             files_by_dir[dir_path] = []
                         files_by_dir[dir_path].append(
-                            (file_path_str, file_content, "success", lang)  # noqa: E501
+                            (file_path_str, file_content_for_markdown, "success", lang)
                         )
 
                 except PermissionError as e:

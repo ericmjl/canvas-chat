@@ -391,3 +391,30 @@
     font-size: inherit;
     font-family: inherit;
 }
+
+/* Image display in file drawer panel */
+.git-repo-file-panel-image-container {
+    padding: 12px;
+    text-align: center;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.git-repo-file-panel-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: block;
+    margin: 0 auto;
+}
+
+.git-repo-file-panel-binary {
+    padding: 16px;
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+}
