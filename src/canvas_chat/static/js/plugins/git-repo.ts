@@ -32,8 +32,6 @@ import { NodeRegistry } from '../node-registry.js';
  * @typedef {Object} GitRepoData
  * @property {string} url - Repository URL
  * @property {Object} files - Map of file paths to file data
- * @property {boolean} [isFetching] - Whether fetch is in progress
- * @property {Array} [fetchProgress] - Array of progress entries
  * @property {string} [selectedFilePath] - Currently selected file path
  */
 
@@ -858,22 +856,18 @@ export class GitRepoFeature extends FeaturePlugin {
         const _fetchBtn = modal.querySelector('#git-repo-fetch-btn');
         const gitCreds = this.getGitCredentialsForUrl(url);
 
-        // Disable button temporarily
+        // Disable button and show spinner
         if (_fetchBtn) {
             _fetchBtn.disabled = true;
             _fetchBtn.innerHTML =
-                '<span class="git-repo-fetch-spinner"></span><span class="git-repo-fetch-text">Starting...</span>';
+                '<span class="git-repo-fetch-spinner"></span><span class="git-repo-fetch-text">Fetching...</span>';
             _fetchBtn.classList.add('loading');
         }
 
-        // Close modal and open drawer for progress
+        // Close modal immediately - no need to keep it open during fetch
         this.modalManager.hidePluginModal('git-repo', 'file-selection');
 
-        // Extract repo name from URL (simplified version of Python's _extract_repo_name)
-        let repoName = url.split('/').pop();
-        if (repoName?.endsWith('.git')) {
-            repoName = repoName.slice(0, -4);
-        }
+        const repoName = url.split('/').pop();
 
         const node = this.graph.getNode(nodeId);
         const gitRepoData = {
@@ -883,12 +877,10 @@ export class GitRepoFeature extends FeaturePlugin {
             selectedFiles: selectedPaths,
             fetchedFilePaths: [],
             files: {},
-            isFetching: true,
-            fetchProgress: [],
         };
 
         const updateData = {
-            content: `**Fetching repository...**\n\n${url}\n\nSelect files to view content after fetch completes.`,
+            content: `**[${repoName}](${url})**\n\nFetching selected files...`,
             gitRepoData,
         };
 
@@ -903,10 +895,6 @@ export class GitRepoFeature extends FeaturePlugin {
         }
 
         this.graph.updateNode(nodeId, updateData);
-
-        // Open the drawer for this node with first selected file
-        const firstSelectedFile = selectedPaths.length > 0 ? selectedPaths[0] : null;
-        this.canvas.selectGitRepoFile(nodeId, firstSelectedFile);
 
         try {
             // Get temp_dir from modal (set during list-files) to avoid double clone
@@ -931,16 +919,6 @@ export class GitRepoFeature extends FeaturePlugin {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
-            const progressLog = [];
-
-            // Update progress in drawer
-            const updateDrawerProgress = () => {
-                const node = this.graph.getNode(nodeId);
-                if (!node) return;
-                const wrapped = wrapNode(node);
-                if (!wrapped || !wrapped.updateFetchProgress) return;
-                wrapped.updateFetchProgress(progressLog);
-            };
 
             // Stream processing loop
             while (true) {
@@ -980,18 +958,11 @@ export class GitRepoFeature extends FeaturePlugin {
                             message = eventData;
                         }
 
-                        if (eventName === 'status') {
-                            progressLog.push({ type: 'info', text: message });
-                        } else if (eventName === 'log') {
-                            progressLog.push({ type: 'log', text: message });
-                        } else if (eventName === 'complete') {
-                            progressLog.push({ type: 'success', text: 'Complete!' });
-                            updateDrawerProgress();
-
+                        if (eventName === 'complete') {
                             // Process complete data - data might be JSON string or object
                             const completeData =
                                 typeof parsed?.data === 'string' ? JSON.parse(parsed.data) : parsed?.data;
-                            await this.processFetchComplete(nodeId, url, selectedPaths, isEdit, completeData, gitCreds);
+                            await this.processFetchComplete(nodeId, url, selectedPaths, isEdit, completeData);
                             return;
                         } else if (eventName === 'error') {
                             throw new Error(message);
@@ -999,14 +970,7 @@ export class GitRepoFeature extends FeaturePlugin {
                     }
                 }
 
-                // Update drawer with progress
-                updateDrawerProgress();
-            }
-
-            // Check if we have any pending data
-            if (buffer.trim()) {
-                // Log but don't warn - this can happen with trailing newlines
-                console.log('[GitRepoFeature] Unprocessed buffer:', buffer);
+                // No progress updates needed - just wait for complete
             }
         } catch (err) {
             console.error('[GitRepoFeature] Fetch error:', err);
@@ -1027,9 +991,8 @@ export class GitRepoFeature extends FeaturePlugin {
      * @param selectedPaths
      * @param isEdit
      * @param data
-     * @param gitCreds
      */
-    async processFetchComplete(nodeId, url, selectedPaths, isEdit, data, gitCreds) {
+    async processFetchComplete(nodeId, url, selectedPaths, isEdit, data) {
         // Store git repo data in node
         const metadata = data.metadata || {};
         const files = metadata.files || {};
@@ -1042,8 +1005,6 @@ export class GitRepoFeature extends FeaturePlugin {
             selectedFiles: selectedPaths,
             fetchedFilePaths,
             files: files,
-            isFetching: false,
-            fetchProgress: [],
         };
 
         const updateData = {
@@ -1198,10 +1159,6 @@ export class GitRepoFeature extends FeaturePlugin {
              * @returns {boolean}
              */
             hasOutput() {
-                // Show drawer when fetching is in progress
-                if (this.node.gitRepoData && this.node.gitRepoData.isFetching) {
-                    return true;
-                }
                 // Only show drawer when a file is selected (not by default)
                 // This keeps the drawer closed initially until user clicks on a file
                 if (this.node.gitRepoData && this.node.gitRepoData.files && this.node.selectedFilePath) {
@@ -1216,36 +1173,6 @@ export class GitRepoFeature extends FeaturePlugin {
              * @returns {string} HTML string
              */
             renderOutputPanel(canvas) {
-                // Show progress while fetching
-                if (this.node.gitRepoData && this.node.gitRepoData.isFetching) {
-                    const progressLog = this.node.gitRepoData.fetchProgress || [];
-                    const logHtml = progressLog
-                        .slice(-50)
-                        .map((entry) => {
-                            let icon = '📋';
-                            if (entry.type === 'log') icon = '📥';
-                            else if (entry.type === 'success') icon = '✅';
-                            else if (entry.type === 'info') icon = 'ℹ️';
-                            return `<div class="git-repo-progress-log-entry ${entry.type}">${icon} ${this.escapeHtml(entry.text)}</div>`;
-                        })
-                        .join('');
-
-                    return `
-                        <div class="git-repo-file-panel-content">
-                            <div class="git-repo-progress-panel">
-                                <div class="git-repo-progress-header">
-                                    <span class="git-repo-progress-spinner-large"></span>
-                                    <span>Fetching repository...</span>
-                                </div>
-                                <div class="git-repo-progress-log">
-                                    ${logHtml || '<div class="git-repo-progress-log-entry info">Initializing...</div>'}
-                                </div>
-                                <div class="git-repo-progress-status">This may take a moment for large repositories</div>
-                            </div>
-                        </div>
-                    `;
-                }
-
                 // Handle git repo file selection
                 if (!this.node.gitRepoData || !this.node.gitRepoData.files) {
                     return '<div class="git-repo-file-panel-content">No repository data</div>';
