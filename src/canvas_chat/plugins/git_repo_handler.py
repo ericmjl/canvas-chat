@@ -4,6 +4,7 @@ Handles git repository URL fetching with file selection support.
 """
 
 import base64
+import json
 import logging
 import subprocess
 import tempfile
@@ -260,12 +261,10 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
             url: Git repository URL
 
         Returns:
-            Dictionary with file tree structure:
+            Dictionary with file tree structure and temp_dir for reuse:
             {
-                "files": [
-                    {"path": "README.md", "type": "file", "size": 1234},
-                    {"path": "src", "type": "directory", "children": [...]}
-                ]
+                "files": [...],
+                "temp_dir": "/path/to/temp/dir"  # For reuse in stream endpoint
             }
 
         Raises:
@@ -273,17 +272,25 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
         """
         repo_name = self._extract_repo_name(url)
 
-        # Create temporary directory for cloning
-        with tempfile.TemporaryDirectory(prefix="canvas-chat-git-") as temp_dir:
-            repo_path = Path(temp_dir) / repo_name
+        # Create temporary directory for cloning.
+        # Don't use context manager so we can return the path for reuse.
+        temp_dir = tempfile.mkdtemp(prefix="canvas-chat-git-")
+        repo_path = Path(temp_dir) / repo_name
 
+        try:
             # Clone repository
             self._clone_repository(url, repo_path, git_credentials=git_credentials)
 
             # Build file tree
             files = self._build_file_tree(repo_path)
 
-            return {"files": files}
+            return {"files": files, "temp_dir": temp_dir}
+        except Exception:
+            # Clean up on error
+            import shutil
+
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            raise
 
     async def fetch_selected_files(
         self,
@@ -865,6 +872,7 @@ def register_endpoints(app):
         url: str,
         file_paths: list[str],
         git_credentials: dict[str, str] | None = None,
+        temp_dir: str | None = None,
     ):
         """Generator that yields SSE events for git clone progress.
 
@@ -872,199 +880,212 @@ def register_endpoints(app):
             url: Git repository URL
             file_paths: List of file paths to fetch
             git_credentials: Optional git credentials by host
+            temp_dir: Optional temp directory path to reuse (from list-files endpoint)
 
         Yields:
             dict with SSE event data
         """
-        import tempfile
+        import shutil
         from pathlib import Path
+        from urllib.parse import urlparse
 
         handler = GitRepoHandler()
         repo_name = handler._extract_repo_name(url)
         normalized_url = handler._normalize_url(url)
 
-        # Create temporary directory for cloning
-        with tempfile.TemporaryDirectory(prefix="canvas-chat-git-") as temp_dir:
+        # If temp_dir provided, reuse it; otherwise create new one
+        should_cleanup = False
+        if temp_dir and Path(temp_dir).exists():
             repo_path = Path(temp_dir) / repo_name
+        else:
+            # Create temporary directory for cloning
+            temp_dir = tempfile.mkdtemp(prefix="canvas-chat-git-")
+            repo_path = Path(temp_dir) / repo_name
+            should_cleanup = True
 
-            # Build git clone command
-            cmd = ["git", "clone", "--depth", "1", "--quiet"]
+        # Build git clone command
+        cmd = ["git", "clone", "--depth", "1", "--quiet"]
 
-            # Add credentials if provided
-            clone_url = normalized_url
-            if git_credentials:
-                try:
-                    from urllib.parse import urlparse
-
-                    parsed = urlparse(normalized_url)
-                    host = parsed.netloc
-                    if host in git_credentials:
-                        cred = git_credentials[host]
-                        # Replace https:// with https://token@
-                        clone_url = normalized_url.replace(
-                            "https://", f"https://{cred}@", 1
-                        )
-                except Exception:
-                    pass
-
-            cmd.append(clone_url)
-            cmd.append(str(repo_path))
-
+        # Add credentials if provided
+        clone_url = normalized_url
+        if git_credentials:
             try:
-                # Start the git clone process
-                yield {
-                    "event": "status",
-                    "data": f"Cloning into '{repo_name}'...",
-                }
+                parsed = urlparse(normalized_url)
+                host = parsed.netloc
+                if host in git_credentials:
+                    cred = git_credentials[host]
+                    # Replace https:// with https://token@
+                    clone_url = normalized_url.replace(
+                        "https://", f"https://{cred}@", 1
+                    )
+            except Exception:
+                pass
 
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
+        cmd.append(clone_url)
+        cmd.append(str(repo_path))
+
+        try:
+            # Start the git clone process
+            yield {
+                "event": "status",
+                "data": f"Cloning into '{repo_name}'...",
+            }
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            # Read stdout line by line
+            while True:
+                line = await process.stdout.readline()
+                if not line and process.returncode is not None:
+                    break
+                if line:
+                    decoded = line.decode("utf-8", errors="ignore").strip()
+                    if decoded:
+                        yield {"event": "log", "data": decoded}
+
+            # Wait for process to complete
+            await process.wait()
+
+            if process.returncode != 0:
+                stderr = await process.stderr.read()
+                stderr_decoded = stderr.decode("utf-8", errors="ignore").strip()
+                yield {
+                    "event": "error",
+                    "data": stderr_decoded or "Git clone failed",
+                }
+                return
+
+            yield {"event": "status", "data": "Clone complete. Reading files..."}
+
+            # Now fetch the selected files
+            files_data = {}
+            files_by_dir = {}
+            root_files = []
+
+            for file_path_str in file_paths:
+                normalized_path = file_path_str.lstrip("/").replace("\\", "/")
+                path_parts = []
+                for part in normalized_path.split("/"):
+                    if part and (not path_parts or part != path_parts[-1]):
+                        path_parts.append(part)
+                normalized_path = (
+                    "/".join(path_parts) if path_parts else normalized_path
                 )
 
-                # Read stdout line by line
-                while True:
-                    line = await process.stdout.readline()
-                    if not line and process.returncode is not None:
-                        break
-                    if line:
-                        decoded = line.decode("utf-8", errors="ignore").strip()
-                        if decoded:
-                            yield {"event": "log", "data": decoded}
+                file_path = repo_path / normalized_path
+                file_ext = Path(normalized_path).suffix.lower()
+                is_image = file_ext in IMAGE_EXTENSIONS
 
-                # Wait for process to complete
-                await process.wait()
+                if is_image:
+                    file_bytes = file_path.read_bytes()
+                    import base64
 
-                if process.returncode != 0:
-                    stderr = await process.stderr.read()
-                    stderr_decoded = stderr.decode("utf-8", errors="ignore").strip()
-                    yield {
-                        "event": "error",
-                        "data": stderr_decoded or "Git clone failed",
+                    file_content = base64.b64encode(file_bytes).decode("utf-8")
+                    mime_map = {
+                        ".png": "image/png",
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".gif": "image/gif",
+                        ".webp": "image/webp",
+                        ".svg": "image/svg+xml",
+                        ".ico": "image/x-icon",
+                        ".bmp": "image/bmp",
                     }
-                    return
+                    mime_type = mime_map.get(file_ext, "application/octet-stream")
 
-                yield {"event": "status", "data": "Clone complete. Reading files..."}
+                    files_data[file_path_str] = {
+                        "content": file_content,
+                        "lang": file_ext.lstrip("."),
+                        "status": "success",
+                        "is_binary": True,
+                        "is_image": True,
+                        "mime_type": mime_type,
+                    }
+                    file_content_for_markdown = f"[Binary image: {file_path.name}]"
+                else:
+                    file_content = file_path.read_text(
+                        encoding="utf-8", errors="ignore"
+                    )
+                    files_data[file_path_str] = {
+                        "content": file_content,
+                        "lang": file_ext.lstrip(".") if file_ext else "",
+                        "status": "success",
+                        "is_binary": False,
+                        "is_image": False,
+                    }
+                    file_content_for_markdown = file_content
 
-                # Now fetch the selected files
-                files_data = {}
-                files_by_dir = {}
-                root_files = []
-
-                for file_path_str in file_paths:
-                    normalized_path = file_path_str.lstrip("/").replace("\\", "/")
-                    path_parts = []
-                    for part in normalized_path.split("/"):
-                        if part and (not path_parts or part != path_parts[-1]):
-                            path_parts.append(part)
-                    normalized_path = (
-                        "/".join(path_parts) if path_parts else normalized_path
+                lang = file_ext.lstrip(".") if file_ext else ""
+                dir_path = str(Path(normalized_path).parent)
+                if dir_path == "." or dir_path == "":
+                    root_files.append(
+                        (file_path_str, file_content_for_markdown, "success", lang)
+                    )
+                else:
+                    if dir_path not in files_by_dir:
+                        files_by_dir[dir_path] = []
+                    files_by_dir[dir_path].append(
+                        (file_path_str, file_content_for_markdown, "success", lang)
                     )
 
-                    file_path = repo_path / normalized_path
-                    file_ext = Path(normalized_path).suffix.lower()
-                    is_image = file_ext in IMAGE_EXTENSIONS
+            # Build markdown content
+            content_parts = []
+            content_parts.append(f"# {repo_name}\n\n")
+            content_parts.append(
+                f"**Repository:** [{normalized_url}]({normalized_url})\n\n"
+            )
 
-                    if is_image:
-                        file_bytes = file_path.read_bytes()
-                        import base64
+            # Add root files
+            if root_files:
+                content_parts.append("## Root Files\n\n")
+                for path, file_content, status, _lang in sorted(root_files):
+                    if status == "success":
+                        content_parts.append(f"### {path}\n\n")
+                        content_parts.append(file_content)
+                        content_parts.append("\n\n")
 
-                        file_content = base64.b64encode(file_bytes).decode("utf-8")
-                        mime_map = {
-                            ".png": "image/png",
-                            ".jpg": "image/jpeg",
-                            ".jpeg": "image/jpeg",
-                            ".gif": "image/gif",
-                            ".webp": "image/webp",
-                            ".svg": "image/svg+xml",
-                            ".ico": "image/x-icon",
-                            ".bmp": "image/bmp",
-                        }
-                        mime_type = mime_map.get(file_ext, "application/octet-stream")
+            # Add files by directory
+            for dir_path in sorted(files_by_dir.keys()):
+                content_parts.append(f"## {dir_path}\n\n")
+                for path, file_content, status, _lang in sorted(
+                    files_by_dir[dir_path], key=lambda x: x[0]
+                ):
+                    if status == "success":
+                        file_name = path.split("/")[-1]
+                        content_parts.append(f"### {file_name}\n\n")
+                        content_parts.append(file_content)
+                        content_parts.append("\n\n")
 
-                        files_data[file_path_str] = {
-                            "content": file_content,
-                            "lang": file_ext.lstrip("."),
-                            "status": "success",
-                            "is_binary": True,
-                            "is_image": True,
-                            "mime_type": mime_type,
-                        }
-                        file_content_for_markdown = f"[Binary image: {file_path.name}]"
-                    else:
-                        file_content = file_path.read_text(
-                            encoding="utf-8", errors="ignore"
-                        )
-                        files_data[file_path_str] = {
-                            "content": file_content,
-                            "lang": file_ext.lstrip(".") if file_ext else "",
-                            "status": "success",
-                            "is_binary": False,
-                            "is_image": False,
-                        }
-                        file_content_for_markdown = file_content
+            content = "".join(content_parts)
 
-                    lang = file_ext.lstrip(".") if file_ext else ""
-                    dir_path = str(Path(normalized_path).parent)
-                    if dir_path == "." or dir_path == "":
-                        root_files.append(
-                            (file_path_str, file_content_for_markdown, "success", lang)
-                        )
-                    else:
-                        if dir_path not in files_by_dir:
-                            files_by_dir[dir_path] = []
-                        files_by_dir[dir_path].append(
-                            (file_path_str, file_content_for_markdown, "success", lang)
-                        )
+            # Prepare metadata for the result
+            metadata = {
+                "files": files_data,
+                "git_repo_data": {
+                    "url": normalized_url,
+                    "repo_name": repo_name,
+                    "selected_files": file_paths,
+                },
+            }
 
-                # Build markdown content
-                content_parts = []
-                content_parts.append(f"# {repo_name}\n\n")
-                content_parts.append(
-                    f"**Repository:** [{normalized_url}]({normalized_url})\n\n"
-                )
+            yield {
+                "event": "complete",
+                "data": json.dumps({"content": content, "metadata": metadata}),
+            }
 
-                # Add root files
-                if root_files:
-                    content_parts.append("## Root Files\n\n")
-                    for path, file_content, status, _lang in sorted(root_files):
-                        if status == "success":
-                            content_parts.append(f"### {path}\n\n")
-                            content_parts.append(file_content)
-                            content_parts.append("\n\n")
-
-                # Add files by directory
-                for dir_path in sorted(files_by_dir.keys()):
-                    content_parts.append(f"## {dir_path}\n\n")
-                    for path, file_content, status, _lang in sorted(
-                        files_by_dir[dir_path], key=lambda x: x[0]
-                    ):
-                        if status == "success":
-                            file_name = path.split("/")[-1]
-                            content_parts.append(f"### {file_name}\n\n")
-                            content_parts.append(file_content)
-                            content_parts.append("\n\n")
-
-                content = "".join(content_parts)
-
-                # Prepare metadata for the result
-                metadata = {
-                    "files": files_data,
-                    "git_repo_data": {
-                        "url": normalized_url,
-                        "repo_name": repo_name,
-                        "selected_files": file_paths,
-                    },
-                }
-
-                yield {
-                    "event": "complete",
-                    "data": {"content": content, "metadata": metadata},
-                }
-
-            except Exception as e:
-                yield {"event": "error", "data": str(e)}
+        except Exception as e:
+            yield {"event": "error", "data": str(e)}
+        finally:
+            # Clean up temp directory if we created it
+            if should_cleanup and temp_dir:
+                try:
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                except Exception:
+                    pass
 
     @app.post("/api/url-fetch/fetch-files-stream")
     async def stream_fetch_url_fetch_files(
@@ -1082,7 +1103,13 @@ def register_endpoints(app):
         url = body.get("url")
         file_paths = body.get("file_paths", [])
         git_credentials = body.get("git_credentials")
+        temp_dir = body.get("temp_dir")  # Reuse cloned repo if provided
 
-        logger.info(f"Stream fetch URL request: url='{url}', files={len(file_paths)}")
+        logger.info(
+            f"Stream fetch URL request: url='{url}', files={len(file_paths)}, "
+            f"temp_dir={temp_dir}"
+        )
 
-        return EventSourceResponse(stream_git_clone(url, file_paths, git_credentials))
+        return EventSourceResponse(
+            stream_git_clone(url, file_paths, git_credentials, temp_dir)
+        )

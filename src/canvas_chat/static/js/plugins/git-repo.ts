@@ -289,6 +289,12 @@ export class GitRepoFeature extends FeaturePlugin {
 
             const data = await response.json();
 
+            // Store temp_dir for reuse in stream endpoint (avoids double clone)
+            const tempDir = data.temp_dir;
+            if (tempDir) {
+                modal.dataset.tempDir = tempDir;
+            }
+
             // Get smart defaults
             const defaultFiles = this.getSmartDefaultFiles(data.files);
 
@@ -903,6 +909,9 @@ export class GitRepoFeature extends FeaturePlugin {
         this.canvas.selectGitRepoFile(nodeId, firstSelectedFile);
 
         try {
+            // Get temp_dir from modal (set during list-files) to avoid double clone
+            const tempDir = modal.dataset.tempDir || null;
+
             // Use fetch with ReadableStream for POST-based streaming
             const response = await fetch(apiUrl('/api/url-fetch/fetch-files-stream'), {
                 method: 'POST',
@@ -911,6 +920,7 @@ export class GitRepoFeature extends FeaturePlugin {
                     url,
                     file_paths: selectedPaths,
                     git_credentials: gitCreds,
+                    temp_dir: tempDir,
                 }),
             });
 
@@ -1020,31 +1030,15 @@ export class GitRepoFeature extends FeaturePlugin {
      * @param gitCreds
      */
     async processFetchComplete(nodeId, url, selectedPaths, isEdit, data, gitCreds) {
-        // Get the file tree structure
-        let fileTree = null;
-        try {
-            const treeResponse = await fetch(apiUrl('/api/url-fetch/list-files'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, git_credentials: gitCreds }),
-            });
-            if (treeResponse.ok) {
-                const treeData = await treeResponse.json();
-                fileTree = treeData.files;
-            }
-        } catch (err) {
-            console.warn('[GitRepoFeature] Failed to fetch file tree:', err);
-        }
-
         // Store git repo data in node
         const metadata = data.metadata || {};
         const files = metadata.files || {};
 
         const fetchedFilePaths = Object.keys(files);
         const gitRepoData = {
-            url: data.metadata?.git_repo_data?.url || url,
-            title: data.title || 'Git Repository',
-            fileTree: fileTree || [],
+            url: metadata.git_repo_data?.url || url,
+            title: metadata.git_repo_data?.repo_name || 'Git Repository',
+            fileTree: [],
             selectedFiles: selectedPaths,
             fetchedFilePaths,
             files: files,
@@ -1053,7 +1047,7 @@ export class GitRepoFeature extends FeaturePlugin {
         };
 
         const updateData = {
-            content: data.content || `**[${data.title || 'Git Repository'}](${url})**`,
+            content: data.content || `**[${metadata.git_repo_data?.repo_name || 'Git Repository'}](${url})**`,
             gitRepoData,
         };
 
@@ -1061,7 +1055,7 @@ export class GitRepoFeature extends FeaturePlugin {
             const node = this.graph.getNode(nodeId);
             updateData.versions = [
                 {
-                    content: node?.content || `**[${data.title || 'Git Repository'}](${url})**`,
+                    content: node?.content || `**[${metadata.git_repo_data?.repo_name || 'Git Repository'}](${url})**`,
                     timestamp: node?.createdAt || Date.now(),
                     reason: 'initial',
                 },
