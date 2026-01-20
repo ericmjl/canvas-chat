@@ -14,8 +14,8 @@ import { NodeRegistry } from '../node-registry.js';
 
 /**
  * @typedef {Object} Canvas
- * @property {HTMLElement} [drawerPanel] - Drawer panel element (may be undefined)
- * @property {Function} renderDrawerPanel - Method to render drawer panel
+ * @property {Map} outputPanels - Map of output panels
+ * @property {Function} updateOutputPanelContent - Method to update panel content
  * @property {Function} selectGitRepoFile - Method to select a file in git repo node
  * @property {Function} renderNode - Method to render a node
  * @property {Function} showToast - Method to show toast notification
@@ -897,10 +897,6 @@ export class GitRepoFeature extends FeaturePlugin {
         }
 
         this.graph.updateNode(nodeId, updateData);
-        const updatedNode = this.graph.getNode(nodeId);
-        if (updatedNode) {
-            this.canvas.renderNode(updatedNode);
-        }
 
         // Open the drawer for this node with first selected file
         const firstSelectedFile = selectedPaths.length > 0 ? selectedPaths[0] : null;
@@ -1070,7 +1066,6 @@ export class GitRepoFeature extends FeaturePlugin {
         }
 
         this.graph.updateNode(nodeId, updateData);
-        this.canvas.renderNode(nodeId);
         this.saveSession?.();
 
         // Select first file if available
@@ -1419,9 +1414,9 @@ export class GitRepoFeature extends FeaturePlugin {
                 this.node.gitRepoData.fetchProgress = progressLog;
                 // Re-render the drawer panel if it's open
                 // Use gitRepoFeatureInstance.canvas since this.canvas doesn't exist on BaseNode
-                const drawerPanel = /** @type {HTMLElement} */ gitRepoFeatureInstance.canvas.drawerPanel;
-                if (drawerPanel && drawerPanel.dataset.nodeId === this.node.id) {
-                    gitRepoFeatureInstance.canvas.renderDrawerPanel();
+                const panelWrapper = gitRepoFeatureInstance.canvas.outputPanels.get(this.node.id);
+                if (panelWrapper) {
+                    gitRepoFeatureInstance.canvas.updateOutputPanelContent(this.node.id, this.node);
                 }
             }
         };

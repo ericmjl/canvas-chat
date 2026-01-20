@@ -1044,6 +1044,9 @@ class CRDTGraph extends EventEmitter {
             }
         }, 'local'); // Mark as local change
 
+        // Emit nodeUpdated for canvas to re-render
+        this.emit('nodeUpdated', this.getNode(id));
+
         return this.getNode(id);
     }
 
