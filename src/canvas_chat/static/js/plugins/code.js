@@ -1232,7 +1232,9 @@ Output ONLY the corrected Python code, no explanations.`;
         const wrapped = wrapNode(node);
         if (!wrapped.hasOutput || !wrapped.hasOutput()) return;
 
-        this.graph.updateNode(nodeId, { outputPanelHeight: height });
+        // Update node height directly without triggering re-render
+        // The visual height is already updated by the resize handle's setAttribute
+        node.outputPanelHeight = height;
         this.saveSession();
     }
 }
