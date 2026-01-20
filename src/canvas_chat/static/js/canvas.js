@@ -3001,6 +3001,12 @@ class Canvas {
             return;
         }
 
+        // If no filePath specified, nothing to select
+        if (!filePath) {
+            console.warn('[Canvas] selectGitRepoFile: no filePath specified');
+            return;
+        }
+
         const currentNode = graph.getNode(nodeId);
         if (!currentNode) {
             console.warn('[Canvas] selectGitRepoFile: node not found', { nodeId, filePath });

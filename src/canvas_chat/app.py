@@ -20,6 +20,7 @@ import base64
 import importlib.util
 import json
 import logging
+import mimetypes
 import os
 import sys
 import time
@@ -49,9 +50,26 @@ from canvas_chat import __version__
 from canvas_chat.config import AppConfig, is_github_copilot_enabled
 from canvas_chat.file_upload_registry import FileUploadRegistry
 
+# Ensure .ts files are served as JavaScript
+mimetypes.add_type("application/javascript", ".ts")
+
+
+class TypeScriptStaticFiles(StaticFiles):
+    """Custom StaticFiles that serves .ts files with correct MIME type."""
+
+    async def get_response(self, path, scope):
+        # Let parent handle lookup, but ensure correct content-type for .ts
+        response = await super().get_response(path, scope)
+        if path.endswith(".ts") and response.headers.get("content-type", "").startswith(
+            "video/"
+        ):
+            response.headers["content-type"] = "application/javascript"
+        return response
+
+
 # Import built-in file upload handler plugins (registers them)
 # Import built-in URL fetch handler plugins (registers them)
-from canvas_chat.plugins import (
+from canvas_chat.plugins import (  # noqa: E402
     code_handler,  # noqa: F401
     git_repo_handler,  # noqa: F401
     matrix_handler,  # noqa: F401
@@ -59,8 +77,8 @@ from canvas_chat.plugins import (
     pdf_url_handler,  # noqa: F401
     youtube_handler,  # noqa: F401
 )
-from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE
-from canvas_chat.url_fetch_registry import UrlFetchRegistry
+from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE  # noqa: E402
+from canvas_chat.url_fetch_registry import UrlFetchRegistry  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -163,7 +181,7 @@ def load_python_plugins(config: AppConfig) -> None:
 
 # Mount static files
 STATIC_DIR = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/static", TypeScriptStaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/health")

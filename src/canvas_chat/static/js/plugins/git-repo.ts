@@ -13,6 +13,39 @@ import { BaseNode, Actions, wrapNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
 /**
+ * @typedef {Object} Canvas
+ * @property {HTMLElement} [drawerPanel] - Drawer panel element (may be undefined)
+ * @property {Function} renderDrawerPanel - Method to render drawer panel
+ * @property {Function} selectGitRepoFile - Method to select a file in git repo node
+ * @property {Function} renderNode - Method to render a node
+ * @property {Function} showToast - Method to show toast notification
+ * @property {Function} updateNodeContent - Method to update node content
+ * @property {Function} showStopButton - Method to show stop button
+ * @property {Function} hideStopButton - Method to hide stop button
+ * @property {Function} showContinueButton - Method to show continue button
+ * @property {Function} hideContinueButton - Method to hide continue button
+ * @property {Map} nodeElements - Map of node elements
+ * @property {boolean} [outputExpanded] - Whether output is expanded
+ */
+
+/**
+ * @typedef {Object} GitRepoData
+ * @property {string} url - Repository URL
+ * @property {Object} files - Map of file paths to file data
+ * @property {boolean} [isFetching] - Whether fetch is in progress
+ * @property {Array} [fetchProgress] - Array of progress entries
+ * @property {string} [selectedFilePath] - Currently selected file path
+ */
+
+/**
+ * @typedef {Object} FileData
+ * @property {string} content - File content
+ * @property {string} status - File status ('success', 'error')
+ * @property {string} [fileType] - File type (image, text, etc.)
+ * @property {string} [mimeType] - MIME type for images
+ */
+
+/**
  * GitRepoFeature class manages git repository URL fetching.
  * Extends FeaturePlugin to integrate with the plugin architecture.
  */
@@ -1382,8 +1415,10 @@ export class GitRepoFeature extends FeaturePlugin {
                 if (!this.node.gitRepoData) return;
                 this.node.gitRepoData.fetchProgress = progressLog;
                 // Re-render the drawer panel if it's open
-                if (this.canvas.drawerPanel && this.canvas.drawerPanel.dataset.nodeId === this.node.id) {
-                    this.canvas.renderDrawerPanel();
+                // Use gitRepoFeatureInstance.canvas since this.canvas doesn't exist on BaseNode
+                const drawerPanel = /** @type {HTMLElement} */ gitRepoFeatureInstance.canvas.drawerPanel;
+                if (drawerPanel && drawerPanel.dataset.nodeId === this.node.id) {
+                    gitRepoFeatureInstance.canvas.renderDrawerPanel();
                 }
             }
         };
