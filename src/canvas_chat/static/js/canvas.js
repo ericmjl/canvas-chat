@@ -1965,20 +1965,11 @@ class Canvas {
         this.setupNodeEvents(wrapper, node);
         // Render output panel for nodes that support it (if they have output)
         // Check if protocol has hasOutput method and it returns true
-        console.log('[Canvas] renderNode: checking hasOutput for', node.id, node.type);
         if (wrapped.hasOutput && typeof wrapped.hasOutput === 'function') {
             const hasOutput = wrapped.hasOutput();
-            console.log('[Canvas] renderNode: hasOutput result:', hasOutput, {
-                isFetching: node.gitRepoData?.isFetching,
-                hasFiles: !!node.gitRepoData?.files,
-                selectedFilePath: node.selectedFilePath,
-                gitRepoDataKeys: node.gitRepoData ? Object.keys(node.gitRepoData) : 'undefined',
-            });
             if (hasOutput) {
                 this.renderOutputPanel(node, wrapper);
             }
-        } else {
-            console.log('[Canvas] renderNode: no hasOutput method for', node.type);
         }
 
         // Restore selection state if node was previously selected
@@ -3017,8 +3008,6 @@ class Canvas {
 
         // If no filePath specified, just open the drawer for progress display (no file selected)
         if (!filePath) {
-            console.log('[Canvas] selectGitRepoFile: opening drawer for progress (no file selected)');
-            console.log('[Canvas] selectGitRepoFile: currentNode.gitRepoData:', currentNode.gitRepoData);
             graph.updateNode(nodeId, {
                 outputExpanded: true,
                 outputPanelHeight: currentNode.outputPanelHeight || 300,
@@ -3037,12 +3026,12 @@ class Canvas {
             return;
         }
 
-        if (!currentNode.gitRepoData.files) {
-            console.warn('[Canvas] selectGitRepoFile: gitRepoData has no files', {
-                nodeId,
-                filePath,
-                gitRepoDataKeys: Object.keys(currentNode.gitRepoData),
-                gitRepoDataFilesType: typeof currentNode.gitRepoData.files,
+        // If no files yet but we're fetching, open drawer for progress display
+        if (!currentNode.gitRepoData.files || Object.keys(currentNode.gitRepoData.files).length === 0) {
+            // Still open the drawer for progress if fetching, or if filePath is provided (will show empty state)
+            graph.updateNode(nodeId, {
+                outputExpanded: true,
+                outputPanelHeight: currentNode.outputPanelHeight || 300,
             });
             return;
         }
