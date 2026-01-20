@@ -926,11 +926,23 @@ export class GitRepoFeature extends FeaturePlugin {
             // Update progress in drawer
             const updateDrawerProgress = () => {
                 const node = this.graph.getNode(nodeId);
-                if (!node) return;
-                const wrapped = wrapNode(node);
-                if (wrapped && wrapped.updateFetchProgress) {
-                    wrapped.updateFetchProgress(progressLog);
+                if (!node) {
+                    console.log('[GitRepoFeature] updateDrawerProgress: node not found');
+                    return;
                 }
+                const wrapped = wrapNode(node);
+                if (!wrapped) {
+                    console.log('[GitRepoFeature] updateDrawerProgress: wrapped is null');
+                    return;
+                }
+                if (!wrapped.updateFetchProgress) {
+                    console.log('[GitRepoFeature] updateDrawerProgress: no updateFetchProgress method', {
+                        type: node.type,
+                    });
+                    return;
+                }
+                console.log('[GitRepoFeature] updateDrawerProgress: calling updateFetchProgress');
+                wrapped.updateFetchProgress(progressLog);
             };
 
             // Stream processing loop
@@ -1410,11 +1422,20 @@ export class GitRepoFeature extends FeaturePlugin {
              * @param {Array} progressLog - Array of progress entries
              */
             updateFetchProgress(progressLog) {
-                if (!this.node.gitRepoData) return;
+                if (!this.node.gitRepoData) {
+                    console.log('[GitRepoProtocol] updateFetchProgress: no gitRepoData');
+                    return;
+                }
                 this.node.gitRepoData.fetchProgress = progressLog;
                 // Re-render the drawer panel if it's open
                 // Use gitRepoFeatureInstance.canvas since this.canvas doesn't exist on BaseNode
                 const panelWrapper = gitRepoFeatureInstance.canvas.outputPanels.get(this.node.id);
+                console.log('[GitRepoProtocol] updateFetchProgress:', {
+                    nodeId: this.node.id,
+                    hasPanel: !!panelWrapper,
+                    progressCount: progressLog.length,
+                    lastProgress: progressLog[progressLog.length - 1],
+                });
                 if (panelWrapper) {
                     gitRepoFeatureInstance.canvas.updateOutputPanelContent(this.node.id, this.node);
                 }
