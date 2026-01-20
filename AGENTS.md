@@ -30,6 +30,7 @@ This includes:
 - 2026-01-16: Use `pixi run python` instead of `python` for project commands.
 - 2026-01-17: Always run tests after adding tests.
 - 2026-01-17: Always run tests after making changes.
+- 2026-01-20: NEVER deploy directly to Modal environments (`modal deploy`). Let CI handle Modal deployments via GitHub Actions. Direct deploys bypass testing and can break production.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
