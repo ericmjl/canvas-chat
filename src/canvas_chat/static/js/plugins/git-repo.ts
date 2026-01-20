@@ -864,6 +864,9 @@ export class GitRepoFeature extends FeaturePlugin {
             _fetchBtn.classList.add('loading');
         }
 
+        // Get temp_dir BEFORE closing modal (modal element will be removed from DOM)
+        const tempDir = modal.dataset.tempDir || null;
+
         // Close modal immediately - no need to keep it open during fetch
         this.modalManager.hidePluginModal('git-repo', 'file-selection');
 
@@ -897,9 +900,6 @@ export class GitRepoFeature extends FeaturePlugin {
         this.graph.updateNode(nodeId, updateData);
 
         try {
-            // Get temp_dir from modal (set during list-files) to avoid double clone
-            const tempDir = modal.dataset.tempDir || null;
-
             // Use fetch with ReadableStream for POST-based streaming
             const response = await fetch(apiUrl('/api/url-fetch/fetch-files-stream'), {
                 method: 'POST',
