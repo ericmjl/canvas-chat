@@ -211,7 +211,11 @@ class App {
             })
             .on('edgeRemoved', (edgeId) => {
                 this.canvas.removeEdge(edgeId);
-            });
+            })
+            .on('nodeUpdated', (node) => {
+                this.canvas.renderNode(node);
+            })
+            .on('tagCreated', this.handleTagCreated.bind(this));
 
         // Setup UI event listeners
         this.setupEventListeners();
@@ -658,8 +662,8 @@ class App {
             .on('csvDrop', (file, position) => this.fileUploadHandler.handleCsvDrop(file, position))
             // Image and tag click events
             .on('imageClick', this.handleImageClick.bind(this))
-            .on('tagChipClick', this.handleTagChipClick.bind(this))
-            .on('tagRemove', this.handleTagRemove.bind(this));
+            .on('tagChipClick', this.handleTagChipClick.bind(this));
+        this.canvas.onTagRemove = this.handleTagRemove.bind(this);
         // Navigation events for parent/child traversal
         this.canvas.on('navParentClick', this.handleNavParentClick.bind(this));
         this.canvas.on('navChildClick', this.handleNavChildClick.bind(this));
@@ -4897,7 +4901,6 @@ print("Hello from Pyodide!")
                     this.graph.updateTag(color, name);
                 }
                 this.saveSession();
-                this.canvas.renderGraph(this.graph); // Re-render to show updated tags
             }
             this.renderTagSlots();
         };
@@ -4925,7 +4928,35 @@ print("Hello from Pyodide!")
         // No confirmation - tags can be recreated easily
         this.graph.deleteTag(color);
         this.saveSession();
-        this.canvas.renderGraph(this.graph);
+        this.renderTagSlots();
+    }
+
+    /**
+     * Handle tag creation events - auto-apply tag to selected nodes.
+     * @param {{ color: string, name: string }} event - Tag created event
+     */
+    handleTagCreated(event) {
+        const { color } = event;
+        const selectedIds = this.canvas.getSelectedNodeIds();
+
+        if (selectedIds.length > 0) {
+            this.addTagToSelectedNodes(color, selectedIds);
+        }
+    }
+
+    /**
+     * Apply a tag to selected nodes that don't already have it.
+     * @param {string} color - Tag color
+     * @param {string[]} nodeIds - Node IDs to tag
+     */
+    addTagToSelectedNodes(color, nodeIds) {
+        const nodesWithoutTag = nodeIds.filter((id) => !this.graph.nodeHasTag(id, color));
+        if (nodesWithoutTag.length === 0) return;
+
+        for (const nodeId of nodesWithoutTag) {
+            this.graph.addTagToNode(nodeId, color);
+        }
+        this.saveSession();
         this.renderTagSlots();
     }
 

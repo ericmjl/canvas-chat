@@ -1479,6 +1479,7 @@ class CRDTGraph extends EventEmitter {
             yTag.set('color', color);
             this.yTags.set(color, yTag);
         }, 'local'); // Mark as local change
+        this.emit('tagCreated', { color, name });
     }
 
     /**
@@ -1490,6 +1491,7 @@ class CRDTGraph extends EventEmitter {
         const yTag = this.yTags.get(color);
         if (yTag && isYMap(yTag)) {
             yTag.set('name', name);
+            this.emit('tagUpdated', { color, name });
         }
     }
 
@@ -1498,21 +1500,30 @@ class CRDTGraph extends EventEmitter {
      * @param color
      */
     deleteTag(color) {
+        const affectedNodeIds = [];
+
         this.ydoc.transact(() => {
             this.yTags.delete(color);
 
-            // Remove from all nodes
-            this.yNodes.forEach((yNode) => {
+            // Remove from all nodes and collect affected node IDs
+            this.yNodes.forEach((yNode, nodeId) => {
                 const yTags = yNode.get('tags');
                 if (isYArray(yTags)) {
                     const tags = yTags.toArray();
                     const index = tags.indexOf(color);
                     if (index !== -1) {
                         yTags.delete(index);
+                        affectedNodeIds.push(nodeId);
                     }
                 }
             });
         }, 'local'); // Mark as local change
+
+        // Emit nodeUpdated for each affected node so canvas re-renders
+        for (const nodeId of affectedNodeIds) {
+            this.emit('nodeUpdated', this.getNode(nodeId));
+        }
+        this.emit('tagDeleted', { color });
     }
 
     /**
@@ -1575,6 +1586,7 @@ class CRDTGraph extends EventEmitter {
                 yTags.push([color]);
             }
         }, 'local'); // Mark as local change
+        this.emit('nodeUpdated', this.getNode(nodeId));
     }
 
     /**
@@ -1594,6 +1606,7 @@ class CRDTGraph extends EventEmitter {
                 yTags.delete(index);
             }
         }
+        this.emit('nodeUpdated', this.getNode(nodeId));
     }
 
     /**

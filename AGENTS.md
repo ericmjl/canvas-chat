@@ -31,6 +31,7 @@ This includes:
 - 2026-01-17: Always run tests after adding tests.
 - 2026-01-17: Always run tests after making changes.
 - 2026-01-20: NEVER deploy directly to Modal environments (`modal deploy`). Let CI handle Modal deployments via GitHub Actions. Direct deploys bypass testing and can break production.
+- 2026-01-20: Fix tag removal bug - canvas uses callback properties (`canvas.onTagRemove = handler`), not event emitter. Changed app.js to set `this.canvas.onTagRemove` instead of `.on('tagRemove', ...)`. Prefer event emitter pattern for new code.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -829,6 +830,40 @@ To add a new node action:
 5. Implement `handleNodeXxx(nodeId)` method in App class
 
 **Note:** For plugin-scoped event handlers (recommended for new plugins), use `getCanvasEventHandlers()` in your FeaturePlugin instead of modifying `app.js`. See [Plugin-scoped event handlers](#plugin-scoped-event-handlers) below.
+
+### Event Emitter Pattern vs Callback Properties
+
+**Prefer event emitter pattern (`emitter.on()` / `emitter.emit()`) over callback properties.**
+
+**Why:**
+
+- Multiple handlers can subscribe to the same event
+- Easier to test and mock
+- Cleaner separation of concerns
+- Follows the project's established architecture
+
+**The old pattern (avoid):**
+
+```javascript
+// In canvas.js - callback property (NOT recommended)
+this.onTagRemove = null; // Single callback
+if (this.onTagRemove) this.onTagRemove(nodeId, color);
+
+// In app.js - setting callback property
+this.canvas.onTagRemove = this.handleTagRemove.bind(this);
+```
+
+**The preferred pattern (use):**
+
+```javascript
+// In canvas.js - event emitter (RECOMMENDED)
+this.emit('tagRemove', nodeId, color);
+
+// In app.js - subscribing to event
+this.canvas.on('tagRemove', this.handleTagRemove.bind(this));
+```
+
+**Exception:** When adding new node actions to the Canvas class (e.g., `onNodeXxx`), prefer the event emitter pattern by using `this.emit()` in canvas.js and `this.canvas.on()` in app.js. If you must use callback properties for legacy compatibility, document the pattern mismatch.
 
 ### Plugin-scoped event handlers
 
