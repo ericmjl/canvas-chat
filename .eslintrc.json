@@ -1,4 +1,5 @@
 {
+    "plugins": ["jsdoc"],
     "env": {
         "browser": true,
         "es2022": true
@@ -24,6 +25,19 @@
         "no-empty": "warn",
         "no-unreachable": "error",
         "eqeqeq": ["warn", "smart"],
-        "no-var": "warn"
+        "no-var": "warn",
+        "jsdoc/require-jsdoc": [
+            "warn",
+            {
+                "require": {
+                    "FunctionDeclaration": true,
+                    "MethodDefinition": true,
+                    "ClassDeclaration": true
+                }
+            }
+        ],
+        "jsdoc/check-param-names": "error",
+        "jsdoc/require-param": "warn",
+        "jsdoc/require-returns": "warn"
     }
 }

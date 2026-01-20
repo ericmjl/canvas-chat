@@ -159,6 +159,8 @@ test('App event listener methods exist', () => {
         'handleNodeDelete',
         // Note: handleNodeStopGeneration and handleNodeContinueGeneration migrated
         // These methods are now handled by StreamingManager via canvas events
+        // Note: handleNodeAnalyze migrated to CSV node protocol
+        // CSV nodes now handle "Analyze" button via CsvNode.analyze()
         'handleNodeCollapse',
         'handleCreateFlashcards',
         'handleFlipCard',
@@ -170,9 +172,8 @@ test('App event listener methods exist', () => {
         'undo',
         'redo',
         'handleSearch',
-        // Self-healing code generation methods
-        'selfHealCode',
-        'fixCodeError',
+        // Note: selfHealCode and fixCodeError migrated to CodeFeature
+        // These methods are now accessed via this.featureRegistry.getFeature('code')
     ];
 
     for (const methodName of requiredMethods) {
@@ -195,6 +196,56 @@ test('App event listener methods exist', () => {
         const [targetName, targetMethod] = target.split('.');
         if (typeof app[targetName]?.[targetMethod] !== 'function') {
             throw new Error(`Delegated method ${methodName} -> ${target} is not a function`);
+        }
+    }
+});
+
+// Test: Setup canvas event listeners doesn't reference undefined methods
+test('setupCanvasEventListeners .bind(this) references exist', async () => {
+    // Read the app.js source code using dynamic import
+    const fs = await import('fs');
+    const appSource = fs.readFileSync('src/canvas_chat/static/js/app.js', 'utf-8');
+
+    // Find the setupCanvasEventListeners method
+    const methodMatch = appSource.match(/setupCanvasEventListeners\(\)[^{]*\{([^]*?)\n    \/\*\*[^]*?\n    \/\/ \*\//);
+    if (!methodMatch) {
+        throw new Error('Could not find setupCanvasEventListeners method');
+    }
+
+    const methodBody = methodMatch[1];
+
+    // Find all .bind(this) calls
+    const bindMatches = methodBody.match(/this\.(\w+)\.bind\(this\)/g);
+
+    if (bindMatches) {
+        for (const match of bindMatches) {
+            const methodName = match.match(/this\.(\w+)\.bind/)[1];
+            if (typeof app[methodName] !== 'function') {
+                throw new Error(`setupCanvasEventListeners references undefined method: ${methodName}`);
+            }
+        }
+    }
+});
+
+// Test: Verify registerFeatureCanvasHandlers was removed (prevent duplicate handler registration)
+test('registerFeatureCanvasHandlers method removed (fixes duplicate handlers)', async () => {
+    // Read the app.js source code
+    const fs = await import('fs');
+    const appSource = fs.readFileSync('src/canvas_chat/static/js/app.js', 'utf-8');
+
+    // Verify the method doesn't exist
+    if (appSource.includes('registerFeatureCanvasHandlers')) {
+        throw new Error(
+            'registerFeatureCanvasHandlers should be removed to prevent duplicate canvas event handler registration'
+        );
+    }
+
+    // Also verify initializePluginSystem doesn't call it
+    const initMatch = appSource.match(/async initializePluginSystem\(\)[^{]*\{([^]*?)\n    \}/);
+    if (initMatch) {
+        const initBody = initMatch[1];
+        if (initBody.includes('registerFeatureCanvasHandlers')) {
+            throw new Error('initializePluginSystem should not call registerFeatureCanvasHandlers');
         }
     }
 });

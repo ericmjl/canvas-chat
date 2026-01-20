@@ -85,6 +85,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/search.js`      | Node search functionality                                              | Search UI, filtering logic                                                                               |
 | `src/canvas_chat/static/js/sse.js`         | Server-sent events utilities                                           | Streaming connection handling                                                                            |
 | `src/canvas_chat/static/js/utils.js`       | Pure utility functions                                                 | Image resizing, error formatting, text processing                                                        |
+| `src/canvas_chat/static/js/model-utils.js` | Model utility functions                                                | Model-related utilities                                                                                  |
 
 #### Plugin architecture modules
 
@@ -152,16 +153,16 @@ canvas-chat/
 
 ### Backend (Python/FastAPI)
 
-| File                                            | Purpose                            | Edit for...                             |
-| ----------------------------------------------- | ---------------------------------- | --------------------------------------- |
-| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints, backend logic            |
-| `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode  |
-| `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server      |
-| `src/canvas_chat/__init__.py`                   | Package initialization             | Package metadata, version               |
-| `src/canvas_chat/file_upload_registry.py`       | File upload handler registration   | Registering Python file upload handlers |
-| `src/canvas_chat/file_upload_handler_plugin.py` | FileUploadHandlerPlugin base class | File upload handler plugin base class   |
-| `src/canvas_chat/plugins/`                      | Python plugin modules              | Backend plugins (e.g., pdf_handler.py)  |
-| `modal_app.py`                                  | Modal deployment config            | Deployment settings                     |
+| File                                            | Purpose                            | Edit for...                                          |
+| ----------------------------------------------- | ---------------------------------- | ---------------------------------------------------- |
+| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints, backend logic                         |
+| `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode               |
+| `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server                   |
+| `src/canvas_chat/__init__.py`                   | Package initialization             | Package metadata, version                            |
+| `src/canvas_chat/file_upload_registry.py`       | File upload handler registration   | Registering Python file upload handlers              |
+| `src/canvas_chat/file_upload_handler_plugin.py` | FileUploadHandlerPlugin base class | File upload handler plugin base class                |
+| `src/canvas_chat/plugins/`                      | Python plugin modules              | Backend plugins (matrix_handler, code_handler, etc.) |
+| `modal_app.py`                                  | Modal deployment config            | Deployment settings                                  |
 
 ### Key constants and their locations
 
@@ -248,13 +249,16 @@ Quick reference guide for finding the right documentation based on what you need
 
 #### Code Reference
 
-| Task/Question                                    | Where to Look                                                     | Description                          |
-| ------------------------------------------------ | ----------------------------------------------------------------- | ------------------------------------ |
-| **What methods are available on FeaturePlugin?** | [feature-plugin-api.md](docs/reference/feature-plugin-api.md)     | Complete FeaturePlugin API reference |
-| **What APIs can I access via AppContext?**       | [app-context-api.md](docs/reference/app-context-api.md)           | Graph, Canvas, Chat, Storage APIs    |
-| **How do I register a plugin?**                  | [feature-registry-api.md](docs/reference/feature-registry-api.md) | FeatureRegistry registration methods |
-| **What events can I subscribe to?**              | [extension-hooks.md](docs/reference/extension-hooks.md)           | Available events and hooks           |
-| **What keyboard shortcuts exist?**               | [keyboard-shortcuts.md](docs/reference/keyboard-shortcuts.md)     | Complete keyboard shortcut reference |
+| Task/Question                                    | Where to Look                                                       | Description                          |
+| ------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------ |
+| **What methods are available on FeaturePlugin?** | [feature-plugin-api.md](docs/reference/feature-plugin-api.md)       | Complete FeaturePlugin API reference |
+| **What APIs can I access via AppContext?**       | [app-context-api.md](docs/reference/app-context-api.md)             | Graph, Canvas, Chat, Storage APIs    |
+| **How do I register a plugin?**                  | [feature-registry-api.md](docs/reference/feature-registry-api.md)   | FeatureRegistry registration methods |
+| **What events can I subscribe to?**              | [extension-hooks.md](docs/reference/extension-hooks.md)             | Available events and hooks           |
+| **What keyboard shortcuts exist?**               | [keyboard-shortcuts.md](docs/reference/keyboard-shortcuts.md)       | Complete keyboard shortcut reference |
+| **How does auto-zoom work?**                     | [auto-zoom.md](docs/reference/auto-zoom.md)                         | Auto-zoom for plugin node creation   |
+| **How do canvas event handlers work?**           | [canvas-event-handlers.md](docs/reference/canvas-event-handlers.md) | Event handler registration           |
+| **What is the JSDoc linting setup?**             | [jsdoc-linting.md](docs/reference/jsdoc-linting.md)                 | JSDoc validation rules               |
 
 ## Code style
 
@@ -1070,9 +1074,88 @@ for (const member of members) {
 
 **No manual rendering needed!** The event system + defensive deferral handles everything.
 
+### Event-Driven vs Imperative Patterns
+
+**Default to event-driven (emitter/subscriber) when:**
+
+- Multiple components need to react to the same state change
+- You need to add/remove handlers dynamically
+- The action is a side effect of a state mutation
+- Future features might want to react to the same event
+
+**Use imperative calls when:**
+
+- One-shot operations with exactly one handler
+- User-triggered actions (clicks, drags, keyboard shortcuts)
+- No other component should ever react to this action
+
+#### Anti-pattern: Flag-based side effects
+
+```javascript
+// WRONG: Hidden global state for side effects
+// In feature-plugin.js:
+this.graph.addNode = (n) => {
+    this._userNodeCreation = n; // Hidden flag!
+    const result = originalAddNode(n);
+    this._userNodeCreation = null;
+    return result;
+};
+
+// In canvas.js:
+if (this._userNodeCreation) {
+    this.panToNodeAnimated(this._userNodeCreation.id);
+}
+```
+
+#### Correct pattern: Explicit events
+
+```javascript
+// In graph.js (state mutation):
+addNode(node) {
+    const result = this._yMap.set(node.id, node);
+    this.emit('nodeCreated', node);  // Explicit event
+    return result;
+}
+
+// In canvas.js (reaction to state change):
+graph.on('nodeCreated', (node) => {
+    if (isUserCreated(node)) {
+        this.panToNodeAnimated(node.id);
+    }
+});
+```
+
+**Why explicit events are better:**
+
+1. **Traceable** - Events are visible in code; flags are hidden
+2. **Extensible** - New handlers can subscribe without modifying emitters
+3. **Testable** - Events are easy to mock and verify
+4. **Decoupled** - Emitter doesn't need to know about handlers
+
+#### Real example: Auto-zoom
+
+Instead of setting a `_userNodeCreation` flag:
+
+```javascript
+// In graph.js:
+addNode(node) {
+    const result = this._yMap.set(node.id, node);
+    const isUserCreated = node.metadata?.createdBy === 'user';
+    this.emit('nodeCreated', { node, isUserCreated });
+    return result;
+}
+
+// In canvas.js:
+graph.on('nodeCreated', ({ node, isUserCreated }) => {
+    if (isUserCreated) {
+        this.panToNodeAnimated(node.id);
+    }
+});
+```
+
 ### Feature instance access (plugin architecture)
 
-**CRITICAL:** All feature instances MUST be accessed through the FeatureRegistry, never instantiated directly.
+**CRITICAL:** All feature instances MUST be accessed through the FeatureRegistry using `this.featureRegistry.getFeature(id)` directly.
 
 **The problem:** Direct instantiation creates duplicate instances with separate state:
 
@@ -1080,36 +1163,16 @@ for (const member of members) {
 - Instance #2: Created by lazy getter (handles modal buttons)
 - Result: Modal state lives in instance #1, but buttons call methods on instance #2
 
-**The pattern:** Use `_getFeature()` helper for all feature getters:
+**The pattern:** Always use `this.featureRegistry.getFeature(id)` directly:
 
 ```javascript
-// WRONG: Direct instantiation creates dual instances
-get committeeFeature() {
-    if (!this._committeeFeature) {
-        this._committeeFeature = new CommitteeFeature({...});
-    }
-    return this._committeeFeature;
-}
-
-// CORRECT: Always use FeatureRegistry instance
+// WRONG: Old pattern with typed getters
 get committeeFeature() {
     return this._getFeature('committee', 'CommitteeFeature');
 }
-```
 
-**The `_getFeature()` helper:**
-
-```javascript
-_getFeature(featureId, featureName) {
-    const feature = this.featureRegistry.getFeature(featureId);
-    if (!feature) {
-        throw new Error(
-            `Feature "${featureName}" not found in FeatureRegistry. ` +
-            `Check initialization order in App.init().`
-        );
-    }
-    return feature;
-}
+// CORRECT: Direct access via FeatureRegistry
+this.featureRegistry.getFeature('committee').handleCommittee(...);
 ```
 
 **Why this matters:**
@@ -1118,13 +1181,70 @@ _getFeature(featureId, featureName) {
 - Prevents state desynchronization between slash commands and UI
 - Fails fast with clear error if initialization order is wrong
 - Forces correct architecture (no backwards compatibility trap)
+- App.js stays small - no typed getters needed for each feature
+- Features are self-contained - no tight coupling to App class
 
 **When adding new features:**
 
 1. Register feature in `FeatureRegistry.registerBuiltInFeatures()`
-2. Create getter using `_getFeature()` helper
-3. Never instantiate the feature class directly in app.js
-4. Never create private `_featureName` instance variables
+2. Never instantiate the feature class directly in app.js
+3. Never create private `_featureName` instance variables
+
+### Node protocol action methods
+
+**Pattern for tight coupling between node types:**
+
+Some node types have tight coupling that's by design (e.g., CSV→Code via Analyze button). Handle this via **node protocol methods**:
+
+```javascript
+// CSV node protocol handles creating Code nodes to analyze CSV data
+class CsvNode extends BaseNode {
+    analyze(nodeId, canvas, graph) {
+        // Create Code node from CSV data
+        // Access graph, canvas via parameters
+        // Return when done
+    }
+}
+
+// In app.js, when canvas emits 'nodeAnalyze' event:
+.on('nodeAnalyze', (nodeId) => {
+    const node = this.graph.getNode(nodeId);
+    if (node) {
+        const wrapped = wrapNode(node);
+        if (typeof wrapped.analyze === 'function') {
+            wrapped.analyze(nodeId, this.canvas, this.graph);
+        }
+    }
+})
+```
+
+**Why use node protocol methods:**
+
+- Self-contained - node type owns its coupling logic
+- Testable - protocol can be tested in isolation
+- No app.js bloat - tight coupling lives in node protocol file
+
+**When to use this pattern:**
+
+- CSV→Code, PDF→Code, etc. (desirable tight coupling)
+- Analyze, Edit, and other node-type-specific operations
+- Any operation that only makes sense for that node type
+
+**When NOT to use this pattern:**
+
+- Global UI handlers (toolbar buttons, keyboard shortcuts)
+- File upload handlers
+- Multi-node operations (bulk delete, export, etc.)
+
+**Note:** When adding/removing methods in app.js, update `tests/test_app_init.js`:
+
+- Add removed methods to delegatedMethods list with comments
+- Add new methods to requiredMethods or delegatedMethods lists
+
+**Note:** When adding/removing methods in app.js, update `tests/test_app_init.js`:
+
+- Add removed methods to delegatedMethods list with comments
+- Add new methods to requiredMethods or delegatedMethods lists
 
 ### Verify APIs exist before using them
 
@@ -1451,6 +1571,79 @@ global.document = {
 ```
 
 **If you're tempted to mock the DOM, use JSDOM instead.**
+
+### When to use jsdom for testing
+
+**CRITICAL:** Don't skip jsdom because tests "seem complex."
+
+In this session, we initially skipped `readSSEStream` tests because mocking Fetch Response seemed hard. This was a mistake - we should have set up jsdom immediately.
+
+**Signs you need jsdom:**
+
+- Code uses `fetch()` or `Response`
+- Code uses `TextEncoder`/`TextDecoder`
+- Code reads from `ReadableStream` or `response.body`
+- Code uses `window.location`, `document`, etc.
+
+**Common mistake to avoid:**
+
+```javascript
+// WRONG: Skipping tests because "mocking is hard"
+console.log('(readSSEStream tests require jsdom setup - skipped for now)');
+// ... later you discover a bug that would have been caught by tests ...
+```
+
+**Correct approach:**
+
+```javascript
+// RIGHT: Set up jsdom even for complex tests
+import { JSDOM } from 'jsdom';
+import { TextEncoder, TextDecoder } from 'util';
+
+// Setup jsdom
+const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
+global.window = dom.window;
+global.document = dom.window.document;
+global.TextEncoder = TextEncoder; // Node.js native
+global.TextDecoder = TextDecoder;
+
+// Create mock response with real TextEncoder
+function createMockResponse(chunks) {
+    const encoder = new TextEncoder();
+    const encodedChunks = chunks.map((chunk) => encoder.encode(chunk));
+    let chunkIndex = 0;
+
+    return {
+        body: {
+            async getReader() {
+                return {
+                    async read() {
+                        if (chunkIndex >= encodedChunks.length) {
+                            return { done: true };
+                        }
+                        return { done: false, value: encodedChunks[chunkIndex++] };
+                    },
+                };
+            },
+        },
+    };
+}
+
+// Now test works with real code
+test('readSSEStream works', async () => {
+    const mockResponse = createMockResponse(['data: hello\n\n']);
+    await readSSEStream(mockResponse, {
+        onEvent: (type, data) => {
+            /* ... */
+        },
+        onDone: () => {
+            /* ... */
+        },
+    });
+});
+```
+
+**Lesson learned:** The initial effort to set up jsdom pays off when tests catch real bugs (like `normalizeText` not handling spaces after apostrophes).
 
 ### When NOT to write unit tests
 
@@ -1797,3 +1990,34 @@ pixi run modal serve modal_app.py
 # Deploy to Modal
 pixi run modal deploy modal_app.py
 ```
+
+### Deprecated: registerFeatureCanvasHandlers()
+
+**The `registerFeatureCanvasHandlers()` method in `app.js` has been removed.**
+
+**Old pattern (deprecated):**
+
+- Call `app.registerFeatureCanvasHandlers()` to register canvas event handlers
+- Required modifying both `app.js` and the plugin file
+
+**Current pattern (required):**
+
+- Use `getCanvasEventHandlers()` in your FeaturePlugin class
+- FeatureRegistry handles registration automatically
+- No `app.js` modifications needed
+
+```javascript
+// DEPRECATED - Do NOT do this
+app.registerFeatureCanvasHandlers();
+
+// CORRECT - Use getCanvasEventHandlers() in your plugin
+class MyFeature extends FeaturePlugin {
+    getCanvasEventHandlers() {
+        return {
+            myEvent: this.handleMyEvent.bind(this),
+        };
+    }
+}
+```
+
+See [Canvas Event Handlers Registration](docs/reference/canvas-event-handlers.md) for details.

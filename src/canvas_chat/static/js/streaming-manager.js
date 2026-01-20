@@ -25,7 +25,13 @@
  * @property {Function} [onContinue] - Optional callback when continue is requested
  */
 
+/**
+ *
+ */
 class StreamingManager {
+    /**
+     *
+     */
     constructor() {
         // Main registry: nodeId -> StreamingState
         this.streams = new Map();

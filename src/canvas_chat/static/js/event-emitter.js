@@ -3,6 +3,9 @@
  * Provides a pub/sub pattern for decoupling components
  */
 class EventEmitter {
+    /**
+     *
+     */
     constructor() {
         this._events = new Map();
     }

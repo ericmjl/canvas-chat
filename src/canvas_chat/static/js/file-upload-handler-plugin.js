@@ -44,12 +44,12 @@ class FileUploadHandlerPlugin {
      * Must be implemented by subclasses
      *
      * @param {File} file - The file to upload
-     * @param {Object|null} position - Optional position for the node (for drag & drop)
-     * @param {Object} context - Additional context (e.g., showHint, etc.)
+     * @param {Object|null} _position - Optional position for the node (for drag & drop)
+     * @param {Object} _context - Additional context (e.g., showHint, etc.)
      * @returns {Promise<Object>} The created node
      * @throws {Error} If upload fails
      */
-    async handleUpload(file, position = null, context = {}) {
+    async handleUpload(file, _position = null, _context = {}) {
         throw new Error('FileUploadHandlerPlugin.handleUpload() must be implemented by subclass');
     }
 

@@ -10,7 +10,14 @@ import { createNode, NodeType } from '../graph-types.js';
 import { createEdge, EdgeType } from '../graph-types.js';
 import { isUrlContent, apiUrl } from '../utils.js';
 
+/**
+ * YouTubeFeature - Handles YouTube video fetching
+ */
 export class YouTubeFeature extends FeaturePlugin {
+    /**
+     * Get slash commands for this feature
+     * @returns {Array<Object>}
+     */
     getSlashCommands() {
         return [
             {
@@ -25,9 +32,9 @@ export class YouTubeFeature extends FeaturePlugin {
      * Handle /youtube slash command
      * @param {string} command - The slash command (e.g., '/youtube')
      * @param {string} args - Text after the command (URL)
-     * @param {Object} contextObj - Additional context (e.g., { text: selectedNodesContent })
+     * @param {Object} _contextObj - Additional context (unused, kept for interface)
      */
-    async handleCommand(command, args, contextObj) {
+    async handleCommand(command, args, _contextObj) {
         const url = args.trim();
         if (!url) {
             this.showToast?.('Please provide a YouTube URL', 'warning');
@@ -53,11 +60,7 @@ export class YouTubeFeature extends FeaturePlugin {
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
-            const edge = createEdge(
-                parentId,
-                fetchNode.id,
-                parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY
-            );
+            const edge = createEdge(parentId, fetchNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
             this.graph.addEdge(edge);
         }
 
@@ -133,6 +136,9 @@ export class YouTubeFeature extends FeaturePlugin {
         }
     }
 
+    /**
+     *
+     */
     async onLoad() {
         console.log('[YouTubeFeature] Loaded');
     }

@@ -8,12 +8,23 @@ import { BaseNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 import { NodeType, DEFAULT_NODE_SIZES } from '../graph-types.js';
 
+/**
+ * CellNode - Protocol for pinned matrix cells
+ */
 class CellNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         // For contextual labels like "GPT-4 × Accuracy"
         return this.node.title || 'Cell';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '📦';
     }

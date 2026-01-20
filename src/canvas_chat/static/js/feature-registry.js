@@ -35,6 +35,9 @@ export const PRIORITY = {
  * - Event bus for plugin communication
  */
 class FeatureRegistry {
+    /**
+     *
+     */
     constructor() {
         // Registered features: Map<featureId, featureInstance>
         this._features = new Map();
@@ -359,6 +362,14 @@ class FeatureRegistry {
      */
     getFeature(id) {
         return this._features.get(id);
+    }
+
+    /**
+     * Get all registered feature instances
+     * @returns {Array<FeaturePlugin>} Array of all feature instances
+     */
+    getAllFeatures() {
+        return Array.from(this._features.values());
     }
 
     /**

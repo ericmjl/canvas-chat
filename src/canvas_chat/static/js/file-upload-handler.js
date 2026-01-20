@@ -13,8 +13,11 @@
  */
 
 import { FileUploadRegistry } from './file-upload-registry.js';
-import { FileUploadHandlerPlugin } from './file-upload-handler-plugin.js';
+import { FileUploadHandlerPlugin as _FileUploadHandlerPlugin } from './file-upload-handler-plugin.js';
 
+/**
+ *
+ */
 class FileUploadHandler {
     /**
      * Create a FileUploadHandler instance.
@@ -66,6 +69,9 @@ class FileUploadHandler {
 
     /**
      * Handle PDF file upload (legacy method - delegates to plugin system)
+     * @param {File} file
+     * @param {Object|null} position
+     * @returns {Promise<Object>}
      * @deprecated Use handleFileUpload() directly
      */
     async handlePdfUpload(file, position = null) {
@@ -74,6 +80,9 @@ class FileUploadHandler {
 
     /**
      * Handle PDF drop on canvas (legacy method - delegates to plugin system)
+     * @param {File} file
+     * @param {Object} position
+     * @returns {Promise<Object>}
      * @deprecated Use handleFileUpload() directly
      */
     async handlePdfDrop(file, position) {
@@ -82,6 +91,10 @@ class FileUploadHandler {
 
     /**
      * Handle image file upload (legacy method - delegates to plugin system)
+     * @param {File} file
+     * @param {Object|null} position
+     * @param {boolean} showHint
+     * @returns {Promise<Object>}
      * @deprecated Use handleFileUpload() directly
      */
     async handleImageUpload(file, position = null, showHint = false) {
@@ -90,6 +103,9 @@ class FileUploadHandler {
 
     /**
      * Handle image drop on canvas (legacy method - delegates to plugin system)
+     * @param {File} file
+     * @param {Object} position
+     * @returns {Promise<Object>}
      * @deprecated Use handleFileUpload() directly
      */
     async handleImageDrop(file, position) {
@@ -98,6 +114,9 @@ class FileUploadHandler {
 
     /**
      * Handle CSV file upload (legacy method - delegates to plugin system)
+     * @param {File} file
+     * @param {Object|null} position
+     * @returns {Promise<Object>}
      * @deprecated Use handleFileUpload() directly
      */
     async handleCsvUpload(file, position = null) {
@@ -106,6 +125,9 @@ class FileUploadHandler {
 
     /**
      * Handle CSV drop on canvas (legacy method - delegates to plugin system)
+     * @param {File} file
+     * @param {Object} position
+     * @returns {Promise<Object>}
      * @deprecated Use handleFileUpload() directly
      */
     async handleCsvDrop(file, position) {

@@ -45,6 +45,7 @@ class CancellableEvent extends CanvasEvent {
 
     /**
      * Alias for cancelled (DOM-style API compatibility)
+     * @returns {boolean}
      */
     get defaultPrevented() {
         return this.cancelled;

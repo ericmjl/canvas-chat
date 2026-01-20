@@ -113,7 +113,10 @@ class FlashcardFeature extends FeaturePlugin {
      */
     async handleCreateFlashcards(nodeId) {
         const sourceNode = this.graph.getNode(nodeId);
-        if (!sourceNode) return;
+        if (!sourceNode) {
+            console.log('[FlashcardFeature] handleCreateFlashcards: source node not found', nodeId);
+            return;
+        }
 
         const model = this.modelPicker.value;
 
@@ -271,7 +274,13 @@ ${nodeContent}`;
      */
     acceptFlashcards(cards, sourceNodeId) {
         const sourceNode = this.graph.getNode(sourceNodeId);
-        if (!sourceNode || cards.length === 0) return;
+        if (!sourceNode || cards.length === 0) {
+            console.log('[FlashcardFeature] acceptFlashcards: no source node or no cards', {
+                sourceNodeId,
+                cardCount: cards?.length,
+            });
+            return;
+        }
 
         // Position flashcards below source node in a row
         const startX = sourceNode.position.x;
@@ -820,6 +829,18 @@ ${gradingRules}
             toast.style.display = 'none';
             toast.classList.remove('hiding');
         }, 300);
+    }
+
+    /**
+     * Get canvas event handlers for flashcard functionality.
+     * @returns {Object} Event name -> handler function mapping
+     */
+    getCanvasEventHandlers() {
+        return {
+            createFlashcards: this.handleCreateFlashcards.bind(this),
+            reviewCard: this.reviewSingleCard.bind(this),
+            flipCard: this.handleFlipCard.bind(this),
+        };
     }
 }
 

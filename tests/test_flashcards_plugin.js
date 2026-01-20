@@ -45,7 +45,7 @@ if (!global.indexedDB) {
 // Now import modules (storage.js will use the mocked indexedDB)
 import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
 import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
-import { assertTrue } from './test_helpers/assertions.js';
+import { assertTrue, assertEqual } from './test_helpers/assertions.js';
 
 // Import FlashcardFeature class
 const { FlashcardFeature } = await import('../src/canvas_chat/static/js/plugins/flashcards.js');
@@ -185,6 +185,54 @@ await asyncTest('FlashcardFeature does not register slash commands', async () =>
     const commands = harness.registry.getSlashCommands();
     assertTrue(!commands.includes('/flashcards'), 'Should not register slash commands');
     assertTrue(!commands.includes('/review'), 'Should not register slash commands');
+});
+
+// Test: FlashcardFeature has correct canvas event handlers
+await asyncTest('FlashcardFeature has correct canvas event handlers', async () => {
+    const harness = new PluginTestHarness();
+
+    await harness.loadPlugin({
+        id: 'flashcards',
+        feature: FlashcardFeature,
+        slashCommands: [],
+    });
+
+    const feature = harness.getPlugin('flashcards');
+
+    // Get canvas event handlers
+    const handlers = feature.getCanvasEventHandlers();
+
+    // Verify expected handlers exist
+    assertTrue(typeof handlers.createFlashcards === 'function', 'Should have createFlashcards handler');
+    assertTrue(typeof handlers.reviewCard === 'function', 'Should have reviewCard handler');
+    assertTrue(typeof handlers.flipCard === 'function', 'Should have flipCard handler');
+});
+
+// Test: Flashcard handlers are registered once (regression test for duplicate handlers bug)
+await asyncTest('Flashcard handlers registered exactly once (no duplicates)', async () => {
+    const harness = new PluginTestHarness();
+
+    // Track canvas.on calls for flashcard events
+    const canvas = harness.mockApp.canvas;
+    let createFlashcardsCount = 0;
+    let reviewCardCount = 0;
+
+    const originalOn = canvas.on.bind(canvas);
+    canvas.on = (event, handler) => {
+        if (event === 'createFlashcards') createFlashcardsCount++;
+        if (event === 'reviewCard') reviewCardCount++;
+        return originalOn(event, handler);
+    };
+
+    await harness.loadPlugin({
+        id: 'flashcards',
+        feature: FlashcardFeature,
+        slashCommands: [],
+    });
+
+    // Each handler should be registered exactly once
+    assertEqual(createFlashcardsCount, 1, 'createFlashcards should be registered once');
+    assertEqual(reviewCardCount, 1, 'reviewCard should be registered once');
 });
 
 console.log('\n=== All Flashcard plugin tests passed! ===\n');

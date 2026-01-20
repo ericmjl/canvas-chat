@@ -35,6 +35,7 @@ const pyodideRunner = (function() {
 
     /**
      * Notify all listeners of state change
+     * @param state
      */
     function notifyStateChange(state) {
         loadingState = state;

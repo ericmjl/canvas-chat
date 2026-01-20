@@ -12,15 +12,30 @@ import { FileUploadHandlerPlugin } from '../file-upload-handler-plugin.js';
 import { FileUploadRegistry, PRIORITY } from '../file-upload-registry.js';
 import { apiUrl } from '../utils.js';
 
+/**
+ * PdfNode - Protocol for PDF document display
+ */
 class PdfNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'PDF';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '📑';
     }
 
+    /**
+     * Get action buttons for this node
+     * @returns {Array<string>}
+     */
     getActions() {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
@@ -45,10 +60,10 @@ class PdfFileUploadHandler extends FileUploadHandlerPlugin {
      * Handle PDF file upload
      * @param {File} file - The PDF file to upload
      * @param {Object|null} position - Optional position for the node
-     * @param {Object} context - Additional context
+     * @param {Object} _context - Additional context
      * @returns {Promise<Object>} The created PDF node
      */
-    async handleUpload(file, position = null, context = {}) {
+    async handleUpload(file, position = null, _context = {}) {
         // Validate file type
         if (file.type !== 'application/pdf') {
             throw new Error('Please select a PDF file.');

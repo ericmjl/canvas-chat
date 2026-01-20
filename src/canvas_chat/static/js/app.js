@@ -10,11 +10,6 @@ import { FileUploadHandler } from './file-upload-handler.js';
 import { EdgeType, NodeType, TAG_COLORS, createEdge, createNode, getDefaultNodeSize } from './graph-types.js';
 import { ModalManager } from './modal-manager.js';
 import { NodeRegistry } from './node-registry.js';
-import { CommitteeFeature } from './plugins/committee.js';
-import { FactcheckFeature } from './plugins/factcheck.js';
-import { FlashcardFeature } from './plugins/flashcards.js';
-import { MatrixFeature } from './plugins/matrix.js';
-import { ResearchFeature } from './plugins/research.js';
 import { SlashCommandMenu, setFeatureRegistry } from './slash-command-menu.js';
 import { storage } from './storage.js';
 import { UndoManager } from './undo-manager.js';
@@ -43,7 +38,7 @@ import './plugins/summary.js'; // Side-effect import for SummaryNode plugin regi
 import './plugins/synthesis-node.js'; // Side-effect import for SynthesisNode plugin registration
 import './plugins/youtube-node.js'; // Side-effect import for YouTubeNode plugin registration
 // Note: poll.js is an external plugin - load via config.yaml
-import { extractExcerptText } from './highlight-utils.js';
+import { extractExcerptText as _extractExcerptText } from './highlight-utils.js';
 import { wrapNode } from './node-protocols.js';
 import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { readSSEStream } from './sse.js';
@@ -63,7 +58,13 @@ import { StreamingManager } from './streaming-manager.js';
 
 /* global pyodideRunner */
 
+/**
+ *
+ */
 class App {
+    /**
+     *
+     */
     constructor() {
         this.canvas = null;
         this.graph = null;
@@ -121,6 +122,9 @@ class App {
         this.init();
     }
 
+    /**
+     *
+     */
     async init() {
         // Configure marked.js early (ensures KaTeX and other extensions are set up)
         Canvas.configureMarked();
@@ -134,6 +138,8 @@ class App {
 
         // Setup canvas event listeners (using EventEmitter pattern)
         this.setupCanvasEventListeners();
+        // Note: Feature canvas handlers are registered in initializePluginSystem()
+        // This ensures features are loaded before registering their handlers
 
         // Attach slash command menu to reply tooltip input
         const replyInput = this.canvas.getReplyTooltipInput();
@@ -175,6 +181,13 @@ class App {
             .on('nodeAdded', (node) => {
                 this.canvas.renderNode(node);
                 this.updateEmptyState();
+
+                // Auto-zoom to user-created nodes (not during session load or bulk operations)
+                if (this._userNodeCreation) {
+                    this._userNodeCreation = false;
+                    // Use zoomToSelectionAnimated to match 'z' shortcut behavior
+                    this.canvas.zoomToSelectionAnimated([node.id], 0.8, 300);
+                }
             })
             .on('nodeRemoved', () => this.updateEmptyState())
             .on('edgeAdded', (edge) => {
@@ -219,6 +232,9 @@ class App {
         }
     }
 
+    /**
+     *
+     */
     async handleCopilotAuthOnLoad() {
         if (this.adminMode) {
             return;
@@ -268,93 +284,8 @@ class App {
     }
 
     /**
-     * Get a feature from the FeatureRegistry.
      *
-     * ARCHITECTURAL PATTERN: Feature Getter Singleton
-     * ================================================
-     * All features MUST be retrieved from the FeatureRegistry to ensure single instance.
-     * This prevents the "dual instance" bug where:
-     * 1. FeatureRegistry creates instance #1 (for slash commands)
-     * 2. Lazy getter creates instance #2 (for modal buttons)
-     * 3. Modal state lives in instance #1, but buttons call methods on instance #2
-     *
-     * If a feature is not found in the registry, this indicates a serious initialization
-     * error and should fail fast with a clear error message.
-     *
-     * @param {string} featureId - Feature ID in FeatureRegistry (e.g., 'committee', 'matrix')
-     * @param {string} featureName - Human-readable feature name for error messages
-     * @returns {FeaturePlugin} The feature instance
-     * @throws {Error} If feature is not registered (initialization order bug)
-     * @private
      */
-    _getFeature(featureId, featureName) {
-        const feature = this.featureRegistry.getFeature(featureId);
-        if (!feature) {
-            throw new Error(
-                `Feature "${featureName}" (${featureId}) not found in FeatureRegistry. ` +
-                    `This indicates initializePluginSystem() was not called before accessing the feature. ` +
-                    `Check initialization order in App.init().`
-            );
-        }
-        return feature;
-    }
-
-    /**
-     * Get the flashcard feature module.
-     * @returns {FlashcardFeature}
-     */
-    get flashcardFeature() {
-        return this._getFeature('flashcards', 'FlashcardFeature');
-    }
-
-    /**
-     * Get the committee feature module.
-     * @returns {CommitteeFeature}
-     */
-    get committeeFeature() {
-        return this._getFeature('committee', 'CommitteeFeature');
-    }
-
-    /**
-     * Get the matrix feature module.
-     * @returns {MatrixFeature}
-     */
-    get matrixFeature() {
-        return this._getFeature('matrix', 'MatrixFeature');
-    }
-
-    /**
-     * Get the factcheck feature module.
-     * @returns {FactcheckFeature}
-     */
-    get factcheckFeature() {
-        return this._getFeature('factcheck', 'FactcheckFeature');
-    }
-
-    /**
-     * Get the research feature module.
-     * @returns {ResearchFeature}
-     */
-    get researchFeature() {
-        return this._getFeature('research', 'ResearchFeature');
-    }
-
-    /**
-     * Get code feature instance.
-     * @returns {CodeFeature}
-     */
-    get codeFeature() {
-        return this._getFeature('code', 'CodeFeature');
-    }
-
-    /**
-     * Get image generation feature instance.
-     * @returns {ImageGenerationFeature}
-     */
-    get imageGenerationFeature() {
-        return this._getFeature('image-generation', 'ImageGenerationFeature');
-    }
-
     async loadModels() {
         // In admin mode, use admin-configured models
         if (this.adminMode) {
@@ -471,6 +402,9 @@ class App {
         }
     }
 
+    /**
+     *
+     */
     async loadSession() {
         // Check for session ID in URL (for shared multiplayer links)
         const urlParams = new URLSearchParams(window.location.search);
@@ -502,6 +436,10 @@ class App {
         await this.createNewSession();
     }
 
+    /**
+     *
+     * @param session
+     */
     async loadSessionData(session) {
         this.session = session;
 
@@ -596,6 +534,9 @@ class App {
         }
     }
 
+    /**
+     *
+     */
     async createNewSession() {
         const sessionId = crypto.randomUUID();
         this.session = {
@@ -643,17 +584,9 @@ class App {
             .on('nodeFetchSummarize', this.handleNodeFetchSummarize.bind(this))
             .on('nodeDelete', this.handleNodeDelete.bind(this))
             .on('nodeCopy', this.copyNodeContent.bind(this))
-            .on('nodeTitleEdit', (nodeId) => this.modalManager.handleNodeTitleEdit(nodeId))
-            // Matrix-specific events
-            .on('matrixCellFill', this.handleMatrixCellFill.bind(this))
-            .on('matrixCellView', this.handleMatrixCellView.bind(this))
-            .on('matrixFillAll', this.handleMatrixFillAll.bind(this))
-            .on('matrixRowExtract', this.handleMatrixRowExtract.bind(this))
-            .on('matrixColExtract', this.handleMatrixColExtract.bind(this))
-            .on('matrixEdit', this.handleMatrixEdit.bind(this))
-            .on('matrixIndexColResize', this.handleMatrixIndexColResize.bind(this))
-            // Streaming control events (now handled by StreamingManager via setCanvas)
-            // Error handling events
+            .on('nodeTitleEdit', (nodeId) => this.modalManager.handleNodeTitleEdit(nodeId));
+        // Streaming control events (now handled by StreamingManager via setCanvas)
+        this.canvas
             .on('nodeRetry', this.handleNodeRetry.bind(this))
             .on('nodeDismissError', this.handleNodeDismissError.bind(this))
             // Node resize to viewport events
@@ -681,10 +614,6 @@ class App {
                     this.modalManager.handleNodeEditContent(nodeId);
                 }
             })
-            // Flashcard events
-            .on('createFlashcards', this.handleCreateFlashcards.bind(this))
-            .on('reviewCard', this.reviewSingleCard.bind(this))
-            .on('flipCard', this.handleFlipCard.bind(this))
             // Poll plugin events are now handled by PollFeature plugin
             // File drop events (plugin-based system)
             .on('fileDrop', (file, position) => this.fileUploadHandler.handleFileUpload(file, position))
@@ -695,25 +624,22 @@ class App {
             // Image and tag click events
             .on('imageClick', this.handleImageClick.bind(this))
             .on('tagChipClick', this.handleTagChipClick.bind(this))
-            .on('tagRemove', this.handleTagRemove.bind(this))
-            // Navigation events for parent/child traversal
-            .on('navParentClick', this.handleNavParentClick.bind(this))
-            .on('navChildClick', this.handleNavChildClick.bind(this))
-            .on('nodeNavigate', this.handleNodeNavigate.bind(this))
-            // Collapse/expand event for hiding/showing descendants
-            .on('nodeCollapse', this.handleNodeCollapse.bind(this))
-            // CSV/Code execution events
-            .on('nodeAnalyze', this.handleNodeAnalyze.bind(this))
-            .on('nodeRunCode', this.handleNodeRunCode.bind(this))
-            .on('nodeCodeChange', this.handleNodeCodeChange.bind(this))
-            .on('nodeEditCode', (nodeId) => this.modalManager.handleNodeEditCode(nodeId))
-            .on('nodeGenerate', this.handleNodeGenerate.bind(this))
-            .on('nodeGenerateSubmit', this.handleNodeGenerateSubmit.bind(this))
-            .on('nodeOutputToggle', this.handleNodeOutputToggle.bind(this))
-            .on('nodeOutputClear', this.handleNodeOutputClear.bind(this))
-            .on('nodeOutputResize', this.handleNodeOutputResize.bind(this));
+            .on('tagRemove', this.handleTagRemove.bind(this));
+        // Navigation events for parent/child traversal
+        this.canvas.on('navParentClick', this.handleNavParentClick.bind(this));
+        this.canvas.on('navChildClick', this.handleNavChildClick.bind(this));
+        this.canvas.on('nodeNavigate', this.handleNodeNavigate.bind(this));
+        // Collapse/expand event for hiding/showing descendants
+        this.canvas.on('nodeCollapse', this.handleNodeCollapse.bind(this));
+        // Register modal canvas handlers
+        this.modalManager.setupCanvasEventListeners();
+        // Node protocol handlers - CSV node Analyze button
+        this.canvas.on('nodeAnalyze', (nodeId) => this.handleNodeAnalyze(nodeId));
     }
 
+    /**
+     *
+     */
     setupEventListeners() {
         // Attach slash command menu to chat input
         this.slashCommandMenu.attach(this.chatInput);
@@ -970,127 +896,6 @@ class App {
         document.getElementById('new-session-btn').addEventListener('click', async () => {
             this.modalManager.hideSessionsModal();
             await this.createNewSession();
-        });
-
-        // Matrix modal
-        document.getElementById('matrix-close').addEventListener('click', () => {
-            document.getElementById('matrix-modal').style.display = 'none';
-            this.matrixFeature._matrixData = null;
-        });
-        document.getElementById('matrix-cancel-btn').addEventListener('click', () => {
-            document.getElementById('matrix-modal').style.display = 'none';
-            this.matrixFeature._matrixData = null;
-        });
-        document.getElementById('swap-axes-btn').addEventListener('click', () => {
-            this.matrixFeature.swapMatrixAxes();
-        });
-        document.getElementById('matrix-create-btn').addEventListener('click', () => {
-            this.matrixFeature.createMatrixNode();
-        });
-        document.getElementById('add-row-btn').addEventListener('click', () => {
-            this.matrixFeature.addAxisItem('row-items');
-        });
-        document.getElementById('add-col-btn').addEventListener('click', () => {
-            this.matrixFeature.addAxisItem('col-items');
-        });
-
-        // Edit matrix modal
-        document.getElementById('edit-matrix-close').addEventListener('click', () => {
-            document.getElementById('edit-matrix-modal').style.display = 'none';
-            this.matrixFeature._editMatrixData = null;
-        });
-        document.getElementById('edit-matrix-cancel-btn').addEventListener('click', () => {
-            document.getElementById('edit-matrix-modal').style.display = 'none';
-            this.matrixFeature._editMatrixData = null;
-        });
-        document.getElementById('edit-matrix-save-btn').addEventListener('click', () => {
-            this.matrixFeature.saveMatrixEdits();
-        });
-        document.getElementById('edit-swap-axes-btn').addEventListener('click', () => {
-            this.matrixFeature.swapEditMatrixAxes();
-        });
-        document.getElementById('edit-add-row-btn').addEventListener('click', () => {
-            this.matrixFeature.addAxisItem('edit-row-items');
-        });
-        document.getElementById('edit-add-col-btn').addEventListener('click', () => {
-            this.matrixFeature.addAxisItem('edit-col-items');
-        });
-
-        // Committee modal
-        document.getElementById('committee-close').addEventListener('click', () => {
-            this.committeeFeature.closeModal();
-        });
-        document.getElementById('committee-cancel-btn').addEventListener('click', () => {
-            this.committeeFeature.closeModal();
-        });
-        document.getElementById('committee-execute-btn').addEventListener('click', () => {
-            this.committeeFeature.executeCommittee();
-        });
-
-        // Factcheck modal
-        document.getElementById('factcheck-close').addEventListener('click', () => {
-            this.factcheckFeature.closeFactcheckModal();
-        });
-        document.getElementById('factcheck-cancel-btn').addEventListener('click', () => {
-            this.factcheckFeature.closeFactcheckModal();
-        });
-        document.getElementById('factcheck-execute-btn').addEventListener('click', () => {
-            this.factcheckFeature.executeFactcheckFromModal();
-        });
-        document.getElementById('factcheck-select-all').addEventListener('change', (e) => {
-            this.factcheckFeature.handleFactcheckSelectAll(e.target.checked);
-        });
-
-        // Cell detail modal
-        document.getElementById('cell-close').addEventListener('click', () => {
-            document.getElementById('cell-modal').style.display = 'none';
-        });
-        document.getElementById('cell-close-btn').addEventListener('click', () => {
-            document.getElementById('cell-modal').style.display = 'none';
-        });
-        document.getElementById('cell-pin-btn').addEventListener('click', () => {
-            this.matrixFeature.pinCellToCanvas();
-        });
-        document.getElementById('cell-copy-btn').addEventListener('click', async () => {
-            const content = document.getElementById('cell-content').textContent;
-            const btn = document.getElementById('cell-copy-btn');
-            try {
-                await navigator.clipboard.writeText(content);
-                const originalText = btn.textContent;
-                btn.textContent = '✓';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                }, 1500);
-            } catch (err) {
-                console.error('Failed to copy:', err);
-            }
-        });
-
-        // Row/Column (slice) detail modal
-        document.getElementById('slice-close').addEventListener('click', () => {
-            document.getElementById('slice-modal').style.display = 'none';
-            this.matrixFeature._currentSliceData = null;
-        });
-        document.getElementById('slice-close-btn').addEventListener('click', () => {
-            document.getElementById('slice-modal').style.display = 'none';
-            this.matrixFeature._currentSliceData = null;
-        });
-        document.getElementById('slice-pin-btn').addEventListener('click', () => {
-            this.matrixFeature.pinSliceToCanvas();
-        });
-        document.getElementById('slice-copy-btn').addEventListener('click', async () => {
-            const content = document.getElementById('slice-content').textContent;
-            const btn = document.getElementById('slice-copy-btn');
-            try {
-                await navigator.clipboard.writeText(content);
-                const originalText = btn.textContent;
-                btn.textContent = '✓';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                }, 1500);
-            } catch (err) {
-                console.error('Failed to copy:', err);
-            }
         });
 
         // Tag drawer
@@ -1362,6 +1167,7 @@ class App {
      * Returns true if it was a slash command and was handled, false otherwise.
      * @param {string} content - The user input
      * @param {string} context - Optional context for contextual commands (e.g., selected text)
+     * @returns {Promise<boolean>}
      */
     async tryHandleSlashCommand(content, context = null) {
         // First check if this is a plugin-registered slash command
@@ -1429,6 +1235,9 @@ class App {
         };
     }
 
+    /**
+     *
+     */
     async handleSend() {
         const content = this.chatInput.value.trim();
         if (!content) return;
@@ -1478,7 +1287,7 @@ class App {
             position: this.graph.autoPosition(parentIds.length > 0 ? parentIds : []),
         });
 
-        this.graph.addNode(humanNode);
+        this.addUserNode(humanNode);
 
         // Create edges from parents (only if nodes are selected)
         if (parentIds.length > 0) {
@@ -1494,33 +1303,24 @@ class App {
 
         // Clear input and selection
         this.chatInput.value = '';
-        this.chatInput.style.height = 'auto';
         this.canvas.clearSelection();
 
-        // Save
-        this.saveSession();
-        this.updateEmptyState();
-
-        // Create AI response node (placeholder)
+        // Create AI response node and stream response
         const model = this.modelPicker.value;
         const aiNode = createNode(NodeType.AI, '', {
             position: this.graph.autoPosition([humanNode.id]),
-            model: model.split('/').pop(), // Just the model name
+            model: model.split('/').pop(),
         });
 
-        this.graph.addNode(aiNode);
+        this.addUserNode(aiNode);
 
-        // Create edge from human to AI
         const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
         this.graph.addEdge(aiEdge);
 
         // Update collapse button for human node (now has AI child)
         this.updateCollapseButtonForNode(humanNode.id);
 
-        // Smoothly pan to the new AI node
-        this.canvas.centerOnAnimated(aiNode.position.x + 160, aiNode.position.y + 100, 300);
-
-        // Build context and send to LLM
+        // Build context and stream LLM response
         const context = this.graph.resolveContext([humanNode.id]);
         const messages = buildMessagesForApi(context);
 
@@ -1538,7 +1338,7 @@ class App {
             },
         });
 
-        // Stream response
+        // Stream response using streamWithAbort
         this.streamWithAbort(
             aiNode.id,
             abortController,
@@ -1555,8 +1355,6 @@ class App {
                 this.canvas.updateNodeContent(aiNode.id, fullContent, false);
                 this.graph.updateNode(aiNode.id, { content: fullContent });
                 this.saveSession();
-
-                // Generate summary async (don't await - let it happen in background)
                 this.generateNodeSummary(aiNode.id);
             },
             // onError
@@ -1576,12 +1374,23 @@ class App {
     }
 
     /**
+     * Add a node with automatic zoom-to-node for user-created nodes.
+     * This should be used for user-initiated node creation (not during session load or bulk operations).
+     * @param {Object} node - The node to add
+     */
+    addUserNode(node) {
+        this._userNodeCreation = true;
+        this.graph.addNode(node);
+    }
+
+    /**
      * Handle search command.
      * @param {string} query - The user's search query
      * @param {string} context - Optional context to help refine the query (e.g., selected text)
+     * @returns {Promise<void>}
      */
     async handleSearch(query, context = null) {
-        return this.researchFeature.handleSearch(query, context);
+        return this.featureRegistry.getFeature('research').handleSearch(query, context);
     }
 
     // Note: Note handling has been moved to NoteFeature plugin
@@ -1986,18 +1795,11 @@ class App {
                 mimeType: mimeType,
             });
 
-            this.graph.addNode(imageNode);
+            this.addUserNode(imageNode);
 
             // Create edge from parent
             const edge = createEdge(parentNodeId, imageNode.id, EdgeType.HIGHLIGHT);
             this.graph.addEdge(edge);
-
-            // Select the new image node
-            this.canvas.clearSelection();
-            this.canvas.selectNode(imageNode.id);
-
-            // Pan to the new node
-            this.canvas.centerOnAnimated(imageNode.position.x + 160, imageNode.position.y + 100, 300);
 
             this.saveSession();
         } catch (err) {
@@ -2050,18 +1852,55 @@ class App {
      * Handle research command.
      * @param {string} instructions - The user's research instructions
      * @param {string} context - Optional context to help refine the instructions (e.g., selected text)
+     * @returns {Promise<void>}
      */
     async handleResearch(instructions, context = null) {
-        return this.researchFeature.handleResearch(instructions, context);
+        return this.featureRegistry.getFeature('research').handleResearch(instructions, context);
     }
 
     /**
-     * Handle /factcheck slash command - verify claims with web search
-     * @param {string} input - The user's input (claim or vague reference)
-     * @param {string} context - Optional context from selected nodes
+     * Handle creating flashcards from a content node.
+     * Shows modal with generated flashcard candidates for user selection.
+     * @param {string} nodeId - ID of source node
+     * @returns {Promise<void>}
      */
-    async handleFactcheck(input, context = null) {
-        return this.factcheckFeature.handleFactcheck(input, context);
+    async handleCreateFlashcards(nodeId) {
+        return this.featureRegistry.getFeature('flashcards').handleCreateFlashcards(nodeId);
+    }
+
+    /**
+     * Show flashcard review modal with due cards.
+     * @param {string[]} dueCardIds - Array of flashcard node IDs to review
+     * @returns {void}
+     */
+    showReviewModal(dueCardIds) {
+        return this.featureRegistry.getFeature('flashcards').showReviewModal(dueCardIds);
+    }
+
+    /**
+     * Start a review session with all due flashcards.
+     * @returns {void}
+     */
+    startFlashcardReview() {
+        return this.featureRegistry.getFeature('flashcards').startFlashcardReview();
+    }
+
+    /**
+     * Review a single flashcard (flip and grade).
+     * @param {string} cardId - The flashcard node ID
+     * @returns {void}
+     */
+    reviewSingleCard(cardId) {
+        return this.featureRegistry.getFeature('flashcards').reviewSingleCard(cardId);
+    }
+
+    /**
+     * Handle flip card action in review modal.
+     * @param {string} cardId - The flashcard node ID
+     * @returns {void}
+     */
+    handleFlipCard(cardId) {
+        return this.featureRegistry.getFeature('flashcards').handleFlipCard(cardId);
     }
 
     // =========================================================================
@@ -2070,9 +1909,10 @@ class App {
 
     /**
      * Handle /committee slash command - show modal to configure LLM committee.
-     * Delegates to the committee feature plugin via FeatureRegistry.
-     * @param {string} question - The question to ask the committee
+     * Delegates to committee feature plugin via FeatureRegistry.
+     * @param {string} question - The question to ask committee
      * @param {string|null} context - Optional context text
+     * @returns {Promise<void>}
      */
     async handleCommittee(question, context = null) {
         const feature = this.featureRegistry.getFeature('committee');
@@ -2080,19 +1920,21 @@ class App {
             return feature.handleCommittee('/committee', question, { text: context });
         }
         // Fallback to old pattern if plugin system not initialized
-        return this.committeeFeature.handleCommittee('/committee', question, { text: context });
+        return this.featureRegistry.getFeature('committee').handleCommittee('/committee', question, { text: context });
     }
 
     /**
      * Get display name for a model ID.
+     * Delegates to committee feature plugin via FeatureRegistry.
      * @param {string} modelId - The model ID
-     * @returns {string} - Display name for the model
+     * @returns {string} - Display name for model
      */
     getModelDisplayName(modelId) {
-        return this.committeeFeature.getModelDisplayName(modelId);
+        return this.featureRegistry.getFeature('committee').getModelDisplayName(modelId);
     }
 
-    // --- CSV/Code Execution Methods ---
+    // --- Code Node Execution Methods ---
+    // Handle Run Code button click from CSV node (now handled via CSV node protocol)
 
     /**
      * Handle /code slash command - creates a Code node, optionally with AI-generated code
@@ -2142,7 +1984,7 @@ print("Hello from Pyodide!")
             csvNodeIds: csvNodeIds, // Empty array if no CSVs
         });
 
-        this.graph.addNode(codeNode);
+        this.addUserNode(codeNode);
 
         // Create edges from all selected nodes to code node
         for (const nodeId of selectedIds) {
@@ -2150,10 +1992,8 @@ print("Hello from Pyodide!")
             this.graph.addEdge(edge);
         }
 
-        this.canvas.renderNode(codeNode);
         this.canvas.updateAllEdges(this.graph);
         this.canvas.updateAllNavButtonStates(this.graph);
-        this.canvas.panToNodeAnimated(codeNode.id);
         this.saveSession();
 
         // Preload Pyodide in the background so it's ready when user clicks Run
@@ -2168,42 +2008,16 @@ print("Hello from Pyodide!")
     }
 
     /**
-     * Handle Analyze button click on CSV node - creates a Code node for that CSV
+     * Handle Analyze button click on CSV node - delegates to CsvNode protocol.
      * @param {string} nodeId - The CSV node ID
      */
     async handleNodeAnalyze(nodeId) {
-        const csvNode = this.graph.getNode(nodeId);
-        if (!csvNode || csvNode.type !== NodeType.CSV) return;
-
-        // Create code node with starter template
-        const starterCode = `# Analyzing: ${csvNode.title || 'CSV data'}
-import pandas as pd
-
-# DataFrame is pre-loaded as 'df'
-df.head()
-`;
-
-        const position = this.graph.autoPosition([nodeId]);
-
-        const codeNode = createNode(NodeType.CODE, starterCode, {
-            position,
-            csvNodeIds: [nodeId], // Link to source CSV node
-        });
-
-        this.graph.addNode(codeNode);
-
-        // Create edge from CSV to code node
-        const edge = createEdge(nodeId, codeNode.id, EdgeType.GENERATES);
-        this.graph.addEdge(edge);
-
-        this.canvas.renderNode(codeNode);
-        this.canvas.updateAllEdges(this.graph);
-        this.canvas.updateAllNavButtonStates(this.graph);
-        this.canvas.panToNodeAnimated(codeNode.id);
-        this.saveSession();
-
-        // Preload Pyodide in the background so it's ready when user clicks Run
-        pyodideRunner.preload();
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (typeof wrapped.analyze === 'function') {
+            wrapped.analyze(nodeId, this.canvas, this.graph);
+        }
     }
 
     /**
@@ -2480,7 +2294,10 @@ df.head()
                     this.saveSession();
 
                     // Self-healing: Auto-run and fix errors (max 3 attempts)
-                    await this.codeFeature.selfHealCode(nodeId, prompt, model, context, 1);
+                    const codeFeature = this.featureRegistry.getFeature('code');
+                    if (codeFeature && codeFeature.selfHealCode) {
+                        await codeFeature.selfHealCode(nodeId, prompt, model, context, 1);
+                    }
                 },
                 onError: (err) => {
                     throw err;
@@ -2576,57 +2393,6 @@ df.head()
         return { dataframeInfo, ancestorContext, existingCode };
     }
 
-    // --- Code Feature Wrappers ---
-    // Code feature is implemented in code-feature.js with CodeFeature class
-
-    /**
-     * Self-heal code by executing it and auto-fixing errors through LLM iterations.
-     * Delegates to CodeFeature plugin.
-     */
-    async selfHealCode(nodeId, originalPrompt, model, context, attemptNum = 1, maxAttempts = 3) {
-        return this.codeFeature.selfHealCode(nodeId, originalPrompt, model, context, attemptNum, maxAttempts);
-    }
-
-    /**
-     * Ask LLM to fix code errors and regenerate.
-     * Delegates to CodeFeature plugin.
-     */
-    async fixCodeError(nodeId, originalPrompt, model, context, failedCode, errorMessage, attemptNum, maxAttempts) {
-        return this.codeFeature.fixCodeError(
-            nodeId,
-            originalPrompt,
-            model,
-            context,
-            failedCode,
-            errorMessage,
-            attemptNum,
-            maxAttempts
-        );
-    }
-
-    /**
-     * Handle output drawer toggle (expand/collapse) with animation
-     * @param {string} nodeId - The Code node ID
-     */
-    handleNodeOutputToggle(nodeId) {
-        const node = this.graph.getNode(nodeId);
-        if (!node) return;
-        const wrapped = wrapNode(node);
-        if (!wrapped.hasOutput || !wrapped.hasOutput()) return;
-
-        const currentExpanded = node.outputExpanded !== false;
-        const newExpanded = !currentExpanded;
-
-        // Animate the panel
-        this.canvas.animateOutputPanel(nodeId, newExpanded, () => {
-            // After animation completes, update state and toggle button (no full re-render)
-            this.graph.updateNode(nodeId, { outputExpanded: newExpanded });
-            this.canvas.updateOutputToggleButton(nodeId, newExpanded);
-        });
-        this.saveSession();
-        this.updateEmptyState();
-    }
-
     /**
      * Initialize the plugin system and register built-in features.
      * MUST be called before loadSession() since features may be accessed during session loading.
@@ -2638,6 +2404,8 @@ df.head()
 
         // Register all built-in features (handles 6 features automatically)
         await this.featureRegistry.registerBuiltInFeatures();
+
+        // Note: Canvas event handlers are already registered by featureRegistry.register()
 
         // Inject FeatureRegistry into slash command menu so it can show feature plugin commands
         setFeatureRegistry(this.featureRegistry);
@@ -2705,49 +2473,29 @@ df.head()
         this.saveSession();
     }
 
-    // --- Matrix Feature Wrappers ---
-    // Matrix feature is implemented in matrix.js with MatrixFeature class
-
-    async handleMatrix(matrixContext) {
-        return this.matrixFeature.handleMatrix(matrixContext);
-    }
-
-    async handleMatrixCellFill(nodeId, row, col, abortController = null) {
-        return this.matrixFeature.handleMatrixCellFill(nodeId, row, col, abortController);
-    }
-
-    handleMatrixCellView(nodeId, row, col) {
-        return this.matrixFeature.handleMatrixCellView(nodeId, row, col);
-    }
-
-    async handleMatrixFillAll(nodeId) {
-        return this.matrixFeature.handleMatrixFillAll(nodeId);
-    }
-
-    handleMatrixEdit(nodeId) {
-        return this.matrixFeature.handleMatrixEdit(nodeId);
-    }
-
-    handleMatrixIndexColResize(nodeId, width) {
-        return this.matrixFeature.handleMatrixIndexColResize(nodeId, width);
-    }
-
-    handleMatrixRowExtract(nodeId, rowIndex) {
-        return this.matrixFeature.handleMatrixRowExtract(nodeId, rowIndex);
-    }
-
-    handleMatrixColExtract(nodeId, colIndex) {
-        return this.matrixFeature.handleMatrixColExtract(nodeId, colIndex);
-    }
-
+    /**
+     *
+     * @param {string} text
+     * @param {number} maxLength
+     * @returns {string}
+     */
     truncate(text, maxLength) {
         return truncateText(text, maxLength);
     }
 
+    /**
+     *
+     * @param {string} text
+     * @returns {string}
+     */
     escapeHtml(text) {
         return escapeHtmlText(text);
     }
 
+    /**
+     *
+     * @returns {void}
+     */
     handleAutoLayout() {
         if (this.graph.isEmpty()) return;
 
@@ -2843,6 +2591,10 @@ df.head()
         }
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     handleNodeReply(nodeId) {
         // Select the node and focus input
         this.canvas.clearSelection();
@@ -2850,6 +2602,12 @@ df.head()
         this.chatInput.focus();
     }
 
+    /**
+     *
+     * @param nodeId
+     * @param selectedText
+     * @param replyText
+     */
     async handleNodeBranch(nodeId, selectedText, replyText) {
         // If text was selected, create a highlight node with that excerpt
         if (selectedText) {
@@ -2868,7 +2626,7 @@ df.head()
                 },
             });
 
-            this.graph.addNode(highlightNode);
+            this.addUserNode(highlightNode);
 
             // Create highlight edge (dashed connection)
             const edge = createEdge(nodeId, highlightNode.id, EdgeType.HIGHLIGHT);
@@ -2898,7 +2656,7 @@ df.head()
                     position: this.graph.autoPosition([highlightNode.id]),
                 });
 
-                this.graph.addNode(humanNode);
+                this.addUserNode(humanNode);
 
                 // Edge from highlight to user message
                 const humanEdge = createEdge(highlightNode.id, humanNode.id, EdgeType.REPLY);
@@ -2916,16 +2674,13 @@ df.head()
                     model: model.split('/').pop(),
                 });
 
-                this.graph.addNode(aiNode);
+                this.addUserNode(aiNode);
 
                 const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
                 this.graph.addEdge(aiEdge);
 
                 // Update collapse button for human node (now has AI child)
                 this.updateCollapseButtonForNode(humanNode.id);
-
-                // Smoothly pan to the AI node
-                this.canvas.centerOnAnimated(aiNode.position.x + 160, aiNode.position.y + 100, 300);
 
                 // Build context and stream LLM response
                 const context = this.graph.resolveContext([humanNode.id]);
@@ -2992,6 +2747,10 @@ df.head()
         }
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     async handleNodeSummarize(nodeId) {
         const model = this.modelPicker.value;
         const parentNode = this.graph.getNode(nodeId);
@@ -3014,7 +2773,7 @@ df.head()
             },
         });
 
-        this.graph.addNode(summaryNode);
+        this.addUserNode(summaryNode);
 
         const edge = createEdge(nodeId, summaryNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(edge);
@@ -3046,6 +2805,7 @@ df.head()
      * - Users who have Exa configured get premium content extraction
      * - Separate from handleNoteFromUrl which uses free Jina Reader API
      * - Both create FETCH_RESULT nodes with the same structure for consistency
+     * @param nodeId
      */
     async handleNodeFetchSummarize(nodeId) {
         const node = this.graph.getNode(nodeId);
@@ -3072,16 +2832,13 @@ df.head()
             },
         });
 
-        this.graph.addNode(fetchResultNode);
+        this.addUserNode(fetchResultNode);
 
         const fetchEdge = createEdge(nodeId, fetchResultNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(fetchEdge);
 
         // Update collapse button for source node (now has children)
         this.updateCollapseButtonForNode(nodeId);
-
-        // Smoothly pan to the fetch result node
-        this.canvas.centerOnAnimated(fetchResultNode.position.x + 200, fetchResultNode.position.y + 100, 300);
 
         try {
             // Fetch content from URL via Exa or fallback to direct fetch
@@ -3153,16 +2910,13 @@ df.head()
                 },
             });
 
-            this.graph.addNode(summaryNode);
+            this.addUserNode(summaryNode);
 
             const summaryEdge = createEdge(fetchResultNode.id, summaryNode.id, EdgeType.REFERENCE);
             this.graph.addEdge(summaryEdge);
 
             // Update collapse button for fetch result node (now has children)
             this.updateCollapseButtonForNode(fetchResultNode.id);
-
-            // Smoothly pan to the summary node
-            this.canvas.centerOnAnimated(summaryNode.position.x + 200, summaryNode.position.y + 100, 300);
 
             // Now summarize the content with LLM
             const messages = [
@@ -3188,11 +2942,18 @@ df.head()
 
     /**
      * Extract URL from Reference node content (format: **[Title](url)**)
+     * @param {string} content
+     * @returns {string|null}
      */
     extractUrlFromReferenceNode(content) {
         return extractUrlFromReferenceNode(content);
     }
 
+    /**
+     *
+     * @param {string[]} selectedIds
+     * @returns {void}
+     */
     handleNodeSelect(selectedIds) {
         this.updateSelectedIndicator(selectedIds);
         this.updateContextHighlight(selectedIds);
@@ -3237,6 +2998,10 @@ df.head()
         this.updateTagDrawer();
     }
 
+    /**
+     *
+     * @param selectedIds
+     */
     handleNodeDeselect(selectedIds) {
         this.updateSelectedIndicator(selectedIds);
         this.updateContextHighlight(selectedIds);
@@ -3258,6 +3023,12 @@ df.head()
         this.updateTagDrawer();
     }
 
+    /**
+     *
+     * @param nodeId
+     * @param newPos
+     * @param oldPos
+     */
     handleNodeMove(nodeId, newPos, oldPos) {
         // Only push undo if position actually changed
         if (oldPos && (oldPos.x !== newPos.x || oldPos.y !== newPos.y)) {
@@ -3274,6 +3045,8 @@ df.head()
     /**
      * Handle real-time node dragging (for multiplayer sync).
      * Updates graph position during drag, throttled to avoid network spam.
+     * @param nodeId
+     * @param newPos
      */
     handleNodeDrag(nodeId, newPos) {
         // Only sync if multiplayer is enabled
@@ -3293,6 +3066,12 @@ df.head()
         this.graph.updateNode(nodeId, { position: newPos });
     }
 
+    /**
+     *
+     * @param nodeId
+     * @param width
+     * @param height
+     */
     handleNodeResize(nodeId, width, height) {
         this.graph.updateNode(nodeId, { width, height });
         this.saveSession();
@@ -3301,6 +3080,9 @@ df.head()
     /**
      * Handle real-time node resizing (for multiplayer sync).
      * Updates graph dimensions during resize, throttled to avoid network spam.
+     * @param nodeId
+     * @param width
+     * @param height
      */
     handleNodeResizing(nodeId, width, height) {
         // Only sync if multiplayer is enabled
@@ -3320,6 +3102,10 @@ df.head()
         this.graph.updateNode(nodeId, { width, height });
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     handleNodeDelete(nodeId) {
         // No confirmation needed - undo (Ctrl+Z) provides recovery
 
@@ -3584,6 +3370,9 @@ df.head()
 
     /**
      * Show an error state on a node with retry/dismiss buttons
+     * @param nodeId
+     * @param errorInfo
+     * @param retryContext
      */
     showNodeError(nodeId, errorInfo, retryContext) {
         // Store retry context for later
@@ -3602,6 +3391,7 @@ df.head()
 
     /**
      * Handle retry for a failed node operation
+     * @param nodeId
      */
     async handleNodeRetry(nodeId) {
         const retryContext = this.retryContexts.get(nodeId);
@@ -3663,6 +3453,7 @@ df.head()
 
     /**
      * Handle dismissing an error node (removes it)
+     * @param nodeId
      */
     handleNodeDismissError(nodeId) {
         // Clean up retry context
@@ -3687,6 +3478,7 @@ df.head()
 
     /**
      * Handle resizing a node to fit 80% of the visible viewport
+     * @param nodeId
      */
     handleNodeFitToViewport(nodeId) {
         this.canvas.resizeNodeToViewport(nodeId);
@@ -3694,6 +3486,7 @@ df.head()
 
     /**
      * Handle resetting a node to its default size
+     * @param nodeId
      */
     handleNodeResetSize(nodeId) {
         const node = this.graph.getNode(nodeId);
@@ -3735,6 +3528,7 @@ df.head()
 
     /**
      * Handle summarizing a FETCH_RESULT node (creates new SUMMARY node)
+     * @param nodeId
      */
     async handleNodeSummarize(nodeId) {
         const fetchNode = this.graph.getNode(nodeId);
@@ -3763,16 +3557,9 @@ df.head()
             model: model.split('/').pop(),
         });
 
-        this.graph.addNode(summaryNode);
+        this.addUserNode(summaryNode);
         const edge = createEdge(nodeId, summaryNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(edge);
-
-        // Pan to new node
-        this.canvas.centerOnAnimated(summaryNode.position.x + 200, summaryNode.position.y + 100, 300);
-
-        // Select the new node
-        this.canvas.clearSelection();
-        this.canvas.selectNode(summaryNode.id);
 
         // Build messages for summarization
         const messages = [
@@ -3831,77 +3618,62 @@ df.head()
     // =========================================================================
 
     /**
-     * Handle creating flashcards from a content node.
-     * @param {string} nodeId - ID of the source node
+     * Highlight's source text in parent node when a highlight excerpt is selected
+     * @param {string} nodeId - The node ID of the highlight
+     * @returns {Promise<void>}
      */
     async handleCreateFlashcards(nodeId) {
-        return this.flashcardFeature.handleCreateFlashcards(nodeId);
+        return this.featureRegistry.getFeature('flashcards').handleCreateFlashcards(nodeId);
     }
 
     /**
-     * Show the flashcard review modal with due cards.
+     * Show flashcard review modal with due cards.
      * @param {string[]} dueCardIds - Array of flashcard node IDs to review
+     * @returns {void}
      */
     showReviewModal(dueCardIds) {
-        return this.flashcardFeature.showReviewModal(dueCardIds);
+        return this.featureRegistry.getFeature('flashcards').showReviewModal(dueCardIds);
     }
 
     /**
      * Start a review session with all due flashcards.
+     * @returns {void}
      */
     startFlashcardReview() {
-        return this.flashcardFeature.startFlashcardReview();
+        return this.featureRegistry.getFeature('flashcards').startFlashcardReview();
     }
 
     /**
-     * Review a single flashcard.
-     * @param {string} cardId - Flashcard node ID
+     * Review a single flashcard (flip and grade).
+     * @param {string} cardId - The flashcard node ID
+     * @returns {void}
      */
     reviewSingleCard(cardId) {
-        return this.flashcardFeature.reviewSingleCard(cardId);
+        return this.featureRegistry.getFeature('flashcards').reviewSingleCard(cardId);
     }
 
     /**
-     * Handle flipping a flashcard to show/hide the answer.
-     * @param {string} cardId - Flashcard node ID
+     * Handle flipping a flashcard to show/hide answer.
+     * @param {string} cardId - The flashcard node ID
+     * @returns {void}
      */
     handleFlipCard(cardId) {
-        return this.flashcardFeature.handleFlipCard(cardId);
+        return this.featureRegistry.getFeature('flashcards').handleFlipCard(cardId);
     }
 
     /**
      * Check for due flashcards and show toast notification if any.
+     * @returns {void}
      */
     checkDueFlashcardsOnLoad() {
-        return this.flashcardFeature.checkDueFlashcardsOnLoad();
+        return this.featureRegistry.getFeature('flashcards').checkDueFlashcardsOnLoad();
     }
 
     /**
-     * Handle voting on a poll option (plugin event)
+     *
+     * @param {string} nodeId
+     * @returns {Promise<void>}
      */
-    // Poll event handlers have been moved to PollFeature plugin
-    // See src/canvas_chat/static/js/poll.js
-
-    /**
-     * Highlight the source text in the parent node when a highlight excerpt is selected
-     * @param {Object} highlightNode - The highlight node that was selected
-     */
-    highlightSourceTextInParent(highlightNode) {
-        // Get the parent node (source of the excerpt)
-        const parents = this.graph.getParents(highlightNode.id);
-        if (parents.length === 0) return;
-
-        const parentNode = parents[0];
-
-        // Extract the excerpted text using the utility function
-        const excerptText = extractExcerptText(highlightNode.content);
-
-        if (!excerptText.trim()) return;
-
-        // Highlight the text in the parent node
-        this.canvas.highlightTextInNode(parentNode.id, excerptText);
-    }
-
     async copyNodeContent(nodeId) {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
@@ -3917,11 +3689,17 @@ df.head()
 
     /**
      * Format a matrix node as a markdown table
+     * @param {Object} matrixNode
+     * @returns {string}
      */
     formatMatrixAsText(matrixNode) {
         return formatMatrixAsText(matrixNode);
     }
 
+    /**
+     *
+     * @returns {void}
+     */
     deleteSelectedNodes() {
         const selectedIds = this.canvas.getSelectedNodeIds();
         if (selectedIds.length === 0) return;
@@ -3980,6 +3758,10 @@ df.head()
 
     // --- Context Visualization ---
 
+    /**
+     *
+     * @param selectedIds
+     */
     updateSelectedIndicator(selectedIds) {
         if (selectedIds.length > 0) {
             this.selectedIndicator.style.display = 'flex';
@@ -3989,6 +3771,10 @@ df.head()
         }
     }
 
+    /**
+     *
+     * @param selectedIds
+     */
     updateContextHighlight(selectedIds) {
         if (selectedIds.length > 0) {
             const ancestorIds = this.graph.getAncestorIds(selectedIds);
@@ -4002,6 +3788,10 @@ df.head()
         }
     }
 
+    /**
+     *
+     * @param selectedIds
+     */
     updateContextBudget(selectedIds) {
         const model = this.modelPicker.value;
         const contextWindow = chat.getContextWindow(model);
@@ -4029,6 +3819,9 @@ df.head()
 
     // --- Session Management ---
 
+    /**
+     *
+     */
     saveSession() {
         // Debounce saves
         if (this.saveTimeout) {
@@ -4057,6 +3850,9 @@ df.head()
         }, 500);
     }
 
+    /**
+     *
+     */
     editSessionName() {
         const newName = prompt('Session name:', this.session.name);
         if (newName && newName.trim()) {
@@ -4066,6 +3862,9 @@ df.head()
         }
     }
 
+    /**
+     *
+     */
     async generateSessionTitle() {
         // Check if there's any content to generate a title from
         if (this.graph.isEmpty()) {
@@ -4137,6 +3936,7 @@ df.head()
     /**
      * Generate a summary for a node (for semantic zoom)
      * Called async after AI/Research/Cell/Matrix nodes complete
+     * @param nodeId
      */
     async generateNodeSummary(nodeId) {
         const node = this.graph.getNode(nodeId);
@@ -4209,10 +4009,17 @@ df.head()
         }
     }
 
+    /**
+     *
+     */
     exportSession() {
         storage.exportSession(this.session);
     }
 
+    /**
+     *
+     * @param file
+     */
     async importSession(file) {
         try {
             const session = await storage.importSession(file);
@@ -4222,6 +4029,9 @@ df.head()
         }
     }
 
+    /**
+     *
+     */
     updateEmptyState() {
         const container = document.getElementById('canvas-container');
         let emptyState = container.querySelector('.empty-state');
@@ -4409,8 +4219,10 @@ df.head()
     /**
      * Handle remote changes from other peers.
      * Uses smart diffing to animate position and size changes smoothly.
+     * @param {string} type
+     * @param {Object[]} _events
      */
-    handleRemoteChange(type, events) {
+    handleRemoteChange(type, _events) {
         console.log('[App] Handling remote change:', type);
 
         const currentNodeIds = new Set(this.canvas.nodeElements.keys());
@@ -4504,6 +4316,9 @@ df.head()
     /**
      * Check if a node needs full re-render (structural changes).
      * Returns true if tags or matrix structure changed.
+     * @param {Object} node
+     * @param {HTMLElement} wrapper
+     * @returns {boolean}
      */
     nodeNeedsRerender(node, wrapper) {
         // Check if tag count changed (simple heuristic)
@@ -4534,6 +4349,7 @@ df.head()
     /**
      * Animate node positions and sizes for remote changes.
      * Uses smooth easing to match local layout animations.
+     * @param animations
      */
     animateRemoteTransforms(animations) {
         const duration = 400; // Slightly faster than local (500ms)
@@ -4578,6 +4394,7 @@ df.head()
 
     /**
      * Update the multiplayer button UI state
+     * @param enabled
      */
     updateMultiplayerUI(enabled) {
         if (enabled) {
@@ -4595,6 +4412,7 @@ df.head()
 
     /**
      * Update the peer count display
+     * @param count
      */
     updatePeerCount(count) {
         this.peerCountEl.textContent = count;
@@ -4608,7 +4426,7 @@ df.head()
      */
     handleLocksChange(lockedNodes) {
         // Remove lock indicators from all nodes
-        for (const [nodeId, wrapper] of this.canvas.nodeElements) {
+        for (const [_nodeId, wrapper] of this.canvas.nodeElements) {
             wrapper.classList.remove('node-locked-by-other');
         }
 
@@ -4647,6 +4465,7 @@ df.head()
 
     /**
      * Execute an undo action (reverse of the original action)
+     * @param action
      */
     executeUndo(action) {
         switch (action.type) {
@@ -4743,6 +4562,7 @@ df.head()
 
     /**
      * Execute a redo action (re-apply the original action)
+     * @param action
      */
     executeRedo(action) {
         switch (action.type) {
@@ -4831,6 +4651,9 @@ df.head()
         }
     }
 
+    /**
+     *
+     */
     saveSettings() {
         const keys = {
             openai: document.getElementById('openai-key').value.trim(),
@@ -4870,6 +4693,9 @@ df.head()
 
     // --- Tag Management ---
 
+    /**
+     *
+     */
     toggleTagDrawer() {
         const drawer = document.getElementById('tag-drawer');
         const btn = document.getElementById('tags-btn');
@@ -4881,6 +4707,9 @@ df.head()
         }
     }
 
+    /**
+     *
+     */
     openTagDrawer() {
         const drawer = document.getElementById('tag-drawer');
         const btn = document.getElementById('tags-btn');
@@ -4891,6 +4720,9 @@ df.head()
         }
     }
 
+    /**
+     *
+     */
     closeTagDrawer() {
         const drawer = document.getElementById('tag-drawer');
         const btn = document.getElementById('tags-btn');
@@ -4898,6 +4730,9 @@ df.head()
         btn.classList.remove('active');
     }
 
+    /**
+     *
+     */
     renderTagSlots() {
         const slotsEl = document.getElementById('tag-slots');
         const tags = this.graph.getAllTags();
@@ -4931,7 +4766,7 @@ df.head()
                 <div class="tag-slot-content">
                     ${
                         tag
-                            ? `<span class="tag-slot-name">${this.escapeHtml(tag.name)}</span>`
+                            ? `<span class="tag-slot-name">${escapeHtmlText(tag.name)}</span>`
                             : `<span class="tag-slot-empty">+ Add tag</span>`
                     }
                 </div>
@@ -4975,6 +4810,10 @@ df.head()
         }
     }
 
+    /**
+     *
+     * @param color
+     */
     handleTagSlotClick(color) {
         const tag = this.graph.getTag(color);
         const selectedIds = this.canvas.getSelectedNodeIds();
@@ -4991,6 +4830,11 @@ df.head()
         }
     }
 
+    /**
+     *
+     * @param color
+     * @param isNew
+     */
     startEditingTag(color, isNew = false) {
         const slot = document.querySelector(`.tag-slot[data-color="${color}"]`);
         if (!slot) return;
@@ -5000,7 +4844,7 @@ df.head()
 
         contentEl.innerHTML = `
             <input type="text" class="tag-slot-input"
-                value="${this.escapeHtml(currentName)}"
+                value="${escapeHtmlText(currentName)}"
                 placeholder="Tag name..."
                 maxlength="20">
         `;
@@ -5035,6 +4879,10 @@ df.head()
         });
     }
 
+    /**
+     *
+     * @param color
+     */
     deleteTag(color) {
         const tag = this.graph.getTag(color);
         if (!tag) return;
@@ -5046,6 +4894,11 @@ df.head()
         this.renderTagSlots();
     }
 
+    /**
+     *
+     * @param color
+     * @param nodeIds
+     */
     toggleTagOnNodes(color, nodeIds) {
         // Check current state
         const nodesWithTag = nodeIds.filter((id) => this.graph.nodeHasTag(id, color));
@@ -5099,6 +4952,9 @@ df.head()
         this.renderTagSlots();
     }
 
+    /**
+     *
+     */
     updateTagDrawer() {
         const drawer = document.getElementById('tag-drawer');
         if (!drawer.classList.contains('open')) return;
@@ -5118,6 +4974,11 @@ df.head()
         this.renderTagSlots();
     }
 
+    /**
+     *
+     * @param {string} text
+     * @returns {string}
+     */
     escapeHtml(text) {
         return escapeHtmlText(text);
     }
@@ -5125,7 +4986,8 @@ df.head()
     // --- Search Methods ---
 
     /**
-     * Rebuild the search index from current graph nodes
+     *
+     * @returns {void}
      */
     rebuildSearchIndex() {
         const nodes = this.graph.getAllNodes();
@@ -5134,6 +4996,7 @@ df.head()
 
     /**
      * Check if search overlay is open
+     * @returns {boolean}
      */
     isSearchOpen() {
         return document.getElementById('search-overlay').style.display !== 'none';
@@ -5141,6 +5004,7 @@ df.head()
 
     /**
      * Open the search overlay
+     * @returns {void}
      */
     openSearch() {
         // Rebuild index to ensure it's fresh
@@ -5192,6 +5056,7 @@ df.head()
 
     /**
      * Handle keyboard navigation in search results
+     * @param e
      */
     handleSearchKeydown(e) {
         const results = document.querySelectorAll('.search-result');
@@ -5236,6 +5101,8 @@ df.head()
 
     /**
      * Render search results
+     * @param results
+     * @param query
      */
     renderSearchResults(results, query = '') {
         const container = document.getElementById('search-results');
@@ -5262,7 +5129,7 @@ df.head()
                 const typeName = result.type.charAt(0).toUpperCase() + result.type.slice(1);
 
                 // Highlight matching terms in snippet
-                let snippet = this.escapeHtml(result.snippet);
+                let snippet = escapeHtmlText(result.snippet);
                 for (const token of queryTokens) {
                     const regex = new RegExp(`(${this.escapeRegex(token)})`, 'gi');
                     snippet = snippet.replace(regex, '<mark>$1</mark>');
@@ -5307,6 +5174,7 @@ df.head()
 
     /**
      * Navigate to a node and select it
+     * @param nodeId
      */
     navigateToNode(nodeId) {
         const node = this.graph.getNode(nodeId);
@@ -5329,12 +5197,14 @@ df.head()
      */
     createAndAddNode(type, content = '', options = {}) {
         const node = createNode(type, content, options);
-        this.graph.addNode(node); // Emits 'nodeAdded', canvas auto-renders
+        this.addUserNode(node);
         return node;
     }
 
     /**
      * Escape special regex characters
+     * @param {string} str
+     * @returns {string}
      */
     escapeRegex(str) {
         return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

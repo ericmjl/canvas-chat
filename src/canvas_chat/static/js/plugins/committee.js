@@ -8,8 +8,8 @@
 import { NodeType, EdgeType, createNode, createEdge } from '../graph-types.js';
 import { FeaturePlugin } from '../feature-plugin.js';
 import { storage } from '../storage.js';
-import { readSSEStream } from '../sse.js';
-import { apiUrl } from '../utils.js';
+import { readSSEStream as _readSSEStream } from '../sse.js';
+import { apiUrl as _apiUrl } from '../utils.js';
 
 /**
  * Static persona presets for quick selection
@@ -67,6 +67,7 @@ class CommitteeFeature extends FeaturePlugin {
 
     /**
      * Lifecycle hook: called when plugin is loaded
+     * @returns {Promise<void>}
      */
     async onLoad() {
         console.log('[CommitteeFeature] Loaded');
@@ -105,7 +106,7 @@ class CommitteeFeature extends FeaturePlugin {
                             </div>
                             <div class="committee-suggestions-container" id="committee-suggestions-container">
                                 <div class="committee-suggestions-loading">
-                                    <span class="spinner">⟳</span> Generating persona suggestions...
+                                    <span class="loading-spinner"></span> Generating persona suggestions...
                                 </div>
                             </div>
                         </div>
@@ -149,10 +150,33 @@ class CommitteeFeature extends FeaturePlugin {
         `;
 
         this.modalManager.registerModal('committee', 'main', modalTemplate);
+
+        // Committee modal event listeners
+        const modal = this.modalManager.getPluginModal('committee', 'main');
+        const closeBtn = modal.querySelector('#committee-close');
+        const cancelBtn = modal.querySelector('#committee-cancel-btn');
+        const executeBtn = modal.querySelector('#committee-execute-btn');
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                this.closeModal();
+            });
+        }
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                this.closeModal();
+            });
+        }
+        if (executeBtn) {
+            executeBtn.addEventListener('click', () => {
+                this.executeCommittee();
+            });
+        }
     }
 
     /**
      * Event subscriptions for this feature
+     * @returns {Object}
      */
     getEventSubscriptions() {
         return {
@@ -245,19 +269,33 @@ class CommitteeFeature extends FeaturePlugin {
 
     /**
      * Generate persona suggestions using LLM.
+     * @param question
      */
     async generatePersonaSuggestions(question) {
         const modal = this.modalManager.getPluginModal('committee', 'main');
         const container = modal.querySelector('#committee-suggestions-container');
         const regenerateBtn = modal.querySelector('#committee-regenerate-btn');
 
-        // Show loading state
+        // Create abort controller for cancellation
+        const abortController = new AbortController();
+
+        // Show loading state with cancel button
         container.innerHTML = `
             <div class="committee-suggestions-loading">
-                <span class="spinner">⟳</span> Generating persona suggestions...
+                <span class="loading-spinner"></span>
+                <span>Generating persona suggestions...</span>
+                <button class="committee-cancel-suggestions-btn" style="margin-left: 12px;">
+                    Cancel
+                </button>
             </div>
         `;
         regenerateBtn.style.display = 'none';
+
+        // Handle cancel button click
+        const cancelBtn = container.querySelector('.committee-cancel-suggestions-btn');
+        cancelBtn.addEventListener('click', () => {
+            abortController.abort();
+        });
 
         const model = this.modelPicker.value;
 
@@ -284,7 +322,8 @@ ${question}`;
                         fullResponse += chunk;
                     },
                     () => resolve(),
-                    (err) => reject(err)
+                    (err) => reject(err),
+                    { signal: abortController.signal }
                 );
             });
 
@@ -313,10 +352,21 @@ ${question}`;
             this.renderPersonaSuggestions(suggestions);
             regenerateBtn.style.display = 'inline-block';
         } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('[Committee] Persona suggestions cancelled by user');
+                container.innerHTML = `
+                    <div class="committee-suggestions-error">
+                        Cancelled. Add members manually or click "Regenerate suggestions" to try again.
+                    </div>
+                `;
+                regenerateBtn.style.display = 'inline-block';
+                regenerateBtn.textContent = 'Regenerate';
+                return;
+            }
             console.error('Failed to generate persona suggestions:', error);
             container.innerHTML = `
                 <div class="committee-suggestions-error">
-                    ⚠️ Couldn't generate suggestions. Add members manually or try again.
+                    Couldn't generate suggestions. Add members manually or try again.
                 </div>
             `;
             regenerateBtn.style.display = 'inline-block';
@@ -326,6 +376,7 @@ ${question}`;
 
     /**
      * Render persona suggestions as cards.
+     * @param suggestions
      */
     renderPersonaSuggestions(suggestions) {
         const modal = this.modalManager.getPluginModal('committee', 'main');
@@ -365,6 +416,7 @@ ${question}`;
 
     /**
      * Add a member from a suggestion.
+     * @param index
      */
     addMemberFromSuggestion(index) {
         const suggestion = this._committeeData.personaSuggestions[index];
@@ -396,6 +448,7 @@ ${question}`;
 
     /**
      * Remove a member from the list.
+     * @param index
      */
     removeMember(index) {
         this._committeeData.members.splice(index, 1);
@@ -534,6 +587,8 @@ ${question}`;
 
     /**
      * Escape HTML to prevent XSS.
+     * @param {string} text
+     * @returns {string}
      */
     escapeHtml(text) {
         const div = document.createElement('div');
@@ -758,19 +813,19 @@ ${question}`;
         const label = persona ? `${persona} (${modelName})` : modelName;
 
         return new Promise((resolve, reject) => {
-            let fullContent = '';
+            let _fullContent = '';
 
             this.chat.sendMessage(
                 messagesWithPersona,
                 model,
                 // onChunk
                 (chunk, accumulated) => {
-                    fullContent = accumulated;
+                    _fullContent = accumulated;
                     this.canvas.updateNodeContent(nodeId, `**${label}**\n\n${accumulated}`, true);
                 },
                 // onDone
                 (finalContent) => {
-                    fullContent = finalContent;
+                    _fullContent = finalContent;
                     this.canvas.updateNodeContent(nodeId, `**${label}**\n\n${finalContent}`, false);
                     this.graph.updateNode(nodeId, { content: `**${label}**\n\n${finalContent}` });
                     this.streamingManager.unregister(nodeId); // Auto-hides stop button
@@ -907,19 +962,19 @@ ${question}`;
               ];
 
         return new Promise((resolve, reject) => {
-            let fullContent = '';
+            let _fullContent = '';
 
             this.chat.sendMessage(
                 reviewMessages,
                 model,
                 // onChunk
                 (chunk, accumulated) => {
-                    fullContent = accumulated;
+                    _fullContent = accumulated;
                     this.canvas.updateNodeContent(reviewNode.id, `**${label} Review**\n\n${accumulated}`, true);
                 },
                 // onDone
                 (finalContent) => {
-                    fullContent = finalContent;
+                    _fullContent = finalContent;
                     this.canvas.updateNodeContent(reviewNode.id, `**${label} Review**\n\n${finalContent}`, false);
                     this.graph.updateNode(reviewNode.id, { content: `**${label} Review**\n\n${finalContent}` });
                     this.streamingManager.unregister(reviewNode.id); // Auto-hides stop button
@@ -1011,19 +1066,19 @@ ${question}`;
         ];
 
         return new Promise((resolve, reject) => {
-            let fullContent = '';
+            let _fullContent = '';
 
             this.chat.sendMessage(
                 synthesisMessages,
                 chairmanModel,
                 // onChunk
                 (chunk, accumulated) => {
-                    fullContent = accumulated;
+                    _fullContent = accumulated;
                     this.canvas.updateNodeContent(nodeId, `**Synthesis (${chairmanName})**\n\n${accumulated}`, true);
                 },
                 // onDone
                 (finalContent) => {
-                    fullContent = finalContent;
+                    _fullContent = finalContent;
                     this.canvas.updateNodeContent(nodeId, `**Synthesis (${chairmanName})**\n\n${finalContent}`, false);
                     this.graph.updateNode(nodeId, {
                         content: `**Synthesis (${chairmanName})**\n\n${finalContent}`,

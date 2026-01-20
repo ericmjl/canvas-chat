@@ -66,7 +66,6 @@ class ResearchFeature extends FeaturePlugin {
         });
 
         this.graph.addNode(searchNode);
-        this.canvas.renderNode(searchNode);
 
         // Create edges from parents only if they exist
         for (const parentId of parentIds) {
@@ -79,9 +78,6 @@ class ResearchFeature extends FeaturePlugin {
         this.canvas.clearSelection();
         this.saveSession();
         this.updateEmptyState();
-
-        // Smoothly pan to search node
-        this.canvas.centerOnAnimated(searchNode.position.x + 160, searchNode.position.y + 100, 300);
 
         try {
             let effectiveQuery = query;
@@ -177,7 +173,6 @@ class ResearchFeature extends FeaturePlugin {
                 });
 
                 this.graph.addNode(resultNode);
-                this.canvas.renderNode(resultNode);
 
                 // Edge from search to result
                 const edge = createEdge(searchNode.id, resultNode.id, EdgeType.SEARCH_RESULT);
@@ -266,7 +261,6 @@ class ResearchFeature extends FeaturePlugin {
             );
 
             this.graph.addNode(researchNode);
-            this.canvas.renderNode(researchNode);
 
             // Create edges from parents only if they exist
             for (const parentId of parentIds) {
@@ -279,9 +273,6 @@ class ResearchFeature extends FeaturePlugin {
             this.canvas.clearSelection();
             this.saveSession();
             this.updateEmptyState();
-
-            // Smoothly pan to research node
-            this.canvas.centerOnAnimated(researchNode.position.x + 250, researchNode.position.y + 100, 300);
         }
 
         // Create abort controller for stop button support

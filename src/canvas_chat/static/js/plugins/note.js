@@ -26,6 +26,7 @@ import { createEdge, EdgeType } from '../graph-types.js';
 class NoteNode extends BaseNode {
     /**
      * Display label shown in node header
+     * @returns {string}
      */
     getTypeLabel() {
         return 'Note';
@@ -33,13 +34,15 @@ class NoteNode extends BaseNode {
 
     /**
      * Emoji icon for the node type
+     * @returns {string}
      */
     getTypeIcon() {
         return '📝';
     }
 
     /**
-     * Action buttons for the note node
+     * Get additional action buttons for this node
+     * @returns {Array<string>}
      */
     getAdditionalActions() {
         return [Actions.CREATE_FLASHCARDS];
@@ -67,6 +70,10 @@ export { NoteNode };
  * For URL fetching, use /fetch command (handled by UrlFetchFeature).
  */
 export class NoteFeature extends FeaturePlugin {
+    /**
+     * Get slash commands for this feature
+     * @returns {Array<Object>}
+     */
     getSlashCommands() {
         return [
             {
@@ -81,9 +88,9 @@ export class NoteFeature extends FeaturePlugin {
      * Handle /note slash command
      * @param {string} command - The slash command (e.g., '/note')
      * @param {string} args - Text after the command (markdown content)
-     * @param {Object} contextObj - Additional context (e.g., { text: selectedNodesContent })
+     * @param {Object} _contextObj - Additional context (unused, kept for interface)
      */
-    async handleCommand(command, args, contextObj) {
+    async handleCommand(command, args, _contextObj) {
         const content = args.trim();
         if (!content) {
             this.showToast?.('Please provide note content', 'warning');
@@ -97,6 +104,7 @@ export class NoteFeature extends FeaturePlugin {
     /**
      * Create a NOTE node with markdown content
      * @param {string} content - Markdown content for the note
+     * @returns {Promise<void>}
      */
     async handleNoteFromContent(content) {
         // Get selected nodes (if any) to link the note to
@@ -111,11 +119,7 @@ export class NoteFeature extends FeaturePlugin {
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
-            const edge = createEdge(
-                parentId,
-                noteNode.id,
-                parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY
-            );
+            const edge = createEdge(parentId, noteNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
             this.graph.addEdge(edge);
         }
 
@@ -125,11 +129,7 @@ export class NoteFeature extends FeaturePlugin {
         this.canvas.clearSelection();
         this.saveSession?.();
         this.updateEmptyState?.();
-
-        // Pan to the new note
-        this.canvas.centerOnAnimated(noteNode.position.x + 160, noteNode.position.y + 100, 300);
     }
-
 }
 
 console.log('Note plugin loaded (node protocol + feature)');

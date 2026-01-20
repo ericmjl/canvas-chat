@@ -60,6 +60,8 @@ import { wouldOverlapNodes, resolveOverlaps } from './layout.js';
 
 /**
  * Check if value is a Y.Map-like object
+ * @param {*} value
+ * @returns {boolean}
  */
 function isYMap(value) {
     return (
@@ -74,6 +76,8 @@ function isYMap(value) {
 /**
  * Check if value is a Y.Text-like object
  * Note: Must check for toDelta to distinguish from Y.Array (both have insert/delete)
+ * @param {*} value
+ * @returns {boolean}
  */
 function isYText(value) {
     return (
@@ -88,6 +92,8 @@ function isYText(value) {
 
 /**
  * Check if value is a Y.Array-like object
+ * @param {*} value
+ * @returns {boolean}
  */
 function isYArray(value) {
     return (
@@ -103,6 +109,9 @@ function isYArray(value) {
 // CRDTGraph Class
 // =============================================================================
 
+/**
+ *
+ */
 class CRDTGraph extends EventEmitter {
     /**
      * Create a new CRDT-backed graph
@@ -176,7 +185,7 @@ class CRDTGraph extends EventEmitter {
             this.persistence = new IndexeddbPersistence(dbName, this.ydoc);
 
             // Wait for initial sync with IndexedDB
-            await new Promise((resolve, reject) => {
+            await new Promise((resolve, _reject) => {
                 const timeout = setTimeout(() => {
                     console.warn('[CRDTGraph] Persistence sync timeout, continuing anyway');
                     resolve();
@@ -281,6 +290,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Disable WebRTC multiplayer.
+     * @returns {void}
      */
     disableMultiplayer() {
         if (this.webrtcProvider) {
@@ -293,6 +303,7 @@ class CRDTGraph extends EventEmitter {
     /**
      * Get the current signaling server URL.
      * Uses the current page's host for the signaling endpoint.
+     * @returns {string}
      */
     _getSignalingUrl() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -528,6 +539,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Add a node to CRDT structures (internal helper)
+     * @param node
      */
     _addNodeToCRDT(node) {
         const yNode = new Y.Map();
@@ -572,11 +584,21 @@ class CRDTGraph extends EventEmitter {
                 // This handles plugin-specific nested objects (e.g., gitRepoData) without special casing
                 const yObj = new Y.Map();
                 for (const [objKey, objValue] of Object.entries(value)) {
-                    if (objValue && typeof objValue === 'object' && !Array.isArray(objValue) && objValue.constructor === Object) {
+                    if (
+                        objValue &&
+                        typeof objValue === 'object' &&
+                        !Array.isArray(objValue) &&
+                        objValue.constructor === Object
+                    ) {
                         // Nested object - recursively convert
                         const yNested = new Y.Map();
                         for (const [nestedKey, nestedValue] of Object.entries(objValue)) {
-                            if (nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue) && nestedValue.constructor === Object) {
+                            if (
+                                nestedValue &&
+                                typeof nestedValue === 'object' &&
+                                !Array.isArray(nestedValue) &&
+                                nestedValue.constructor === Object
+                            ) {
                                 // Deeply nested object - convert one more level
                                 const yDeep = new Y.Map();
                                 for (const [deepKey, deepValue] of Object.entries(nestedValue)) {
@@ -615,6 +637,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Add an edge to CRDT structures (internal helper)
+     * @param edge
      */
     _addEdgeToCRDT(edge) {
         const yEdge = new Y.Map();
@@ -628,6 +651,9 @@ class CRDTGraph extends EventEmitter {
     // Observers for Index Maintenance
     // =========================================================================
 
+    /**
+     *
+     */
     _setupObservers() {
         // Observe node changes for remote sync notifications
         this.yNodes.observeDeep((events, transaction) => {
@@ -688,6 +714,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Notify the change callback if set
+     * @param type
+     * @param events
      */
     _notifyChange(type, events) {
         if (this._remoteChangeCallback) {
@@ -695,6 +723,9 @@ class CRDTGraph extends EventEmitter {
         }
     }
 
+    /**
+     *
+     */
     _rebuildIndexes() {
         this.outgoingEdges.clear();
         this.incomingEdges.clear();
@@ -727,6 +758,8 @@ class CRDTGraph extends EventEmitter {
      * Extract a plain JS value from a potentially Y-typed value.
      * Uses duck typing to avoid instanceof issues.
      * Note: Check Y.Array BEFORE Y.Text because Y.Array passes the old Y.Text check
+     * @param {*} value
+     * @returns {*}
      */
     _extractValue(value) {
         if (value === null || value === undefined) {
@@ -757,6 +790,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Extract a node from Y.Map to plain JS object
+     * @param {Object} yNode
+     * @returns {Object|null}
      */
     _extractNode(yNode) {
         if (!yNode || !isYMap(yNode)) {
@@ -792,6 +827,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Extract an edge from Y.Map to plain JS object
+     * @param {Object} yEdge
+     * @returns {Object|null}
      */
     _extractEdge(yEdge) {
         if (!yEdge || !isYMap(yEdge)) {
@@ -812,6 +849,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Add a node to the graph
+     * @param {Object} node
+     * @returns {Object}
      */
     addNode(node) {
         this.ydoc.transact(() => {
@@ -826,6 +865,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Get a node by ID (returns plain JS object)
+     * @param {string} id
+     * @returns {Object|undefined}
      */
     getNode(id) {
         const yNode = this.yNodes.get(id);
@@ -835,6 +876,9 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Update a node's properties
+     * @param {string} id
+     * @param {Object} updates
+     * @returns {Object|undefined}
      */
     updateNode(id, updates) {
         const yNode = this.yNodes.get(id);
@@ -896,6 +940,14 @@ class CRDTGraph extends EventEmitter {
                         yCells = new Y.Map();
                         yNode.set('cells', yCells);
                     }
+                    // Remove cells that are not in the new value (for Clear All functionality)
+                    const newCellKeys = new Set(Object.keys(value));
+                    for (const existingKey of yCells.keys()) {
+                        if (!newCellKeys.has(existingKey)) {
+                            yCells.delete(existingKey);
+                        }
+                    }
+                    // Add/update cells from the new value
                     for (const [cellKey, cellValue] of Object.entries(value)) {
                         let yCell = yCells.get(cellKey);
                         if (!isYMap(yCell)) {
@@ -916,7 +968,12 @@ class CRDTGraph extends EventEmitter {
                     for (const [metaKey, metaValue] of Object.entries(value)) {
                         yMetadata.set(metaKey, metaValue);
                     }
-                } else if (value && typeof value === 'object' && !Array.isArray(value) && value.constructor === Object) {
+                } else if (
+                    value &&
+                    typeof value === 'object' &&
+                    !Array.isArray(value) &&
+                    value.constructor === Object
+                ) {
                     // Generic nested object (not position, cells, metadata which have special handling above)
                     // Recursively convert to Y.Map to preserve nested properties
                     // This handles plugin-specific nested objects without special casing
@@ -927,7 +984,12 @@ class CRDTGraph extends EventEmitter {
                     }
                     // Update all object properties
                     for (const [objKey, objValue] of Object.entries(value)) {
-                        if (objValue && typeof objValue === 'object' && !Array.isArray(objValue) && objValue.constructor === Object) {
+                        if (
+                            objValue &&
+                            typeof objValue === 'object' &&
+                            !Array.isArray(objValue) &&
+                            objValue.constructor === Object
+                        ) {
                             // Nested object - recursively convert
                             let yNested = yObj.get(objKey);
                             if (!isYMap(yNested)) {
@@ -936,7 +998,12 @@ class CRDTGraph extends EventEmitter {
                             }
                             // Update nested object properties
                             for (const [nestedKey, nestedValue] of Object.entries(objValue)) {
-                                if (nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue) && nestedValue.constructor === Object) {
+                                if (
+                                    nestedValue &&
+                                    typeof nestedValue === 'object' &&
+                                    !Array.isArray(nestedValue) &&
+                                    nestedValue.constructor === Object
+                                ) {
                                     // Deeply nested object - convert one more level
                                     let yDeep = yNested.get(nestedKey);
                                     if (!isYMap(yDeep)) {
@@ -982,6 +1049,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Remove a node and its connected edges
+     * @param {string} id
+     * @returns {void}
      */
     removeNode(id) {
         this.ydoc.transact(() => {
@@ -1007,10 +1076,11 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Get all nodes as array of plain JS objects
+     * @returns {Object[]}
      */
     getAllNodes() {
         const nodes = [];
-        this.yNodes.forEach((yNode, id) => {
+        this.yNodes.forEach((yNode, _id) => {
             const node = this._extractNode(yNode);
             if (node) nodes.push(node);
         });
@@ -1023,6 +1093,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Add an edge to the graph
+     * @param {Object} edge
+     * @returns {Object}
      */
     addEdge(edge) {
         this.ydoc.transact(() => {
@@ -1037,6 +1109,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Remove an edge by ID
+     * @param {string} edgeId
+     * @returns {void}
      */
     removeEdge(edgeId) {
         this._removeEdgeById(edgeId);
@@ -1045,6 +1119,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Internal helper to remove edge by ID
+     * @param edgeId
      */
     _removeEdgeById(edgeId) {
         for (let i = 0; i < this.yEdges.length; i++) {
@@ -1058,6 +1133,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Get all edges as array of plain JS objects
+     * @returns {Object[]}
      */
     getAllEdges() {
         const edges = [];
@@ -1071,6 +1147,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Getter for edges array (compatibility with legacy Graph)
+     * @returns {Object[]}
      */
     get edges() {
         return this.getAllEdges();
@@ -1082,6 +1159,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Get parent nodes (nodes that have edges pointing to this node)
+     * @param {string} nodeId
+     * @returns {Object[]}
      */
     getParents(nodeId) {
         const incoming = this.incomingEdges.get(nodeId) || [];
@@ -1090,6 +1169,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Get child nodes (nodes that this node has edges pointing to)
+     * @param {string} nodeId
+     * @returns {Object[]}
      */
     getChildren(nodeId) {
         const outgoing = this.outgoingEdges.get(nodeId) || [];
@@ -1222,6 +1303,9 @@ class CRDTGraph extends EventEmitter {
     /**
      * Get all ancestors of a node (for context resolution)
      * Returns nodes in topological order (oldest first)
+     * @param {string} nodeId
+     * @param {Set} visited
+     * @returns {Object[]}
      */
     getAncestors(nodeId, visited = new Set()) {
         if (visited.has(nodeId)) return [];
@@ -1240,6 +1324,9 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Get all ancestor edges (for highlighting context path)
+     * @param {string} nodeId
+     * @param {Set} visited
+     * @returns {Object[]}
      */
     getAncestorEdges(nodeId, visited = new Set()) {
         if (visited.has(nodeId)) return [];
@@ -1258,6 +1345,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Get all ancestor node IDs for highlighting
+     * @param {string[]} nodeIds
+     * @returns {Set<string>}
      */
     getAncestorIds(nodeIds) {
         const ancestorIds = new Set();
@@ -1275,6 +1364,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Find root nodes (nodes with no parents)
+     * @returns {Object[]}
      */
     getRootNodes() {
         const roots = [];
@@ -1290,6 +1380,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Find leaf nodes (nodes with no children)
+     * @returns {Object[]}
      */
     getLeafNodes() {
         const leaves = [];
@@ -1310,6 +1401,8 @@ class CRDTGraph extends EventEmitter {
     /**
      * Resolve context for one or more nodes
      * Returns messages in chronological order, deduplicated
+     * @param {string[]} nodeIds
+     * @returns {Object[]}
      */
     resolveContext(nodeIds) {
         const allAncestors = new Map();
@@ -1331,7 +1424,16 @@ class CRDTGraph extends EventEmitter {
         const sorted = Array.from(allAncestors.values()).sort((a, b) => a.created_at - b.created_at);
 
         // Convert to message format for API
-        const userTypes = [NodeType.HUMAN, NodeType.HIGHLIGHT, NodeType.NOTE, NodeType.IMAGE, NodeType.PDF, NodeType.FETCH_RESULT, NodeType.YOUTUBE, NodeType.GIT_REPO];
+        const userTypes = [
+            NodeType.HUMAN,
+            NodeType.HIGHLIGHT,
+            NodeType.NOTE,
+            NodeType.IMAGE,
+            NodeType.PDF,
+            NodeType.FETCH_RESULT,
+            NodeType.YOUTUBE,
+            NodeType.GIT_REPO,
+        ];
         return sorted.map((node) => {
             const msg = {
                 role: userTypes.includes(node.type) ? 'user' : 'assistant',
@@ -1348,6 +1450,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Estimate token count for context
+     * @param {string[]} nodeIds
+     * @returns {number}
      */
     estimateTokens(nodeIds) {
         const context = this.resolveContext(nodeIds);
@@ -1361,6 +1465,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Create or update a tag for a color
+     * @param color
+     * @param name
      */
     createTag(color, name) {
         if (!TAG_COLORS.includes(color)) {
@@ -1377,6 +1483,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Update a tag's name
+     * @param color
+     * @param name
      */
     updateTag(color, name) {
         const yTag = this.yTags.get(color);
@@ -1387,6 +1495,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Delete a tag and remove it from all nodes
+     * @param color
      */
     deleteTag(color) {
         this.ydoc.transact(() => {
@@ -1408,6 +1517,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Get a tag by color
+     * @param {string} color
+     * @returns {Object|null}
      */
     getTag(color) {
         const yTag = this.yTags.get(color);
@@ -1420,6 +1531,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Get all defined tags
+     * @returns {Object}
      */
     getAllTags() {
         const tags = {};
@@ -1436,6 +1548,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Add a tag to a node
+     * @param nodeId
+     * @param color
      */
     addTagToNode(nodeId, color) {
         const yNode = this.yNodes.get(nodeId);
@@ -1465,6 +1579,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Remove a tag from a node
+     * @param nodeId
+     * @param color
      */
     removeTagFromNode(nodeId, color) {
         const yNode = this.yNodes.get(nodeId);
@@ -1482,6 +1598,9 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Check if a node has a tag
+     * @param {string} nodeId
+     * @param {string} color
+     * @returns {boolean}
      */
     nodeHasTag(nodeId, color) {
         const node = this.getNode(nodeId);
@@ -1494,6 +1613,8 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Auto-position a new node relative to its parents, avoiding overlaps
+     * @param {string[]} parentIds
+     * @returns {Object}
      */
     autoPosition(parentIds) {
         const NODE_WIDTH = 420;
@@ -1554,6 +1675,11 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Check if a position would overlap with existing nodes
+     * @param {Object} pos
+     * @param {number} width
+     * @param {number} height
+     * @param {Object[]} nodes
+     * @returns {boolean}
      */
     wouldOverlap(pos, width, height, nodes) {
         return wouldOverlapNodes(pos, width, height, nodes);
@@ -1561,6 +1687,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Topological sort using Kahn's algorithm
+     * @returns {Object[]}
      */
     topologicalSort() {
         const allNodes = this.getAllNodes();
@@ -1608,6 +1735,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Auto-layout all nodes using topological sort and greedy placement
+     * @param dimensions
      */
     autoLayout(dimensions = new Map()) {
         const DEFAULT_WIDTH = 420;
@@ -1723,6 +1851,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Force-directed layout
+     * @param dimensions
      */
     forceDirectedLayout(dimensions = new Map()) {
         const DEFAULT_WIDTH = 420;
@@ -1920,6 +2049,8 @@ class CRDTGraph extends EventEmitter {
     /**
      * Resolve overlapping nodes.
      * Delegates to the pure function from layout.js.
+     * @param nodes
+     * @param dimensions
      */
     resolveOverlaps(nodes, dimensions = new Map()) {
         resolveOverlaps(nodes, 40, 50, dimensions);
@@ -1931,6 +2062,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Check if graph is empty
+     * @returns {boolean}
      */
     isEmpty() {
         return this.yNodes.size === 0;
@@ -1938,6 +2070,7 @@ class CRDTGraph extends EventEmitter {
 
     /**
      * Serialize graph to JSON-compatible object
+     * @returns {Object}
      */
     toJSON() {
         return {

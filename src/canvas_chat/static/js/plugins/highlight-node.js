@@ -9,15 +9,31 @@
 import { BaseNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
+/**
+ * HighlightNode - Protocol for excerpted content
+ */
 class HighlightNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'Highlight';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '✨';
     }
 
+    /**
+     * Render the content for the highlight node
+     * @param {Canvas} canvas
+     * @returns {string}
+     */
     renderContent(canvas) {
         // If has image data, render image; otherwise render markdown
         if (this.node.imageData) {

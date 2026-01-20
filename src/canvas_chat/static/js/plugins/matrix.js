@@ -34,14 +34,26 @@ import { wrapNode } from '../node-protocols.js';
  * Defines how matrix nodes are rendered and what actions they support.
  */
 class MatrixNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'Matrix';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '📊';
     }
 
+    /**
+     * Get header buttons for this node
+     * @returns {Array<string>}
+     */
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,
@@ -70,7 +82,12 @@ class MatrixNode extends BaseNode {
         return 'matrix-table-container';
     }
 
-    getSummaryText(canvas) {
+    /**
+     * Get summary text for semantic zoom (shown when zoomed out)
+     * @param {Canvas} _canvas
+     * @returns {string}
+     */
+    getSummaryText(_canvas) {
         // Priority: user-set title > LLM summary > generated fallback
         if (this.node.title) return this.node.title;
         if (this.node.summary) return this.node.summary;
@@ -149,10 +166,16 @@ class MatrixNode extends BaseNode {
             <div class="matrix-actions">
                 <button class="matrix-edit-btn" title="Edit rows and columns">Edit</button>
                 <button class="matrix-fill-all-btn" title="Fill all empty cells with concise AI evaluations (2-3 sentences each)">Fill All</button>
+                <button class="matrix-clear-all-btn" title="Clear all cell contents">Clear All</button>
             </div>
         `;
     }
 
+    /**
+     *
+     * @param canvas
+     * @param app
+     */
     async copyToClipboard(canvas, app) {
         // Format matrix as markdown table
         if (!app?.formatMatrixAsText) {
@@ -323,6 +346,10 @@ class MatrixNode extends BaseNode {
         return true;
     }
 
+    /**
+     * Get event bindings for matrix interactions
+     * @returns {Array<Object>}
+     */
     getEventBindings() {
         return [
             // Matrix cells - view filled or fill empty
@@ -333,11 +360,21 @@ class MatrixNode extends BaseNode {
                     const cell = e.currentTarget;
                     const row = parseInt(cell.dataset.row);
                     const col = parseInt(cell.dataset.col);
-                    if (cell.classList.contains('filled')) {
+
+                    // Guard: Don't process if already filled (prevents double-generation)
+                    if (cell.classList.contains('filled') && !cell.classList.contains('loading')) {
                         canvas.emit('matrixCellView', nodeId, row, col);
-                    } else {
-                        canvas.emit('matrixCellFill', nodeId, row, col);
+                        return;
                     }
+
+                    // Guard: Don't process if currently loading (prevents double-generation)
+                    if (cell.classList.contains('loading')) {
+                        console.log('[Matrix] Cell is loading, ignoring click');
+                        return;
+                    }
+
+                    // Cell is empty and not loading - start fill
+                    canvas.emit('matrixCellFill', nodeId, row, col);
                 },
             },
             // Edit button
@@ -349,6 +386,11 @@ class MatrixNode extends BaseNode {
             {
                 selector: '.matrix-fill-all-btn',
                 handler: 'matrixFillAll',
+            },
+            // Clear all button
+            {
+                selector: '.matrix-clear-all-btn',
+                handler: 'matrixClearAll',
             },
             // Copy context button
             {
@@ -623,6 +665,170 @@ class MatrixFeature extends FeaturePlugin {
             </div>
         `;
         this.modalManager.registerModal('matrix', 'slice', sliceModalTemplate);
+
+        // Matrix creation modal event listeners
+        const createModal = this.modalManager.getPluginModal('matrix', 'create');
+        const matrixCloseBtn = createModal.querySelector('#matrix-close');
+        const matrixCancelBtn = createModal.querySelector('#matrix-cancel-btn');
+        const swapAxesBtn = createModal.querySelector('#swap-axes-btn');
+        const matrixCreateBtn = createModal.querySelector('#matrix-create-btn');
+        const addRowBtn = createModal.querySelector('#add-row-btn');
+        const addColBtn = createModal.querySelector('#add-col-btn');
+
+        if (matrixCloseBtn) {
+            matrixCloseBtn.addEventListener('click', () => {
+                createModal.style.display = 'none';
+                this._matrixData = null;
+            });
+        }
+        if (matrixCancelBtn) {
+            matrixCancelBtn.addEventListener('click', () => {
+                createModal.style.display = 'none';
+                this._matrixData = null;
+            });
+        }
+        if (swapAxesBtn) {
+            swapAxesBtn.addEventListener('click', () => {
+                this.swapMatrixAxes();
+            });
+        }
+        if (matrixCreateBtn) {
+            matrixCreateBtn.addEventListener('click', () => {
+                this.createMatrixNode();
+            });
+        }
+        if (addRowBtn) {
+            addRowBtn.addEventListener('click', () => {
+                this.addAxisItem('row-items');
+            });
+        }
+        if (addColBtn) {
+            addColBtn.addEventListener('click', () => {
+                this.addAxisItem('col-items');
+            });
+        }
+
+        // Edit matrix modal event listeners
+        const editModal = this.modalManager.getPluginModal('matrix', 'edit');
+        const editMatrixCloseBtn = editModal.querySelector('#edit-matrix-close');
+        const editMatrixCancelBtn = editModal.querySelector('#edit-matrix-cancel-btn');
+        const editSwapAxesBtn = editModal.querySelector('#edit-swap-axes-btn');
+        const editSaveBtn = editModal.querySelector('#edit-matrix-save-btn');
+        const editAddRowBtn = editModal.querySelector('#edit-add-row-btn');
+        const editAddColBtn = editModal.querySelector('#edit-add-col-btn');
+
+        if (editMatrixCloseBtn) {
+            editMatrixCloseBtn.addEventListener('click', () => {
+                editModal.style.display = 'none';
+                this._editMatrixData = null;
+            });
+        }
+        if (editMatrixCancelBtn) {
+            editMatrixCancelBtn.addEventListener('click', () => {
+                editModal.style.display = 'none';
+                this._editMatrixData = null;
+            });
+        }
+        if (editSwapAxesBtn) {
+            editSwapAxesBtn.addEventListener('click', () => {
+                this.swapEditMatrixAxes();
+            });
+        }
+        if (editAddRowBtn) {
+            editAddRowBtn.addEventListener('click', () => {
+                this.addAxisItem('edit-row-items');
+            });
+        }
+        if (editAddColBtn) {
+            editAddColBtn.addEventListener('click', () => {
+                this.addAxisItem('edit-col-items');
+            });
+        }
+        if (editSaveBtn) {
+            editSaveBtn.addEventListener('click', () => {
+                this.saveMatrixEdits();
+            });
+        }
+
+        // Cell detail modal event listeners
+        const cellModal = this.modalManager.getPluginModal('matrix', 'cell');
+        const cellCloseBtn = cellModal.querySelector('#cell-close');
+        const cellCloseBtn2 = cellModal.querySelector('#cell-close-btn');
+        const cellPinBtn = cellModal.querySelector('#cell-pin-btn');
+        const cellCopyBtn = cellModal.querySelector('#cell-copy-btn');
+
+        if (cellCloseBtn) {
+            cellCloseBtn.addEventListener('click', () => {
+                cellModal.style.display = 'none';
+            });
+        }
+        if (cellCloseBtn2) {
+            cellCloseBtn2.addEventListener('click', () => {
+                cellModal.style.display = 'none';
+            });
+        }
+        if (cellPinBtn) {
+            cellPinBtn.addEventListener('click', () => {
+                this.pinCellToCanvas();
+            });
+        }
+        if (cellCopyBtn) {
+            cellCopyBtn.addEventListener('click', async () => {
+                const content = document.getElementById('cell-content').textContent;
+                const btn = document.getElementById('cell-copy-btn');
+                try {
+                    await navigator.clipboard.writeText(content);
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                    }, 1500);
+                } catch (err) {
+                    console.error('Failed to copy:', err);
+                }
+            });
+        }
+
+        // Slice detail modal event listeners
+        const sliceModal = this.modalManager.getPluginModal('matrix', 'slice');
+        const sliceCloseBtn = sliceModal.querySelector('#slice-close');
+        const sliceCloseBtn2 = sliceModal.querySelector('#slice-close-btn');
+        const slicePinBtn = sliceModal.querySelector('#slice-pin-btn');
+        const sliceCopyBtn = sliceModal.querySelector('#slice-copy-btn');
+
+        if (sliceCloseBtn) {
+            sliceCloseBtn.addEventListener('click', () => {
+                sliceModal.style.display = 'none';
+                this._currentSliceData = null;
+            });
+        }
+        if (sliceCloseBtn2) {
+            sliceCloseBtn2.addEventListener('click', () => {
+                sliceModal.style.display = 'none';
+                this._currentSliceData = null;
+            });
+        }
+        if (slicePinBtn) {
+            slicePinBtn.addEventListener('click', () => {
+                this.pinSliceToCanvas();
+            });
+        }
+        if (sliceCopyBtn) {
+            sliceCopyBtn.addEventListener('click', async () => {
+                const content = document.getElementById('slice-content').textContent;
+                const btn = document.getElementById('slice-copy-btn');
+                try {
+                    await navigator.clipboard.writeText(content);
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                    }, 1500);
+                } catch (err) {
+                    console.error('Failed to copy:', err);
+                }
+            });
+        }
     }
 
     /**
@@ -716,7 +922,14 @@ class MatrixFeature extends FeaturePlugin {
         }
     }
 
-    async parseTwoLists(contents, context, model) {
+    /**
+     * Parse two lists into matrix structure
+     * @param {Array<string>} contents
+     * @param {string} context
+     * @param {string} _model
+     * @returns {Promise<Object>}
+     */
+    async parseTwoLists(contents, context, _model) {
         const requestBody = this.buildLLMRequest({
             contents,
             context,
@@ -748,6 +961,8 @@ class MatrixFeature extends FeaturePlugin {
     /**
      * Get the data source and element IDs for a given axis container.
      * Supports both create modal (row-items, col-items) and edit modal (edit-row-items, edit-col-items).
+     * @param {string} containerId
+     * @returns {Object}
      */
     getAxisConfig(containerId) {
         const isEdit = containerId.startsWith('edit-');
@@ -758,6 +973,11 @@ class MatrixFeature extends FeaturePlugin {
         return { dataSource, items, countId, isRow };
     }
 
+    /**
+     *
+     * @param containerId
+     * @param items
+     */
     populateAxisItems(containerId, items) {
         const container = document.getElementById(containerId);
         container.innerHTML = '';
@@ -787,6 +1007,11 @@ class MatrixFeature extends FeaturePlugin {
         });
     }
 
+    /**
+     *
+     * @param containerId
+     * @param index
+     */
     removeAxisItem(containerId, index) {
         const { items, countId } = this.getAxisConfig(containerId);
         if (!items) return;
@@ -796,6 +1021,12 @@ class MatrixFeature extends FeaturePlugin {
         document.getElementById(countId).textContent = `${items.length} items`;
     }
 
+    /**
+     *
+     * @param containerId
+     * @param index
+     * @param newValue
+     */
     updateAxisItem(containerId, index, newValue) {
         const { items } = this.getAxisConfig(containerId);
         if (!items || !newValue.trim()) return;
@@ -803,6 +1034,10 @@ class MatrixFeature extends FeaturePlugin {
         items[index] = newValue.trim();
     }
 
+    /**
+     *
+     * @param containerId
+     */
     addAxisItem(containerId) {
         const { items, countId } = this.getAxisConfig(containerId);
         if (!items) return;
@@ -825,6 +1060,9 @@ class MatrixFeature extends FeaturePlugin {
         }
     }
 
+    /**
+     *
+     */
     swapMatrixAxes() {
         if (!this._matrixData) return;
 
@@ -847,6 +1085,9 @@ class MatrixFeature extends FeaturePlugin {
         document.getElementById('col-count').textContent = `${this._matrixData.colItems.length} items`;
     }
 
+    /**
+     *
+     */
     swapEditMatrixAxes() {
         if (!this._editMatrixData) return;
 
@@ -860,6 +1101,9 @@ class MatrixFeature extends FeaturePlugin {
         document.getElementById('edit-col-count').textContent = `${this._editMatrixData.colItems.length} items`;
     }
 
+    /**
+     *
+     */
     createMatrixNode() {
         if (!this._matrixData) return;
 
@@ -930,6 +1174,16 @@ class MatrixFeature extends FeaturePlugin {
         const matrixNode = this.graph.getNode(nodeId);
         if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
 
+        // Guard: Check if cell is already being filled
+        const cellKey = `${row}-${col}`;
+        const groupId = `matrix-${nodeId}`;
+        const cellNodeId = `${nodeId}:cell:${cellKey}`;
+        const groupNodes = this.streamingManager.getGroupNodes(groupId);
+        if (groupNodes.has(cellNodeId)) {
+            console.log(`[MatrixFeature] Cell (${row}, ${col}) is already being filled, skipping`);
+            return;
+        }
+
         const rowItem = matrixNode.rowItems[row];
         const colItem = matrixNode.colItems[col];
         const context = matrixNode.context;
@@ -937,17 +1191,8 @@ class MatrixFeature extends FeaturePlugin {
         // Get DAG history for context
         const messages = this.graph.resolveContext([nodeId]);
 
-        // Track this cell fill for stop button support
-        const cellKey = `${row}-${col}`;
-        // Use a unique virtual nodeId for each cell to allow individual tracking
-        const cellNodeId = `${nodeId}:cell:${cellKey}`;
-        // Group all cells in this matrix together so stopping one stops all
-        const groupId = `matrix-${nodeId}`;
-
-        // Create abort controller for this cell
-        abortController = abortController || new AbortController();
-
-        // Extension hook: matrix:before:fill - allow plugins to prevent or modify cell fill
+        // Register this cell fill with StreamingManager
+        // Use virtual cell nodeId for tracking, but don't auto-show button on virtual ID
         const beforeEvent = new CancellableEvent('matrix:before:fill', {
             nodeId,
             row,
@@ -965,6 +1210,9 @@ class MatrixFeature extends FeaturePlugin {
             return;
         }
 
+        // Create abort controller for this cell
+        abortController = abortController || new AbortController();
+
         // Register this cell fill with StreamingManager
         // Use virtual cell nodeId for tracking, but don't auto-show button on virtual ID
         this.streamingManager.register(cellNodeId, {
@@ -981,7 +1229,6 @@ class MatrixFeature extends FeaturePlugin {
 
         // Show stop button on parent matrix node (not the virtual cell ID)
         // Only show if this is the first cell in the group
-        const groupNodes = this.streamingManager.getGroupNodes(groupId);
         if (groupNodes.size === 1) {
             // First cell - show stop button on parent matrix node
             this.canvas.showStopButton(nodeId);
@@ -1153,6 +1400,12 @@ class MatrixFeature extends FeaturePlugin {
         }
     }
 
+    /**
+     *
+     * @param nodeId
+     * @param row
+     * @param col
+     */
     handleMatrixCellView(nodeId, row, col) {
         const matrixNode = this.graph.getNode(nodeId);
         if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
@@ -1182,6 +1435,10 @@ class MatrixFeature extends FeaturePlugin {
         this.modalManager.showPluginModal('matrix', 'cell');
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     async handleMatrixFillAll(nodeId) {
         const matrixNode = this.graph.getNode(nodeId);
         if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
@@ -1201,7 +1458,7 @@ class MatrixFeature extends FeaturePlugin {
         }
 
         if (emptyCells.length === 0) {
-            // All cells filled - no action needed, button tooltip already indicates this
+            // All cells filled - no action needed
             return;
         }
 
@@ -1218,7 +1475,35 @@ class MatrixFeature extends FeaturePlugin {
     }
 
     /**
+     * Clear all filled cells in a matrix.
+     * @param {string} nodeId - Matrix node ID
+     */
+    handleMatrixClearAll(nodeId) {
+        const matrixNode = this.graph.getNode(nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        // Check if there are any filled cells
+        const { cells } = matrixNode;
+        const hasFilledCells = Object.values(cells).some((cell) => cell && cell.filled);
+
+        if (!hasFilledCells) {
+            // No cells to clear
+            return;
+        }
+
+        // Clear all cells
+        const emptyCells = {};
+        this.graph.updateNode(nodeId, { cells: emptyCells });
+
+        // Re-render the node to show empty cells
+        this.canvas.renderNode(this.graph.getNode(nodeId));
+
+        this.saveSession();
+    }
+
+    /**
      * Handle editing matrix rows and columns
+     * @param nodeId
      */
     handleMatrixEdit(nodeId) {
         const matrixNode = this.graph.getNode(nodeId);
@@ -1257,6 +1542,9 @@ class MatrixFeature extends FeaturePlugin {
         this.saveSession();
     }
 
+    /**
+     *
+     */
     saveMatrixEdits() {
         if (!this._editMatrixData) return;
 
@@ -1308,6 +1596,9 @@ class MatrixFeature extends FeaturePlugin {
         this.saveSession();
     }
 
+    /**
+     *
+     */
     pinCellToCanvas() {
         if (!this._currentCellData) return;
 
@@ -1348,6 +1639,8 @@ class MatrixFeature extends FeaturePlugin {
 
     /**
      * Handle extracting a row from a matrix - show preview modal
+     * @param nodeId
+     * @param rowIndex
      */
     handleMatrixRowExtract(nodeId, rowIndex) {
         const matrixNode = this.graph.getNode(nodeId);
@@ -1392,6 +1685,8 @@ class MatrixFeature extends FeaturePlugin {
 
     /**
      * Handle extracting a column from a matrix - show preview modal
+     * @param nodeId
+     * @param colIndex
      */
     handleMatrixColExtract(nodeId, colIndex) {
         const matrixNode = this.graph.getNode(nodeId);
@@ -1515,6 +1810,23 @@ class MatrixFeature extends FeaturePlugin {
         this._currentSliceData = null;
         // StreamingManager handles cleanup via clear() when session changes
         this.streamingMatrixCells.clear();
+    }
+
+    /**
+     * Get canvas event handlers for matrix functionality.
+     * @returns {Object} Event name -> handler function mapping
+     */
+    getCanvasEventHandlers() {
+        return {
+            matrixCellFill: this.handleMatrixCellFill.bind(this),
+            matrixCellView: this.handleMatrixCellView.bind(this),
+            matrixFillAll: this.handleMatrixFillAll.bind(this),
+            matrixClearAll: this.handleMatrixClearAll.bind(this),
+            matrixRowExtract: this.handleMatrixRowExtract.bind(this),
+            matrixColExtract: this.handleMatrixColExtract.bind(this),
+            matrixEdit: this.handleMatrixEdit.bind(this),
+            matrixIndexColResize: this.handleMatrixIndexColResize.bind(this),
+        };
     }
 }
 

@@ -6,6 +6,8 @@
 /**
  * Normalize text content from LLM streaming
  * Fixes common tokenization artifacts like spaces before punctuation
+ * @param {string} text
+ * @returns {string}
  */
 function normalizeText(text) {
     if (!text) return text;
@@ -18,8 +20,9 @@ function normalizeText(text) {
             .replace(/ +([.,!?;:)\]}])/g, '$1')
             // Remove spaces after opening brackets/parens
             .replace(/([[({]) +/g, '$1')
-            // Fix space before apostrophe in contractions
+            // Fix space around apostrophe in contractions (e.g., "don ' t" -> "don't")
             .replace(/ +'/g, "'")
+            .replace(/' +/g, "'")
             // Fix multiple spaces (but preserve single spaces)
             .replace(/ {2,}/g, ' ')
             // Trim leading/trailing whitespace

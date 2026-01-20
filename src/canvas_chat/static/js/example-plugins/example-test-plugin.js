@@ -11,6 +11,10 @@ import { NodeType, createNode } from '../graph-types.js';
  * Used for testing the plugin system and as documentation.
  */
 class SimpleTestPlugin extends FeaturePlugin {
+    /**
+     *
+     * @param context
+     */
     constructor(context) {
         super(context);
         this.loadCount = 0;
@@ -18,15 +22,17 @@ class SimpleTestPlugin extends FeaturePlugin {
         this.commandsExecuted = [];
     }
 
+    /**
+     *
+     */
     async onLoad() {
         this.loadCount++;
         console.log('[SimpleTestPlugin] Loaded');
     }
 
-    async onUnload() {
-        console.log('[SimpleTestPlugin] Unloaded');
-    }
-
+    /**
+     * @returns {Object} Event subscriptions mapping
+     */
     getEventSubscriptions() {
         return {
             'node:created': this.onNodeCreated.bind(this),
@@ -34,14 +40,27 @@ class SimpleTestPlugin extends FeaturePlugin {
         };
     }
 
+    /**
+     *
+     * @param event
+     */
     onNodeCreated(event) {
         this.eventsReceived.push({ type: 'node:created', data: event.data });
     }
 
+    /**
+     *
+     * @param event
+     */
     onCommandBefore(event) {
         this.eventsReceived.push({ type: 'command:before', data: event.data });
     }
 
+    /**
+     * @param {string} command
+     * @param {string} args
+     * @param {Object} context
+     */
     async handleTestCommand(command, args, context) {
         this.commandsExecuted.push({ command, args, context });
 
@@ -55,7 +74,13 @@ class SimpleTestPlugin extends FeaturePlugin {
         }
     }
 
-    async handleErrorCommand(command, args, context) {
+    /**
+     * @param {string} _command
+     * @param {string} _args
+     * @param {Object} _context
+     * @returns {never}
+     */
+    async handleErrorCommand(_command, _args, _context) {
         throw new Error('Intentional test error');
     }
 }
@@ -67,6 +92,10 @@ class SimpleTestPlugin extends FeaturePlugin {
  * - Event cancellation
  */
 class ComplexTestPlugin extends FeaturePlugin {
+    /**
+     *
+     * @param context
+     */
     constructor(context) {
         super(context);
         this.state = {
@@ -75,16 +104,26 @@ class ComplexTestPlugin extends FeaturePlugin {
         };
     }
 
+    /**
+     *
+     */
     async onLoad() {
         console.log('[ComplexTestPlugin] Loaded');
     }
 
+    /**
+     * @returns {Object} Event subscriptions mapping
+     */
     getEventSubscriptions() {
         return {
             'command:before': this.onCommandBefore.bind(this),
         };
     }
 
+    /**
+     *
+     * @param event
+     */
     onCommandBefore(event) {
         // Cancel commands that start with 'blocked'
         if (event.data.command === '/blocked') {
@@ -92,7 +131,12 @@ class ComplexTestPlugin extends FeaturePlugin {
         }
     }
 
-    async handleCountCommand(command, args, context) {
+    /**
+     * @param {string} _command
+     * @param {string} _args
+     * @param {Object} _context
+     */
+    async handleCountCommand(_command, _args, _context) {
         this.state.counter++;
         this.state.operations.push({ type: 'count', counter: this.state.counter });
 
@@ -100,7 +144,12 @@ class ComplexTestPlugin extends FeaturePlugin {
         this.graph.addNode(node);
     }
 
-    async handleAsyncCommand(command, args, context) {
+    /**
+     * @param {string} _command
+     * @param {string} _args
+     * @param {Object} _context
+     */
+    async handleAsyncCommand(_command, _args, _context) {
         this.state.operations.push({ type: 'async', status: 'started' });
 
         // Simulate async operation

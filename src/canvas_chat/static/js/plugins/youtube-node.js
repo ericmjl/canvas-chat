@@ -8,15 +8,30 @@ import { BaseNode, Actions } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 import { NodeType } from '../graph-types.js';
 
+/**
+ * YouTubeNode - Protocol for YouTube video display with transcript
+ */
 class YouTubeNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'YouTube Video';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '▶️';
     }
 
+    /**
+     * Get additional action buttons for this node
+     * @returns {Array<string>}
+     */
     getAdditionalActions() {
         return [Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS];
     }
@@ -24,8 +39,10 @@ class YouTubeNode extends BaseNode {
     /**
      * Get summary text for semantic zoom (shown when zoomed out)
      * Use video title from metadata instead of transcript content
+     * @param {Canvas} _canvas
+     * @returns {string}
      */
-    getSummaryText(canvas) {
+    getSummaryText(_canvas) {
         // Priority: user-set title > video title from metadata > fallback
         if (this.node.title) return this.node.title;
         const videoTitle = this.node.metadata?.title;
@@ -36,6 +53,7 @@ class YouTubeNode extends BaseNode {
     /**
      * Render the main node content.
      * For YouTube videos: embed video iframe only (no transcript preview).
+     * @returns {string}
      */
     renderContent() {
         const videoId = this.node.metadata?.video_id || this.node.youtubeVideoId;
@@ -61,6 +79,7 @@ class YouTubeNode extends BaseNode {
 
     /**
      * Check if node has output panel (transcript drawer).
+     * @returns {boolean}
      */
     hasOutput() {
         return true; // Always show transcript in drawer
@@ -68,6 +87,7 @@ class YouTubeNode extends BaseNode {
 
     /**
      * Render output panel (transcript drawer).
+     * @returns {string}
      */
     renderOutputPanel() {
         // Transcript is stored in node.content
@@ -80,6 +100,8 @@ class YouTubeNode extends BaseNode {
 
     /**
      * Render markdown content.
+     * @param {string} content
+     * @returns {string}
      */
     renderMarkdown(content) {
         if (!content) return '';

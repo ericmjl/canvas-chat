@@ -24,21 +24,39 @@ import { FeaturePlugin } from '../feature-plugin.js';
  * Defines how factcheck nodes are rendered and what actions they support.
  */
 class FactcheckNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'Factcheck';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '🔍';
     }
 
-    getSummaryText(canvas) {
+    /**
+     * Get summary text for the node (shown when zoomed out)
+     * @param {Canvas} _canvas
+     * @returns {string}
+     */
+    getSummaryText(_canvas) {
         const claims = this.node.claims || [];
         const count = claims.length;
         if (count === 0) return 'Fact Check';
         return `Fact Check · ${count} claim${count !== 1 ? 's' : ''}`;
     }
 
+    /**
+     * Render the content for the factcheck node
+     * @param {Canvas} canvas
+     * @returns {string}
+     */
     renderContent(canvas) {
         const claims = this.node.claims || [];
         if (claims.length === 0) {
@@ -74,7 +92,7 @@ class FactcheckNode extends BaseNode {
                     <div class="factcheck-claim-header">
                         <span class="factcheck-badge">${badge}</span>
                         <span class="factcheck-claim-text">${canvas.escapeHtml(claim.text)}</span>
-                        ${isChecking ? '<span class="factcheck-spinner">⟳</span>' : '<span class="factcheck-toggle">▼</span>'}
+                        ${isChecking ? '<span class="loading-spinner factcheck-inline-spinner"></span>' : '<span class="factcheck-toggle">▼</span>'}
                     </div>
                     ${detailsHtml}
                 </div>
@@ -85,6 +103,11 @@ class FactcheckNode extends BaseNode {
         return `<div class="factcheck-claims">${claimsHtml}</div>`;
     }
 
+    /**
+     * Get the verdict badge emoji for a status
+     * @param {string} status
+     * @returns {string}
+     */
     getVerdictBadge(status) {
         const badges = {
             checking: '🔄',
@@ -98,23 +121,32 @@ class FactcheckNode extends BaseNode {
         return badges[status] || '❓';
     }
 
+    /**
+     * Get action buttons for this node
+     * @returns {Array<string>}
+     */
     getActions() {
         return [Actions.COPY];
     }
 
+    /**
+     * Get CSS classes for content wrapper
+     * @returns {string}
+     */
     getContentClasses() {
         return 'factcheck-content';
     }
 
     /**
      * Factcheck-specific event bindings for claim accordion
+     * @returns {Array<Object>}
      */
     getEventBindings() {
         return [
             {
                 selector: '.factcheck-claim-header',
                 multiple: true,
-                handler: (nodeId, e, canvas) => {
+                handler: (_nodeId, e, _canvas) => {
                     const claimEl = e.currentTarget.closest('.factcheck-claim');
                     if (claimEl && !claimEl.classList.contains('checking')) {
                         // Toggle expanded state (multiple can be open)
@@ -161,6 +193,7 @@ class FactcheckFeature extends FeaturePlugin {
 
     /**
      * Lifecycle hook called when the plugin is loaded.
+     * @returns {Promise<void>}
      */
     async onLoad() {
         console.log('[FactcheckFeature] Loaded');
@@ -288,9 +321,7 @@ class FactcheckFeature extends FeaturePlugin {
                         refined === 'verify this' ||
                         refined.length < 10
                     ) {
-                        console.warn(
-                            '[Factcheck] Refine returned unhelpful result, using context directly'
-                        );
+                        console.warn('[Factcheck] Refine returned unhelpful result, using context directly');
                         effectiveInput = selectedContext;
                     } else {
                         effectiveInput = refined;
@@ -547,9 +578,7 @@ class FactcheckFeature extends FeaturePlugin {
                 const preservedClaims = claimsData.map((newClaim, index) => {
                     const existingClaim = existingClaims[index];
                     // If text matches and claim is already verified, preserve it
-                    if (existingClaim &&
-                        existingClaim.text === newClaim.text &&
-                        existingClaim.status !== 'checking') {
+                    if (existingClaim && existingClaim.text === newClaim.text && existingClaim.status !== 'checking') {
                         return existingClaim; // Keep the existing verified claim
                     }
                     return newClaim; // Use new claim (either new text or still checking)
@@ -607,11 +636,14 @@ class FactcheckFeature extends FeaturePlugin {
         );
 
         const results = await Promise.allSettled(verificationPromises);
-        console.log(`[Factcheck] All verifications complete. Results:`, results.map((r, i) => ({
-            index: i,
-            status: r.status,
-            error: r.status === 'rejected' ? r.reason : null,
-        })));
+        console.log(
+            `[Factcheck] All verifications complete. Results:`,
+            results.map((r, i) => ({
+                index: i,
+                status: r.status,
+                error: r.status === 'rejected' ? r.reason : null,
+            }))
+        );
 
         // Final save after all verifications complete
         this.saveSession();
@@ -667,15 +699,15 @@ class FactcheckFeature extends FeaturePlugin {
      * @param {number} claimIndex - Index of the claim in the claims array
      * @param {string} claim - The claim text to verify
      * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
+     * @param {string} _apiKey - API key for the model (unused, fetched internally)
      */
-    async verifyClaim(nodeId, claimIndex, claim, model, apiKey) {
+    async verifyClaim(nodeId, claimIndex, claim, model, _apiKey) {
         const node = this.graph.getNode(nodeId);
         if (!node || !node.claims) return;
 
         try {
             // 1. Generate search queries for this claim
-            const queries = await this.generateFactcheckQueries(claim, model, apiKey);
+            const queries = await this.generateFactcheckQueries(claim, model);
 
             // 2. Perform web searches
             const hasExa = storage.hasExaApiKey();
@@ -728,7 +760,7 @@ class FactcheckFeature extends FeaturePlugin {
 
             // 3. Analyze search results to produce verdict
             console.log(`[Factcheck] Analyzing verdict for claim ${claimIndex + 1}:`, claim);
-            const verdict = await this.analyzeClaimVerdict(claim, uniqueResults, model, apiKey);
+            const verdict = await this.analyzeClaimVerdict(claim, uniqueResults, model);
             console.log(`[Factcheck] Verdict for claim ${claimIndex + 1}:`, verdict);
 
             // 4. Update the claim in the node
@@ -784,7 +816,6 @@ class FactcheckFeature extends FeaturePlugin {
      * Extract verifiable claims from input text using LLM
      * @param {string} input - Text containing potential claims
      * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
      * @returns {Promise<string[]>} - Array of extracted claims (max 10)
      */
     async extractFactcheckClaims(input, model) {
@@ -805,21 +836,27 @@ Rules:
 Respond with a JSON array of claim strings. Example:
 ["The Eiffel Tower is 330 meters tall", "Paris is the capital of France"]
 
-If the input contains no factual content at all (e.g., ONLY greetings or questions with no assertions), respond with an empty array: []`;
+        If the input contains no factual content at all (e.g., ONLY greetings or questions with no assertions), respond with an empty array: []`;
 
         console.log('[Factcheck] Extracting claims from:', input);
 
-        // Get API key (may be null in admin mode, backend handles it)
-        const apiKey = chat.getApiKeyForModel(model);
+        // API key is fetched internally by chat.sendMessage()
 
-        const response = await chat.sendMessageNonStreaming(
-            [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: input },
-            ],
-            model,
-            apiKey
-        );
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: input },
+        ];
+
+        // Use streaming API with onDone callback to get full response
+        const response = await new Promise((resolve, reject) => {
+            chat.sendMessage(
+                messages,
+                model,
+                null, // onChunk - not needed
+                (fullContent) => resolve(fullContent), // onDone - get full response
+                (error) => reject(error) // onError
+            );
+        });
 
         console.log('[Factcheck] LLM response:', response);
 
@@ -843,10 +880,9 @@ If the input contains no factual content at all (e.g., ONLY greetings or questio
      * Generate search queries to verify a claim
      * @param {string} claim - The claim to verify
      * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
      * @returns {Promise<string[]>} - Array of search queries (2-3)
      */
-    async generateFactcheckQueries(claim, model, apiKey) {
+    async generateFactcheckQueries(claim, model) {
         const systemPrompt = `You are a fact-checking assistant. Generate 2-3 search queries to verify the given claim.
 
 Guidelines:
@@ -855,17 +891,24 @@ Guidelines:
 3. Vary query phrasing to find different perspectives
 4. Add keywords like "fact check", "true", or "false" if helpful
 
-Respond with a JSON array of query strings. Example:
+        Respond with a JSON array of query strings. Example:
 ["Eiffel Tower height meters", "How tall is Eiffel Tower Wikipedia", "Eiffel Tower official dimensions"]`;
 
-        const response = await chat.sendMessageNonStreaming(
-            [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: claim },
-            ],
-            model,
-            apiKey
-        );
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: claim },
+        ];
+
+        // Use streaming API with onDone callback to get full response
+        const response = await new Promise((resolve, reject) => {
+            chat.sendMessage(
+                messages,
+                model,
+                null,
+                (fullContent) => resolve(fullContent),
+                (error) => reject(error)
+            );
+        });
 
         try {
             const jsonMatch = response.match(/\[[\s\S]*\]/);
@@ -885,10 +928,9 @@ Respond with a JSON array of query strings. Example:
      * @param {string} claim - The claim being verified
      * @param {Object[]} searchResults - Array of search results with title, url, snippet
      * @param {string} model - LLM model to use
-     * @param {string} apiKey - API key for the model
      * @returns {Promise<Object>} - Verdict object with status, explanation, sources
      */
-    async analyzeClaimVerdict(claim, searchResults, model, apiKey) {
+    async analyzeClaimVerdict(claim, searchResults, model) {
         if (searchResults.length === 0) {
             return {
                 status: 'unverifiable',
@@ -930,14 +972,23 @@ SEARCH RESULTS:
 ${resultsText}`;
 
         console.log(`[Factcheck] Calling LLM to analyze verdict for claim: ${claim.substring(0, 50)}...`);
-        const response = await chat.sendMessageNonStreaming(
-            [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userPrompt },
-            ],
-            model,
-            apiKey
-        );
+
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+        ];
+
+        // Use streaming API with onDone callback to get full response
+        const response = await new Promise((resolve, reject) => {
+            chat.sendMessage(
+                messages,
+                model,
+                null,
+                (fullContent) => resolve(fullContent),
+                (error) => reject(error)
+            );
+        });
+
         console.log(`[Factcheck] LLM response received (length: ${response.length})`);
 
         try {

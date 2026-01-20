@@ -40,6 +40,9 @@ function calculateIDF(N, df) {
  * BM25 Search Index
  */
 class SearchIndex {
+    /**
+     *
+     */
     constructor() {
         this.documents = new Map(); // nodeId -> { tokens, length }
         this.termFrequencies = new Map(); // nodeId -> Map(term -> count)

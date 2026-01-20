@@ -55,6 +55,10 @@ Click the `+` button in any empty cell. The AI evaluates that specific row-colum
 
 Click "Fill All" at the bottom of the matrix. A confirmation dialog appears showing how many cells will be filled. The AI processes each empty cell sequentially, streaming content as it generates.
 
+### Clear all cells
+
+Click "Clear All" at the bottom of the matrix to remove all cell content. This resets the matrix to its original row/column structure without the evaluations.
+
 ## Viewing cell details
 
 Click any filled cell to open the detail modal, which shows:

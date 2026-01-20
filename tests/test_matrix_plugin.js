@@ -166,6 +166,96 @@ await asyncTest('MatrixFeature has required methods', async () => {
     assertTrue(typeof feature.createMatrixNode === 'function', 'Has createMatrixNode');
     assertTrue(typeof feature.handleMatrixCellFill === 'function', 'Has handleMatrixCellFill');
     assertTrue(typeof feature.handleMatrixFillAll === 'function', 'Has handleMatrixFillAll');
+    assertTrue(typeof feature.handleMatrixClearAll === 'function', 'Has handleMatrixClearAll');
+});
+
+// Test: handleMatrixClearAll clears cells correctly
+await asyncTest('handleMatrixClearAll clears cells from graph', async () => {
+    const harness = new PluginTestHarness();
+
+    await harness.loadPlugin({
+        id: 'matrix',
+        feature: MatrixFeature,
+        slashCommands: [
+            {
+                command: '/matrix',
+                handler: 'handleMatrix',
+            },
+        ],
+    });
+
+    const feature = harness.getPlugin('matrix');
+    const graph = feature.graph;
+
+    // Create a mock matrix node with cells
+    const mockMatrixNode = {
+        id: 'test-matrix-1',
+        type: 'matrix',
+        context: 'Test Context',
+        rowItems: ['Row 1', 'Row 2'],
+        colItems: ['Col 1', 'Col 2'],
+        cells: {
+            '0-0': { content: 'Cell 0,0', filled: true },
+            '0-1': { content: 'Cell 0,1', filled: true },
+            '1-0': { content: 'Cell 1,0', filled: true },
+            '1-1': { content: 'Cell 1,1', filled: true },
+        },
+        position: { x: 100, y: 100 },
+    };
+
+    // Add the node to the graph
+    graph.addNode(mockMatrixNode);
+
+    // Verify cells are set
+    const nodeBefore = graph.getNode('test-matrix-1');
+    assertTrue(nodeBefore.cells && Object.keys(nodeBefore.cells).length === 4, 'Should have 4 cells before clear');
+
+    // Call handleMatrixClearAll
+    feature.handleMatrixClearAll('test-matrix-1');
+
+    // Verify cells are cleared
+    const nodeAfter = graph.getNode('test-matrix-1');
+    assertTrue(nodeAfter.cells && Object.keys(nodeAfter.cells).length === 0, 'Should have 0 cells after clear');
+});
+
+// Test: handleMatrixClearAll does nothing when no filled cells
+await asyncTest('handleMatrixClearAll does nothing when no filled cells', async () => {
+    const harness = new PluginTestHarness();
+
+    await harness.loadPlugin({
+        id: 'matrix',
+        feature: MatrixFeature,
+        slashCommands: [
+            {
+                command: '/matrix',
+                handler: 'handleMatrix',
+            },
+        ],
+    });
+
+    const feature = harness.getPlugin('matrix');
+    const graph = feature.graph;
+
+    // Create a mock matrix node without filled cells
+    const mockMatrixNode = {
+        id: 'test-matrix-2',
+        type: 'matrix',
+        context: 'Test Context',
+        rowItems: ['Row 1'],
+        colItems: ['Col 1'],
+        cells: {},
+        position: { x: 100, y: 100 },
+    };
+
+    // Add the node to the graph
+    graph.addNode(mockMatrixNode);
+
+    // Call handleMatrixClearAll (should not throw and should not modify anything)
+    feature.handleMatrixClearAll('test-matrix-2');
+
+    // Verify cells are still empty
+    const nodeAfter = graph.getNode('test-matrix-2');
+    assertTrue(nodeAfter.cells && Object.keys(nodeAfter.cells).length === 0, 'Should still have 0 cells');
 });
 
 // Test: Matrix feature lifecycle hooks called

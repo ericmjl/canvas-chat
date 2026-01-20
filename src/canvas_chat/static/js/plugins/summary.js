@@ -9,12 +9,12 @@ import { BaseNode, Actions } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
 /**
- * Summary Node Protocol Class
- * Defines how summary nodes are rendered and what actions they support.
+ * SummaryNode - Protocol for AI-generated summaries
  */
 class SummaryNode extends BaseNode {
     /**
      * Display label shown in node header
+     * @returns {string}
      */
     getTypeLabel() {
         return 'Summary';
@@ -22,6 +22,7 @@ class SummaryNode extends BaseNode {
 
     /**
      * Emoji icon for the node type
+     * @returns {string}
      */
     getTypeIcon() {
         return '📋';
@@ -29,6 +30,7 @@ class SummaryNode extends BaseNode {
 
     /**
      * Action buttons for the summary node
+     * @returns {Array<string>}
      */
     getActions() {
         return [Actions.REPLY, Actions.CREATE_FLASHCARDS, Actions.COPY];

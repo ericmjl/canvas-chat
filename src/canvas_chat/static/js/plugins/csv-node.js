@@ -7,28 +7,49 @@
  */
 import { BaseNode, Actions } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
-import { NodeType, createNode } from '../graph-types.js';
+import { NodeType, createNode, createEdge, EdgeType } from '../graph-types.js';
 import { FileUploadHandlerPlugin } from '../file-upload-handler-plugin.js';
 import { FileUploadRegistry, PRIORITY } from '../file-upload-registry.js';
 
 /* global Papa */
 
+/**
+ * CsvNode - Protocol for CSV data display
+ */
 class CsvNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'CSV';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '📊';
     }
 
-    getSummaryText(canvas) {
+    /**
+     * Get summary text for semantic zoom (shown when zoomed out)
+     * @param {Canvas} _canvas
+     * @returns {string}
+     */
+    getSummaryText(_canvas) {
         if (this.node.title) return this.node.title;
         const filename = this.node.filename || 'CSV Data';
         const rowCount = this.node.rowCount || '?';
         return `${filename} (${rowCount} rows)`;
     }
 
+    /**
+     * Render the content for the CSV node
+     * @param {Canvas} canvas
+     * @returns {string}
+     */
     renderContent(canvas) {
         // Show table preview with metadata header
         const filename = this.node.filename || 'data.csv';
@@ -52,8 +73,60 @@ class CsvNode extends BaseNode {
         return html;
     }
 
+    /**
+     * Get action buttons for this node
+     * @returns {Array<string>}
+     */
     getActions() {
         return [Actions.ANALYZE, Actions.REPLY, Actions.SUMMARIZE, Actions.COPY];
+    }
+
+    /**
+     * Handle Analyze button click - creates a Code node to analyze CSV data.
+     * This is tight coupling between CSV and Code nodes (by design).
+     * @param {string} nodeId - The CSV node ID
+     * @param {Object} canvas - Canvas instance
+     * @param {Object} graph - Graph instance
+     */
+    analyze(nodeId, canvas, graph) {
+        const csvNode = graph.getNode(nodeId);
+        if (!csvNode) return;
+
+        // Create code node with starter template
+        const starterCode = `# Analyzing: ${csvNode.title || 'CSV data'}
+import pandas as pd
+
+# DataFrame is pre-loaded as 'df'
+df.head()
+`;
+
+        const position = graph.autoPosition([nodeId]);
+
+        const codeNode = createNode(NodeType.CODE, starterCode, {
+            position,
+            csvNodeIds: [nodeId], // Link to source CSV node
+        });
+
+        graph.addNode(codeNode);
+
+        // Create edge from CSV to code node
+        const edge = createEdge(nodeId, codeNode.id, EdgeType.GENERATES);
+        graph.addEdge(edge);
+
+        canvas.renderNode(codeNode);
+        canvas.updateAllEdges(graph);
+        canvas.updateAllNavButtonStates(graph);
+        canvas.panToNodeAnimated(codeNode.id);
+
+        // Save session
+        if (canvas.saveSession) {
+            canvas.saveSession();
+        }
+
+        // Preload Pyodide in background so it's ready when user clicks Run
+        if (window.pyodideRunner) {
+            window.pyodideRunner.preload();
+        }
     }
 }
 
@@ -76,10 +149,10 @@ class CsvFileUploadHandler extends FileUploadHandlerPlugin {
      * Handle CSV file upload
      * @param {File} file - The CSV file to upload
      * @param {Object|null} position - Optional position for the node
-     * @param {Object} context - Additional context
+     * @param {Object} _context - Additional context
      * @returns {Promise<Object>} The created CSV node
      */
-    async handleUpload(file, position = null, context = {}) {
+    async handleUpload(file, position = null, _context = {}) {
         // Validate CSV type
         if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
             throw new Error('Please select a CSV file.');

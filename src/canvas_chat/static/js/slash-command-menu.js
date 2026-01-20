@@ -54,6 +54,9 @@ const SLASH_COMMANDS = getAllSlashCommands();
  * Slash command autocomplete menu
  */
 class SlashCommandMenu {
+    /**
+     *
+     */
     constructor() {
         this.menu = null;
         this.activeInput = null;
@@ -68,6 +71,9 @@ class SlashCommandMenu {
         this.createMenu();
     }
 
+    /**
+     *
+     */
     createMenu() {
         this.menu = document.createElement('div');
         this.menu.className = 'slash-command-menu';
@@ -82,6 +88,8 @@ class SlashCommandMenu {
 
     /**
      * Attach to an input element
+     * @param input
+     * @param onSelect
      */
     attach(input, onSelect) {
         this.onSelect = onSelect;
@@ -97,6 +105,11 @@ class SlashCommandMenu {
         });
     }
 
+    /**
+     *
+     * @param e
+     * @param input
+     */
     handleInput(e, input) {
         const value = input.value;
 
@@ -129,6 +142,12 @@ class SlashCommandMenu {
         }
     }
 
+    /**
+     *
+     * @param {KeyboardEvent} e
+     * @param {HTMLTextAreaElement} input
+     * @returns {boolean}
+     */
     handleKeydown(e, input) {
         // If we just selected a command, block the next Enter from sending
         if (this.justSelected && e.key === 'Enter') {
@@ -174,6 +193,11 @@ class SlashCommandMenu {
         return false;
     }
 
+    /**
+     *
+     * @param input
+     * @param cmd
+     */
     selectCommand(input, cmd) {
         // Insert the command with a trailing space
         input.value = cmd.command + ' ';
@@ -200,6 +224,10 @@ class SlashCommandMenu {
         }
     }
 
+    /**
+     *
+     * @param input
+     */
     show(input) {
         this.activeInput = input;
         this.visible = true;
@@ -215,6 +243,9 @@ class SlashCommandMenu {
         this.render();
     }
 
+    /**
+     *
+     */
     hide() {
         this.visible = false;
         this.menu.style.display = 'none';
@@ -223,6 +254,8 @@ class SlashCommandMenu {
 
     /**
      * Check if a command is currently disabled
+     * @param {Object} cmd
+     * @returns {boolean}
      */
     isCommandDisabled(cmd) {
         const hasExa = storage.hasExaApiKey();
@@ -238,6 +271,9 @@ class SlashCommandMenu {
         return isExaDisabled || isContextDisabled || isCsvDisabled;
     }
 
+    /**
+     *
+     */
     render() {
         const hasExa = storage.hasExaApiKey();
         // Check if context is available (selected nodes or text after command)

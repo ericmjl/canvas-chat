@@ -8,15 +8,30 @@
 import { BaseNode, Actions } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
+/**
+ * ReferenceNode - Protocol for search results
+ */
 class ReferenceNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'Reference';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '🔗';
     }
 
+    /**
+     * Get action buttons for this node
+     * @returns {Array<string>}
+     */
     getActions() {
         return [Actions.REPLY, Actions.FETCH_SUMMARIZE, Actions.COPY];
     }

@@ -70,7 +70,13 @@ const DB_VERSION = 1;
 const SESSIONS_STORE = 'sessions';
 const COPILOT_AUTH_KEY = 'canvas-chat-copilot-auth';
 
+/**
+ *
+ */
 class Storage {
+    /**
+     *
+     */
     constructor() {
         this.db = null;
         this.dbReady = this.initDB();
@@ -78,6 +84,7 @@ class Storage {
 
     /**
      * Initialize IndexedDB
+     * @returns {Promise<IDBDatabase|null>}
      */
     async initDB() {
         // Check if indexedDB is available (not available in Node.js test environment)
@@ -114,6 +121,7 @@ class Storage {
 
     /**
      * Ensure DB is ready before operations
+     * @returns {IDBDatabase}
      */
     async ensureDB() {
         if (!this.db) {
@@ -126,6 +134,8 @@ class Storage {
 
     /**
      * Save a session to IndexedDB
+     * @param {Session} session
+     * @returns {Promise<Session>}
      */
     async saveSession(session) {
         const db = await this.ensureDB();
@@ -143,6 +153,8 @@ class Storage {
 
     /**
      * Get a session by ID
+     * @param {string} id
+     * @returns {Promise<Session|null>}
      */
     async getSession(id) {
         const db = await this.ensureDB();
@@ -158,6 +170,7 @@ class Storage {
 
     /**
      * List all sessions, sorted by updated_at descending
+     * @returns {Promise<Session[]>}
      */
     async listSessions() {
         const db = await this.ensureDB();
@@ -183,6 +196,7 @@ class Storage {
 
     /**
      * Delete a session by ID
+     * @param id
      */
     async deleteSession(id) {
         const db = await this.ensureDB();
@@ -200,6 +214,8 @@ class Storage {
 
     /**
      * Export session to JSON file (.canvaschat)
+     * @param {Session} session
+     * @returns {void}
      */
     exportSession(session) {
         const exportData = {
@@ -222,6 +238,8 @@ class Storage {
 
     /**
      * Import session from .canvaschat file
+     * @param {File} file
+     * @returns {Promise<Session>}
      */
     async importSession(file) {
         return new Promise((resolve, reject) => {
@@ -260,6 +278,7 @@ class Storage {
 
     /**
      * Get API keys from localStorage
+     * @returns {ApiKeys}
      */
     getApiKeys() {
         const keys = localStorage.getItem('canvas-chat-api-keys');
@@ -268,6 +287,7 @@ class Storage {
 
     /**
      * Save API keys to localStorage
+     * @param keys
      */
     saveApiKeys(keys) {
         localStorage.setItem('canvas-chat-api-keys', JSON.stringify(keys));
@@ -299,6 +319,7 @@ class Storage {
 
     /**
      * Get Copilot API key
+     * @returns {string|null}
      */
     getCopilotApiKey() {
         return this.getCopilotAuth()?.apiKey || null;
@@ -306,6 +327,7 @@ class Storage {
 
     /**
      * Get Copilot access token
+     * @returns {string|null}
      */
     getCopilotAccessToken() {
         return this.getCopilotAuth()?.accessToken || null;
@@ -313,6 +335,7 @@ class Storage {
 
     /**
      * Get Copilot token expiry timestamp (seconds)
+     * @returns {number|null}
      */
     getCopilotExpiresAt() {
         return this.getCopilotAuth()?.expiresAt || null;
@@ -320,6 +343,7 @@ class Storage {
 
     /**
      * Check if Copilot auth is expired
+     * @returns {boolean}
      */
     isCopilotAuthExpired() {
         const auth = this.getCopilotAuth();
@@ -331,6 +355,7 @@ class Storage {
 
     /**
      * Check if Copilot auth is available and not expired
+     * @returns {boolean}
      */
     hasCopilotAuth() {
         const auth = this.getCopilotAuth();
@@ -466,6 +491,7 @@ class Storage {
 
     /**
      * Get Exa API key
+     * @returns {string|null}
      */
     getExaApiKey() {
         const keys = this.getApiKeys();
@@ -483,6 +509,7 @@ class Storage {
 
     /**
      * Get the currently selected model
+     * @returns {string}
      */
     getCurrentModel() {
         return localStorage.getItem('canvas-chat-model') || 'openai/gpt-4o-mini';
@@ -490,6 +517,7 @@ class Storage {
 
     /**
      * Save the currently selected model
+     * @param model
      */
     setCurrentModel(model) {
         localStorage.setItem('canvas-chat-model', model);
@@ -497,6 +525,7 @@ class Storage {
 
     /**
      * Get the last active session ID
+     * @returns {string|null}
      */
     getLastSessionId() {
         return localStorage.getItem('canvas-chat-last-session');
@@ -504,6 +533,7 @@ class Storage {
 
     /**
      * Save the last active session ID
+     * @param id
      */
     setLastSessionId(id) {
         localStorage.setItem('canvas-chat-last-session', id);
@@ -511,6 +541,7 @@ class Storage {
 
     /**
      * Get the custom base URL for LLM proxy
+     * @returns {string|null}
      */
     getBaseUrl() {
         return localStorage.getItem('canvas-chat-base-url') || null;
@@ -518,6 +549,7 @@ class Storage {
 
     /**
      * Save the custom base URL for LLM proxy
+     * @param url
      */
     setBaseUrl(url) {
         if (url) {
