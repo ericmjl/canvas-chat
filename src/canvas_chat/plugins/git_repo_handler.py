@@ -898,36 +898,47 @@ def register_endpoints(app):
         repo_name = handler._extract_repo_name(url)
         normalized_url = handler._normalize_url(url)
 
-        # If temp_dir provided, reuse it; otherwise create new one
+        # If temp_dir provided and repo exists, reuse it; otherwise create new one
         should_cleanup = False
-        if temp_dir and Path(temp_dir).exists():
+        if (
+            temp_dir
+            and Path(temp_dir).exists()
+            and (Path(temp_dir) / repo_name).exists()
+        ):
+            # Repo already exists from previous clone, reuse it directly
             repo_path = Path(temp_dir) / repo_name
+            yield {
+                "event": "status",
+                "data": f"Using existing repository at '{repo_name}'...",
+            }
+            yield {"event": "status", "data": "Repository ready. Reading files..."}
         else:
             # Create temporary directory for cloning
-            temp_dir = tempfile.mkdtemp(prefix="canvas-chat-git-")
+            if not temp_dir or not Path(temp_dir).exists():
+                temp_dir = tempfile.mkdtemp(prefix="canvas-chat-git-")
             repo_path = Path(temp_dir) / repo_name
             should_cleanup = True
 
-        # Build git clone command
-        cmd = ["git", "clone", "--depth", "1", "--quiet"]
+            # Build git clone command
+            cmd = ["git", "clone", "--depth", "1", "--quiet"]
 
-        # Add credentials if provided
-        clone_url = normalized_url
-        if git_credentials:
-            try:
-                parsed = urlparse(normalized_url)
-                host = parsed.netloc
-                if host in git_credentials:
-                    cred = git_credentials[host]
-                    # Replace https:// with https://token@
-                    clone_url = normalized_url.replace(
-                        "https://", f"https://{cred}@", 1
-                    )
-            except Exception:
-                pass
+            # Add credentials if provided
+            clone_url = normalized_url
+            if git_credentials:
+                try:
+                    parsed = urlparse(normalized_url)
+                    host = parsed.netloc
+                    if host in git_credentials:
+                        cred = git_credentials[host]
+                        # Replace https:// with https://token@
+                        clone_url = normalized_url.replace(
+                            "https://", f"https://{cred}@", 1
+                        )
+                except Exception:
+                    pass
 
-        cmd.append(clone_url)
-        cmd.append(str(repo_path))
+            cmd.append(clone_url)
+            cmd.append(str(repo_path))
 
         try:
             # Start the git clone process
