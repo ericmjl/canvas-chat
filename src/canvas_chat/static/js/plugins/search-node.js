@@ -8,11 +8,22 @@
 import { BaseNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
+/**
+ * SearchNode - Protocol for search queries
+ */
 class SearchNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'Search';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '🔍';
     }

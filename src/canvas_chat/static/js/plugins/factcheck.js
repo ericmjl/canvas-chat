@@ -25,24 +25,27 @@ import { FeaturePlugin } from '../feature-plugin.js';
  */
 class FactcheckNode extends BaseNode {
     /**
-     *
+     * Get the type label for this node
+     * @returns {string}
      */
     getTypeLabel() {
         return 'Factcheck';
     }
 
     /**
-     *
+     * Get the type icon for this node
+     * @returns {string}
      */
     getTypeIcon() {
         return '🔍';
     }
 
     /**
-     *
-     * @param canvas
+     * Get summary text for the node (shown when zoomed out)
+     * @param {Canvas} _canvas
+     * @returns {string}
      */
-    getSummaryText(canvas) {
+    getSummaryText(_canvas) {
         const claims = this.node.claims || [];
         const count = claims.length;
         if (count === 0) return 'Fact Check';
@@ -50,8 +53,9 @@ class FactcheckNode extends BaseNode {
     }
 
     /**
-     *
-     * @param canvas
+     * Render the content for the factcheck node
+     * @param {Canvas} canvas
+     * @returns {string}
      */
     renderContent(canvas) {
         const claims = this.node.claims || [];
@@ -100,8 +104,9 @@ class FactcheckNode extends BaseNode {
     }
 
     /**
-     *
-     * @param status
+     * Get the verdict badge emoji for a status
+     * @param {string} status
+     * @returns {string}
      */
     getVerdictBadge(status) {
         const badges = {
@@ -117,14 +122,16 @@ class FactcheckNode extends BaseNode {
     }
 
     /**
-     *
+     * Get action buttons for this node
+     * @returns {Array<string>}
      */
     getActions() {
         return [Actions.COPY];
     }
 
     /**
-     *
+     * Get CSS classes for content wrapper
+     * @returns {string}
      */
     getContentClasses() {
         return 'factcheck-content';
@@ -132,13 +139,14 @@ class FactcheckNode extends BaseNode {
 
     /**
      * Factcheck-specific event bindings for claim accordion
+     * @returns {Array<Object>}
      */
     getEventBindings() {
         return [
             {
                 selector: '.factcheck-claim-header',
                 multiple: true,
-                handler: (nodeId, e, canvas) => {
+                handler: (_nodeId, e, _canvas) => {
                     const claimEl = e.currentTarget.closest('.factcheck-claim');
                     if (claimEl && !claimEl.classList.contains('checking')) {
                         // Toggle expanded state (multiple can be open)
@@ -185,6 +193,7 @@ class FactcheckFeature extends FeaturePlugin {
 
     /**
      * Lifecycle hook called when the plugin is loaded.
+     * @returns {Promise<void>}
      */
     async onLoad() {
         console.log('[FactcheckFeature] Loaded');

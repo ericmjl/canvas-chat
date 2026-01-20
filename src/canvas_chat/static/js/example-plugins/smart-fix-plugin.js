@@ -12,7 +12,14 @@
 
 import { FeaturePlugin } from '../feature-plugin.js';
 
+/**
+ * SmartFixPlugin - Extension plugin for enhanced code self-healing
+ */
 class SmartFixPlugin extends FeaturePlugin {
+    /**
+     * Create a SmartFixPlugin instance
+     * @param {AppContext} context
+     */
     constructor(context) {
         super(context);
 
@@ -28,6 +35,7 @@ class SmartFixPlugin extends FeaturePlugin {
 
     /**
      * Lifecycle hook: Initialize plugin
+     * @returns {Promise<void>}
      */
     async onLoad() {
         console.log('[SmartFixPlugin] Loaded - Enhanced self-healing active');
@@ -35,6 +43,7 @@ class SmartFixPlugin extends FeaturePlugin {
 
     /**
      * Subscribe to self-healing hooks
+     * @returns {Object}
      */
     getEventSubscriptions() {
         return {
@@ -49,6 +58,7 @@ class SmartFixPlugin extends FeaturePlugin {
     /**
      * Hook: Before self-healing begins
      * Can prevent self-healing for specific cases
+     * @param {Object} event
      */
     onBeforeHeal(event) {
         this.stats.totalAttempts++;
@@ -65,6 +75,7 @@ class SmartFixPlugin extends FeaturePlugin {
     /**
      * Hook: When code execution fails
      * Track error patterns for analytics
+     * @param {Object} event
      */
     onError(event) {
         const { error } = event.data;
@@ -79,6 +90,7 @@ class SmartFixPlugin extends FeaturePlugin {
     /**
      * Hook: Before LLM is asked to fix code
      * Provide custom fix strategies for known error patterns
+     * @param {Object} event
      */
     onFix(event) {
         const { errorMessage, failedCode, originalPrompt } = event.data;
@@ -119,6 +131,7 @@ class SmartFixPlugin extends FeaturePlugin {
     /**
      * Hook: When self-healing succeeds
      * Track success metrics
+     * @param {Object} event
      */
     onSuccess(event) {
         this.stats.successes++;
@@ -136,6 +149,7 @@ class SmartFixPlugin extends FeaturePlugin {
     /**
      * Hook: When self-healing exhausts all attempts
      * Provide helpful suggestions
+     * @param {Object} event
      */
     onFailed(event) {
         this.stats.failures++;
@@ -159,6 +173,8 @@ class SmartFixPlugin extends FeaturePlugin {
 
     /**
      * Extract error type from error message
+     * @param {string} error
+     * @returns {string}
      */
     extractErrorType(error) {
         const match = error.match(/^(\w+Error)/);
@@ -167,6 +183,8 @@ class SmartFixPlugin extends FeaturePlugin {
 
     /**
      * Extract missing module name from ImportError
+     * @param {string} errorMessage
+     * @returns {string|null}
      */
     extractMissingModule(errorMessage) {
         const match = errorMessage.match(/No module named ['"](\w+)['"]/);
@@ -175,6 +193,8 @@ class SmartFixPlugin extends FeaturePlugin {
 
     /**
      * Extract undefined variable from NameError
+     * @param {string} errorMessage
+     * @returns {string|null}
      */
     extractUndefinedVariable(errorMessage) {
         const match = errorMessage.match(/name ['"](\w+)['"]/);
@@ -183,6 +203,10 @@ class SmartFixPlugin extends FeaturePlugin {
 
     /**
      * Build custom fix prompt for ImportError
+     * @param {string} failedCode
+     * @param {string} module
+     * @param {string} originalPrompt
+     * @returns {string}
      */
     buildImportFixPrompt(failedCode, module, originalPrompt) {
         return `The code is missing the Python package "${module}".
@@ -202,6 +226,10 @@ Output ONLY the corrected Python code with the pip install line, no explanations
 
     /**
      * Build custom fix prompt for NameError
+     * @param {string} failedCode
+     * @param {string} variable
+     * @param {string} originalPrompt
+     * @returns {string}
      */
     buildNameErrorFixPrompt(failedCode, variable, originalPrompt) {
         return `The code references an undefined variable "${variable}".
@@ -222,6 +250,10 @@ Output ONLY the corrected Python code, no explanations.`;
 
     /**
      * Build custom fix prompt for AttributeError
+     * @param {string} failedCode
+     * @param {string} errorMessage
+     * @param {string} originalPrompt
+     * @returns {string}
      */
     buildAttributeErrorFixPrompt(failedCode, errorMessage, originalPrompt) {
         return `The code has an AttributeError:
@@ -247,6 +279,7 @@ Output ONLY the corrected Python code, no explanations.`;
 
     /**
      * Get success rate percentage
+     * @returns {number}
      */
     getSuccessRate() {
         const total = this.stats.successes + this.stats.failures;
@@ -255,6 +288,8 @@ Output ONLY the corrected Python code, no explanations.`;
 
     /**
      * Get suggestion for specific error type
+     * @param {string} errorType
+     * @returns {string}
      */
     getSuggestionForError(errorType) {
         const suggestions = {
@@ -273,6 +308,7 @@ Output ONLY the corrected Python code, no explanations.`;
 
     /**
      * Get statistics report
+     * @returns {Object}
      */
     getStats() {
         return {

@@ -82,6 +82,7 @@ class AppContext {
 
     /**
      * Get graph instance (live reference, created during session load)
+     * @returns {Object}
      */
     get graph() {
         this._wrapGraphAddNode();
@@ -90,6 +91,7 @@ class AppContext {
 
     /**
      * Get search index (live reference, created during session load)
+     * @returns {Object}
      */
     get searchIndex() {
         return this._app.searchIndex;

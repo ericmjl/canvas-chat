@@ -8,11 +8,22 @@
 import { BaseNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
+/**
+ * HumanNode - Protocol for user messages
+ */
 class HumanNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'You';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '💬';
     }

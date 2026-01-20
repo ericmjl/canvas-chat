@@ -12,7 +12,6 @@ import { isUrlContent, apiUrl } from '../utils.js';
 import { BaseNode, Actions } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
-
 /**
  * GitRepoFeature class manages git repository URL fetching.
  * Extends FeaturePlugin to integrate with the plugin architecture.
@@ -46,9 +45,9 @@ export class GitRepoFeature extends FeaturePlugin {
      * Handle /git slash command
      * @param {string} command - The slash command (e.g., '/git')
      * @param {string} args - Text after the command (URL)
-     * @param {Object} contextObj - Additional context (e.g., { text: selectedNodesContent })
+     * @param {Object} _contextObj - Additional context (unused, kept for interface)
      */
-    async handleCommand(command, args, contextObj) {
+    async handleCommand(command, args, _contextObj) {
         const url = args.trim();
         if (!url) {
             this.showToast?.('Please provide a repository URL', 'warning');
@@ -67,12 +66,12 @@ export class GitRepoFeature extends FeaturePlugin {
 
     /**
      * Check if URL is a git repository URL
-     * @param {string} url - URL to check
+     * @param {string} _url - URL to check (unused, deprecated)
      * @returns {boolean} True if URL matches git repository patterns
      */
     // Note: isGitRepositoryUrl is no longer used - URL routing is handled by backend UrlFetchRegistry
     // This method is kept for backward compatibility but should not be called
-    isGitRepositoryUrl(url) {
+    isGitRepositoryUrl(_url) {
         // Deprecated: URL routing is now handled by backend UrlFetchRegistry
         // This method may be removed in the future
         console.warn('[GitRepoFeature] isGitRepositoryUrl() is deprecated - use backend routing instead');
@@ -178,24 +177,16 @@ export class GitRepoFeature extends FeaturePlugin {
         const parentIds = this.canvas.getSelectedNodeIds();
 
         // Create a placeholder node while fetching
-        const fetchNode = createNode(
-            NodeType.GIT_REPO,
-            `Loading repository files:\n${url}...`,
-            {
-                position: this.graph.autoPosition(parentIds),
-            }
-        );
+        const fetchNode = createNode(NodeType.GIT_REPO, `Loading repository files:\n${url}...`, {
+            position: this.graph.autoPosition(parentIds),
+        });
 
         this.graph.addNode(fetchNode);
         this.canvas.clearSelection();
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
-            const edge = createEdge(
-                parentId,
-                fetchNode.id,
-                parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY
-            );
+            const edge = createEdge(parentId, fetchNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
             this.graph.addEdge(edge);
         }
 
@@ -394,11 +385,11 @@ export class GitRepoFeature extends FeaturePlugin {
                 }
 
                 // Check if this file is currently selected for viewing in the drawer
-                const isViewSelected = selectedFilePath && (
-                    fullPath === selectedFilePath ||
-                    fullPath.toLowerCase() === selectedFilePath.toLowerCase() ||
-                    fullPath.split('/').pop() === selectedFilePath.split('/').pop()
-                );
+                const isViewSelected =
+                    selectedFilePath &&
+                    (fullPath === selectedFilePath ||
+                        fullPath.toLowerCase() === selectedFilePath.toLowerCase() ||
+                        fullPath.split('/').pop() === selectedFilePath.split('/').pop());
                 if (isViewSelected) {
                     li.classList.add('git-repo-file-view-selected');
                 }
@@ -422,12 +413,13 @@ export class GitRepoFeature extends FeaturePlugin {
                             filePathForLookup = fullPath;
                         } else {
                             // Try to find a matching path (case-insensitive or partial match)
-                            const matchingPath = Array.from(fetchedFiles).find(p =>
-                                p === fullPath ||
-                                p.toLowerCase() === fullPath.toLowerCase() ||
-                                p.endsWith(fullPath) ||
-                                fullPath.endsWith(p) ||
-                                p.split('/').pop() === fullPath.split('/').pop()
+                            const matchingPath = Array.from(fetchedFiles).find(
+                                (p) =>
+                                    p === fullPath ||
+                                    p.toLowerCase() === fullPath.toLowerCase() ||
+                                    p.endsWith(fullPath) ||
+                                    fullPath.endsWith(p) ||
+                                    p.split('/').pop() === fullPath.split('/').pop()
                             );
                             if (matchingPath) {
                                 filePathForLookup = matchingPath;
@@ -454,7 +446,9 @@ export class GitRepoFeature extends FeaturePlugin {
                 // Expand/collapse triangle
                 const expandBtn = document.createElement('button');
                 expandBtn.className = 'git-repo-expand-btn';
-                expandBtn.innerHTML = hasChildren ? '<span class="git-repo-expand-icon">▶</span>' : '<span class="git-repo-expand-icon"></span>';
+                expandBtn.innerHTML = hasChildren
+                    ? '<span class="git-repo-expand-icon">▶</span>'
+                    : '<span class="git-repo-expand-icon"></span>';
                 expandBtn.dataset.path = fullPath;
                 expandBtn.title = fullPath;
                 expandBtn.disabled = !hasChildren;
@@ -475,8 +469,8 @@ export class GitRepoFeature extends FeaturePlugin {
                 // Check if all files in directory are selected
                 if (hasChildren) {
                     const allFilePaths = this.getAllFilePaths(item.children);
-                    const allSelected = allFilePaths.length > 0 && allFilePaths.every(p => selectedPaths.has(p));
-                    const someSelected = allFilePaths.some(p => selectedPaths.has(p));
+                    const allSelected = allFilePaths.length > 0 && allFilePaths.every((p) => selectedPaths.has(p));
+                    const someSelected = allFilePaths.some((p) => selectedPaths.has(p));
                     dirCheckbox.checked = allSelected;
                     dirCheckbox.indeterminate = someSelected && !allSelected;
                 }
@@ -518,12 +512,12 @@ export class GitRepoFeature extends FeaturePlugin {
                         if (childrenUl) {
                             const updateChildren = (ul) => {
                                 const fileCheckboxes = ul.querySelectorAll('input[data-type="file"]');
-                                fileCheckboxes.forEach(cb => {
+                                fileCheckboxes.forEach((cb) => {
                                     cb.checked = dirCheckbox.checked;
                                 });
                                 // Also update nested directory checkboxes
                                 const dirCheckboxes = ul.querySelectorAll('input[data-type="directory"]');
-                                dirCheckboxes.forEach(dcb => {
+                                dirCheckboxes.forEach((dcb) => {
                                     dcb.checked = dirCheckbox.checked;
                                     dcb.indeterminate = false;
                                     const nestedUl = dcb.closest('.git-repo-file-tree-item')?.querySelector('ul');
@@ -594,19 +588,21 @@ export class GitRepoFeature extends FeaturePlugin {
     updateParentDirectoryCheckboxes(container) {
         const treeContainer = container.closest('.git-repo-file-tree') || container;
         const allSelectedFilePaths = new Set(
-            Array.from(treeContainer.querySelectorAll('input[data-type="file"]:checked') || [])
-                .map(cb => cb.dataset.path)
+            Array.from(treeContainer.querySelectorAll('input[data-type="file"]:checked') || []).map(
+                (cb) => cb.dataset.path
+            )
         );
 
         const dirCheckboxes = treeContainer.querySelectorAll('input[data-type="directory"]');
-        dirCheckboxes.forEach(dirCheckbox => {
+        dirCheckboxes.forEach((dirCheckbox) => {
             const li = dirCheckbox.closest('.git-repo-file-tree-item');
             const childrenUl = li?.querySelector('ul');
             if (childrenUl) {
-                const allFilePaths = Array.from(childrenUl.querySelectorAll('input[data-type="file"]'))
-                    .map(cb => cb.dataset.path);
-                const allSelected = allFilePaths.length > 0 && allFilePaths.every(p => allSelectedFilePaths.has(p));
-                const someSelected = allFilePaths.some(p => allSelectedFilePaths.has(p));
+                const allFilePaths = Array.from(childrenUl.querySelectorAll('input[data-type="file"]')).map(
+                    (cb) => cb.dataset.path
+                );
+                const allSelected = allFilePaths.length > 0 && allFilePaths.every((p) => allSelectedFilePaths.has(p));
+                const someSelected = allFilePaths.some((p) => allSelectedFilePaths.has(p));
                 dirCheckbox.checked = allSelected;
                 dirCheckbox.indeterminate = someSelected && !allSelected;
             }
@@ -841,9 +837,9 @@ export class GitRepoFeature extends FeaturePlugin {
             console.log('[GitRepoFeature] Backend fetch response:', {
                 hasMetadata: !!data.metadata,
                 metadataKeys: data.metadata ? Object.keys(data.metadata) : [],
-                hasFiles: !!(data.metadata?.files),
+                hasFiles: !!data.metadata?.files,
                 filesCount: data.metadata?.files ? Object.keys(data.metadata.files).length : 0,
-                filesKeys: data.metadata?.files ? Object.keys(data.metadata.files).slice(0, 5) : []
+                filesKeys: data.metadata?.files ? Object.keys(data.metadata.files).slice(0, 5) : [],
             });
 
             // Get the file tree structure (we need to fetch it again or store it)
@@ -922,10 +918,10 @@ export class GitRepoFeature extends FeaturePlugin {
                 console.log('[GitRepoFeature] After updateNode, node has:', {
                     hasGitRepoData: !!node.gitRepoData,
                     gitRepoDataKeys: node.gitRepoData ? Object.keys(node.gitRepoData) : [],
-                    hasFiles: !!(node.gitRepoData?.files),
+                    hasFiles: !!node.gitRepoData?.files,
                     filesType: typeof node.gitRepoData?.files,
                     filesCount: node.gitRepoData?.files ? Object.keys(node.gitRepoData.files).length : 0,
-                    filesKeys: node.gitRepoData?.files ? Object.keys(node.gitRepoData.files).slice(0, 5) : []
+                    filesKeys: node.gitRepoData?.files ? Object.keys(node.gitRepoData.files).slice(0, 5) : [],
                 });
                 this.canvas.renderNode(node);
             }
@@ -1010,14 +1006,26 @@ export class GitRepoFeature extends FeaturePlugin {
         // Register custom node protocol for git repository nodes
         // Uses BaseNode as base (no need to extend FetchResultNode since we have our own node type)
         const GitRepoProtocol = class extends BaseNode {
+            /**
+             * Get the type label for this node
+             * @returns {string}
+             */
             getTypeLabel() {
                 return 'Git Repository';
             }
 
+            /**
+             * Get the type icon for this node
+             * @returns {string}
+             */
             getTypeIcon() {
                 return '📦';
             }
 
+            /**
+             * Get additional action buttons for this node
+             * @returns {Array<string>}
+             */
             getAdditionalActions() {
                 return [Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS];
             }
@@ -1029,9 +1037,10 @@ export class GitRepoFeature extends FeaturePlugin {
              * Copy all fetched files to clipboard with format:
              * [filename]\ncontent\n========\n[filename2]\ncontent2\n...
              * @param {Canvas} canvas - Canvas instance
-             * @param {Object} app - App instance (optional)
+             * @param {Object} _app - App instance (unused, kept for interface)
+             * @returns {Promise<void>}
              */
-            async copyToClipboard(canvas, app) {
+            async copyToClipboard(canvas, _app) {
                 if (!this.node.gitRepoData || !this.node.gitRepoData.files) {
                     return;
                 }
@@ -1094,29 +1103,29 @@ export class GitRepoFeature extends FeaturePlugin {
                     const { content, lang, status } = fileData;
                     const escapedPath = canvas.escapeHtml(filePath);
 
-                let html = `<div class="git-repo-file-panel-content">`;
-                html += `<div class="git-repo-file-panel-header">`;
-                html += `<strong>${escapedPath}</strong>`;
-                if (lang) {
-                    html += ` <span class="git-repo-file-panel-lang">(${canvas.escapeHtml(lang)})</span>`;
-                }
-                html += `</div>`;
+                    let html = `<div class="git-repo-file-panel-content">`;
+                    html += `<div class="git-repo-file-panel-header">`;
+                    html += `<strong>${escapedPath}</strong>`;
+                    if (lang) {
+                        html += ` <span class="git-repo-file-panel-lang">(${canvas.escapeHtml(lang)})</span>`;
+                    }
+                    html += `</div>`;
 
-                if (status === "not_found") {
-                    html += `<div class="git-repo-file-panel-error">File not found</div>`;
-                } else if (status === "permission_denied") {
-                    html += `<div class="git-repo-file-panel-error">Permission denied</div>`;
-                } else if (status === "error") {
-                    html += `<div class="git-repo-file-panel-error">Failed to read file</div>`;
-                } else if (content) {
-                    // Syntax-highlighted code display (same pattern as code node)
-                    // Escape HTML to prevent XSS, highlight.js will handle the rest
-                    const escapedContent = canvas.escapeHtml(content);
-                    const codeClass = lang ? `language-${lang}` : '';
-                    html += `<pre class="git-repo-file-panel-code"><code class="${codeClass}" data-highlight="true">${escapedContent}</code></pre>`;
-                } else {
-                    html += `<div class="git-repo-file-panel-error">No content available</div>`;
-                }
+                    if (status === 'not_found') {
+                        html += `<div class="git-repo-file-panel-error">File not found</div>`;
+                    } else if (status === 'permission_denied') {
+                        html += `<div class="git-repo-file-panel-error">Permission denied</div>`;
+                    } else if (status === 'error') {
+                        html += `<div class="git-repo-file-panel-error">Failed to read file</div>`;
+                    } else if (content) {
+                        // Syntax-highlighted code display (same pattern as code node)
+                        // Escape HTML to prevent XSS, highlight.js will handle the rest
+                        const escapedContent = canvas.escapeHtml(content);
+                        const codeClass = lang ? `language-${lang}` : '';
+                        html += `<pre class="git-repo-file-panel-code"><code class="${codeClass}" data-highlight="true">${escapedContent}</code></pre>`;
+                    } else {
+                        html += `<div class="git-repo-file-panel-error">No content available</div>`;
+                    }
 
                     html += `</div>`;
                     return html;
@@ -1136,7 +1145,7 @@ export class GitRepoFeature extends FeaturePlugin {
                     {
                         selector: '.git-repo-file-panel-code',
                         event: 'init', // Special event: called after render, not a DOM event
-                        handler: (nodeId, e, canvas) => {
+                        handler: (_nodeId, e, _canvas) => {
                             // Initialize syntax highlighting after render
                             if (window.hljs) {
                                 const codeEl = e.currentTarget.querySelector('code[data-highlight="true"]');
@@ -1149,6 +1158,11 @@ export class GitRepoFeature extends FeaturePlugin {
                 ];
             }
 
+            /**
+             * Render the content for the git repo node
+             * @param {Canvas} canvas
+             * @returns {string}
+             */
             renderContent(canvas) {
                 // Render git repo file tree if available
                 if (!this.node.gitRepoData) {
@@ -1159,14 +1173,7 @@ export class GitRepoFeature extends FeaturePlugin {
                 // Check if this is a git repo node with file tree data
                 if (Array.isArray(this.node.gitRepoData.fileTree) && this.node.gitRepoData.fileTree.length > 0) {
                     try {
-                        const {
-                            fileTree,
-                            url,
-                            title,
-                            selectedFiles,
-                            fetchedFilePaths,
-                            files,
-                        } = this.node.gitRepoData;
+                        const { fileTree, url, title, selectedFiles, fetchedFilePaths, files } = this.node.gitRepoData;
                         const container = document.createElement('div');
                         container.className = 'git-repo-node-tree';
 
@@ -1191,17 +1198,11 @@ export class GitRepoFeature extends FeaturePlugin {
                                 : Object.keys(files || {})
                         );
                         // Use the captured GitRepoFeature instance to call renderFileTree
-                        gitRepoFeatureInstance.renderFileTree(
-                            fileTree,
-                            selectedPathsSet,
-                            treeContainer,
-                            0,
-                            {
-                                hideCheckboxes: true,
-                                fetchedFiles: fetchedFilesSet,
-                                selectedFilePath: this.node.selectedFilePath || null
-                            }
-                        );
+                        gitRepoFeatureInstance.renderFileTree(fileTree, selectedPathsSet, treeContainer, 0, {
+                            hideCheckboxes: true,
+                            fetchedFiles: fetchedFilesSet,
+                            selectedFilePath: this.node.selectedFilePath || null,
+                        });
                         container.appendChild(treeContainer);
 
                         return container.outerHTML;
@@ -1220,7 +1221,11 @@ export class GitRepoFeature extends FeaturePlugin {
                 }
             }
 
-
+            /**
+             * Escape HTML special characters
+             * @param {string} text
+             * @returns {string}
+             */
             escapeHtml(text) {
                 if (!text) return '';
                 const div = document.createElement('div');
@@ -1390,9 +1395,7 @@ export class GitRepoFeature extends FeaturePlugin {
 
         // Filter out standard hosts (github.com, gitlab.com, bitbucket.org)
         const standardHosts = ['github.com', 'gitlab.com', 'bitbucket.org'];
-        const customCreds = Object.entries(gitCreds).filter(
-            ([host]) => !standardHosts.includes(host)
-        );
+        const customCreds = Object.entries(gitCreds).filter(([host]) => !standardHosts.includes(host));
 
         if (customCreds.length === 0) {
             return;
@@ -1462,6 +1465,7 @@ export class GitRepoFeature extends FeaturePlugin {
      * Handle edit button click for git repo nodes
      * Opens file selection modal instead of content edit modal
      * @param {string} nodeId - Node ID to edit
+     * @returns {Promise<boolean>}
      */
     async handleEditGitRepoNode(nodeId) {
         const node = this.graph.getNode(nodeId);

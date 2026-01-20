@@ -9,7 +9,14 @@
 import { Actions, BaseNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
+/**
+ * FetchResultNode - Protocol for fetched content display
+ */
 class FetchResultNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         // Show content-type-specific labels
         const metadata = this.node.metadata || {};
@@ -26,6 +33,10 @@ class FetchResultNode extends BaseNode {
         return 'Fetched Content';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         // Show content-type-specific icons
         const metadata = this.node.metadata || {};
@@ -42,6 +53,10 @@ class FetchResultNode extends BaseNode {
         return '📄';
     }
 
+    /**
+     * Get additional action buttons for this node
+     * @returns {Array<string>}
+     */
     getAdditionalActions() {
         return [Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS];
     }
@@ -49,6 +64,8 @@ class FetchResultNode extends BaseNode {
     /**
      * Render the main node content.
      * For YouTube videos, show embedded video. Otherwise, show markdown content.
+     * @param {Canvas} canvas
+     * @returns {string}
      */
     renderContent(canvas) {
         // Read metadata (unified format)
@@ -81,6 +98,7 @@ class FetchResultNode extends BaseNode {
 
     /**
      * Check if this node has output (transcript for YouTube videos)
+     * @returns {boolean}
      */
     hasOutput() {
         // YouTube videos always have transcripts in the output panel
@@ -91,6 +109,8 @@ class FetchResultNode extends BaseNode {
 
     /**
      * Render the output panel content (transcript for YouTube videos)
+     * @param {Canvas} canvas
+     * @returns {string}
      */
     renderOutputPanel(canvas) {
         // Support both old format (youtubeVideoId) and new format (metadata.video_id)

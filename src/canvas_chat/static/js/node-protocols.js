@@ -1,4 +1,4 @@
-/* global NodeType, DEFAULT_NODE_SIZES */
+/* global _NodeType, _DEFAULT_NODE_SIZES */
 /**
  * Node Protocol Pattern - Plugin Architecture for Canvas-Chat
  *
@@ -6,7 +6,7 @@
  * It enables dynamic node rendering through a factory pattern with protocol dispatch.
  */
 
-import { NodeType, DEFAULT_NODE_SIZES } from './graph-types.js';
+import { NodeType as _NodeType, DEFAULT_NODE_SIZES as _DEFAULT_NODE_SIZES } from './graph-types.js';
 import { NodeRegistry } from './node-registry.js';
 
 /**
@@ -60,6 +60,10 @@ const HeaderButtons = {
  * All node-specific classes extend this base class
  */
 class BaseNode {
+    /**
+     *
+     * @param node
+     */
     constructor(node) {
         this.node = node;
     }
@@ -173,10 +177,10 @@ class BaseNode {
     /**
      * Copy node content to clipboard
      * @param {Canvas} canvas - Canvas instance
-     * @param {App} app - App instance
+     * @param {App} _app - App instance
      * @returns {Promise<void>}
      */
-    async copyToClipboard(canvas, app) {
+    async copyToClipboard(canvas, _app) {
         const text = this.node.content || '';
         if (!text) return;
         await navigator.clipboard.writeText(text);
@@ -204,10 +208,10 @@ class BaseNode {
      * Handle saving edited fields.
      * Plugins can override this to customize save behavior (e.g., save multiple fields).
      * @param {Object} fields - Object mapping field IDs to values
-     * @param {Object} app - App instance for graph updates
+     * @param {Object} _app - App instance for graph updates
      * @returns {Object} Update object to pass to graph.updateNode()
      */
-    handleEditSave(fields, app) {
+    handleEditSave(fields, _app) {
         // Default: save content field
         return {
             content: fields.content || '',
@@ -285,14 +289,14 @@ class BaseNode {
     /**
      * Update a specific cell's content (for node types with cells, like Matrix).
      * Override in subclasses that support cell-based content updates.
-     * @param {string} nodeId - The node ID
-     * @param {string} cellKey - Cell identifier (e.g., "row-col" for matrix)
-     * @param {string} content - New cell content
-     * @param {boolean} isStreaming - Whether this is a streaming update
-     * @param {Canvas} canvas - Canvas instance for DOM manipulation
+     * @param {string} _nodeId - The node ID
+     * @param {string} _cellKey - Cell identifier (e.g., "row-col" for matrix)
+     * @param {string} _content - New cell content
+     * @param {boolean} _isStreaming - Whether this is a streaming update
+     * @param {Canvas} _canvas - Canvas instance for DOM manipulation
      * @returns {boolean} True if the update was handled
      */
-    updateCellContent(nodeId, cellKey, content, isStreaming, canvas) {
+    updateCellContent(_nodeId, _cellKey, _content, _isStreaming, _canvas) {
         // Base class doesn't support cell updates
         return false;
     }
@@ -319,11 +323,11 @@ class BaseNode {
     /**
      * Update node content from remote changes (for multiplayer sync).
      * Override in subclasses that need custom remote update handling (e.g., Matrix cells).
-     * @param {Object} node - Updated node object
-     * @param {Canvas} canvas - Canvas instance for DOM manipulation
+     * @param {Object} _node - Updated node object
+     * @param {Canvas} _canvas - Canvas instance for DOM manipulation
      * @returns {boolean} True if the update was handled
      */
-    updateRemoteContent(node, canvas) {
+    updateRemoteContent(_node, _canvas) {
         // Base class doesn't need special remote handling
         return false;
     }
@@ -355,10 +359,10 @@ class BaseNode {
     /**
      * Render the output panel content (for nodes with output panels).
      * Override in subclasses that support output panels (e.g., CodeNode).
-     * @param {Canvas} canvas - Canvas instance for helper methods
+     * @param {Canvas} _canvas - Canvas instance for helper methods
      * @returns {string} HTML string for the output panel content
      */
-    renderOutputPanel(canvas) {
+    renderOutputPanel(_canvas) {
         // Base class doesn't have output panels
         return '';
     }
@@ -366,13 +370,13 @@ class BaseNode {
     /**
      * Update code content in-place (for code nodes during streaming).
      * Override in subclasses that need custom content updates (e.g., CodeNode).
-     * @param {string} nodeId - The node ID
-     * @param {string} content - New content
-     * @param {boolean} isStreaming - Whether this is a streaming update
-     * @param {Canvas} canvas - Canvas instance for DOM manipulation
+     * @param {string} _nodeId - The node ID
+     * @param {string} _content - New content
+     * @param {boolean} _isStreaming - Whether this is a streaming update
+     * @param {Canvas} _canvas - Canvas instance for DOM manipulation
      * @returns {boolean} True if the update was handled
      */
-    updateContent(nodeId, content, isStreaming, canvas) {
+    updateContent(_nodeId, _content, _isStreaming, _canvas) {
         // Base class uses default updateNodeContent
         return false;
     }
@@ -400,14 +404,14 @@ class BaseNode {
     /**
      * Show generate UI (for nodes that support AI generation, e.g., CodeNode).
      * Override in subclasses that support generation UI.
-     * @param {string} nodeId - The node ID
-     * @param {Array<Object>} models - Available model options with {id, name}
-     * @param {string} currentModel - Currently selected model ID
-     * @param {Canvas} canvas - Canvas instance for DOM manipulation and event emission
-     * @param {App|null} app - App instance (optional, can use canvas.emit() instead)
+     * @param {string} _nodeId - The node ID
+     * @param {Array<Object>} _models - Available model options with {id, name}
+     * @param {string} _currentModel - Currently selected model ID
+     * @param {Canvas} _canvas - Canvas instance for DOM manipulation and event emission
+     * @param {App|null} _app - App instance (optional, can use canvas.emit() instead)
      * @returns {boolean} True if the UI was shown
      */
-    showGenerateUI(nodeId, models, currentModel, canvas, app) {
+    showGenerateUI(_nodeId, _models, _currentModel, _canvas, _app) {
         // Base class doesn't support generate UI
         return false;
     }
@@ -415,11 +419,11 @@ class BaseNode {
     /**
      * Hide generate UI (for nodes that support AI generation).
      * Override in subclasses that support generation UI.
-     * @param {string} nodeId - The node ID
-     * @param {Canvas} canvas - Canvas instance for DOM manipulation
+     * @param {string} _nodeId - The node ID
+     * @param {Canvas} _canvas - Canvas instance for DOM manipulation
      * @returns {boolean} True if the UI was hidden
      */
-    hideGenerateUI(nodeId, canvas) {
+    hideGenerateUI(_nodeId, _canvas) {
         // Base class doesn't support generate UI
         return false;
     }
@@ -427,12 +431,12 @@ class BaseNode {
     /**
      * Handle custom resize operations (for nodes with custom resize handles).
      * Override in subclasses that have custom resize handles (e.g., matrix index column).
-     * @param {MouseEvent} e - The mousedown event
-     * @param {string} nodeId - The node ID
-     * @param {Canvas} canvas - Canvas instance for DOM manipulation and event emission
+     * @param {MouseEvent} _e - The mousedown event
+     * @param {string} _nodeId - The node ID
+     * @param {Canvas} _canvas - Canvas instance for DOM manipulation and event emission
      * @returns {boolean} True if the resize was handled
      */
-    handleCustomResize(e, nodeId, canvas) {
+    handleCustomResize(_e, _nodeId, _canvas) {
         // Base class doesn't support custom resize
         return false;
     }
@@ -537,7 +541,7 @@ function wrapNode(node) {
     // Image data takes precedence (for IMAGE nodes or HIGHLIGHT nodes with images)
     // Note: ImageNode is now a plugin, but we still check imageData first for HIGHLIGHT nodes
     // The registry will handle IMAGE type nodes below
-    if (node.imageData && node.type === NodeType.IMAGE) {
+    if (node.imageData && node.type === _NodeType.IMAGE) {
         // Try registry (ImageNode is now a plugin)
         if (typeof NodeRegistry !== 'undefined' && NodeRegistry.isRegistered(node.type)) {
             const NodeClass = NodeRegistry.getProtocolClass(node.type);
@@ -565,11 +569,11 @@ function createMockNodeForType(nodeType) {
     const baseMock = { type: nodeType, content: '' };
 
     // Add type-specific properties that methods might access
-    if (nodeType === NodeType.IMAGE) {
+    if (nodeType === _NodeType.IMAGE) {
         return { ...baseMock, imageData: 'mockImageData', mimeType: 'image/png' };
     }
     // Note: MatrixNode is now a plugin (matrix-node.js)
-    // if (nodeType === NodeType.MATRIX) {
+    // if (nodeType === _NodeType.MATRIX) {
     //     return {
     //         ...baseMock,
     //         context: 'Test Context',
@@ -579,14 +583,14 @@ function createMockNodeForType(nodeType) {
     //     };
     // }
     // Note: CellNode is now a plugin (cell-node.js)
-    // if (nodeType === NodeType.CELL) {
+    // if (nodeType === _NodeType.CELL) {
     //     return { ...baseMock, title: 'Test Cell Title' };
     // }
-    if (nodeType === NodeType.HIGHLIGHT) {
+    if (nodeType === _NodeType.HIGHLIGHT) {
         // HighlightNode can have imageData or just content
         return baseMock;
     }
-    if (nodeType === NodeType.FLASHCARD) {
+    if (nodeType === _NodeType.FLASHCARD) {
         return { ...baseMock, content: 'Test question', back: 'Test answer', srs: null };
     }
 
@@ -615,39 +619,39 @@ function validateNodeProtocol(NodeClass) {
 
     // Try to determine the node type from the class name
     // This is a heuristic - class names should match node types
-    let nodeType = NodeType.NOTE; // Default fallback
+    let nodeType = _NodeType.NOTE; // Default fallback
     const className = NodeClass.name;
     // Note: ImageNode is now a plugin (image-node.js)
-    // if (className.includes('Image')) nodeType = NodeType.IMAGE;
+    // if (className.includes('Image')) nodeType = _NodeType.IMAGE;
     // Note: MatrixNode is now a plugin (matrix-node.js)
-    // if (className.includes('Matrix')) nodeType = NodeType.MATRIX;
+    // if (className.includes('Matrix')) nodeType = _NodeType.MATRIX;
     // Note: CellNode is now a plugin (cell-node.js)
-    // if (className.includes('Cell')) nodeType = NodeType.CELL;
+    // if (className.includes('Cell')) nodeType = _NodeType.CELL;
     // Note: HumanNode is now a plugin (human-node.js)
     // Note: AINode is now a plugin (ai-node.js)
-    if (className.includes('Note')) nodeType = NodeType.NOTE;
-    else if (className.includes('Summary')) nodeType = NodeType.SUMMARY;
+    if (className.includes('Note')) nodeType = _NodeType.NOTE;
+    else if (className.includes('Summary')) nodeType = _NodeType.SUMMARY;
     // Note: ReferenceNode is now a plugin (reference.js)
     // Note: SearchNode is now a plugin (search-node.js)
     // Note: HighlightNode is now a plugin (highlight-node.js)
     // Note: FetchResultNode is now a plugin (fetch-result-node.js)
     // Note: ResearchNode is now a plugin (research-node.js)
     // Note: RowNode is now a plugin (row-node.js)
-    // else if (className.includes('Row')) nodeType = NodeType.ROW;
+    // else if (className.includes('Row')) nodeType = _NodeType.ROW;
     // Note: ColumnNode is now a plugin (column-node.js)
-    // else if (className.includes('Column')) nodeType = NodeType.COLUMN;
+    // else if (className.includes('Column')) nodeType = _NodeType.COLUMN;
     // Note: PdfNode is now a plugin (pdf-node.js)
     // Note: OpinionNode is now a plugin (opinion-node.js)
     // Note: SynthesisNode is now a plugin (synthesis-node.js)
     // Note: ReviewNode is now a plugin (review-node.js)
     // Note: FactcheckNode is now a plugin (factcheck-node.js)
-    // else if (className.includes('Factcheck')) nodeType = NodeType.FACTCHECK;
+    // else if (className.includes('Factcheck')) nodeType = _NodeType.FACTCHECK;
     // Note: FlashcardNode is now a plugin (flashcard-node.js)
-    // else if (className.includes('Flashcard')) nodeType = NodeType.FLASHCARD;
+    // else if (className.includes('Flashcard')) nodeType = _NodeType.FLASHCARD;
     // Note: CsvNode is now a plugin (csv-node.js)
-    // else if (className.includes('Csv')) nodeType = NodeType.CSV;
+    // else if (className.includes('Csv')) nodeType = _NodeType.CSV;
     // Note: CodeNode is now a plugin (code-node.js)
-    // if (className.includes('Code')) nodeType = NodeType.CODE;
+    // if (className.includes('Code')) nodeType = _NodeType.CODE;
 
     // Create a type-appropriate mock node
     const mockNode = createMockNodeForType(nodeType);
@@ -679,7 +683,7 @@ if (typeof window !== 'undefined') {
  * Register all built-in node types with the NodeRegistry.
  * This allows the plugin system to treat built-in types the same as plugins.
  */
-function registerBuiltinNodeTypes() {
+function registerBuiltin_NodeTypes() {
     if (typeof NodeRegistry === 'undefined') {
         console.debug('NodeRegistry not available, skipping built-in registration');
         return;
@@ -714,8 +718,8 @@ function registerBuiltinNodeTypes() {
 
     // Get default sizes from graph-types.js if available
     const getSize = (type) => {
-        if (typeof DEFAULT_NODE_SIZES !== 'undefined' && DEFAULT_NODE_SIZES[type]) {
-            return DEFAULT_NODE_SIZES[type];
+        if (typeof _DEFAULT_NODE_SIZES !== 'undefined' && _DEFAULT_NODE_SIZES[type]) {
+            return _DEFAULT_NODE_SIZES[type];
         }
         return { width: 420, height: 200 };
     };
@@ -735,7 +739,7 @@ function registerBuiltinNodeTypes() {
 }
 
 // Auto-register built-in types when this script loads
-registerBuiltinNodeTypes();
+registerBuiltin_NodeTypes();
 
 // ES Module exports
 export {
@@ -745,7 +749,7 @@ export {
     wrapNode,
     createMockNodeForType,
     validateNodeProtocol,
-    registerBuiltinNodeTypes,
+    registerBuiltin_NodeTypes,
     // Base class
     BaseNode,
     // Node type classes

@@ -9,10 +9,18 @@ import { highlightTextInHtml } from './highlight-utils.js';
 import { escapeHtmlText, truncateText } from './utils.js';
 import { findScrollableContainer } from './scroll-utils.js';
 
+/**
+ *
+ */
 class Canvas {
     // Static flag to track if marked has been configured (only configure once)
     static markedConfigured = false;
 
+    /**
+     *
+     * @param containerId
+     * @param svgId
+     */
     constructor(containerId, svgId) {
         this.container = document.getElementById(containerId);
         this.svg = document.getElementById(svgId);
@@ -118,6 +126,9 @@ class Canvas {
         this.init();
     }
 
+    /**
+     *
+     */
     init() {
         this.updateViewBox();
         this.setupEventListeners();
@@ -180,6 +191,7 @@ class Canvas {
 
     /**
      * Get the reply tooltip input element (for attaching slash command menu)
+     * @returns {HTMLInputElement|undefined}
      */
     getReplyTooltipInput() {
         return this.replyTooltipInput;
@@ -206,6 +218,8 @@ class Canvas {
     /**
      * Show the reply tooltip near the selection
      * NOTE: Do NOT auto-focus the input - this would clear the text selection
+     * @param x
+     * @param y
      */
     showBranchTooltip(x, y) {
         // Store the selected text before showing (selection may change later)
@@ -288,6 +302,8 @@ class Canvas {
 
     /**
      * Show the image tooltip near the clicked image
+     * @param imgSrc
+     * @param position
      */
     showImageTooltip(imgSrc, position) {
         // Store image info
@@ -390,7 +406,7 @@ class Canvas {
 
         // Add click handlers to items
         listEl.querySelectorAll('.nav-popover-item').forEach((item) => {
-            item.addEventListener('click', (e) => {
+            item.addEventListener('click', (_e) => {
                 const nodeId = item.getAttribute('data-node-id');
                 this.hideNavPopover();
                 this.emit('nodeNavigate', nodeId);
@@ -585,6 +601,7 @@ class Canvas {
 
     /**
      * Get the center of the visible viewport in SVG coordinates
+     * @returns {{x: number, y: number}}
      */
     getViewportCenter() {
         return {
@@ -593,6 +610,9 @@ class Canvas {
         };
     }
 
+    /**
+     *
+     */
     setupEventListeners() {
         // Mouse pan (click and drag)
         this.container.addEventListener('mousedown', this.handleMouseDown.bind(this));
@@ -712,6 +732,7 @@ class Canvas {
 
     /**
      * Handle dragover event for PDF drop zone
+     * @param e
      */
     handleDragOver(e) {
         // Check if dragging files
@@ -724,6 +745,7 @@ class Canvas {
 
     /**
      * Handle dragleave event for PDF drop zone
+     * @param e
      */
     handleDragLeave(e) {
         // Only hide if leaving the container entirely (not entering a child)
@@ -734,6 +756,7 @@ class Canvas {
 
     /**
      * Handle drop event for files (uses FileUploadRegistry to find handlers)
+     * @param e
      */
     async handleDrop(e) {
         e.preventDefault();
@@ -783,6 +806,9 @@ class Canvas {
         }
     }
 
+    /**
+     *
+     */
     handleResize() {
         const rect = this.container.getBoundingClientRect();
         this.viewBox.width = rect.width / this.scale;
@@ -790,6 +816,9 @@ class Canvas {
         this.updateViewBox();
     }
 
+    /**
+     *
+     */
     updateViewBox() {
         this.svg.setAttribute(
             'viewBox',
@@ -813,13 +842,14 @@ class Canvas {
 
     /**
      * Check if any nodes are visible in the current viewport
+     * @returns {boolean}
      */
     hasVisibleNodes() {
         if (this.nodeElements.size === 0) return false;
 
         const vb = this.viewBox;
 
-        for (const [nodeId, wrapper] of this.nodeElements) {
+        for (const [_nodeId, wrapper] of this.nodeElements) {
             const x = parseFloat(wrapper.getAttribute('x')) || 0;
             const y = parseFloat(wrapper.getAttribute('y')) || 0;
             const width = parseFloat(wrapper.getAttribute('width')) || 320;
@@ -872,6 +902,10 @@ class Canvas {
         }
     }
 
+    /**
+     *
+     * @param e
+     */
     handleMouseDown(e) {
         // Ignore if clicking on a node
         if (e.target.closest('.node')) {
@@ -891,6 +925,10 @@ class Canvas {
         this.container.style.cursor = 'grabbing';
     }
 
+    /**
+     *
+     * @param e
+     */
     handleMouseMove(e) {
         if (this.isPanning) {
             const dx = (e.clientX - this.panStart.x) / this.scale;
@@ -934,7 +972,11 @@ class Canvas {
         }
     }
 
-    handleMouseUp(e) {
+    /**
+     *
+     * @param {MouseEvent} _e
+     */
+    handleMouseUp(_e) {
         if (this.isPanning) {
             this.isPanning = false;
             this.container.style.cursor = 'grab';
@@ -962,6 +1004,10 @@ class Canvas {
         }
     }
 
+    /**
+     *
+     * @param e
+     */
     handleWheel(e) {
         const rect = this.container.getBoundingClientRect();
 
@@ -1042,6 +1088,10 @@ class Canvas {
         }
     }
 
+    /**
+     *
+     * @param e
+     */
     handleDoubleClick(e) {
         // Double-click on empty space to fit content (with smooth animation)
         if (e.target === this.svg || e.target.closest('#edges-layer')) {
@@ -1051,6 +1101,10 @@ class Canvas {
 
     // --- Touch Event Handlers (for mobile/tablet) ---
 
+    /**
+     *
+     * @param e
+     */
     handleTouchStart(e) {
         const touches = Array.from(e.touches);
         this.touchState.touches = touches.map((t) => ({ x: t.clientX, y: t.clientY }));
@@ -1071,6 +1125,10 @@ class Canvas {
         }
     }
 
+    /**
+     *
+     * @param e
+     */
     handleTouchMove(e) {
         const touches = Array.from(e.touches);
 
@@ -1125,6 +1183,10 @@ class Canvas {
         }
     }
 
+    /**
+     *
+     * @param e
+     */
     handleTouchEnd(e) {
         const touches = Array.from(e.touches);
         this.touchState.touches = touches.map((t) => ({ x: t.clientX, y: t.clientY }));
@@ -1137,12 +1199,22 @@ class Canvas {
         }
     }
 
+    /**
+     *
+     * @param {Touch[]} touches
+     * @returns {number}
+     */
     getTouchDistance(touches) {
         const dx = touches[0].clientX - touches[1].clientX;
         const dy = touches[0].clientY - touches[1].clientY;
         return Math.sqrt(dx * dx + dy * dy);
     }
 
+    /**
+     *
+     * @param {Touch[]} touches
+     * @returns {{x: number, y: number}}
+     */
     getTouchCenter(touches) {
         return {
             x: (touches[0].clientX + touches[1].clientX) / 2,
@@ -1154,12 +1226,20 @@ class Canvas {
     // These handle pinch-to-zoom on Safari. We always capture these gestures
     // (even on nodes) to prevent the browser's viewport zoom from activating.
 
+    /**
+     *
+     * @param e
+     */
     handleGestureStart(e) {
         e.preventDefault();
         this.gestureState.startScale = this.scale;
         this.gestureState.isGesturing = true;
     }
 
+    /**
+     *
+     * @param e
+     */
     handleGestureChange(e) {
         e.preventDefault();
         if (!this.gestureState.isGesturing) return;
@@ -1185,6 +1265,11 @@ class Canvas {
         }
     }
 
+    /**
+     *
+     * @param {TouchEvent} e
+     * @returns {void}
+     */
     handleGestureEnd(e) {
         e.preventDefault();
         this.gestureState.isGesturing = false;
@@ -1192,6 +1277,9 @@ class Canvas {
 
     /**
      * Convert client coordinates to SVG coordinates
+     * @param {number} clientX
+     * @param {number} clientY
+     * @returns {{x: number, y: number}}
      */
     clientToSvg(clientX, clientY) {
         const rect = this.container.getBoundingClientRect();
@@ -1203,6 +1291,7 @@ class Canvas {
 
     /**
      * Fit the viewport to show all nodes
+     * @param padding
      */
     fitToContent(padding = 50) {
         const nodes = Array.from(this.nodeElements.values());
@@ -1243,6 +1332,8 @@ class Canvas {
 
     /**
      * Center on a specific position (instant)
+     * @param x
+     * @param y
      */
     centerOn(x, y) {
         const rect = this.container.getBoundingClientRect();
@@ -1253,6 +1344,9 @@ class Canvas {
 
     /**
      * Smoothly animate to center on a specific position
+     * @param x
+     * @param y
+     * @param duration
      */
     centerOnAnimated(x, y, duration = 300) {
         const rect = this.container.getBoundingClientRect();
@@ -1282,6 +1376,7 @@ class Canvas {
 
     /**
      * Pan to center a specific node in the viewport (instant)
+     * @param nodeId
      */
     panToNode(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -1301,6 +1396,8 @@ class Canvas {
 
     /**
      * Smoothly pan to center a specific node in the viewport
+     * @param nodeId
+     * @param duration
      */
     panToNodeAnimated(nodeId, duration = 300) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -1464,6 +1561,9 @@ class Canvas {
 
     /**
      * Calculate the target viewport for fit-to-content
+     * @param {Object} graph
+     * @param {number} padding
+     * @returns {Object|null}
      */
     calculateFitToContentViewport(graph, padding = 50) {
         const nodes = graph.getAllNodes();
@@ -1510,6 +1610,7 @@ class Canvas {
 
     /**
      * Animated version of fitToContent
+     * @param duration
      */
     fitToContentAnimated(duration = 500) {
         const nodeIds = Array.from(this.nodeElements.keys());
@@ -1534,6 +1635,7 @@ class Canvas {
 
     /**
      * Get the visible viewport dimensions in screen pixels
+     * @returns {{width: number, height: number}}
      */
     getViewportDimensions() {
         const rect = this.container.getBoundingClientRect();
@@ -1654,6 +1756,7 @@ class Canvas {
     /**
      * Resize a node to fit 80% of the visible viewport
      * Makes content scrollable if it overflows
+     * @param nodeId
      */
     resizeNodeToViewport(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -1692,6 +1795,7 @@ class Canvas {
 
     /**
      * Update all edges based on current node positions in graph
+     * @param graph
      */
     updateAllEdges(graph) {
         for (const edge of graph.getAllEdges()) {
@@ -1717,6 +1821,8 @@ class Canvas {
 
     /**
      * Render a node to the canvas
+     * @param {Object} node
+     * @returns {void}
      */
     renderNode(node) {
         // Preserve selection state (removeNode will clear it)
@@ -2074,8 +2180,8 @@ class Canvas {
             return;
         }
 
-        const panelDiv = panelWrapper.querySelector('.code-output-panel');
-        const panelInner = panelWrapper.querySelector('.code-output-panel-inner');
+        const _panelDiv = panelWrapper.querySelector('.code-output-panel');
+        const _panelInner = panelWrapper.querySelector('.code-output-panel-inner');
         const panelBody = panelWrapper.querySelector('.code-output-panel-body');
 
         const panelOverlap = 10;
@@ -2215,6 +2321,9 @@ class Canvas {
 
     /**
      * Setup resize handle event listener (extracted for reuse)
+     * @param resizeHandle
+     * @param panelWrapper
+     * @param node
      */
     setupResizeHandle(resizeHandle, panelWrapper, node) {
         resizeHandle.addEventListener('mousedown', (e) => {
@@ -2247,9 +2356,12 @@ class Canvas {
     }
 
     /**
-     * Setup event listeners for output panel
+     *
+     * @param {HTMLElement} panelWrapper
+     * @param {Object} node
+     * @param {HTMLElement} _nodeWrapper
      */
-    setupOutputPanelEvents(panelWrapper, node, nodeWrapper) {
+    setupOutputPanelEvents(panelWrapper, node, _nodeWrapper) {
         const toggleBtn = panelWrapper.querySelector('.code-output-toggle');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', (e) => {
@@ -2318,6 +2430,8 @@ class Canvas {
 
     /**
      * Setup event listeners for a node
+     * @param wrapper
+     * @param node
      */
     setupNodeEvents(wrapper, node) {
         const div = wrapper.querySelector('.node');
@@ -3004,6 +3118,9 @@ class Canvas {
 
     /**
      * Update node content (for streaming)
+     * @param nodeId
+     * @param content
+     * @param isStreaming
      */
     updateNodeContent(nodeId, content, isStreaming = false) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -3070,6 +3187,9 @@ class Canvas {
     /**
      * Highlight a specific cell in a matrix node
      * Uses protocol's getElement method to find the cell.
+     * @param matrixNodeId
+     * @param row
+     * @param col
      */
     highlightMatrixCell(matrixNodeId, row, col) {
         const node = this.graph?.getNode(matrixNodeId);
@@ -3115,7 +3235,7 @@ class Canvas {
         // Create a case-insensitive regex to find the text
         // Escape special regex characters in the search text
         const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(${escapedText})`, 'gi');
+        const _regex = new RegExp(`(${escapedText})`, 'gi');
 
         // Replace matching text with highlighted version
         // We need to be careful not to break HTML tags
@@ -3160,6 +3280,7 @@ class Canvas {
      * The button is in the node header next to the delete button so it doesn't
      * move as content streams in - important for parallel generations where
      * each node needs its own accessible stop control.
+     * @param nodeId
      */
     showStopButton(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -3174,6 +3295,7 @@ class Canvas {
 
     /**
      * Hide the stop button on a node (when streaming completes)
+     * @param nodeId
      */
     hideStopButton(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -3186,6 +3308,7 @@ class Canvas {
     /**
      * Show the continue button on a node (after stopping).
      * Allows resuming generation for this specific node.
+     * @param nodeId
      */
     showContinueButton(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -3200,6 +3323,7 @@ class Canvas {
 
     /**
      * Hide the continue button on a node
+     * @param nodeId
      */
     hideContinueButton(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -3275,10 +3399,10 @@ class Canvas {
      * Update visibility of edges connected to a node.
      * An edge is hidden if either its source or target node is hidden.
      * @param {string} nodeId - The node ID whose edges should be checked
-     * @param {boolean} nodeVisible - Whether the node is visible
+     * @param {boolean} _nodeVisible - Whether the node is visible
      */
-    updateEdgeVisibility(nodeId, nodeVisible) {
-        for (const [edgeId, edgeEl] of this.edgeElements) {
+    updateEdgeVisibility(nodeId, _nodeVisible) {
+        for (const [_edgeId, edgeEl] of this.edgeElements) {
             const source = edgeEl.getAttribute('data-source');
             const target = edgeEl.getAttribute('data-target');
 
@@ -3326,6 +3450,8 @@ class Canvas {
 
     /**
      * Show an error state on a node with retry/dismiss buttons
+     * @param nodeId
+     * @param errorInfo
      */
     showNodeError(nodeId, errorInfo) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -3373,6 +3499,7 @@ class Canvas {
 
     /**
      * Clear error state on a node
+     * @param nodeId
      */
     clearNodeError(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -3384,6 +3511,7 @@ class Canvas {
 
     /**
      * Show brief copy feedback on a node
+     * @param nodeId
      */
     showCopyFeedback(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -3400,6 +3528,7 @@ class Canvas {
 
     /**
      * Remove a node from the canvas
+     * @param nodeId
      */
     removeNode(nodeId) {
         const wrapper = this.nodeElements.get(nodeId);
@@ -3421,6 +3550,8 @@ class Canvas {
 
     /**
      * Select a node
+     * @param nodeId
+     * @param isMulti
      */
     selectNode(nodeId, isMulti = false) {
         if (!isMulti) {
@@ -3441,6 +3572,7 @@ class Canvas {
 
     /**
      * Deselect a node
+     * @param nodeId
      */
     deselectNode(nodeId) {
         this.selectedNodes.delete(nodeId);
@@ -3491,6 +3623,7 @@ class Canvas {
 
     /**
      * Get selected node IDs
+     * @returns {string[]}
      */
     getSelectedNodeIds() {
         return Array.from(this.selectedNodes);
@@ -3499,6 +3632,7 @@ class Canvas {
     /**
      * Get actual rendered dimensions for all nodes
      * Returns Map of nodeId -> { width, height }
+     * @returns {Map<string, {width: number, height: number}>}
      */
     getNodeDimensions() {
         const dimensions = new Map();
@@ -3521,6 +3655,7 @@ class Canvas {
 
     /**
      * Highlight context ancestors
+     * @param ancestorIds
      */
     highlightContext(ancestorIds) {
         // Clear previous highlights
@@ -3575,7 +3710,7 @@ class Canvas {
         }
 
         // Fade edges that don't connect two highlighted nodes
-        for (const [edgeId, edgePath] of this.edgeElements) {
+        for (const [_edgeId, edgePath] of this.edgeElements) {
             const sourceId = edgePath.dataset.source;
             const targetId = edgePath.dataset.target;
             const sourceWrapper = this.nodeElements.get(sourceId);
@@ -3602,15 +3737,15 @@ class Canvas {
      * @param {Object} edge - The edge object
      * @param {Object|Graph} sourcePosOrGraph - Source position {x,y} OR Graph instance
      * @param {Object} [targetPos] - Target position {x,y} (only for legacy signature)
+     * @returns {SVGPathElement|null}
      */
     renderEdge(edge, sourcePosOrGraph, targetPos) {
         let sourcePos, finalTargetPos;
-        let usingGraphSignature = false;
 
         // Signature 1: renderEdge(edge, graph)
         // Detect graph by checking for getNode method
         if (sourcePosOrGraph && typeof sourcePosOrGraph.getNode === 'function') {
-            usingGraphSignature = true;
+            const _usingGraphSignature = true;
             const graph = sourcePosOrGraph;
             const sourceNode = graph.getNode(edge.source);
             const targetNode = graph.getNode(edge.target);
@@ -3689,6 +3824,8 @@ class Canvas {
 
     /**
      * Register callback to fire when a node finishes rendering
+     * @param nodeId
+     * @param callback
      * @private
      */
     _addNodeRenderCallback(nodeId, callback) {
@@ -3700,6 +3837,7 @@ class Canvas {
 
     /**
      * Retry rendering a deferred edge
+     * @param edgeId
      * @private
      */
     _retryDeferredEdge(edgeId) {
@@ -3721,6 +3859,7 @@ class Canvas {
     /**
      * Notify that a node has finished rendering
      * Called at end of renderNode()
+     * @param nodeId
      * @private
      */
     _notifyNodeRendered(nodeId) {
@@ -3736,6 +3875,10 @@ class Canvas {
         this.nodeRenderCallbacks.delete(nodeId);
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     _removeDeferredEdgesForNode(nodeId) {
         if (this.nodeRenderCallbacks.has(nodeId)) {
             this.nodeRenderCallbacks.delete(nodeId);
@@ -3756,6 +3899,7 @@ class Canvas {
      * @param {string} targetId - The visible descendant node ID
      * @param {Object} sourcePos - Source node position {x, y}
      * @param {Object} targetPos - Target node position {x, y}
+     * @returns {void}
      */
     renderCollapsedPathEdge(sourceId, targetId, sourcePos, targetPos) {
         const virtualEdgeId = `collapsed-path-${sourceId}-${targetId}`;
@@ -3835,6 +3979,10 @@ class Canvas {
     /**
      * Calculate the best connection point on a node's border
      * Returns {x, y, side} where side is 'top', 'bottom', 'left', 'right'
+     * @param {Object} nodePos
+     * @param {Object} nodeSize
+     * @param {Object} otherCenter
+     * @returns {{x: number, y: number, side: string}}
      */
     getConnectionPoint(nodePos, nodeSize, otherCenter) {
         const center = {
@@ -3879,6 +4027,11 @@ class Canvas {
 
     /**
      * Calculate bezier curve path between two nodes with dynamic connection points
+     * @param {Object} sourcePos
+     * @param {Object} sourceSize
+     * @param {Object} targetPos
+     * @param {Object} targetSize
+     * @returns {string}
      */
     calculateBezierPath(sourcePos, sourceSize, targetPos, targetSize) {
         // Calculate centers
@@ -3947,9 +4100,11 @@ class Canvas {
 
     /**
      * Update edge positions when a node moves
+     * @param nodeId
+     * @param newPos
      */
     updateEdgesForNode(nodeId, newPos) {
-        for (const [edgeId, path] of this.edgeElements) {
+        for (const [_edgeId, path] of this.edgeElements) {
             const sourceId = path.getAttribute('data-source');
             const targetId = path.getAttribute('data-target');
 
@@ -3999,9 +4154,9 @@ class Canvas {
      * This method is kept for backwards compatibility but delegates to the protocol.
      * @param {MouseEvent} e - The mousedown event
      * @param {string} nodeId - The matrix node's ID
-     * @param {HTMLElement} nodeDiv - The node's DOM element
+     * @param {HTMLElement} _nodeDiv - The node's DOM element
      */
-    startIndexColResize(e, nodeId, nodeDiv) {
+    startIndexColResize(e, nodeId, _nodeDiv) {
         const node = this.graph?.getNode(nodeId);
         if (!node) return;
 
@@ -4013,6 +4168,7 @@ class Canvas {
 
     /**
      * Remove an edge from the canvas
+     * @param edgeId
      */
     removeEdge(edgeId) {
         const path = this.edgeElements.get(edgeId);
@@ -4025,6 +4181,11 @@ class Canvas {
 
     // --- Utilities ---
 
+    /**
+     *
+     * @param {string} type
+     * @returns {string}
+     */
     getNodeTypeLabel(type) {
         // Use cached value if available
         if (this.nodeTypeLabelCache.has(type)) {
@@ -4038,6 +4199,11 @@ class Canvas {
         return label;
     }
 
+    /**
+     *
+     * @param {string} type
+     * @returns {string}
+     */
     getNodeTypeIcon(type) {
         // Use cached value if available
         if (this.nodeTypeIconCache.has(type)) {
@@ -4054,6 +4220,8 @@ class Canvas {
     /**
      * Check if a node type can contain rich content (markdown with images)
      * Used to determine if image click handlers should be attached
+     * @param {string} type
+     * @returns {boolean}
      */
     isRichContentNodeType(type) {
         const richTypes = [
@@ -4067,16 +4235,32 @@ class Canvas {
         return richTypes.includes(type);
     }
 
+    /**
+     *
+     * @param {Object} node
+     * @returns {string}
+     */
     getNodeSummaryText(node) {
         // Use protocol pattern
         const wrapped = wrapNode(node);
         return wrapped.getSummaryText(this);
     }
 
+    /**
+     *
+     * @param {string} text
+     * @returns {string}
+     */
     escapeHtml(text) {
         return escapeHtmlText(text);
     }
 
+    /**
+     *
+     * @param {string} text
+     * @param {number} maxLength
+     * @returns {string}
+     */
     truncate(text, maxLength) {
         return truncateText(text, maxLength);
     }
@@ -4087,6 +4271,7 @@ class Canvas {
      *
      * @param {string} imageData - Base64 encoded image data (without data URL prefix)
      * @param {string} mimeType - MIME type of the image (e.g., 'image/png', 'image/jpeg')
+     * @returns {Promise<void>}
      */
     async copyImageToClipboard(imageData, mimeType) {
         // Convert base64 to blob
@@ -4120,6 +4305,8 @@ class Canvas {
 
     /**
      * Render tags for a node (left side, post-it style with arrows)
+     * @param {Object} node
+     * @returns {string}
      */
     renderNodeTags(node) {
         if (!node.tags || node.tags.length === 0) {
@@ -4202,6 +4389,8 @@ class Canvas {
 
     /**
      * Render markdown to HTML with math support
+     * @param {string} text
+     * @returns {string}
      */
     renderMarkdown(text) {
         if (!text) return '';
@@ -4305,6 +4494,7 @@ class Canvas {
 
     /**
      * Render entire graph
+     * @param graph
      */
     renderGraph(graph) {
         this.clear();

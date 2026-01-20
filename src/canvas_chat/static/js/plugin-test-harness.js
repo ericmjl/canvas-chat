@@ -10,19 +10,36 @@ import { AppContext } from './feature-plugin.js';
  * Mock Graph for testing (doesn't require Yjs)
  */
 class MockGraph {
+    /**
+     *
+     */
     constructor() {
         this.nodes = new Map();
         this.edges = new Map();
     }
 
+    /**
+     *
+     * @param {Object} node
+     * @returns {void}
+     */
     addNode(node) {
         this.nodes.set(node.id, node);
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     removeNode(nodeId) {
         this.nodes.delete(nodeId);
     }
 
+    /**
+     *
+     * @param nodeId
+     * @param updates
+     */
     updateNode(nodeId, updates) {
         const node = this.nodes.get(nodeId);
         if (node) {
@@ -30,36 +47,69 @@ class MockGraph {
         }
     }
 
+    /**
+     *
+     * @param {string} nodeId
+     * @returns {Object|undefined}
+     */
     getNode(nodeId) {
         return this.nodes.get(nodeId);
     }
 
+    /**
+     *
+     * @returns {Object[]}
+     */
     getNodes() {
         return Array.from(this.nodes.values());
     }
 
+    /**
+     *
+     * @param edge
+     */
     addEdge(edge) {
         this.edges.set(edge.id, edge);
     }
 
+    /**
+     *
+     * @param edgeId
+     */
     removeEdge(edgeId) {
         this.edges.delete(edgeId);
     }
 
+    /**
+     *
+     * @returns {Object[]}
+     */
     getEdges() {
         return Array.from(this.edges.values());
     }
 
+    /**
+     *
+     */
     clear() {
         this.nodes.clear();
         this.edges.clear();
     }
 
+    /**
+     *
+     * @returns {MockGraph}
+     */
     on() {
         return this; // Chainable
     }
 
-    autoPosition(existingNodes) {
+    /**
+     *
+     * @param {Object[]} _existingNodes
+     * @returns {{x: number, y: number}}
+     */
+    autoPosition(_existingNodes) {
         // Simple mock implementation - return a fixed position
         return { x: 100, y: 100 };
     }
@@ -69,6 +119,9 @@ class MockGraph {
  * Mock Canvas for testing
  */
 class MockCanvas {
+    /**
+     *
+     */
     constructor() {
         this.nodes = new Map();
         this.renderedNodes = [];
@@ -77,42 +130,103 @@ class MockCanvas {
         this._eventHandlers = new Map();
     }
 
+    /**
+     *
+     * @param node
+     */
     renderNode(node) {
         this.renderedNodes.push(node.id);
         this.nodes.set(node.id, node);
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     removeNode(nodeId) {
         this.removedNodes.push(nodeId);
         this.nodes.delete(nodeId);
     }
 
+    /**
+     *
+     * @param {string} nodeId
+     * @param {string} content
+     * @param {boolean} isStreaming
+     * @returns {void}
+     */
     updateNodeContent(nodeId, content, isStreaming) {
         this.updatedNodes.push({ nodeId, content, isStreaming });
     }
 
+    /**
+     *
+     * @returns {string[]}
+     */
     getSelectedNodeIds() {
         return [];
     }
 
+    /**
+     *
+     * @returns {void}
+     */
     clearSelection() {
         // Mock implementation
     }
 
-    centerOnAnimated(x, y, duration) {
+    /**
+     *
+     * @param {number} _x
+     * @param {number} _y
+     * @param {number} _duration
+     * @returns {void}
+     */
+    centerOnAnimated(_x, _y, _duration) {
         // Mock implementation
     }
 
-    panToNodeAnimated(nodeId) {
+    /**
+     *
+     * @param {string} _nodeId
+     * @returns {void}
+     */
+    panToNodeAnimated(_nodeId) {
         // Mock implementation
     }
 
-    showStopButton(nodeId) {}
-    hideStopButton(nodeId) {}
-    showContinueButton(nodeId) {}
-    hideContinueButton(nodeId) {}
+    /**
+     *
+     * @param {string} _nodeId
+     * @returns {void}
+     */
+    showStopButton(_nodeId) {}
+    /**
+     *
+     * @param {string} _nodeId
+     * @returns {void}
+     */
+    hideStopButton(_nodeId) {}
+    /**
+     *
+     * @param {string} _nodeId
+     * @returns {void}
+     */
+    showContinueButton(_nodeId) {}
+    /**
+     *
+     * @param {string} _nodeId
+     * @returns {void}
+     */
+    hideContinueButton(_nodeId) {}
 
     // Event emitter methods for plugin-scoped event handlers
+    /**
+     *
+     * @param {string} eventName
+     * @param {Function} handler
+     * @returns {MockCanvas}
+     */
     on(eventName, handler) {
         if (!this._eventHandlers.has(eventName)) {
             this._eventHandlers.set(eventName, []);
@@ -121,6 +235,12 @@ class MockCanvas {
         return this; // Chainable
     }
 
+    /**
+     *
+     * @param {string} eventName
+     * @param {Function} handler
+     * @returns {MockCanvas}
+     */
     off(eventName, handler) {
         if (this._eventHandlers.has(eventName)) {
             const handlers = this._eventHandlers.get(eventName);
@@ -132,6 +252,11 @@ class MockCanvas {
         return this; // Chainable
     }
 
+    /**
+     *
+     * @param eventName
+     * @param {...any} args
+     */
     emit(eventName, ...args) {
         if (this._eventHandlers.has(eventName)) {
             for (const handler of this._eventHandlers.get(eventName)) {
@@ -145,18 +270,35 @@ class MockCanvas {
  * Mock Chat for testing
  */
 class MockChat {
+    /**
+     *
+     */
     constructor() {
         this.messages = [];
     }
 
-    async sendMessage(messages, model, onChunk, onDone, onError) {
+    /**
+     *
+     * @param {Object[]} messages
+     * @param {string} model
+     * @param {Function} onChunk
+     * @param {Function} onDone
+     * @param {Function} _onError
+     * @returns {Promise<void>}
+     */
+    async sendMessage(messages, model, onChunk, onDone, _onError) {
         this.messages.push({ messages, model });
         // Simulate a simple response
         if (onChunk) onChunk('Mock response');
         if (onDone) onDone();
     }
 
-    getApiKeyForModel(model) {
+    /**
+     *
+     * @param {string} _model
+     * @returns {string}
+     */
+    getApiKeyForModel(_model) {
         return 'mock-api-key';
     }
 }
@@ -165,23 +307,46 @@ class MockChat {
  * Mock Storage for testing
  */
 class MockStorage {
+    /**
+     *
+     */
     constructor() {
         this.data = new Map();
     }
 
+    /**
+     *
+     * @param {string} key
+     * @returns {*}
+     */
     getItem(key) {
         return this.data.get(key);
     }
 
+    /**
+     *
+     * @param {string} key
+     * @param {*} value
+     * @returns {void}
+     */
     setItem(key, value) {
         this.data.set(key, value);
     }
 
+    /**
+     *
+     * @returns {Object}
+     */
     getApiKeys() {
         return { openai: 'mock-key' };
     }
 
-    getApiKeyForProvider(provider) {
+    /**
+     *
+     * @param {string} _provider
+     * @returns {string}
+     */
+    getApiKeyForProvider(_provider) {
         return 'mock-key';
     }
 }
@@ -190,27 +355,44 @@ class MockStorage {
  * Mock ModalManager for testing
  */
 class MockModalManager {
+    /**
+     *
+     */
     constructor() {
         this.modalsShown = [];
         this.registeredModals = new Map();
     }
 
+    /**
+     *
+     */
     showSettingsModal() {
         this.modalsShown.push('settings');
     }
 
+    /**
+     *
+     * @param modalId
+     */
     showModal(modalId) {
         this.modalsShown.push(modalId);
     }
 
-    registerModal(pluginId, modalId, htmlTemplate) {
+    /**
+     *
+     * @param {string} pluginId
+     * @param {string} modalId
+     * @param {string} _htmlTemplate
+     * @returns {Object}
+     */
+    registerModal(pluginId, modalId, _htmlTemplate) {
         const key = `${pluginId}:${modalId}`;
         // Create a mock modal element with querySelector support
         const mockModal = {
             id: `${pluginId}-${modalId}-modal`,
             style: { display: 'none' },
             classList: { contains: () => true, add: () => {} },
-            querySelector: (selector) => {
+            querySelector: (_selector) => {
                 // Return a mock element for common selectors
                 const classes = new Set();
                 return {
@@ -239,7 +421,7 @@ class MockModalManager {
                 };
             },
             querySelectorAll: () => [],
-            getElementById: (id) => {
+            getElementById: (_id) => {
                 const classes = new Set();
                 return {
                     value: '',
@@ -271,14 +453,31 @@ class MockModalManager {
         return mockModal;
     }
 
+    /**
+     *
+     * @param pluginId
+     * @param modalId
+     */
     showPluginModal(pluginId, modalId) {
         this.modalsShown.push(`${pluginId}:${modalId}`);
     }
 
-    hidePluginModal(pluginId, modalId) {
+    /**
+     *
+     * @param {string} _pluginId
+     * @param {string} _modalId
+     * @returns {void}
+     */
+    hidePluginModal(_pluginId, _modalId) {
         // Mock implementation
     }
 
+    /**
+     *
+     * @param {string} pluginId
+     * @param {string} modalId
+     * @returns {Object|undefined}
+     */
     getPluginModal(pluginId, modalId) {
         const key = `${pluginId}:${modalId}`;
         return this.registeredModals.get(key);
@@ -289,15 +488,28 @@ class MockModalManager {
  * Mock UndoManager for testing
  */
 class MockUndoManager {
+    /**
+     *
+     */
     constructor() {
         this.actions = [];
     }
 
+    /**
+     *
+     * @param action
+     */
     push(action) {
         this.actions.push(action);
     }
 
+    /**
+     *
+     */
     undo() {}
+    /**
+     *
+     */
     redo() {}
 }
 
@@ -305,8 +517,18 @@ class MockUndoManager {
  * Mock SearchIndex for testing
  */
 class MockSearchIndex {
-    addDocument(doc) {}
-    search(query) {
+    /**
+     *
+     * @param {Object} _doc
+     * @returns {void}
+     */
+    addDocument(_doc) {}
+    /**
+     *
+     * @param {string} _query
+     * @returns {Array}
+     */
+    search(_query) {
         return [];
     }
 }
@@ -315,6 +537,9 @@ class MockSearchIndex {
  * Mock App for creating AppContext
  */
 class MockApp {
+    /**
+     *
+     */
     constructor() {
         this.graph = new MockGraph();
         this.canvas = new MockCanvas();
@@ -357,20 +582,41 @@ class MockApp {
         };
     }
 
+    /**
+     *
+     * @param message
+     * @param type
+     */
     showToast(message, type) {
         this.methodCalls.showToast.push({ message, type });
     }
 
+    /**
+     *
+     */
     saveSession() {
         this.methodCalls.saveSession.push({});
     }
 
+    /**
+     *
+     */
     updateEmptyState() {
         this.methodCalls.updateEmptyState.push({});
     }
 
-    updateCollapseButtonForNode(nodeId) {}
+    /**
+     *
+     * @param {string} _nodeId
+     * @returns {void}
+     */
+    updateCollapseButtonForNode(_nodeId) {}
 
+    /**
+     *
+     * @param {Object} params
+     * @returns {Object}
+     */
     buildLLMRequest(params) {
         this.methodCalls.buildLLMRequest.push(params);
         return {
@@ -380,7 +626,19 @@ class MockApp {
         };
     }
 
-    generateNodeSummary(nodeId) {}
+    /**
+     *
+     * @param {string} _nodeId
+     * @returns {void}
+     */
+    updateCollapseButtonForNode(_nodeId) {}
+
+    /**
+     *
+     * @param {string} _nodeId
+     * @returns {void}
+     */
+    generateNodeSummary(_nodeId) {}
 }
 
 /**
@@ -392,6 +650,9 @@ class MockApp {
  * - Verifying plugin behavior in isolation
  */
 class PluginTestHarness {
+    /**
+     *
+     */
     constructor() {
         this.mockApp = new MockApp();
         // Track nodes created during tests

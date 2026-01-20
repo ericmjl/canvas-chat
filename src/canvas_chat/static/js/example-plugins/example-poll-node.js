@@ -28,6 +28,7 @@ import { NodeRegistry } from '/static/js/node-registry.js';
 class PollNode extends BaseNode {
     /**
      * Display label shown in node header
+     * @returns {string}
      */
     getTypeLabel() {
         return 'Poll';
@@ -35,6 +36,7 @@ class PollNode extends BaseNode {
 
     /**
      * Emoji icon for the node type
+     * @returns {string}
      */
     getTypeIcon() {
         return '📊';
@@ -42,6 +44,8 @@ class PollNode extends BaseNode {
 
     /**
      * Summary text for semantic zoom (shown when zoomed out)
+     * @param {Canvas} canvas
+     * @returns {string}
      */
     getSummaryText(canvas) {
         // Show question as summary
@@ -51,6 +55,8 @@ class PollNode extends BaseNode {
 
     /**
      * Render the HTML content for the poll
+     * @param {Canvas} canvas
+     * @returns {string}
      */
     renderContent(canvas) {
         // Debug: Log what we're rendering
@@ -96,6 +102,7 @@ class PollNode extends BaseNode {
 
     /**
      * Action buttons for the poll node
+     * @returns {Array<Object>}
      */
     getActions() {
         return [
@@ -107,6 +114,7 @@ class PollNode extends BaseNode {
 
     /**
      * Custom event bindings for poll interactions
+     * @returns {Array<Object>}
      */
     getEventBindings() {
         return [
@@ -134,6 +142,9 @@ class PollNode extends BaseNode {
 
     /**
      * Copy poll results to clipboard
+     * @param {Canvas} canvas
+     * @param {App} _app
+     * @returns {Promise<void>}
      */
     async copyToClipboard(canvas, _app) {
         const question = this.node.question || 'Poll';

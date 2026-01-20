@@ -28,6 +28,7 @@ class ImageGenerationFeature extends FeaturePlugin {
 
     /**
      * Lifecycle hook called when the plugin is loaded.
+     * @returns {Promise<void>}
      */
     async onLoad() {
         console.log('[ImageGenerationFeature] Loaded');
@@ -89,6 +90,7 @@ class ImageGenerationFeature extends FeaturePlugin {
 
     /**
      * Define slash commands provided by this feature.
+     * @returns {Array<Object>}
      */
     getSlashCommands() {
         return [
@@ -327,6 +329,8 @@ class ImageGenerationFeature extends FeaturePlugin {
 
     /**
      * Escape HTML to prevent XSS in error messages.
+     * @param {string} text
+     * @returns {string}
      */
     escapeHtml(text) {
         const div = document.createElement('div');

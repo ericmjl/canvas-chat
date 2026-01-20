@@ -38,7 +38,7 @@ import './plugins/summary.js'; // Side-effect import for SummaryNode plugin regi
 import './plugins/synthesis-node.js'; // Side-effect import for SynthesisNode plugin registration
 import './plugins/youtube-node.js'; // Side-effect import for YouTubeNode plugin registration
 // Note: poll.js is an external plugin - load via config.yaml
-import { extractExcerptText } from './highlight-utils.js';
+import { extractExcerptText as _extractExcerptText } from './highlight-utils.js';
 import { wrapNode } from './node-protocols.js';
 import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { readSSEStream } from './sse.js';
@@ -58,7 +58,13 @@ import { StreamingManager } from './streaming-manager.js';
 
 /* global pyodideRunner */
 
+/**
+ *
+ */
 class App {
+    /**
+     *
+     */
     constructor() {
         this.canvas = null;
         this.graph = null;
@@ -116,6 +122,9 @@ class App {
         this.init();
     }
 
+    /**
+     *
+     */
     async init() {
         // Configure marked.js early (ensures KaTeX and other extensions are set up)
         Canvas.configureMarked();
@@ -223,6 +232,9 @@ class App {
         }
     }
 
+    /**
+     *
+     */
     async handleCopilotAuthOnLoad() {
         if (this.adminMode) {
             return;
@@ -271,6 +283,9 @@ class App {
         console.log('[App] Hidden admin-restricted UI elements (API keys, proxy, custom models)');
     }
 
+    /**
+     *
+     */
     async loadModels() {
         // In admin mode, use admin-configured models
         if (this.adminMode) {
@@ -387,6 +402,9 @@ class App {
         }
     }
 
+    /**
+     *
+     */
     async loadSession() {
         // Check for session ID in URL (for shared multiplayer links)
         const urlParams = new URLSearchParams(window.location.search);
@@ -418,6 +436,10 @@ class App {
         await this.createNewSession();
     }
 
+    /**
+     *
+     * @param session
+     */
     async loadSessionData(session) {
         this.session = session;
 
@@ -512,6 +534,9 @@ class App {
         }
     }
 
+    /**
+     *
+     */
     async createNewSession() {
         const sessionId = crypto.randomUUID();
         this.session = {
@@ -612,6 +637,9 @@ class App {
         this.canvas.on('nodeAnalyze', (nodeId) => this.handleNodeAnalyze(nodeId));
     }
 
+    /**
+     *
+     */
     setupEventListeners() {
         // Attach slash command menu to chat input
         this.slashCommandMenu.attach(this.chatInput);
@@ -1139,6 +1167,7 @@ class App {
      * Returns true if it was a slash command and was handled, false otherwise.
      * @param {string} content - The user input
      * @param {string} context - Optional context for contextual commands (e.g., selected text)
+     * @returns {Promise<boolean>}
      */
     async tryHandleSlashCommand(content, context = null) {
         // First check if this is a plugin-registered slash command
@@ -1206,6 +1235,9 @@ class App {
         };
     }
 
+    /**
+     *
+     */
     async handleSend() {
         const content = this.chatInput.value.trim();
         if (!content) return;
@@ -1355,6 +1387,7 @@ class App {
      * Handle search command.
      * @param {string} query - The user's search query
      * @param {string} context - Optional context to help refine the query (e.g., selected text)
+     * @returns {Promise<void>}
      */
     async handleSearch(query, context = null) {
         return this.featureRegistry.getFeature('research').handleSearch(query, context);
@@ -1819,6 +1852,7 @@ class App {
      * Handle research command.
      * @param {string} instructions - The user's research instructions
      * @param {string} context - Optional context to help refine the instructions (e.g., selected text)
+     * @returns {Promise<void>}
      */
     async handleResearch(instructions, context = null) {
         return this.featureRegistry.getFeature('research').handleResearch(instructions, context);
@@ -1828,6 +1862,7 @@ class App {
      * Handle creating flashcards from a content node.
      * Shows modal with generated flashcard candidates for user selection.
      * @param {string} nodeId - ID of source node
+     * @returns {Promise<void>}
      */
     async handleCreateFlashcards(nodeId) {
         return this.featureRegistry.getFeature('flashcards').handleCreateFlashcards(nodeId);
@@ -1836,6 +1871,7 @@ class App {
     /**
      * Show flashcard review modal with due cards.
      * @param {string[]} dueCardIds - Array of flashcard node IDs to review
+     * @returns {void}
      */
     showReviewModal(dueCardIds) {
         return this.featureRegistry.getFeature('flashcards').showReviewModal(dueCardIds);
@@ -1843,6 +1879,7 @@ class App {
 
     /**
      * Start a review session with all due flashcards.
+     * @returns {void}
      */
     startFlashcardReview() {
         return this.featureRegistry.getFeature('flashcards').startFlashcardReview();
@@ -1851,6 +1888,7 @@ class App {
     /**
      * Review a single flashcard (flip and grade).
      * @param {string} cardId - The flashcard node ID
+     * @returns {void}
      */
     reviewSingleCard(cardId) {
         return this.featureRegistry.getFeature('flashcards').reviewSingleCard(cardId);
@@ -1859,6 +1897,7 @@ class App {
     /**
      * Handle flip card action in review modal.
      * @param {string} cardId - The flashcard node ID
+     * @returns {void}
      */
     handleFlipCard(cardId) {
         return this.featureRegistry.getFeature('flashcards').handleFlipCard(cardId);
@@ -1873,6 +1912,7 @@ class App {
      * Delegates to committee feature plugin via FeatureRegistry.
      * @param {string} question - The question to ask committee
      * @param {string|null} context - Optional context text
+     * @returns {Promise<void>}
      */
     async handleCommittee(question, context = null) {
         const feature = this.featureRegistry.getFeature('committee');
@@ -2433,14 +2473,29 @@ print("Hello from Pyodide!")
         this.saveSession();
     }
 
+    /**
+     *
+     * @param {string} text
+     * @param {number} maxLength
+     * @returns {string}
+     */
     truncate(text, maxLength) {
         return truncateText(text, maxLength);
     }
 
+    /**
+     *
+     * @param {string} text
+     * @returns {string}
+     */
     escapeHtml(text) {
         return escapeHtmlText(text);
     }
 
+    /**
+     *
+     * @returns {void}
+     */
     handleAutoLayout() {
         if (this.graph.isEmpty()) return;
 
@@ -2536,6 +2591,10 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     handleNodeReply(nodeId) {
         // Select the node and focus input
         this.canvas.clearSelection();
@@ -2543,6 +2602,12 @@ print("Hello from Pyodide!")
         this.chatInput.focus();
     }
 
+    /**
+     *
+     * @param nodeId
+     * @param selectedText
+     * @param replyText
+     */
     async handleNodeBranch(nodeId, selectedText, replyText) {
         // If text was selected, create a highlight node with that excerpt
         if (selectedText) {
@@ -2682,6 +2747,10 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     async handleNodeSummarize(nodeId) {
         const model = this.modelPicker.value;
         const parentNode = this.graph.getNode(nodeId);
@@ -2736,6 +2805,7 @@ print("Hello from Pyodide!")
      * - Users who have Exa configured get premium content extraction
      * - Separate from handleNoteFromUrl which uses free Jina Reader API
      * - Both create FETCH_RESULT nodes with the same structure for consistency
+     * @param nodeId
      */
     async handleNodeFetchSummarize(nodeId) {
         const node = this.graph.getNode(nodeId);
@@ -2872,11 +2942,18 @@ print("Hello from Pyodide!")
 
     /**
      * Extract URL from Reference node content (format: **[Title](url)**)
+     * @param {string} content
+     * @returns {string|null}
      */
     extractUrlFromReferenceNode(content) {
         return extractUrlFromReferenceNode(content);
     }
 
+    /**
+     *
+     * @param {string[]} selectedIds
+     * @returns {void}
+     */
     handleNodeSelect(selectedIds) {
         this.updateSelectedIndicator(selectedIds);
         this.updateContextHighlight(selectedIds);
@@ -2921,6 +2998,10 @@ print("Hello from Pyodide!")
         this.updateTagDrawer();
     }
 
+    /**
+     *
+     * @param selectedIds
+     */
     handleNodeDeselect(selectedIds) {
         this.updateSelectedIndicator(selectedIds);
         this.updateContextHighlight(selectedIds);
@@ -2942,6 +3023,12 @@ print("Hello from Pyodide!")
         this.updateTagDrawer();
     }
 
+    /**
+     *
+     * @param nodeId
+     * @param newPos
+     * @param oldPos
+     */
     handleNodeMove(nodeId, newPos, oldPos) {
         // Only push undo if position actually changed
         if (oldPos && (oldPos.x !== newPos.x || oldPos.y !== newPos.y)) {
@@ -2958,6 +3045,8 @@ print("Hello from Pyodide!")
     /**
      * Handle real-time node dragging (for multiplayer sync).
      * Updates graph position during drag, throttled to avoid network spam.
+     * @param nodeId
+     * @param newPos
      */
     handleNodeDrag(nodeId, newPos) {
         // Only sync if multiplayer is enabled
@@ -2977,6 +3066,12 @@ print("Hello from Pyodide!")
         this.graph.updateNode(nodeId, { position: newPos });
     }
 
+    /**
+     *
+     * @param nodeId
+     * @param width
+     * @param height
+     */
     handleNodeResize(nodeId, width, height) {
         this.graph.updateNode(nodeId, { width, height });
         this.saveSession();
@@ -2985,6 +3080,9 @@ print("Hello from Pyodide!")
     /**
      * Handle real-time node resizing (for multiplayer sync).
      * Updates graph dimensions during resize, throttled to avoid network spam.
+     * @param nodeId
+     * @param width
+     * @param height
      */
     handleNodeResizing(nodeId, width, height) {
         // Only sync if multiplayer is enabled
@@ -3004,6 +3102,10 @@ print("Hello from Pyodide!")
         this.graph.updateNode(nodeId, { width, height });
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     handleNodeDelete(nodeId) {
         // No confirmation needed - undo (Ctrl+Z) provides recovery
 
@@ -3268,6 +3370,9 @@ print("Hello from Pyodide!")
 
     /**
      * Show an error state on a node with retry/dismiss buttons
+     * @param nodeId
+     * @param errorInfo
+     * @param retryContext
      */
     showNodeError(nodeId, errorInfo, retryContext) {
         // Store retry context for later
@@ -3286,6 +3391,7 @@ print("Hello from Pyodide!")
 
     /**
      * Handle retry for a failed node operation
+     * @param nodeId
      */
     async handleNodeRetry(nodeId) {
         const retryContext = this.retryContexts.get(nodeId);
@@ -3347,6 +3453,7 @@ print("Hello from Pyodide!")
 
     /**
      * Handle dismissing an error node (removes it)
+     * @param nodeId
      */
     handleNodeDismissError(nodeId) {
         // Clean up retry context
@@ -3371,6 +3478,7 @@ print("Hello from Pyodide!")
 
     /**
      * Handle resizing a node to fit 80% of the visible viewport
+     * @param nodeId
      */
     handleNodeFitToViewport(nodeId) {
         this.canvas.resizeNodeToViewport(nodeId);
@@ -3378,6 +3486,7 @@ print("Hello from Pyodide!")
 
     /**
      * Handle resetting a node to its default size
+     * @param nodeId
      */
     handleNodeResetSize(nodeId) {
         const node = this.graph.getNode(nodeId);
@@ -3419,6 +3528,7 @@ print("Hello from Pyodide!")
 
     /**
      * Handle summarizing a FETCH_RESULT node (creates new SUMMARY node)
+     * @param nodeId
      */
     async handleNodeSummarize(nodeId) {
         const fetchNode = this.graph.getNode(nodeId);
@@ -3509,7 +3619,8 @@ print("Hello from Pyodide!")
 
     /**
      * Highlight's source text in parent node when a highlight excerpt is selected
-     * @param {Object} highlightNode - The highlight node that was selected
+     * @param {string} nodeId - The node ID of the highlight
+     * @returns {Promise<void>}
      */
     async handleCreateFlashcards(nodeId) {
         return this.featureRegistry.getFeature('flashcards').handleCreateFlashcards(nodeId);
@@ -3518,6 +3629,7 @@ print("Hello from Pyodide!")
     /**
      * Show flashcard review modal with due cards.
      * @param {string[]} dueCardIds - Array of flashcard node IDs to review
+     * @returns {void}
      */
     showReviewModal(dueCardIds) {
         return this.featureRegistry.getFeature('flashcards').showReviewModal(dueCardIds);
@@ -3525,6 +3637,7 @@ print("Hello from Pyodide!")
 
     /**
      * Start a review session with all due flashcards.
+     * @returns {void}
      */
     startFlashcardReview() {
         return this.featureRegistry.getFeature('flashcards').startFlashcardReview();
@@ -3533,6 +3646,7 @@ print("Hello from Pyodide!")
     /**
      * Review a single flashcard (flip and grade).
      * @param {string} cardId - The flashcard node ID
+     * @returns {void}
      */
     reviewSingleCard(cardId) {
         return this.featureRegistry.getFeature('flashcards').reviewSingleCard(cardId);
@@ -3541,6 +3655,7 @@ print("Hello from Pyodide!")
     /**
      * Handle flipping a flashcard to show/hide answer.
      * @param {string} cardId - The flashcard node ID
+     * @returns {void}
      */
     handleFlipCard(cardId) {
         return this.featureRegistry.getFeature('flashcards').handleFlipCard(cardId);
@@ -3548,11 +3663,17 @@ print("Hello from Pyodide!")
 
     /**
      * Check for due flashcards and show toast notification if any.
+     * @returns {void}
      */
     checkDueFlashcardsOnLoad() {
         return this.featureRegistry.getFeature('flashcards').checkDueFlashcardsOnLoad();
     }
 
+    /**
+     *
+     * @param {string} nodeId
+     * @returns {Promise<void>}
+     */
     async copyNodeContent(nodeId) {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
@@ -3568,11 +3689,17 @@ print("Hello from Pyodide!")
 
     /**
      * Format a matrix node as a markdown table
+     * @param {Object} matrixNode
+     * @returns {string}
      */
     formatMatrixAsText(matrixNode) {
         return formatMatrixAsText(matrixNode);
     }
 
+    /**
+     *
+     * @returns {void}
+     */
     deleteSelectedNodes() {
         const selectedIds = this.canvas.getSelectedNodeIds();
         if (selectedIds.length === 0) return;
@@ -3631,6 +3758,10 @@ print("Hello from Pyodide!")
 
     // --- Context Visualization ---
 
+    /**
+     *
+     * @param selectedIds
+     */
     updateSelectedIndicator(selectedIds) {
         if (selectedIds.length > 0) {
             this.selectedIndicator.style.display = 'flex';
@@ -3640,6 +3771,10 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     * @param selectedIds
+     */
     updateContextHighlight(selectedIds) {
         if (selectedIds.length > 0) {
             const ancestorIds = this.graph.getAncestorIds(selectedIds);
@@ -3653,6 +3788,10 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     * @param selectedIds
+     */
     updateContextBudget(selectedIds) {
         const model = this.modelPicker.value;
         const contextWindow = chat.getContextWindow(model);
@@ -3680,6 +3819,9 @@ print("Hello from Pyodide!")
 
     // --- Session Management ---
 
+    /**
+     *
+     */
     saveSession() {
         // Debounce saves
         if (this.saveTimeout) {
@@ -3708,6 +3850,9 @@ print("Hello from Pyodide!")
         }, 500);
     }
 
+    /**
+     *
+     */
     editSessionName() {
         const newName = prompt('Session name:', this.session.name);
         if (newName && newName.trim()) {
@@ -3717,6 +3862,9 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     */
     async generateSessionTitle() {
         // Check if there's any content to generate a title from
         if (this.graph.isEmpty()) {
@@ -3788,6 +3936,7 @@ print("Hello from Pyodide!")
     /**
      * Generate a summary for a node (for semantic zoom)
      * Called async after AI/Research/Cell/Matrix nodes complete
+     * @param nodeId
      */
     async generateNodeSummary(nodeId) {
         const node = this.graph.getNode(nodeId);
@@ -3860,10 +4009,17 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     */
     exportSession() {
         storage.exportSession(this.session);
     }
 
+    /**
+     *
+     * @param file
+     */
     async importSession(file) {
         try {
             const session = await storage.importSession(file);
@@ -3873,6 +4029,9 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     */
     updateEmptyState() {
         const container = document.getElementById('canvas-container');
         let emptyState = container.querySelector('.empty-state');
@@ -4060,8 +4219,10 @@ print("Hello from Pyodide!")
     /**
      * Handle remote changes from other peers.
      * Uses smart diffing to animate position and size changes smoothly.
+     * @param {string} type
+     * @param {Object[]} _events
      */
-    handleRemoteChange(type, events) {
+    handleRemoteChange(type, _events) {
         console.log('[App] Handling remote change:', type);
 
         const currentNodeIds = new Set(this.canvas.nodeElements.keys());
@@ -4155,6 +4316,9 @@ print("Hello from Pyodide!")
     /**
      * Check if a node needs full re-render (structural changes).
      * Returns true if tags or matrix structure changed.
+     * @param {Object} node
+     * @param {HTMLElement} wrapper
+     * @returns {boolean}
      */
     nodeNeedsRerender(node, wrapper) {
         // Check if tag count changed (simple heuristic)
@@ -4185,6 +4349,7 @@ print("Hello from Pyodide!")
     /**
      * Animate node positions and sizes for remote changes.
      * Uses smooth easing to match local layout animations.
+     * @param animations
      */
     animateRemoteTransforms(animations) {
         const duration = 400; // Slightly faster than local (500ms)
@@ -4229,6 +4394,7 @@ print("Hello from Pyodide!")
 
     /**
      * Update the multiplayer button UI state
+     * @param enabled
      */
     updateMultiplayerUI(enabled) {
         if (enabled) {
@@ -4246,6 +4412,7 @@ print("Hello from Pyodide!")
 
     /**
      * Update the peer count display
+     * @param count
      */
     updatePeerCount(count) {
         this.peerCountEl.textContent = count;
@@ -4259,7 +4426,7 @@ print("Hello from Pyodide!")
      */
     handleLocksChange(lockedNodes) {
         // Remove lock indicators from all nodes
-        for (const [nodeId, wrapper] of this.canvas.nodeElements) {
+        for (const [_nodeId, wrapper] of this.canvas.nodeElements) {
             wrapper.classList.remove('node-locked-by-other');
         }
 
@@ -4298,6 +4465,7 @@ print("Hello from Pyodide!")
 
     /**
      * Execute an undo action (reverse of the original action)
+     * @param action
      */
     executeUndo(action) {
         switch (action.type) {
@@ -4394,6 +4562,7 @@ print("Hello from Pyodide!")
 
     /**
      * Execute a redo action (re-apply the original action)
+     * @param action
      */
     executeRedo(action) {
         switch (action.type) {
@@ -4482,6 +4651,9 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     */
     saveSettings() {
         const keys = {
             openai: document.getElementById('openai-key').value.trim(),
@@ -4521,6 +4693,9 @@ print("Hello from Pyodide!")
 
     // --- Tag Management ---
 
+    /**
+     *
+     */
     toggleTagDrawer() {
         const drawer = document.getElementById('tag-drawer');
         const btn = document.getElementById('tags-btn');
@@ -4532,6 +4707,9 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     */
     openTagDrawer() {
         const drawer = document.getElementById('tag-drawer');
         const btn = document.getElementById('tags-btn');
@@ -4542,6 +4720,9 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     */
     closeTagDrawer() {
         const drawer = document.getElementById('tag-drawer');
         const btn = document.getElementById('tags-btn');
@@ -4549,6 +4730,9 @@ print("Hello from Pyodide!")
         btn.classList.remove('active');
     }
 
+    /**
+     *
+     */
     renderTagSlots() {
         const slotsEl = document.getElementById('tag-slots');
         const tags = this.graph.getAllTags();
@@ -4626,6 +4810,10 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     * @param color
+     */
     handleTagSlotClick(color) {
         const tag = this.graph.getTag(color);
         const selectedIds = this.canvas.getSelectedNodeIds();
@@ -4642,6 +4830,11 @@ print("Hello from Pyodide!")
         }
     }
 
+    /**
+     *
+     * @param color
+     * @param isNew
+     */
     startEditingTag(color, isNew = false) {
         const slot = document.querySelector(`.tag-slot[data-color="${color}"]`);
         if (!slot) return;
@@ -4686,6 +4879,10 @@ print("Hello from Pyodide!")
         });
     }
 
+    /**
+     *
+     * @param color
+     */
     deleteTag(color) {
         const tag = this.graph.getTag(color);
         if (!tag) return;
@@ -4697,6 +4894,11 @@ print("Hello from Pyodide!")
         this.renderTagSlots();
     }
 
+    /**
+     *
+     * @param color
+     * @param nodeIds
+     */
     toggleTagOnNodes(color, nodeIds) {
         // Check current state
         const nodesWithTag = nodeIds.filter((id) => this.graph.nodeHasTag(id, color));
@@ -4750,6 +4952,9 @@ print("Hello from Pyodide!")
         this.renderTagSlots();
     }
 
+    /**
+     *
+     */
     updateTagDrawer() {
         const drawer = document.getElementById('tag-drawer');
         if (!drawer.classList.contains('open')) return;
@@ -4769,6 +4974,11 @@ print("Hello from Pyodide!")
         this.renderTagSlots();
     }
 
+    /**
+     *
+     * @param {string} text
+     * @returns {string}
+     */
     escapeHtml(text) {
         return escapeHtmlText(text);
     }
@@ -4776,7 +4986,8 @@ print("Hello from Pyodide!")
     // --- Search Methods ---
 
     /**
-     * Rebuild the search index from current graph nodes
+     *
+     * @returns {void}
      */
     rebuildSearchIndex() {
         const nodes = this.graph.getAllNodes();
@@ -4785,6 +4996,7 @@ print("Hello from Pyodide!")
 
     /**
      * Check if search overlay is open
+     * @returns {boolean}
      */
     isSearchOpen() {
         return document.getElementById('search-overlay').style.display !== 'none';
@@ -4792,6 +5004,7 @@ print("Hello from Pyodide!")
 
     /**
      * Open the search overlay
+     * @returns {void}
      */
     openSearch() {
         // Rebuild index to ensure it's fresh
@@ -4843,6 +5056,7 @@ print("Hello from Pyodide!")
 
     /**
      * Handle keyboard navigation in search results
+     * @param e
      */
     handleSearchKeydown(e) {
         const results = document.querySelectorAll('.search-result');
@@ -4887,6 +5101,8 @@ print("Hello from Pyodide!")
 
     /**
      * Render search results
+     * @param results
+     * @param query
      */
     renderSearchResults(results, query = '') {
         const container = document.getElementById('search-results');
@@ -4958,6 +5174,7 @@ print("Hello from Pyodide!")
 
     /**
      * Navigate to a node and select it
+     * @param nodeId
      */
     navigateToNode(nodeId) {
         const node = this.graph.getNode(nodeId);
@@ -4986,6 +5203,8 @@ print("Hello from Pyodide!")
 
     /**
      * Escape special regex characters
+     * @param {string} str
+     * @returns {string}
      */
     escapeRegex(str) {
         return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

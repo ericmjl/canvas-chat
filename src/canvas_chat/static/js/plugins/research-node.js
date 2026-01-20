@@ -8,15 +8,30 @@
 import { BaseNode, Actions, HeaderButtons } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
+/**
+ * ResearchNode - Protocol for deep research results
+ */
 class ResearchNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'Research';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '📚';
     }
 
+    /**
+     * Get header buttons for this node
+     * @returns {Array<string>}
+     */
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,
@@ -30,6 +45,10 @@ class ResearchNode extends BaseNode {
         ];
     }
 
+    /**
+     * Get action buttons for this node
+     * @returns {Array<string>}
+     */
     getActions() {
         return [Actions.REPLY, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }

@@ -13,22 +13,43 @@ import { FileUploadRegistry, PRIORITY } from '../file-upload-registry.js';
 
 /* global Papa */
 
+/**
+ * CsvNode - Protocol for CSV data display
+ */
 class CsvNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'CSV';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '📊';
     }
 
-    getSummaryText(canvas) {
+    /**
+     * Get summary text for semantic zoom (shown when zoomed out)
+     * @param {Canvas} _canvas
+     * @returns {string}
+     */
+    getSummaryText(_canvas) {
         if (this.node.title) return this.node.title;
         const filename = this.node.filename || 'CSV Data';
         const rowCount = this.node.rowCount || '?';
         return `${filename} (${rowCount} rows)`;
     }
 
+    /**
+     * Render the content for the CSV node
+     * @param {Canvas} canvas
+     * @returns {string}
+     */
     renderContent(canvas) {
         // Show table preview with metadata header
         const filename = this.node.filename || 'data.csv';
@@ -52,6 +73,10 @@ class CsvNode extends BaseNode {
         return html;
     }
 
+    /**
+     * Get action buttons for this node
+     * @returns {Array<string>}
+     */
     getActions() {
         return [Actions.ANALYZE, Actions.REPLY, Actions.SUMMARIZE, Actions.COPY];
     }
@@ -124,10 +149,10 @@ class CsvFileUploadHandler extends FileUploadHandlerPlugin {
      * Handle CSV file upload
      * @param {File} file - The CSV file to upload
      * @param {Object|null} position - Optional position for the node
-     * @param {Object} context - Additional context
+     * @param {Object} _context - Additional context
      * @returns {Promise<Object>} The created CSV node
      */
-    async handleUpload(file, position = null, context = {}) {
+    async handleUpload(file, position = null, _context = {}) {
         // Validate CSV type
         if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
             throw new Error('Please select a CSV file.');

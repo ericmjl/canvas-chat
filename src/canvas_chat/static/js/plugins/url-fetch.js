@@ -13,7 +13,14 @@ import { createNode, NodeType } from '../graph-types.js';
 import { createEdge, EdgeType } from '../graph-types.js';
 import { isUrlContent, apiUrl } from '../utils.js';
 
+/**
+ * UrlFetchFeature - Handles generic URL fetching
+ */
 export class UrlFetchFeature extends FeaturePlugin {
+    /**
+     * Get slash commands for this feature
+     * @returns {Array<Object>}
+     */
     getSlashCommands() {
         return [
             {
@@ -31,9 +38,9 @@ export class UrlFetchFeature extends FeaturePlugin {
      *
      * @param {string} command - The slash command (e.g., '/fetch')
      * @param {string} args - Text after the command (URL)
-     * @param {Object} contextObj - Additional context (e.g., { text: selectedNodesContent })
+     * @param {Object} _contextObj - Additional context (unused, kept for interface)
      */
-    async handleCommand(command, args, contextObj) {
+    async handleCommand(command, args, _contextObj) {
         const url = args.trim();
         if (!url) {
             this.showToast?.('Please provide a URL', 'warning');
@@ -63,6 +70,7 @@ export class UrlFetchFeature extends FeaturePlugin {
      * This uses Jina Reader API (/api/fetch-url) which is free and requires no API key.
      *
      * @param {string} url - The URL to fetch
+     * @returns {Promise<void>}
      */
     async handleWebUrl(url) {
         // Get selected nodes (if any) to link the fetched content to
@@ -78,11 +86,7 @@ export class UrlFetchFeature extends FeaturePlugin {
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {
-            const edge = createEdge(
-                parentId,
-                fetchNode.id,
-                parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY
-            );
+            const edge = createEdge(parentId, fetchNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
             this.graph.addEdge(edge);
         }
 
@@ -136,7 +140,6 @@ export class UrlFetchFeature extends FeaturePlugin {
             this.saveSession?.();
         }
     }
-
 }
 
 console.log('URL Fetch plugin loaded');

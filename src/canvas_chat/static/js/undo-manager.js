@@ -2,6 +2,10 @@
  * Undo/Redo manager for tracking user actions
  */
 class UndoManager {
+    /**
+     *
+     * @param maxHistory
+     */
     constructor(maxHistory = 50) {
         this.undoStack = [];
         this.redoStack = [];
@@ -11,6 +15,7 @@ class UndoManager {
 
     /**
      * Push an action onto the undo stack
+     * @param action
      */
     push(action) {
         this.undoStack.push(action);
@@ -54,10 +59,18 @@ class UndoManager {
         return action;
     }
 
+    /**
+     *
+     * @returns {boolean}
+     */
     canUndo() {
         return this.undoStack.length > 0;
     }
 
+    /**
+     *
+     * @returns {boolean}
+     */
     canRedo() {
         return this.redoStack.length > 0;
     }

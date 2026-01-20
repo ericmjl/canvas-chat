@@ -6,7 +6,8 @@
 /**
  * Normalize text content from LLM streaming
  * Fixes common tokenization artifacts like spaces before punctuation
- * @param text
+ * @param {string} text
+ * @returns {string}
  */
 function normalizeText(text) {
     if (!text) return text;

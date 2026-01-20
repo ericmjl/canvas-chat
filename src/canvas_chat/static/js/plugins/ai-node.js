@@ -9,23 +9,46 @@
 import { BaseNode, Actions, HeaderButtons } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
+/**
+ * AINode - Protocol for AI-generated responses
+ */
 class AINode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'AI';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '🤖';
     }
 
+    /**
+     * Get action buttons for this node
+     * @returns {Array<string>}
+     */
     getActions() {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
 
+    /**
+     * Check if this node supports stop/continue functionality
+     * @returns {boolean}
+     */
     supportsStopContinue() {
         return true;
     }
 
+    /**
+     * Get header buttons for this node
+     * @returns {Array<string>}
+     */
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,

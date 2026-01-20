@@ -34,14 +34,26 @@ import { wrapNode } from '../node-protocols.js';
  * Defines how matrix nodes are rendered and what actions they support.
  */
 class MatrixNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'Matrix';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '📊';
     }
 
+    /**
+     * Get header buttons for this node
+     * @returns {Array<string>}
+     */
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,
@@ -70,7 +82,12 @@ class MatrixNode extends BaseNode {
         return 'matrix-table-container';
     }
 
-    getSummaryText(canvas) {
+    /**
+     * Get summary text for semantic zoom (shown when zoomed out)
+     * @param {Canvas} _canvas
+     * @returns {string}
+     */
+    getSummaryText(_canvas) {
         // Priority: user-set title > LLM summary > generated fallback
         if (this.node.title) return this.node.title;
         if (this.node.summary) return this.node.summary;
@@ -154,6 +171,11 @@ class MatrixNode extends BaseNode {
         `;
     }
 
+    /**
+     *
+     * @param canvas
+     * @param app
+     */
     async copyToClipboard(canvas, app) {
         // Format matrix as markdown table
         if (!app?.formatMatrixAsText) {
@@ -324,6 +346,10 @@ class MatrixNode extends BaseNode {
         return true;
     }
 
+    /**
+     * Get event bindings for matrix interactions
+     * @returns {Array<Object>}
+     */
     getEventBindings() {
         return [
             // Matrix cells - view filled or fill empty
@@ -896,7 +922,14 @@ class MatrixFeature extends FeaturePlugin {
         }
     }
 
-    async parseTwoLists(contents, context, model) {
+    /**
+     * Parse two lists into matrix structure
+     * @param {Array<string>} contents
+     * @param {string} context
+     * @param {string} _model
+     * @returns {Promise<Object>}
+     */
+    async parseTwoLists(contents, context, _model) {
         const requestBody = this.buildLLMRequest({
             contents,
             context,
@@ -928,6 +961,8 @@ class MatrixFeature extends FeaturePlugin {
     /**
      * Get the data source and element IDs for a given axis container.
      * Supports both create modal (row-items, col-items) and edit modal (edit-row-items, edit-col-items).
+     * @param {string} containerId
+     * @returns {Object}
      */
     getAxisConfig(containerId) {
         const isEdit = containerId.startsWith('edit-');
@@ -938,6 +973,11 @@ class MatrixFeature extends FeaturePlugin {
         return { dataSource, items, countId, isRow };
     }
 
+    /**
+     *
+     * @param containerId
+     * @param items
+     */
     populateAxisItems(containerId, items) {
         const container = document.getElementById(containerId);
         container.innerHTML = '';
@@ -967,6 +1007,11 @@ class MatrixFeature extends FeaturePlugin {
         });
     }
 
+    /**
+     *
+     * @param containerId
+     * @param index
+     */
     removeAxisItem(containerId, index) {
         const { items, countId } = this.getAxisConfig(containerId);
         if (!items) return;
@@ -976,6 +1021,12 @@ class MatrixFeature extends FeaturePlugin {
         document.getElementById(countId).textContent = `${items.length} items`;
     }
 
+    /**
+     *
+     * @param containerId
+     * @param index
+     * @param newValue
+     */
     updateAxisItem(containerId, index, newValue) {
         const { items } = this.getAxisConfig(containerId);
         if (!items || !newValue.trim()) return;
@@ -983,6 +1034,10 @@ class MatrixFeature extends FeaturePlugin {
         items[index] = newValue.trim();
     }
 
+    /**
+     *
+     * @param containerId
+     */
     addAxisItem(containerId) {
         const { items, countId } = this.getAxisConfig(containerId);
         if (!items) return;
@@ -1005,6 +1060,9 @@ class MatrixFeature extends FeaturePlugin {
         }
     }
 
+    /**
+     *
+     */
     swapMatrixAxes() {
         if (!this._matrixData) return;
 
@@ -1027,6 +1085,9 @@ class MatrixFeature extends FeaturePlugin {
         document.getElementById('col-count').textContent = `${this._matrixData.colItems.length} items`;
     }
 
+    /**
+     *
+     */
     swapEditMatrixAxes() {
         if (!this._editMatrixData) return;
 
@@ -1040,6 +1101,9 @@ class MatrixFeature extends FeaturePlugin {
         document.getElementById('edit-col-count').textContent = `${this._editMatrixData.colItems.length} items`;
     }
 
+    /**
+     *
+     */
     createMatrixNode() {
         if (!this._matrixData) return;
 
@@ -1336,6 +1400,12 @@ class MatrixFeature extends FeaturePlugin {
         }
     }
 
+    /**
+     *
+     * @param nodeId
+     * @param row
+     * @param col
+     */
     handleMatrixCellView(nodeId, row, col) {
         const matrixNode = this.graph.getNode(nodeId);
         if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
@@ -1365,6 +1435,10 @@ class MatrixFeature extends FeaturePlugin {
         this.modalManager.showPluginModal('matrix', 'cell');
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     async handleMatrixFillAll(nodeId) {
         const matrixNode = this.graph.getNode(nodeId);
         if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
@@ -1429,6 +1503,7 @@ class MatrixFeature extends FeaturePlugin {
 
     /**
      * Handle editing matrix rows and columns
+     * @param nodeId
      */
     handleMatrixEdit(nodeId) {
         const matrixNode = this.graph.getNode(nodeId);
@@ -1467,6 +1542,9 @@ class MatrixFeature extends FeaturePlugin {
         this.saveSession();
     }
 
+    /**
+     *
+     */
     saveMatrixEdits() {
         if (!this._editMatrixData) return;
 
@@ -1518,6 +1596,9 @@ class MatrixFeature extends FeaturePlugin {
         this.saveSession();
     }
 
+    /**
+     *
+     */
     pinCellToCanvas() {
         if (!this._currentCellData) return;
 
@@ -1558,6 +1639,8 @@ class MatrixFeature extends FeaturePlugin {
 
     /**
      * Handle extracting a row from a matrix - show preview modal
+     * @param nodeId
+     * @param rowIndex
      */
     handleMatrixRowExtract(nodeId, rowIndex) {
         const matrixNode = this.graph.getNode(nodeId);
@@ -1602,6 +1685,8 @@ class MatrixFeature extends FeaturePlugin {
 
     /**
      * Handle extracting a column from a matrix - show preview modal
+     * @param nodeId
+     * @param colIndex
      */
     handleMatrixColExtract(nodeId, colIndex) {
         const matrixNode = this.graph.getNode(nodeId);

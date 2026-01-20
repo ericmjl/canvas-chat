@@ -26,14 +26,27 @@ import { apiUrl } from '../utils.js';
  * Defines how code nodes are rendered and what actions they support.
  */
 class CodeNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'Code';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '🐍';
     }
 
+    /**
+     * Get summary text for the node (shown when zoomed out)
+     * @param {Canvas} canvas
+     * @returns {string}
+     */
     getSummaryText(canvas) {
         if (this.node.title) return this.node.title;
         // Show first meaningful line of code
@@ -42,6 +55,11 @@ class CodeNode extends BaseNode {
         return canvas.truncate(firstLine.trim(), 50);
     }
 
+    /**
+     * Render the content for the code node
+     * @param {Canvas} canvas
+     * @returns {string}
+     */
     renderContent(canvas) {
         const code = this.node.code || this.node.content || '';
         const executionState = this.node.executionState || 'idle';
@@ -173,14 +191,26 @@ class CodeNode extends BaseNode {
         return true;
     }
 
+    /**
+     * Get IDs of hidden actions for this node
+     * @returns {Array<string>}
+     */
     getHiddenActionIds() {
         return ['edit-content']; // Hide default edit, use edit-code instead
     }
 
+    /**
+     * Get additional action buttons for this node
+     * @returns {Array<string>}
+     */
     getAdditionalActions() {
         return [Actions.EDIT_CODE, Actions.GENERATE, Actions.RUN_CODE];
     }
 
+    /**
+     * Get keyboard shortcuts for this node
+     * @returns {Object}
+     */
     getKeyboardShortcuts() {
         const shortcuts = super.getKeyboardShortcuts();
         // Override 'e' to use edit-code instead of edit-content
@@ -190,10 +220,18 @@ class CodeNode extends BaseNode {
         return shortcuts;
     }
 
+    /**
+     * Check if this node supports stop/continue functionality
+     * @returns {boolean}
+     */
     supportsStopContinue() {
         return true;
     }
 
+    /**
+     * Get header buttons for this node
+     * @returns {Array<string>}
+     */
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,
@@ -229,10 +267,10 @@ class CodeNode extends BaseNode {
      * @param {Array<Object>} models - Available model options with {id, name}
      * @param {string} currentModel - Currently selected model ID
      * @param {Canvas} canvas - Canvas instance for DOM manipulation
-     * @param {App} app - App instance for event emission
+     * @param {App} _app - App instance for event emission (unused)
      * @returns {boolean}
      */
-    showGenerateUI(nodeId, models, currentModel, canvas, app) {
+    showGenerateUI(nodeId, models, currentModel, canvas, _app) {
         const wrapper = canvas.nodeElements.get(nodeId);
         if (!wrapper) return false;
 
@@ -323,6 +361,7 @@ class CodeNode extends BaseNode {
 
     /**
      * Code-specific event bindings for syntax highlighting initialization
+     * @returns {Array<Object>}
      */
     getEventBindings() {
         return [
@@ -330,7 +369,7 @@ class CodeNode extends BaseNode {
             {
                 selector: '.code-display',
                 event: 'init', // Special event: called after render, not a DOM event
-                handler: (nodeId, e, canvas) => {
+                handler: (_nodeId, e, _canvas) => {
                     if (window.hljs) {
                         const codeEl = e.currentTarget.querySelector('code');
                         if (codeEl) {
@@ -368,6 +407,10 @@ export { CodeNode };
  * - selfheal:fix - Before generating fix prompt (CancellableEvent, can customize prompt)
  */
 export class CodeFeature extends FeaturePlugin {
+    /**
+     *
+     * @param context
+     */
     constructor(context) {
         super(context);
 
@@ -381,6 +424,7 @@ export class CodeFeature extends FeaturePlugin {
 
     /**
      * Initialize the feature
+     * @returns {Promise<void>}
      */
     async onLoad() {
         console.log('[CodeFeature] Loaded - self-healing enabled');
@@ -798,9 +842,10 @@ Output ONLY the corrected Python code, no explanations.`;
 
     /**
      * Get canvas event handlers for code node functionality.
+     * @param {Canvas} _canvas - Canvas instance (unused, kept for interface consistency)
      * @returns {Object} Event name -> handler function mapping
      */
-    getCanvasEventHandlers() {
+    getCanvasEventHandlers(_canvas) {
         return {
             nodeEditCode: this.handleNodeEditCode.bind(this),
             nodeRunCode: this.handleNodeRunCode.bind(this),
@@ -815,8 +860,10 @@ Output ONLY the corrected Python code, no explanations.`;
     /**
      * Handle Run button click on Code node - executes Python with Pyodide
      * @param {string} nodeId - The Code node ID
+     * @param {_nodeId} _nodeId - Duplicate nodeId (unused, for streaming manager callback)
+     * @returns {Promise<void>}
      */
-    async handleNodeRunCode(nodeId) {
+    async handleNodeRunCode(nodeId, _nodeId) {
         const codeNode = this.graph.getNode(nodeId);
         if (!codeNode) return;
         const wrapped = wrapNode(codeNode);
@@ -1066,7 +1113,7 @@ Output ONLY the corrected Python code, no explanations.`;
         this.streamingManager.register(nodeId, {
             abortController,
             featureId: this.id,
-            onStop: (nodeId) => {
+            onStop: (_nodeId) => {
                 console.log('[Code] Generation stopped');
             },
             onContinue: async (nodeId, state) => {

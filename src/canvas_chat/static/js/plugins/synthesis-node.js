@@ -9,23 +9,46 @@
 import { BaseNode, Actions, HeaderButtons } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
+/**
+ * SynthesisNode - Protocol for chairman's synthesized response
+ */
 class SynthesisNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'Synthesis';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '⚖️';
     }
 
+    /**
+     * Get action buttons for this node
+     * @returns {Array<string>}
+     */
     getActions() {
         return [Actions.REPLY, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS, Actions.COPY];
     }
 
+    /**
+     * Check if this node supports stop/continue functionality
+     * @returns {boolean}
+     */
     supportsStopContinue() {
         return true;
     }
 
+    /**
+     * Get header buttons for this node
+     * @returns {Array<string>}
+     */
     getHeaderButtons() {
         return [
             HeaderButtons.NAV_PARENT,

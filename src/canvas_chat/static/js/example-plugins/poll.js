@@ -30,6 +30,7 @@ import { createNode } from '../graph-types.js';
 class PollNode extends BaseNode {
     /**
      * Display label shown in node header
+     * @returns {string}
      */
     getTypeLabel() {
         return 'Poll';
@@ -37,6 +38,7 @@ class PollNode extends BaseNode {
 
     /**
      * Emoji icon for the node type
+     * @returns {string}
      */
     getTypeIcon() {
         return '📊';
@@ -44,6 +46,8 @@ class PollNode extends BaseNode {
 
     /**
      * Summary text for semantic zoom (shown when zoomed out)
+     * @param {Canvas} canvas
+     * @returns {string}
      */
     getSummaryText(canvas) {
         // Show question as summary
@@ -53,6 +57,8 @@ class PollNode extends BaseNode {
 
     /**
      * Render the HTML content for the poll
+     * @param {Canvas} canvas
+     * @returns {string}
      */
     renderContent(canvas) {
         const question = this.node.question || 'No question set';
@@ -89,6 +95,7 @@ class PollNode extends BaseNode {
 
     /**
      * Action buttons for the poll node
+     * @returns {Array<Object>}
      */
     getActions() {
         return [
@@ -100,6 +107,7 @@ class PollNode extends BaseNode {
 
     /**
      * Custom event bindings for poll interactions
+     * @returns {Array<Object>}
      */
     getEventBindings() {
         return [
@@ -127,6 +135,9 @@ class PollNode extends BaseNode {
 
     /**
      * Copy poll results to clipboard
+     * @param {Canvas} canvas
+     * @param {App} _app
+     * @returns {Promise<void>}
      */
     async copyToClipboard(canvas, _app) {
         const question = this.node.question || 'Poll';
@@ -233,6 +244,10 @@ NodeRegistry.register({
  * and handles poll node interactions (voting, adding options, resetting votes).
  */
 export class PollFeature extends FeaturePlugin {
+    /**
+     * Get slash commands for this feature
+     * @returns {Array<Object>}
+     */
     getSlashCommands() {
         return [
             {
@@ -247,9 +262,10 @@ export class PollFeature extends FeaturePlugin {
      * Handle /poll slash command - generate poll from natural language
      * @param {string} command - The slash command (e.g., '/poll')
      * @param {string} args - Text after the command (natural language prompt)
-     * @param {Object} contextObj - Additional context (e.g., { text: selectedNodesContent })
+     * @param {Object} _contextObj - Additional context (unused, kept for interface)
+     * @returns {Promise<void>}
      */
-    async handleCommand(command, args, contextObj) {
+    async handleCommand(command, args, _contextObj) {
         const input = args.trim();
         if (!input) {
             this.showToast?.('Please provide a poll question or description', 'warning');
@@ -287,7 +303,7 @@ export class PollFeature extends FeaturePlugin {
             onStop: (nodeId) => {
                 this.streamingManager.unregister(nodeId);
             },
-            onContinue: async (nodeId, state) => {
+            onContinue: async (_nodeId, _state) => {
                 // Continue not supported for poll generation (would need to re-prompt)
                 this.showToast?.('Cannot continue poll generation. Create a new poll instead.', 'warning');
             },
@@ -321,9 +337,10 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
                 (chunk, accumulated) => {
                     fullResponse = accumulated;
                     // Show streaming progress
-                    const progressText = accumulated.length > 50
-                        ? `🔄 Generating poll... (${accumulated.length} chars)`
-                        : '🔄 Generating poll...';
+                    const progressText =
+                        accumulated.length > 50
+                            ? `🔄 Generating poll... (${accumulated.length} chars)`
+                            : '🔄 Generating poll...';
 
                     // Update the node in the graph
                     this.graph.updateNode(loadingNode.id, {
@@ -437,6 +454,11 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
         };
     }
 
+    /**
+     * Handle poll vote event
+     * @param {string} nodeId
+     * @param {number} optionIndex
+     */
     handlePollVote(nodeId, optionIndex) {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
@@ -455,6 +477,10 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
         this.saveSession?.();
     }
 
+    /**
+     * Handle add option button click
+     * @param {string} nodeId
+     */
     handlePollAddOption(nodeId) {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
@@ -520,6 +546,11 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
         });
     }
 
+    /**
+     * Add a new option to the poll
+     * @param {string} nodeId
+     * @param {string} option
+     */
     addOptionToPoll(nodeId, option) {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
@@ -538,6 +569,10 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
         this.saveSession?.();
     }
 
+    /**
+     * Handle reset votes button click
+     * @param {string} nodeId
+     */
     handlePollResetVotes(nodeId) {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
@@ -581,6 +616,10 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
         });
     }
 
+    /**
+     * Reset all votes for a poll
+     * @param {string} nodeId
+     */
     resetPollVotes(nodeId) {
         // Clear all votes
         this.graph.updateNode(nodeId, { votes: {} });
@@ -595,21 +634,24 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
 if (typeof window !== 'undefined') {
     const registerFeature = (app) => {
         if (app && app.featureRegistry && app.featureRegistry._appContext) {
-            app.featureRegistry.register({
-                id: 'poll',
-                feature: PollFeature,
-                slashCommands: [
-                    {
-                        command: '/poll',
-                        handler: 'handleCommand',
-                    },
-                ],
-                priority: 500, // OFFICIAL priority for external plugins
-            }).then(() => {
-                console.log('[Poll Plugin] PollFeature registered successfully');
-            }).catch((err) => {
-                console.error('[Poll Plugin] Failed to register PollFeature:', err);
-            });
+            app.featureRegistry
+                .register({
+                    id: 'poll',
+                    feature: PollFeature,
+                    slashCommands: [
+                        {
+                            command: '/poll',
+                            handler: 'handleCommand',
+                        },
+                    ],
+                    priority: 500, // OFFICIAL priority for external plugins
+                })
+                .then(() => {
+                    console.log('[Poll Plugin] PollFeature registered successfully');
+                })
+                .catch((err) => {
+                    console.error('[Poll Plugin] Failed to register PollFeature:', err);
+                });
         }
     };
 

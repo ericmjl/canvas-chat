@@ -8,8 +8,8 @@
 import { NodeType, EdgeType, createNode, createEdge } from '../graph-types.js';
 import { FeaturePlugin } from '../feature-plugin.js';
 import { storage } from '../storage.js';
-import { readSSEStream } from '../sse.js';
-import { apiUrl } from '../utils.js';
+import { readSSEStream as _readSSEStream } from '../sse.js';
+import { apiUrl as _apiUrl } from '../utils.js';
 
 /**
  * Static persona presets for quick selection
@@ -67,6 +67,7 @@ class CommitteeFeature extends FeaturePlugin {
 
     /**
      * Lifecycle hook: called when plugin is loaded
+     * @returns {Promise<void>}
      */
     async onLoad() {
         console.log('[CommitteeFeature] Loaded');
@@ -175,6 +176,7 @@ class CommitteeFeature extends FeaturePlugin {
 
     /**
      * Event subscriptions for this feature
+     * @returns {Object}
      */
     getEventSubscriptions() {
         return {
@@ -267,6 +269,7 @@ class CommitteeFeature extends FeaturePlugin {
 
     /**
      * Generate persona suggestions using LLM.
+     * @param question
      */
     async generatePersonaSuggestions(question) {
         const modal = this.modalManager.getPluginModal('committee', 'main');
@@ -373,6 +376,7 @@ ${question}`;
 
     /**
      * Render persona suggestions as cards.
+     * @param suggestions
      */
     renderPersonaSuggestions(suggestions) {
         const modal = this.modalManager.getPluginModal('committee', 'main');
@@ -412,6 +416,7 @@ ${question}`;
 
     /**
      * Add a member from a suggestion.
+     * @param index
      */
     addMemberFromSuggestion(index) {
         const suggestion = this._committeeData.personaSuggestions[index];
@@ -443,6 +448,7 @@ ${question}`;
 
     /**
      * Remove a member from the list.
+     * @param index
      */
     removeMember(index) {
         this._committeeData.members.splice(index, 1);
@@ -581,6 +587,8 @@ ${question}`;
 
     /**
      * Escape HTML to prevent XSS.
+     * @param {string} text
+     * @returns {string}
      */
     escapeHtml(text) {
         const div = document.createElement('div');
@@ -805,19 +813,19 @@ ${question}`;
         const label = persona ? `${persona} (${modelName})` : modelName;
 
         return new Promise((resolve, reject) => {
-            let fullContent = '';
+            let _fullContent = '';
 
             this.chat.sendMessage(
                 messagesWithPersona,
                 model,
                 // onChunk
                 (chunk, accumulated) => {
-                    fullContent = accumulated;
+                    _fullContent = accumulated;
                     this.canvas.updateNodeContent(nodeId, `**${label}**\n\n${accumulated}`, true);
                 },
                 // onDone
                 (finalContent) => {
-                    fullContent = finalContent;
+                    _fullContent = finalContent;
                     this.canvas.updateNodeContent(nodeId, `**${label}**\n\n${finalContent}`, false);
                     this.graph.updateNode(nodeId, { content: `**${label}**\n\n${finalContent}` });
                     this.streamingManager.unregister(nodeId); // Auto-hides stop button
@@ -954,19 +962,19 @@ ${question}`;
               ];
 
         return new Promise((resolve, reject) => {
-            let fullContent = '';
+            let _fullContent = '';
 
             this.chat.sendMessage(
                 reviewMessages,
                 model,
                 // onChunk
                 (chunk, accumulated) => {
-                    fullContent = accumulated;
+                    _fullContent = accumulated;
                     this.canvas.updateNodeContent(reviewNode.id, `**${label} Review**\n\n${accumulated}`, true);
                 },
                 // onDone
                 (finalContent) => {
-                    fullContent = finalContent;
+                    _fullContent = finalContent;
                     this.canvas.updateNodeContent(reviewNode.id, `**${label} Review**\n\n${finalContent}`, false);
                     this.graph.updateNode(reviewNode.id, { content: `**${label} Review**\n\n${finalContent}` });
                     this.streamingManager.unregister(reviewNode.id); // Auto-hides stop button
@@ -1058,19 +1066,19 @@ ${question}`;
         ];
 
         return new Promise((resolve, reject) => {
-            let fullContent = '';
+            let _fullContent = '';
 
             this.chat.sendMessage(
                 synthesisMessages,
                 chairmanModel,
                 // onChunk
                 (chunk, accumulated) => {
-                    fullContent = accumulated;
+                    _fullContent = accumulated;
                     this.canvas.updateNodeContent(nodeId, `**Synthesis (${chairmanName})**\n\n${accumulated}`, true);
                 },
                 // onDone
                 (finalContent) => {
-                    fullContent = finalContent;
+                    _fullContent = finalContent;
                     this.canvas.updateNodeContent(nodeId, `**Synthesis (${chairmanName})**\n\n${finalContent}`, false);
                     this.graph.updateNode(nodeId, {
                         content: `**Synthesis (${chairmanName})**\n\n${finalContent}`,

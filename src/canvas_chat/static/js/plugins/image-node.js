@@ -12,25 +12,52 @@ import { FileUploadHandlerPlugin } from '../file-upload-handler-plugin.js';
 import { FileUploadRegistry, PRIORITY } from '../file-upload-registry.js';
 import { resizeImage } from '../utils.js';
 
+/**
+ * ImageNode - Protocol for image display
+ */
 class ImageNode extends BaseNode {
+    /**
+     * Get the type label for this node
+     * @returns {string}
+     */
     getTypeLabel() {
         return 'Image';
     }
 
+    /**
+     * Get the type icon for this node
+     * @returns {string}
+     */
     getTypeIcon() {
         return '🖼️';
     }
 
-    getSummaryText(canvas) {
+    /**
+     * Get summary text for semantic zoom (shown when zoomed out)
+     * @param {Canvas} _canvas
+     * @returns {string}
+     */
+    getSummaryText(_canvas) {
         return 'Image';
     }
 
-    renderContent(canvas) {
+    /**
+     * Render the content for the image node
+     * @param {Canvas} _canvas
+     * @returns {string}
+     */
+    renderContent(_canvas) {
         const imgSrc = `data:${this.node.mimeType || 'image/png'};base64,${this.node.imageData}`;
         return `<div class="image-node-content"><img src="${imgSrc}" class="node-image" alt="Image"></div>`;
     }
 
-    async copyToClipboard(canvas, app) {
+    /**
+     * Copy image to clipboard
+     * @param {Canvas} canvas
+     * @param {App} _app
+     * @returns {Promise<void>}
+     */
+    async copyToClipboard(canvas, _app) {
         if (!canvas?.copyImageToClipboard) {
             console.error('ImageNode.copyToClipboard: canvas.copyImageToClipboard is not available');
             return;

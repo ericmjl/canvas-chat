@@ -13,9 +13,12 @@
 
 import { storage } from './storage.js';
 import { escapeHtmlText, apiUrl } from './utils.js';
-import { NodeType } from './graph-types.js';
+import { NodeType as _NodeType } from './graph-types.js';
 import { wrapNode } from './node-protocols.js';
 
+/**
+ *
+ */
 class ModalManager {
     /**
      * Create a ModalManager instance.
@@ -122,6 +125,9 @@ class ModalManager {
 
     // --- Copilot Auth ---
 
+    /**
+     *
+     */
     updateCopilotStatus() {
         const statusEl = document.getElementById('copilot-auth-status');
         if (!statusEl) {
@@ -130,6 +136,10 @@ class ModalManager {
         statusEl.textContent = this.formatCopilotStatus();
     }
 
+    /**
+     *
+     * @returns {string}
+     */
     formatCopilotStatus() {
         const auth = storage.getCopilotAuth();
         if (!auth?.apiKey) {
@@ -152,6 +162,10 @@ class ModalManager {
         return 'Authenticated';
     }
 
+    /**
+     *
+     * @param message
+     */
     showCopilotAuthModal(message = '') {
         const modal = document.getElementById('copilot-auth-modal');
         if (!modal) {
@@ -164,6 +178,9 @@ class ModalManager {
         }
     }
 
+    /**
+     *
+     */
     hideCopilotAuthModal() {
         const modal = document.getElementById('copilot-auth-modal');
         if (!modal) {
@@ -172,6 +189,9 @@ class ModalManager {
         modal.style.display = 'none';
     }
 
+    /**
+     *
+     */
     async startCopilotAuth() {
         const messageEl = document.getElementById('copilot-auth-message');
         if (messageEl) {
@@ -214,6 +234,9 @@ class ModalManager {
         }
     }
 
+    /**
+     *
+     */
     async completeCopilotAuth() {
         const messageEl = document.getElementById('copilot-auth-message');
         if (!this.copilotDeviceCode) {
@@ -256,6 +279,11 @@ class ModalManager {
         }
     }
 
+    /**
+     *
+     * @param {Object} options
+     * @returns {Promise<void>}
+     */
     async refreshCopilotAuth(options = {}) {
         const {
             clearAuthOnFailure = false,
@@ -313,6 +341,9 @@ class ModalManager {
         }
     }
 
+    /**
+     *
+     */
     clearCopilotAuth() {
         storage.clearCopilotAuth();
         this.copilotDeviceCode = null;
@@ -322,6 +353,9 @@ class ModalManager {
         this.updateCopilotStatus();
     }
 
+    /**
+     *
+     */
     copyCopilotCode() {
         const codeEl = document.getElementById('copilot-auth-code');
         if (!codeEl?.value) {
@@ -332,6 +366,9 @@ class ModalManager {
         });
     }
 
+    /**
+     *
+     */
     openCopilotVerificationUrl() {
         const url = this.copilotVerificationUrl;
         if (url) {
@@ -341,6 +378,9 @@ class ModalManager {
 
     // --- Settings Modal ---
 
+    /**
+     *
+     */
     showSettingsModal() {
         const modal = document.getElementById('settings-modal');
         modal.style.display = 'flex';
@@ -366,6 +406,9 @@ class ModalManager {
         this.renderCustomModelsList();
     }
 
+    /**
+     *
+     */
     hideSettingsModal() {
         document.getElementById('settings-modal').style.display = 'none';
     }
@@ -374,6 +417,9 @@ class ModalManager {
      * Render the custom models list in the settings modal
      */
 
+    /**
+     *
+     */
     renderCustomModelsList() {
         const container = document.getElementById('custom-models-list');
         const models = storage.getCustomModels();
@@ -475,14 +521,24 @@ class ModalManager {
 
     // --- Help Modal ---
 
+    /**
+     *
+     */
     showHelpModal() {
         document.getElementById('help-modal').style.display = 'flex';
     }
 
+    /**
+     *
+     */
     hideHelpModal() {
         document.getElementById('help-modal').style.display = 'none';
     }
 
+    /**
+     *
+     * @returns {boolean}
+     */
     isHelpOpen() {
         return document.getElementById('help-modal').style.display === 'flex';
     }
@@ -494,7 +550,7 @@ class ModalManager {
      */
     closeAnyOpenModal() {
         // First check plugin modals (most specific)
-        for (const [key, modal] of this._pluginModals.entries()) {
+        for (const [_key, modal] of this._pluginModals.entries()) {
             if (modal && modal.style.display === 'flex') {
                 modal.style.display = 'none';
                 return true;
@@ -520,6 +576,9 @@ class ModalManager {
 
     // --- Sessions Modal ---
 
+    /**
+     *
+     */
     async showSessionsModal() {
         const modal = document.getElementById('session-modal');
         modal.style.display = 'flex';
@@ -576,6 +635,9 @@ class ModalManager {
         });
     }
 
+    /**
+     *
+     */
     hideSessionsModal() {
         document.getElementById('session-modal').style.display = 'none';
     }
@@ -584,6 +646,7 @@ class ModalManager {
 
     /**
      * Handle opening the edit content modal for a node
+     * @param nodeId
      */
     handleNodeEditContent(nodeId) {
         const node = this.app.graph.getNode(nodeId);
@@ -610,7 +673,7 @@ class ModalManager {
 
         const modalTitle = document.querySelector('#edit-content-modal .modal-header h2');
         const editPane = document.querySelector('#edit-content-modal .edit-pane');
-        const preview = document.getElementById('edit-content-preview');
+        const _preview = document.getElementById('edit-content-preview');
 
         // Update modal title from protocol
         if (modalTitle) {
@@ -908,6 +971,7 @@ class ModalManager {
 
     /**
      * Handle opening the edit title modal for a node
+     * @param nodeId
      */
     handleNodeTitleEdit(nodeId) {
         const node = this.app.graph.getNode(nodeId);
