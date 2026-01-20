@@ -954,6 +954,11 @@ export class GitRepoFeature extends FeaturePlugin {
                 const lines = buffer.split('\n');
                 buffer = lines.pop() || '';
 
+                console.log(
+                    '[GitRepoFeature] Raw lines:',
+                    lines.filter((l) => l.trim())
+                );
+
                 for (const line of lines) {
                     if (line.startsWith('data:')) {
                         try {
