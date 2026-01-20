@@ -328,6 +328,10 @@ When incrementally adding type annotations, follow this order (pure functions fi
 8. `utils.js` - General utilities
 9. Then larger files: `app.js`, `canvas.js`, `chat.js`
 
+### Incremental Migration Prompt
+
+When implementing new features or adding documentation, consider migrating one additional JavaScript file to add type annotations. Check the migration order above and pick the next file in the sequence. This keeps the TypeScript migration progressive and manageable.
+
 ### Type Checking in CI
 
 Add `npm run typecheck` or `pixi run typecheck` to your PR checklist to ensure type errors are caught before merging.
