@@ -65,6 +65,9 @@ await asyncTest('loadModels adds Copilot options when authenticated', async () =
     const originalIsLocalhost = storage.isLocalhost;
     const app = createAppForLoadModels();
 
+    // Enable copilot (normally set by fetchFeatureFlags)
+    app.copilotEnabled = true;
+
     const { chat } = await import('../src/canvas_chat/static/js/chat.js');
     const originalFetchProviderModels = chat.fetchProviderModels;
     const originalFetchModels = chat.fetchModels;
