@@ -38,13 +38,10 @@ async function discoverTestFiles(specificFile = null) {
 
 /**
  * Get the appropriate command and args for running a test file
- * .ts files use tsx (TypeScript runner), .js files use node
+ * Use tsx for all files to support TypeScript imports from .ts files
  */
 function getRunCommand(filePath) {
-    if (filePath.endsWith('.ts')) {
-        return { cmd: 'npx', args: ['tsx', filePath] };
-    }
-    return { cmd: 'node', args: [filePath] };
+    return { cmd: 'npx', args: ['tsx', filePath] };
 }
 
 /**
