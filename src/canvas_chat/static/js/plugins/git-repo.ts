@@ -926,22 +926,9 @@ export class GitRepoFeature extends FeaturePlugin {
             // Update progress in drawer
             const updateDrawerProgress = () => {
                 const node = this.graph.getNode(nodeId);
-                if (!node) {
-                    console.log('[GitRepoFeature] updateDrawerProgress: node not found');
-                    return;
-                }
+                if (!node) return;
                 const wrapped = wrapNode(node);
-                if (!wrapped) {
-                    console.log('[GitRepoFeature] updateDrawerProgress: wrapped is null');
-                    return;
-                }
-                if (!wrapped.updateFetchProgress) {
-                    console.log('[GitRepoFeature] updateDrawerProgress: no updateFetchProgress method', {
-                        type: node.type,
-                    });
-                    return;
-                }
-                console.log('[GitRepoFeature] updateDrawerProgress: calling updateFetchProgress');
+                if (!wrapped || !wrapped.updateFetchProgress) return;
                 wrapped.updateFetchProgress(progressLog);
             };
 
@@ -954,52 +941,50 @@ export class GitRepoFeature extends FeaturePlugin {
                 const lines = buffer.split('\n');
                 buffer = lines.pop() || '';
 
-                console.log(
-                    '[GitRepoFeature] Raw lines:',
-                    lines.filter((l) => l.trim())
-                );
+                let currentEventType = 'message';
 
                 for (const line of lines) {
-                    if (line.startsWith('data:')) {
+                    const cleanLine = line.replace(/\r$/, '');
+
+                    if (cleanLine.startsWith('event:')) {
+                        currentEventType = cleanLine.substring(6).trim();
+                        continue;
+                    }
+
+                    if (cleanLine.startsWith('data:')) {
+                        const eventData = cleanLine.substring(5).trim();
+
+                        // Handle both JSON format and plain text format
+                        let parsed;
+                        let eventName;
+                        let message;
+
                         try {
-                            const eventType = line.split(':')[0];
-                            const eventData = line.substring(line.indexOf(':') + 1);
+                            // Try parsing as JSON first
+                            parsed = JSON.parse(eventData);
+                            eventName = parsed.event;
+                            message = parsed.data;
+                        } catch {
+                            // Plain text format - use currentEventType as event name
+                            eventName = currentEventType;
+                            message = eventData;
+                        }
 
-                            if (eventType === 'event') {
-                                // Handle event type line
-                                continue;
-                            }
+                        if (eventName === 'status') {
+                            progressLog.push({ type: 'info', text: message });
+                        } else if (eventName === 'log') {
+                            progressLog.push({ type: 'log', text: message });
+                        } else if (eventName === 'complete') {
+                            progressLog.push({ type: 'success', text: 'Complete!' });
+                            updateDrawerProgress();
 
-                            const parsed = JSON.parse(eventData);
-
-                            if (parsed.event === 'status') {
-                                progressLog.push({ type: 'info', text: parsed.data });
-                            } else if (parsed.event === 'log') {
-                                progressLog.push({ type: 'log', text: parsed.data });
-                            } else if (parsed.event === 'complete') {
-                                progressLog.push({ type: 'success', text: 'Complete!' });
-                                updateDrawerProgress();
-
-                                // Process complete data
-                                const completeData = parsed.data;
-                                await this.processFetchComplete(
-                                    nodeId,
-                                    url,
-                                    selectedPaths,
-                                    isEdit,
-                                    completeData,
-                                    gitCreds
-                                );
-                                return;
-                            } else if (parsed.event === 'error') {
-                                throw new Error(parsed.data);
-                            }
-                        } catch (e) {
-                            if (e instanceof SyntaxError) {
-                                // Incomplete JSON, wait for more data
-                                continue;
-                            }
-                            throw e;
+                            // Process complete data - data might be JSON string or object
+                            const completeData =
+                                typeof parsed?.data === 'string' ? JSON.parse(parsed.data) : parsed?.data;
+                            await this.processFetchComplete(nodeId, url, selectedPaths, isEdit, completeData, gitCreds);
+                            return;
+                        } else if (eventName === 'error') {
+                            throw new Error(message);
                         }
                     }
                 }
@@ -1010,7 +995,8 @@ export class GitRepoFeature extends FeaturePlugin {
 
             // Check if we have any pending data
             if (buffer.trim()) {
-                console.warn('[GitRepoFeature] Unprocessed buffer:', buffer);
+                // Log but don't warn - this can happen with trailing newlines
+                console.log('[GitRepoFeature] Unprocessed buffer:', buffer);
             }
         } catch (err) {
             console.error('[GitRepoFeature] Fetch error:', err);
@@ -1427,20 +1413,9 @@ export class GitRepoFeature extends FeaturePlugin {
              * @param {Array} progressLog - Array of progress entries
              */
             updateFetchProgress(progressLog) {
-                if (!this.node.gitRepoData) {
-                    console.log('[GitRepoProtocol] updateFetchProgress: no gitRepoData');
-                    return;
-                }
+                if (!this.node.gitRepoData) return;
                 this.node.gitRepoData.fetchProgress = progressLog;
-                // Re-render the drawer panel if it's open
-                // Use gitRepoFeatureInstance.canvas since this.canvas doesn't exist on BaseNode
                 const panelWrapper = gitRepoFeatureInstance.canvas.outputPanels.get(this.node.id);
-                console.log('[GitRepoProtocol] updateFetchProgress:', {
-                    nodeId: this.node.id,
-                    hasPanel: !!panelWrapper,
-                    progressCount: progressLog.length,
-                    lastProgress: progressLog[progressLog.length - 1],
-                });
                 if (panelWrapper) {
                     gitRepoFeatureInstance.canvas.updateOutputPanelContent(this.node.id, this.node);
                 }
