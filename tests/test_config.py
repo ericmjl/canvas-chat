@@ -584,3 +584,78 @@ plugins: "not-a-list"
 
     # Warnings logged for each character path
     assert "Plugin file not found" in caplog.text
+
+
+# --- is_github_copilot_enabled tests ---
+
+
+def test_copilot_enabled_by_default(monkeypatch):
+    """Copilot should be enabled when env var is not set."""
+    monkeypatch.delenv("CANVAS_CHAT_ENABLE_GITHUB_COPILOT", raising=False)
+    from canvas_chat.config import is_github_copilot_enabled
+
+    assert is_github_copilot_enabled() is True
+
+
+def test_copilot_enabled_with_true(monkeypatch):
+    """Copilot should be enabled when env var is 'true'."""
+    monkeypatch.setenv("CANVAS_CHAT_ENABLE_GITHUB_COPILOT", "true")
+    from canvas_chat.config import is_github_copilot_enabled
+
+    assert is_github_copilot_enabled() is True
+
+
+def test_copilot_enabled_with_1(monkeypatch):
+    """Copilot should be enabled when env var is '1'."""
+    monkeypatch.setenv("CANVAS_CHAT_ENABLE_GITHUB_COPILOT", "1")
+    from canvas_chat.config import is_github_copilot_enabled
+
+    assert is_github_copilot_enabled() is True
+
+
+def test_copilot_enabled_with_yes(monkeypatch):
+    """Copilot should be enabled when env var is 'yes'."""
+    monkeypatch.setenv("CANVAS_CHAT_ENABLE_GITHUB_COPILOT", "yes")
+    from canvas_chat.config import is_github_copilot_enabled
+
+    assert is_github_copilot_enabled() is True
+
+
+def test_copilot_disabled_with_false(monkeypatch):
+    """Copilot should be disabled when env var is 'false'."""
+    monkeypatch.setenv("CANVAS_CHAT_ENABLE_GITHUB_COPILOT", "false")
+    from canvas_chat.config import is_github_copilot_enabled
+
+    assert is_github_copilot_enabled() is False
+
+
+def test_copilot_disabled_with_0(monkeypatch):
+    """Copilot should be disabled when env var is '0'."""
+    monkeypatch.setenv("CANVAS_CHAT_ENABLE_GITHUB_COPILOT", "0")
+    from canvas_chat.config import is_github_copilot_enabled
+
+    assert is_github_copilot_enabled() is False
+
+
+def test_copilot_disabled_with_no(monkeypatch):
+    """Copilot should be disabled when env var is 'no'."""
+    monkeypatch.setenv("CANVAS_CHAT_ENABLE_GITHUB_COPILOT", "no")
+    from canvas_chat.config import is_github_copilot_enabled
+
+    assert is_github_copilot_enabled() is False
+
+
+def test_copilot_disabled_with_empty(monkeypatch):
+    """Copilot should be disabled when env var is empty."""
+    monkeypatch.setenv("CANVAS_CHAT_ENABLE_GITHUB_COPILOT", "")
+    from canvas_chat.config import is_github_copilot_enabled
+
+    assert is_github_copilot_enabled() is False
+
+
+def test_copilot_disabled_with_random_value(monkeypatch):
+    """Copilot should be disabled when env var is random non-truthy value."""
+    monkeypatch.setenv("CANVAS_CHAT_ENABLE_GITHUB_COPILOT", "disabled")
+    from canvas_chat.config import is_github_copilot_enabled
+
+    assert is_github_copilot_enabled() is False

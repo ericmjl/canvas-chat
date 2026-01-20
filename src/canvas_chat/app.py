@@ -46,7 +46,7 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from canvas_chat import __version__
-from canvas_chat.config import AppConfig
+from canvas_chat.config import AppConfig, is_github_copilot_enabled
 from canvas_chat.file_upload_registry import FileUploadRegistry
 
 # Import built-in file upload handler plugins (registers them)
@@ -574,7 +574,12 @@ def is_copilot_model(model: str | None) -> bool:
 
 
 def ensure_copilot_allowed() -> None:
-    """Raise if Copilot is requested in admin mode."""
+    """Raise if Copilot is requested when disabled or in admin mode."""
+    if not is_github_copilot_enabled():
+        raise HTTPException(
+            status_code=400,
+            detail="GitHub Copilot is disabled on this deployment",
+        )
     if get_admin_config().admin_mode:
         raise HTTPException(
             status_code=400,
@@ -1408,6 +1413,11 @@ Summary:"""
 @app.post("/api/github-copilot/auth/start", response_model=CopilotAuthStartResponse)
 async def start_copilot_auth():
     """Start GitHub Copilot device authentication."""
+    if not is_github_copilot_enabled():
+        raise HTTPException(
+            status_code=410,
+            detail="GitHub Copilot is disabled on this deployment",
+        )
     ensure_copilot_allowed()
     data = await request_copilot_device_code()
     return CopilotAuthStartResponse(
@@ -1424,6 +1434,11 @@ async def start_copilot_auth():
 @app.post("/api/github-copilot/auth/complete", response_model=CopilotAuthResponse)
 async def complete_copilot_auth(request: CopilotAuthCompleteRequest):
     """Complete GitHub Copilot device authentication."""
+    if not is_github_copilot_enabled():
+        raise HTTPException(
+            status_code=410,
+            detail="GitHub Copilot is disabled on this deployment",
+        )
     ensure_copilot_allowed()
     access_token = await poll_copilot_access_token(
         request.device_code, request.interval, request.expires_in
@@ -1440,6 +1455,11 @@ async def complete_copilot_auth(request: CopilotAuthCompleteRequest):
 @app.post("/api/github-copilot/auth/refresh", response_model=CopilotAuthResponse)
 async def refresh_copilot_auth(request: CopilotAuthRefreshRequest):
     """Refresh GitHub Copilot API key using stored access token."""
+    if not is_github_copilot_enabled():
+        raise HTTPException(
+            status_code=410,
+            detail="GitHub Copilot is disabled on this deployment",
+        )
     ensure_copilot_allowed()
     api_key_info = await fetch_copilot_api_key(request.access_token)
     expires_at = api_key_info.get("expires_at") or int(time.time()) + 3600
@@ -1464,6 +1484,19 @@ async def estimate_tokens(text: str, model: str = "openai/gpt-4o"):
     except Exception:
         # Fallback: rough estimate (4 chars per token)
         return {"tokens": len(text) // 4, "model": model, "estimated": True}
+
+
+@app.get("/api/config/flags")
+async def get_config_flags() -> dict:
+    """
+    Get feature flags for the frontend.
+
+    This allows the backend to control which features are available
+    without requiring code changes or frontend deployments.
+    """
+    return {
+        "githubCopilotEnabled": is_github_copilot_enabled(),
+    }
 
 
 class RefineQueryRequest(BaseModel):

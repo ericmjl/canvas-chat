@@ -97,6 +97,9 @@ class App {
         this.adminMode = false;
         this.adminModels = []; // Models configured by admin (only in admin mode)
 
+        // Feature flags (set by fetchFeatureFlags)
+        this.copilotEnabled = true; // Default to enabled, updated after fetch
+
         // Plugin system (all features managed by FeatureRegistry)
         this.featureRegistry = new FeatureRegistry();
 
@@ -160,7 +163,19 @@ class App {
         // Load admin config first (determines if admin mode is enabled)
         await this.loadConfig();
 
-        await this.handleCopilotAuthOnLoad();
+        // Fetch feature flags (determines which features are enabled)
+        await this.fetchFeatureFlags();
+
+        // Hide copilot UI if disabled
+        const copilotSection = document.getElementById('copilot-settings-section');
+        if (copilotSection) {
+            copilotSection.style.display = this.copilotEnabled ? 'block' : 'none';
+        }
+
+        // Skip copilot auth if disabled
+        if (this.copilotEnabled) {
+            await this.handleCopilotAuthOnLoad();
+        }
 
         // Load models (behavior differs based on admin mode)
         await this.loadModels();
@@ -229,6 +244,25 @@ class App {
             console.warn('[App] Failed to load config, using normal mode:', error);
             this.adminMode = false;
             this.adminModels = [];
+        }
+    }
+
+    /**
+     * Fetch feature flags from the server
+     */
+    async fetchFeatureFlags() {
+        try {
+            const response = await fetch(apiUrl('/api/config/flags'));
+            if (response.ok) {
+                const flags = await response.json();
+                this.copilotEnabled = flags.githubCopilotEnabled !== false;
+            } else {
+                // Default to enabled if fetch fails
+                this.copilotEnabled = true;
+            }
+        } catch (error) {
+            console.warn('[App] Failed to fetch feature flags, defaulting copilot to enabled:', error);
+            this.copilotEnabled = true;
         }
     }
 
@@ -311,7 +345,8 @@ class App {
             .filter((p) => p.key) // Only providers with keys
             .map((p) => chat.fetchProviderModels(p.name, p.key));
 
-        if (storage.hasCopilotAuth()) {
+        // Fetch copilot models if enabled and user has auth
+        if (this.copilotEnabled && storage.hasCopilotAuth()) {
             fetchPromises.push(chat.fetchProviderModels('github_copilot'));
         }
 

@@ -166,14 +166,15 @@ canvas-chat/
 
 ### Key constants and their locations
 
-| Constant             | Location                   | Purpose                                                 |
-| -------------------- | -------------------------- | ------------------------------------------------------- |
-| `NodeType`           | `graph-types.js:11-32`     | All node type definitions                               |
-| `EdgeType`           | `graph-types.js:82-94`     | All edge type definitions                               |
-| `DEFAULT_NODE_SIZES` | `graph-types.js:40-68`     | Default dimensions by node type                         |
-| `PRIORITY`           | `feature-registry.js:8-12` | Plugin priority levels (BUILTIN > OFFICIAL > COMMUNITY) |
-| `PluginConfig`       | `config.py:78-197`         | Plugin configuration dataclass (JS/PY/paired plugins)   |
-| CSS variables        | `style.css:10-75`          | Colors, sizing, theming                                 |
+| Constant                            | Location                                | Purpose                                                 |
+| ----------------------------------- | --------------------------------------- | ------------------------------------------------------- |
+| `NodeType`                          | `graph-types.js:11-32`                  | All node type definitions                               |
+| `EdgeType`                          | `graph-types.js:82-94`                  | All edge type definitions                               |
+| `DEFAULT_NODE_SIZES`                | `graph-types.js:40-68`                  | Default dimensions by node type                         |
+| `PRIORITY`                          | `feature-registry.js:8-12`              | Plugin priority levels (BUILTIN > OFFICIAL > COMMUNITY) |
+| `PluginConfig`                      | `config.py:78-197`                      | Plugin configuration dataclass (JS/PY/paired plugins)   |
+| `CANVAS_CHAT_ENABLE_GITHUB_COPILOT` | `config.py:is_github_copilot_enabled()` | Enable/disable GitHub Copilot (default: true)           |
+| CSS variables                       | `style.css:10-75`                       | Colors, sizing, theming                                 |
 
 ### Zoom levels (semantic zoom)
 

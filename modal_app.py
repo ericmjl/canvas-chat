@@ -34,6 +34,7 @@ image = (
     )
     .add_local_dir("src/canvas_chat", remote_path="/app/canvas_chat")
     .add_local_file("pyproject.toml", remote_path="/app/pyproject.toml")
+    .env({"CANVAS_CHAT_ENABLE_GITHUB_COPILOT": "false"})
 )
 
 

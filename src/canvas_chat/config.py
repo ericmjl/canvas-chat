@@ -397,3 +397,18 @@ class AppConfig:
                 }
             )
         return result
+
+
+def is_github_copilot_enabled() -> bool:
+    """
+    Check if GitHub Copilot is enabled via environment variable.
+
+    Enabled by default (returns True). Set CANVAS_CHAT_ENABLE_GITHUB_COPILOT=false
+    to disable (e.g., in containerized environments where LiteLLM's file-based
+    auth doesn't work).
+
+    Returns:
+        True if GitHub Copilot is enabled, False otherwise.
+    """
+    env_value = os.getenv("CANVAS_CHAT_ENABLE_GITHUB_COPILOT", "true").lower()
+    return env_value in ("true", "1", "yes")
