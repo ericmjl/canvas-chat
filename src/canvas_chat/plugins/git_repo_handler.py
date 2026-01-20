@@ -680,6 +680,7 @@ def register_endpoints(app):
 
         url: str
         files: list[FileTreeItem]
+        temp_dir: str | None = None
 
     class FetchFilesRequest(BaseModel):
         """Request body for fetching selected files from a git repository."""
@@ -720,7 +721,11 @@ def register_endpoints(app):
                     status_code=400,
                     detail="Handler does not support file listing for this URL",
                 )
-            return ListFilesResult(url=request.url, files=file_tree["files"])
+            return ListFilesResult(
+                url=request.url,
+                files=file_tree["files"],
+                temp_dir=file_tree.get("temp_dir"),
+            )
         except HTTPException:
             raise
         except Exception as e:

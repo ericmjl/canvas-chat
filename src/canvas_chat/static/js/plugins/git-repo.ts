@@ -287,10 +287,19 @@ export class GitRepoFeature extends FeaturePlugin {
 
             const data = await response.json();
 
+            console.log('[GitRepoFeature] list-files response:', {
+                hasTempDir: !!data.temp_dir,
+                tempDir: data.temp_dir,
+                fileCount: data.files?.length,
+            });
+
             // Store temp_dir for reuse in stream endpoint (avoids double clone)
             const tempDir = data.temp_dir;
             if (tempDir) {
                 modal.dataset.tempDir = tempDir;
+                console.log('[GitRepoFeature] tempDir stored in modal.dataset:', tempDir);
+            } else {
+                console.warn('[GitRepoFeature] No temp_dir in list-files response!');
             }
 
             // Get smart defaults
@@ -866,6 +875,7 @@ export class GitRepoFeature extends FeaturePlugin {
 
         // Get temp_dir BEFORE closing modal (modal element will be removed from DOM)
         const tempDir = modal.dataset.tempDir || null;
+        console.log('[GitRepoFeature] tempDir from modal.dataset:', tempDir);
 
         // Close modal immediately - no need to keep it open during fetch
         this.modalManager.hidePluginModal('git-repo', 'file-selection');
