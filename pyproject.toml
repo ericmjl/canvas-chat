@@ -1,6 +1,6 @@
 [project]
 name = "canvas-chat"
-version = "0.1.67"
+version = "0.1.68"
 description = "A visual, non-linear chat interface where conversations are nodes on an infinite canvas"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -78,6 +78,7 @@ modal-serve = "modal serve modal_app.py"
 modal-deploy = "modal deploy modal_app.py"
 test = "pytest tests/ -v"
 test-js = "node tests/run_tests.js"
+typecheck = "npx tsc --noEmit"
 
 [tool.pixi.dependencies]
 youtube-transcript-api = ">=1.2.3,<2"

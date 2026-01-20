@@ -269,6 +269,69 @@ Quick reference guide for finding the right documentation based on what you need
 - Prefer simple, greedy algorithms over complex optimal solutions
 - Local-first: no server-side user data storage
 
+## TypeScript Type Checking
+
+The project uses TypeScript's `checkJs` mode to add compile-time error detection to JavaScript files without requiring a full migration. This catches errors like calling non-existent methods before runtime.
+
+### Running Type Checks
+
+```bash
+# Using npm
+npm run typecheck
+
+# Using pixi
+pixi run typecheck
+
+# Direct tsc
+npx tsc --noEmit
+```
+
+### Type Annotation Pattern
+
+When adding types to JavaScript files, use JSDoc annotations that TypeScript understands:
+
+```javascript
+/**
+ * @typedef {Object} NodePosition
+ * @property {number} x - X coordinate
+ * @property {number} y - Y coordinate
+ */
+
+/**
+ * @typedef {Object} Node
+ * @property {string} id - Unique node identifier
+ * @property {NodePosition} position - Node position
+ * @property {number} [width] - Optional width override
+ * @property {number} [height] - Optional height override
+ */
+
+/**
+ * @param {Node & {position: NodePosition, width?: number, height?: number}} nodeA
+ * @returns {{ overlapX: number, overlapY: number }}
+ */
+function getOverlap(nodeA, nodeB, padding = 40) {
+    // ...
+}
+```
+
+### Progressive Migration Order
+
+When incrementally adding type annotations, follow this order (pure functions first):
+
+1. `layout.js` - Pure positioning/overlap functions ✓ (done)
+2. `highlight-utils.js` - DOM utilities (document parameter)
+3. `graph-types.js` - Data definitions (NodeType, EdgeType)
+4. `crdt-graph.js` - Core data model
+5. `model-utils.js` - Model selection utilities
+6. `storage.js` - localStorage utilities
+7. `search.js` - Search algorithm
+8. `utils.js` - General utilities
+9. Then larger files: `app.js`, `canvas.js`, `chat.js`
+
+### Type Checking in CI
+
+Add `npm run typecheck` or `pixi run typecheck` to your PR checklist to ensure type errors are caught before merging.
+
 ## Post-task review
 
 After completing a task, take a moment to review the code you've written and look for refactoring opportunities:

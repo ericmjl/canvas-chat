@@ -5,6 +5,32 @@
  * They operate on node-like objects with { position: { x, y }, width?, height? }.
  */
 
+// Type definitions for better IDE support and type checking
+/**
+ * @typedef {Object} NodePosition
+ * @property {number} x - X coordinate
+ * @property {number} y - Y coordinate
+ */
+
+/**
+ * @typedef {Object} NodeDimensions
+ * @property {number} width - Node width
+ * @property {number} height - Node height
+ */
+
+/**
+ * @typedef {Object} Node
+ * @property {string} id - Unique node identifier
+ * @property {NodePosition} position - Node position
+ * @property {number} [width] - Optional width override
+ * @property {number} [height] - Optional height override
+ */
+
+/**
+ * @typedef {Map<string, NodeDimensions>} DimensionsMap
+ * - Map of nodeId -> { width, height } for custom dimensions
+ */
+
 // Default node dimensions
 const DEFAULT_WIDTH = 420;
 const DEFAULT_HEIGHT = 220;
@@ -12,8 +38,8 @@ const DEFAULT_PADDING = 40;
 
 /**
  * Get the size of a node, using defaults if not specified.
- * @param {Object} node - Node with optional width/height
- * @param {Map} dimensions - Optional map of nodeId -> { width, height }
+ * @param {Node & {id?: string, width?: number, height?: number}} node - Node with optional width/height
+ * @param {DimensionsMap|null} dimensions - Optional map of nodeId -> { width, height }
  * @returns {{ width: number, height: number }}
  */
 function getNodeSize(node, dimensions = null) {
@@ -34,7 +60,7 @@ function getNodeSize(node, dimensions = null) {
  * @param {{ x: number, y: number }} pos - Position to check
  * @param {number} width - Width of the new node
  * @param {number} height - Height of the new node
- * @param {Array} nodes - Array of existing nodes
+ * @param {Array<Node & {position: NodePosition, width?: number, height?: number}>} nodes - Array of existing nodes
  * @param {number} padding - Minimum gap between nodes (default: 20)
  * @returns {boolean} True if there would be overlap
  */
@@ -60,10 +86,10 @@ function wouldOverlapNodes(pos, width, height, nodes, padding = 20) {
 
 /**
  * Calculate overlap between two nodes.
- * @param {Object} nodeA - First node with position, width, height
- * @param {Object} nodeB - Second node with position, width, height
+ * @param {Node & {position: NodePosition, width?: number, height?: number}} nodeA - First node with position, width, height
+ * @param {Node & {position: NodePosition, width?: number, height?: number}} nodeB - Second node with position, width, height
  * @param {number} padding - Padding to include in overlap calculation (default: 40)
- * @param {Map} dimensions - Optional map of nodeId -> { width, height }
+ * @param {DimensionsMap|null} dimensions - Optional map of nodeId -> { width, height }
  * @returns {{ overlapX: number, overlapY: number }} - Amount of overlap in each dimension
  */
 function getOverlap(nodeA, nodeB, padding = DEFAULT_PADDING, dimensions = null) {
@@ -93,9 +119,9 @@ function getOverlap(nodeA, nodeB, padding = DEFAULT_PADDING, dimensions = null) 
 
 /**
  * Check if any nodes in the array overlap with each other.
- * @param {Array} nodes - Array of nodes to check
+ * @param {Array<Node & {position: NodePosition, width?: number, height?: number}>} nodes - Array of nodes to check
  * @param {number} padding - Padding for overlap calculation (default: 40)
- * @param {Map} dimensions - Optional map of nodeId -> { width, height }
+ * @param {DimensionsMap|null} dimensions - Optional map of nodeId -> { width, height }
  * @returns {boolean} True if any overlap exists
  */
 function hasAnyOverlap(nodes, padding = DEFAULT_PADDING, dimensions = null) {
@@ -113,10 +139,10 @@ function hasAnyOverlap(nodes, padding = DEFAULT_PADDING, dimensions = null) {
 /**
  * Resolve overlapping nodes by nudging them apart.
  * Mutates the position of nodes in place.
- * @param {Array} nodes - Array of nodes to resolve
+ * @param {Array<Node & {position: NodePosition, width?: number, height?: number}>} nodes - Array of nodes to resolve
  * @param {number} padding - Padding between nodes (default: 40)
  * @param {number} maxIterations - Maximum iterations to attempt (default: 50)
- * @param {Map} dimensions - Optional map of nodeId -> { width, height }
+ * @param {DimensionsMap|null} dimensions - Optional map of nodeId -> { width, height }
  */
 function resolveOverlaps(nodes, padding = DEFAULT_PADDING, maxIterations = 50, dimensions = null) {
     for (let iter = 0; iter < maxIterations; iter++) {

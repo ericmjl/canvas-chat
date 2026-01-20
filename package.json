@@ -5,6 +5,7 @@
     "type": "module",
     "scripts": {
         "test": "pixi run test-js",
+        "typecheck": "tsc --noEmit",
         "lint": "eslint src/canvas_chat/static/js/*.js",
         "lint:fix": "eslint src/canvas_chat/static/js/*.js --fix",
         "format": "prettier --write src/canvas_chat/static/js/*.js src/canvas_chat/static/css/*.css",
@@ -14,7 +15,8 @@
         "eslint": "^8.57.0",
         "eslint-plugin-jsdoc": "^48.11.0",
         "jsdom": "^24.0.0",
-        "prettier": "^3.2.5"
+        "prettier": "^3.2.5",
+        "typescript": "^5.9.3"
     },
     "private": true,
     "_comment": "test script delegates to pixi - pyproject.toml is the single source of truth for test commands. See AGENTS.md for details."
