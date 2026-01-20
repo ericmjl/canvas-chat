@@ -32,6 +32,7 @@ This includes:
 - 2026-01-17: Always run tests after making changes.
 - 2026-01-20: NEVER deploy directly to Modal environments (`modal deploy`). Let CI handle Modal deployments via GitHub Actions. Direct deploys bypass testing and can break production.
 - 2026-01-20: Fix tag removal bug - canvas uses callback properties (`canvas.onTagRemove = handler`), not event emitter. Changed app.js to set `this.canvas.onTagRemove` instead of `.on('tagRemove', ...)`. Prefer event emitter pattern for new code.
+- 2026-01-20: New TypeScript files must pass `pixi run typecheck` before committing. When converting JS to TS, verify the new `.ts` file has no type errors. Run `npx tsc --noEmit path/to/file.ts` to check specific files.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
