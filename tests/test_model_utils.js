@@ -1,5 +1,5 @@
 /**
- * Tests for model-utils.ts
+ * Tests for model-utils.js
  *
  * Tests model utility functions for API key and base URL lookup.
  * These utilities are extracted from chat.js for plugin reusability.
@@ -71,34 +71,34 @@ function assertNull(value, message) {
     }
 }
 
-asyncTest('model-utils.ts imports successfully', async () => {
+asyncTest('model-utils.js imports successfully', async () => {
     const { getApiKeyForModel, getBaseUrlForModel, apiUrl } =
-        await import('../src/canvas_chat/static/js/model-utils.ts');
+        await import('../src/canvas_chat/static/js/model-utils.js');
     assertTrue(typeof getApiKeyForModel === 'function', 'getApiKeyForModel is a function');
     assertTrue(typeof getBaseUrlForModel === 'function', 'getBaseUrlForModel is a function');
     assertTrue(typeof apiUrl === 'function', 'apiUrl is a function');
 });
 
 asyncTest('getApiKeyForModel returns null for null model', async () => {
-    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.js');
     const result = getApiKeyForModel(null);
     assertNull(result, 'Should return null for null model');
 });
 
 asyncTest('getApiKeyForModel returns null for undefined model', async () => {
-    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.js');
     const result = getApiKeyForModel(undefined);
     assertNull(result, 'Should return null for undefined model');
 });
 
 asyncTest('getApiKeyForModel returns null for empty string model', async () => {
-    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.js');
     const result = getApiKeyForModel('');
     assertNull(result, 'Should return null for empty string model');
 });
 
 asyncTest('getApiKeyForModel handles dall-e models with OpenAI provider', async () => {
-    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.js');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
     // Mock the storage to return a specific API key
@@ -119,7 +119,7 @@ asyncTest('getApiKeyForModel handles dall-e models with OpenAI provider', async 
 });
 
 asyncTest('getApiKeyForModel extracts provider from model ID', async () => {
-    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.js');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
     // Mock the storage to return a specific API key
@@ -140,7 +140,7 @@ asyncTest('getApiKeyForModel extracts provider from model ID', async () => {
 });
 
 asyncTest('getApiKeyForModel returns null for unknown provider', async () => {
-    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.js');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
     // Mock the storage to return null for all providers
@@ -156,7 +156,7 @@ asyncTest('getApiKeyForModel returns null for unknown provider', async () => {
 });
 
 asyncTest('getApiKeyForModel handles provider with hyphen (e.g., "openrouter")', async () => {
-    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { getApiKeyForModel } = await import('../src/canvas_chat/static/js/model-utils.js');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
     const originalGetApiKeyForProvider = storage.getApiKeyForProvider;
@@ -176,7 +176,7 @@ asyncTest('getApiKeyForModel handles provider with hyphen (e.g., "openrouter")',
 });
 
 asyncTest('getBaseUrlForModel returns custom model base_url if configured', async () => {
-    const { getBaseUrlForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { getBaseUrlForModel } = await import('../src/canvas_chat/static/js/model-utils.js');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
     const originalGetCustomModels = storage.getCustomModels;
@@ -193,7 +193,7 @@ asyncTest('getBaseUrlForModel returns custom model base_url if configured', asyn
 });
 
 asyncTest('getBaseUrlForModel falls back to global base URL', async () => {
-    const { getBaseUrlForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { getBaseUrlForModel } = await import('../src/canvas_chat/static/js/model-utils.js');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
     const originalGetCustomModels = storage.getCustomModels;
@@ -212,7 +212,7 @@ asyncTest('getBaseUrlForModel falls back to global base URL', async () => {
 });
 
 asyncTest('getBaseUrlForModel returns null when no base URL configured', async () => {
-    const { getBaseUrlForModel } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { getBaseUrlForModel } = await import('../src/canvas_chat/static/js/model-utils.js');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
     const originalGetCustomModels = storage.getCustomModels;
@@ -231,7 +231,7 @@ asyncTest('getBaseUrlForModel returns null when no base URL configured', async (
 });
 
 asyncTest('apiUrl formats endpoint correctly', async () => {
-    const { apiUrl } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { apiUrl } = await import('../src/canvas_chat/static/js/model-utils.js');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
     // Mock window for apiUrl to work in Node.js
@@ -247,7 +247,7 @@ asyncTest('apiUrl formats endpoint correctly', async () => {
 });
 
 asyncTest('apiUrl handles endpoints with leading slash', async () => {
-    const { apiUrl } = await import('../src/canvas_chat/static/js/model-utils.ts');
+    const { apiUrl } = await import('../src/canvas_chat/static/js/model-utils.js');
     const { storage } = await import('../src/canvas_chat/static/js/storage.js');
 
     // Mock window for apiUrl to work in Node.js
