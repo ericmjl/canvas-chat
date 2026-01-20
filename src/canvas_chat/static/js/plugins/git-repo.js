@@ -864,7 +864,10 @@ export class GitRepoFeature extends FeaturePlugin {
         }
 
         this.graph.updateNode(nodeId, updateData);
-        this.canvas.renderNode(nodeId);
+        const updatedNode = this.graph.getNode(nodeId);
+        if (updatedNode) {
+            this.canvas.renderNode(updatedNode);
+        }
 
         // Open the drawer for this node
         this.canvas.selectGitRepoFile(nodeId, null);
