@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Automatic test discovery and runner for JavaScript tests.
- * Finds all test_*.js files in the tests directory and runs them.
+ * Automatic test discovery and runner for JavaScript/TypeScript tests.
+ * Finds all test_*.js and test_*.ts files in the tests directory and runs them.
  */
 
 import { readdir } from 'fs/promises';
@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 const testsDir = __dirname;
 
 /**
- * Find all test files matching test_*.js pattern
+ * Find all test files matching test_*.js or test_*.ts pattern
  */
 async function discoverTestFiles(specificFile = null) {
     if (specificFile) {
@@ -23,10 +23,13 @@ async function discoverTestFiles(specificFile = null) {
         return [specificFile];
     }
 
-    // Auto-discover all test_*.js files (exclude setup/helper files)
+    // Auto-discover all test_*.js and test_*.ts files (exclude setup/helper files)
     const files = await readdir(testsDir);
     const testFiles = files
-        .filter((file) => file.startsWith('test_') && file.endsWith('.js') && file !== 'test_setup.js')
+        .filter(
+            (file) =>
+                file.startsWith('test_') && (file.endsWith('.js') || file.endsWith('.ts')) && file !== 'test_setup.js'
+        )
         .map((file) => join(testsDir, file))
         .sort(); // Sort for consistent execution order
 
@@ -34,11 +37,23 @@ async function discoverTestFiles(specificFile = null) {
 }
 
 /**
+ * Get the appropriate command and args for running a test file
+ * .ts files use tsx (TypeScript runner), .js files use node
+ */
+function getRunCommand(filePath) {
+    if (filePath.endsWith('.ts')) {
+        return { cmd: 'npx', args: ['tsx', filePath] };
+    }
+    return { cmd: 'node', args: [filePath] };
+}
+
+/**
  * Run a single test file
  */
 function runTestFile(filePath) {
     return new Promise((resolve, reject) => {
-        const child = spawn('node', [filePath], {
+        const { cmd, args } = getRunCommand(filePath);
+        const child = spawn(cmd, args, {
             stdio: 'inherit',
             shell: false,
         });
