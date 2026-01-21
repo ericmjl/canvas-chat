@@ -428,7 +428,12 @@ export class GitRepoFeature extends FeaturePlugin {
                     }
                     label.dataset.filePath = filePathForLookup;
                 }
-                label.innerHTML = `<span class="git-repo-file-icon">📄</span> ${displayName}`;
+
+                // Determine file icon based on file type
+                const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico'];
+                const isImage = imageExtensions.some((ext) => fullPath.toLowerCase().endsWith(ext));
+                const fileIcon = isImage ? '🖼️' : '📄';
+                label.innerHTML = `<span class="git-repo-file-icon">${fileIcon}</span> ${displayName}`;
 
                 // Wrap content in a container for consistency
                 const contentWrapper = document.createElement('span');
@@ -1100,7 +1105,7 @@ export class GitRepoFeature extends FeaturePlugin {
                 if (filePath && this.node.gitRepoData.files[filePath]) {
                     const fileData = this.node.gitRepoData.files[filePath];
 
-                    const { content, lang, status } = fileData;
+                    const { content, lang, status, error } = fileData;
                     const escapedPath = canvas.escapeHtml(filePath);
 
                     let html = `<div class="git-repo-file-panel-content">`;
@@ -1116,7 +1121,22 @@ export class GitRepoFeature extends FeaturePlugin {
                     } else if (status === 'permission_denied') {
                         html += `<div class="git-repo-file-panel-error">Permission denied</div>`;
                     } else if (status === 'error') {
-                        html += `<div class="git-repo-file-panel-error">Failed to read file</div>`;
+                        const errorMsg = error || 'Failed to read file';
+                        html += `<div class="git-repo-file-panel-error">${canvas.escapeHtml(errorMsg)}</div>`;
+                    } else if (fileData.isBinary) {
+                        // Binary image (PNG, JPG, GIF, etc.)
+                        const imgSrc = `data:${fileData.mimeType};base64,${fileData.imageData}`;
+                        html += `<div class="git-repo-image-panel">
+                            <img src="${imgSrc}" class="node-image" alt="${escapedPath}">
+                        </div>`;
+                    } else if (fileData.isSvg) {
+                        // SVG - render via Blob URL for native SVG rendering
+                        const svgContent = fileData.content;
+                        const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' });
+                        const blobUrl = URL.createObjectURL(svgBlob);
+                        html += `<div class="git-repo-image-panel">
+                            <img src="${blobUrl}" class="node-image" alt="${escapedPath}">
+                        </div>`;
                     } else if (content) {
                         // Syntax-highlighted code display (same pattern as code node)
                         // Escape HTML to prevent XSS, highlight.js will handle the rest

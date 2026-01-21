@@ -15,6 +15,8 @@ dependencies = [
     "python-multipart>=0.0.9",
     "typer", "beautifulsoup4>=4.14.3,<5", "ddgs>=9.0.0,<10", "ruamel-yaml>=0.19.1,<0.20",
     "youtube-transcript-api>=1.2.3,<2",
+    "pillow>=12.1.0,<13",
+    "defusedxml",
 ]
 
 [project.optional-dependencies]

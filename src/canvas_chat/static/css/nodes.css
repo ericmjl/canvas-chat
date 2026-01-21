@@ -1333,8 +1333,29 @@
 }
 
 /* =============================================================================
-   Git Repository Node Tree Styles
-   ============================================================================= */
+    Git Repository Node Tree Styles
+    ============================================================================= */
+
+/* Git repo image panel in drawer */
+.git-repo-image-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    height: 100%;
+    min-height: 200px;
+    overflow: auto;
+    background: #f8f8f8;
+    border-radius: var(--radius-sm, 4px);
+}
+
+.git-repo-image-panel .node-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-sm, 4px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
 
 /* =============================================================================
    CSV Node Styles
