@@ -3,15 +3,121 @@
 Handles git repository URL fetching with file selection support.
 """
 
+import base64
 import logging
 import subprocess
 import tempfile
+from io import BytesIO
 from pathlib import Path
+
+try:
+    from PIL import Image
+
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+
+try:
+    import defusedxml.ElementTree as ET
+
+    HAS_DEFUSEDXML = True
+except ImportError:
+    HAS_DEFUSEDXML = False
 
 from canvas_chat.url_fetch_handler_plugin import UrlFetchHandlerPlugin
 from canvas_chat.url_fetch_registry import PRIORITY, UrlFetchRegistry
 
 logger = logging.getLogger(__name__)
+
+# Binary image extensions (will be resized + base64 encoded)
+IMAGE_BINARY_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico"}
+
+# SVG extensions (will be sanitized + sent as text for native rendering)
+IMAGE_SVG_EXTENSIONS = {".svg"}
+
+# Max original file size in bytes (5MB) - files larger than this will show error
+MAX_IMAGE_SIZE = 5 * 1024 * 1024
+
+# Max image dimension after resizing
+MAX_IMAGE_DIMENSION = 1920
+
+
+def _resize_image(
+    image_bytes: bytes, max_dimension: int = MAX_IMAGE_DIMENSION
+) -> bytes | None:
+    """Resize image to max_dimension while maintaining aspect ratio.
+
+    Args:
+        image_bytes: Raw image bytes
+        max_dimension: Maximum width/height (default 1920px)
+
+    Returns:
+        Resized image bytes in PNG format, or None if resizing failed
+    """
+    if not HAS_PIL:
+        logger.warning("PIL not available, cannot resize image")
+        return None
+
+    try:
+        img = Image.open(BytesIO(image_bytes))
+
+        # Convert to RGB if necessary (handles PNG with transparency, etc.)
+        if img.mode in ("RGBA", "P"):
+            pass  # Keep transparency for PNG
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # Resize maintaining aspect ratio
+        img.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
+
+        # Save as PNG to BytesIO
+        output = BytesIO()
+        img.save(output, format="PNG", quality=85, optimize=True)
+        return output.getvalue()
+    except Exception as e:
+        logger.warning(f"Failed to resize image: {e}")
+        return None
+
+
+def _sanitize_svg(svg_content: str) -> str | None:
+    """Light sanitize SVG to remove potentially dangerous content.
+
+    Removes:
+    - <script> tags
+    - on* event handlers
+    - javascript: URLs
+    - data: URLs
+
+    Args:
+        svg_content: Raw SVG content as string
+
+    Returns:
+        Sanitized SVG content, or None if sanitization failed
+    """
+    if not HAS_DEFUSEDXML:
+        logger.warning("defusedxml not available, skipping SVG sanitization")
+        return svg_content  # Return original, let browser handle it
+
+    try:
+        root = ET.fromstring(svg_content)
+
+        # Remove all script elements
+        for script in root.iter("script"):
+            root.remove(script)
+
+        # Remove event handlers from all elements
+        for elem in root.iter():
+            attrs_to_remove = [
+                attr for attr in elem.attrib if attr.lower().startswith("on")
+            ]
+            for attr in attrs_to_remove:
+                del elem.attrib[attr]
+
+        # Return sanitized SVG as string
+        return ET.tostring(root, encoding="unicode")
+    except Exception as e:
+        logger.warning(f"SVG sanitization failed: {e}")
+        return None  # Signal to treat as plain text instead
 
 
 class GitRepoHandler(UrlFetchHandlerPlugin):
@@ -354,33 +460,163 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
                     continue
 
                 try:
-                    file_content = file_path.read_text(
-                        encoding="utf-8", errors="ignore"
-                    )
+                    file_ext = Path(normalized_path).suffix.lower()
 
-                    # Determine file extension for syntax highlighting
-                    file_ext = Path(normalized_path).suffix.lstrip(".")
-                    lang = file_ext if file_ext else ""
+                    # Handle binary images (PNG, JPG, GIF, WEBP, BMP, ICO)
+                    if file_ext in IMAGE_BINARY_EXTENSIONS:
+                        file_bytes = file_path.read_bytes()
+                        if len(file_bytes) > MAX_IMAGE_SIZE:
+                            files_data[file_path_str] = {
+                                "content": None,
+                                "lang": None,
+                                "status": "error",
+                                "error": "File too large (max 5MB)",
+                            }
+                            dir_path = str(Path(normalized_path).parent)
+                            if dir_path == "." or dir_path == "":
+                                root_files.append(
+                                    (normalized_path, None, "error", None)
+                                )
+                            else:
+                                if dir_path not in files_by_dir:
+                                    files_by_dir[dir_path] = []
+                                files_by_dir[dir_path].append(
+                                    (normalized_path, None, "error", None)
+                                )
+                        else:
+                            # Resize image if needed
+                            resized_bytes = _resize_image(file_bytes)
+                            if resized_bytes is None:
+                                # Fallback: use original bytes if resize failed
+                                resized_bytes = file_bytes
+                            mime_map = {
+                                ".png": "image/png",
+                                ".jpg": "image/jpeg",
+                                ".jpeg": "image/jpeg",
+                                ".gif": "image/gif",
+                                ".webp": "image/webp",
+                                ".bmp": "image/bmp",
+                                ".ico": "image/x-icon",
+                            }
+                            files_data[file_path_str] = {
+                                "content": None,
+                                "lang": None,
+                                "status": "success",
+                                "isBinary": True,
+                                "imageData": base64.b64encode(resized_bytes).decode(
+                                    "ascii"
+                                ),
+                                "mimeType": mime_map.get(file_ext, "image/png"),
+                            }
+                            # Add placeholder to content
+                            # (no actual code content for images)
+                            dir_path = str(Path(normalized_path).parent)
+                            placeholder = f"[Image: {normalized_path}]"
+                            if dir_path == "." or dir_path == "":
+                                root_files.append(
+                                    (normalized_path, placeholder, "success", None)
+                                )
+                            else:
+                                if dir_path not in files_by_dir:
+                                    files_by_dir[dir_path] = []
+                                files_by_dir[dir_path].append(
+                                    (normalized_path, placeholder, "success", None)
+                                )
 
-                    # Store file data for drawer (use original file_path_str as key)
-                    files_data[file_path_str] = {
-                        "content": file_content,
-                        "lang": lang,
-                        "status": "success",
-                    }
+                    # Handle SVGs (sanitize and send as text for native rendering)
+                    elif file_ext in IMAGE_SVG_EXTENSIONS:
+                        try:
+                            svg_content = file_path.read_text(encoding="utf-8")
+                            sanitized = _sanitize_svg(svg_content)
+                            if sanitized is None:
+                                # Sanitization failed, treat as plain XML
+                                files_data[file_path_str] = {
+                                    "content": svg_content,
+                                    "lang": "xml",
+                                    "status": "success",
+                                }
+                                dir_path = str(Path(normalized_path).parent)
+                                if dir_path == "." or dir_path == "":
+                                    root_files.append(
+                                        (normalized_path, svg_content, "success", "xml")
+                                    )
+                                else:
+                                    if dir_path not in files_by_dir:
+                                        files_by_dir[dir_path] = []
+                                    files_by_dir[dir_path].append(
+                                        (normalized_path, svg_content, "success", "xml")
+                                    )
+                            else:
+                                # Successfully sanitized, mark as SVG for native
+                                # rendering
+                                files_data[file_path_str] = {
+                                    "content": sanitized,
+                                    "lang": None,
+                                    "status": "success",
+                                    "isSvg": True,
+                                }
+                                # Add placeholder to content
+                                # (no actual code content for SVGs)
+                                dir_path = str(Path(normalized_path).parent)
+                                placeholder = f"[SVG: {normalized_path}]"
+                                if dir_path == "." or dir_path == "":
+                                    root_files.append(
+                                        (normalized_path, placeholder, "success", None)
+                                    )
+                                else:
+                                    if dir_path not in files_by_dir:
+                                        files_by_dir[dir_path] = []
+                                    files_by_dir[dir_path].append(
+                                        (normalized_path, placeholder, "success", None)
+                                    )
+                        except Exception as e:
+                            logger.warning(f"Failed to read SVG {file_path}: {e}")
+                            files_data[file_path_str] = {
+                                "content": None,
+                                "lang": None,
+                                "status": "error",
+                            }
+                            dir_path = str(Path(normalized_path).parent)
+                            if dir_path == "." or dir_path == "":
+                                root_files.append(
+                                    (normalized_path, None, "error", None)
+                                )
+                            else:
+                                if dir_path not in files_by_dir:
+                                    files_by_dir[dir_path] = []
+                                files_by_dir[dir_path].append(
+                                    (normalized_path, None, "error", None)
+                                )
 
-                    # Group by directory
-                    dir_path = str(Path(normalized_path).parent)
-                    if dir_path == "." or dir_path == "":
-                        root_files.append(
-                            (file_path_str, file_content, "success", lang)  # noqa: E501
-                        )
+                    # Handle regular text files
                     else:
-                        if dir_path not in files_by_dir:
-                            files_by_dir[dir_path] = []
-                        files_by_dir[dir_path].append(
-                            (file_path_str, file_content, "success", lang)  # noqa: E501
+                        file_content = file_path.read_text(
+                            encoding="utf-8", errors="ignore"
                         )
+
+                        # Determine file extension for syntax highlighting
+                        file_ext_clean = Path(normalized_path).suffix.lstrip(".")
+                        lang = file_ext_clean if file_ext_clean else ""
+
+                        # Store file data for drawer (use original file_path_str as key)
+                        files_data[file_path_str] = {
+                            "content": file_content,
+                            "lang": lang,
+                            "status": "success",
+                        }
+
+                        # Group by directory
+                        dir_path = str(Path(normalized_path).parent)
+                        if dir_path == "." or dir_path == "":
+                            root_files.append(
+                                (file_path_str, file_content, "success", lang)  # noqa: E501
+                            )
+                        else:
+                            if dir_path not in files_by_dir:
+                                files_by_dir[dir_path] = []
+                            files_by_dir[dir_path].append(
+                                (file_path_str, file_content, "success", lang)  # noqa: E501
+                            )
 
                 except PermissionError as e:
                     logger.warning(f"Permission denied reading {file_path}: {e}")
