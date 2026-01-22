@@ -3021,10 +3021,8 @@ print("Hello from Pyodide!")
                     this.canvas.highlightMatrixCell(matrixId, node.rowIndex, node.colIndex);
                 }
 
-                // If a highlight node is selected, highlight the source text in the parent node
-                if (node.type === NodeType.HIGHLIGHT) {
-                    this.highlightSourceTextInParent(node);
-                }
+                // Note: Highlight source text highlighting is now handled by HighlightFeature plugin
+                // via getCanvasEventHandlers() -> 'nodeSelect' event handler
             }
         }
 

@@ -172,6 +172,8 @@ test('App event listener methods exist', () => {
         'undo',
         'redo',
         'handleSearch',
+        // Note: highlightSourceTextInParent migrated to HighlightFeature plugin
+        // This method is now accessed via this.featureRegistry.getFeature('highlight')
         // Note: selfHealCode and fixCodeError migrated to CodeFeature
         // These methods are now accessed via this.featureRegistry.getFeature('code')
     ];
