@@ -16,6 +16,7 @@ import { GitRepoFeature } from './plugins/git-repo.js';
 import { UrlFetchFeature } from './plugins/url-fetch.js';
 import { YouTubeFeature } from './plugins/youtube.js';
 import { ImageGenerationFeature } from './plugins/image-generation.js';
+import { HighlightFeature } from './plugins/highlight.js';
 
 /**
  * Priority levels for slash command resolution
@@ -182,6 +183,12 @@ class FeatureRegistry {
                         handler: 'handleCommand',
                     },
                 ],
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'highlight',
+                feature: HighlightFeature,
+                slashCommands: [], // Event-driven, no slash commands
                 priority: PRIORITY.BUILTIN,
             },
         ];
