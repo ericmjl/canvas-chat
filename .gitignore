@@ -184,3 +184,4 @@ config.yaml
 
 # TEMP
 FETCHING*.md
+.plans/

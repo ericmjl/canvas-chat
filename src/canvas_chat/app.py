@@ -3095,6 +3095,80 @@ class GenerateSummaryRequest(BaseModel):
     base_url: str | None = None
 
 
+@app.post("/api/generate-title")
+async def generate_title(request: GenerateTitleRequest):
+    """
+    Generate a session title based on conversation content.
+
+    Returns a short, descriptive title for the canvas session.
+    """
+    # Inject admin credentials if in admin mode
+    inject_admin_credentials(request)
+
+    logger.info(f"Generate title request: content length={len(request.content)}")
+
+    provider = extract_provider(request.model)
+
+    system_prompt = (
+        """Generate a short, descriptive title for a conversation/session """
+        """based on the content provided.
+
+Rules:
+- Return ONLY the title text, no quotes or extra formatting
+- Keep it concise: 3-6 words is ideal
+- Make it descriptive of the main topic or theme
+- Use title case
+- Do not include generic words like "Discussion" or "Chat" unless truly relevant
+- If the content mentions specific topics, technologies, or concepts, include them
+
+Examples of good titles:
+- "Python API Design Patterns"
+- "Marketing Strategy Q1 2025"
+- "Machine Learning Model Optimization"
+- "React Component Architecture"
+"""
+    )
+
+    try:
+        kwargs = {
+            "model": request.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Generate a title for this conversation:\n\n{request.content}"
+                    ),
+                },
+            ],
+            "temperature": 0.7,
+            "max_tokens": 50,
+        }
+
+        api_key = get_api_key_for_provider(provider, request.api_key)
+        if api_key:
+            kwargs["api_key"] = api_key
+
+        if request.base_url:
+            kwargs["base_url"] = request.base_url
+
+        kwargs = prepare_copilot_openai_request(kwargs, request.model, api_key)
+
+        response = await litellm.acompletion(**kwargs)
+        title = response.choices[0].message.content.strip()
+
+        # Clean up any quotes or extra formatting
+        title = title.strip("\"'")
+
+        logger.info(f"Generated title: {title}")
+        return {"title": title}
+
+    except Exception as e:
+        logger.error(f"Generate title failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @app.post("/api/generate-summary")
 async def generate_summary(request: GenerateSummaryRequest):
     """
