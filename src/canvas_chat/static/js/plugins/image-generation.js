@@ -255,6 +255,7 @@ class ImageGenerationFeature extends FeaturePlugin {
                 imageData: imageData,
                 mimeType: mimeType,
                 content: revised_prompt || '',
+                model: model,
             });
 
             // Force re-render to show the image
