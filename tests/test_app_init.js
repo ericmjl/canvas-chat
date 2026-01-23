@@ -172,6 +172,7 @@ test('App event listener methods exist', () => {
         'undo',
         'redo',
         'handleSearch',
+        'setupGraphEventListeners', // Extracted method for graph event listener setup
         // Note: highlightSourceTextInParent migrated to HighlightFeature plugin
         // This method is now accessed via this.featureRegistry.getFeature('highlight')
         // Note: selfHealCode and fixCodeError migrated to CodeFeature
@@ -209,7 +210,7 @@ test('setupCanvasEventListeners .bind(this) references exist', async () => {
     const appSource = fs.readFileSync('src/canvas_chat/static/js/app.js', 'utf-8');
 
     // Find the setupCanvasEventListeners method
-    const methodMatch = appSource.match(/setupCanvasEventListeners\(\)[^{]*\{([^]*?)\n    \/\*\*[^]*?\n    \/\/ \*\//);
+    const methodMatch = appSource.match(/setupCanvasEventListeners\(\)[^{]*\{([^]*?)\n    \/\*\*[^]*?\n    \/\/ \*\*/);
     if (!methodMatch) {
         throw new Error('Could not find setupCanvasEventListeners method');
     }
@@ -220,10 +221,39 @@ test('setupCanvasEventListeners .bind(this) references exist', async () => {
     const bindMatches = methodBody.match(/this\.(\w+)\.bind\(this\)/g);
 
     if (bindMatches) {
+        const app = new App();
         for (const match of bindMatches) {
             const methodName = match.match(/this\.(\w+)\.bind/)[1];
             if (typeof app[methodName] !== 'function') {
                 throw new Error(`setupCanvasEventListeners references undefined method: ${methodName}`);
+            }
+        }
+    }
+});
+
+// Test: Setup graph event listeners doesn't reference undefined methods
+test('setupGraphEventListeners .bind(this) references exist', async () => {
+    // Read the app.js source code using dynamic import
+    const fs = await import('fs');
+    const appSource = fs.readFileSync('src/canvas_chat/static/js/app.js', 'utf-8');
+
+    // Find the setupGraphEventListeners method
+    const methodMatch = appSource.match(/setupGraphEventListeners\(\)[^{]*\{([^]*?)\n    \}/);
+    if (!methodMatch) {
+        throw new Error('Could not find setupGraphEventListeners method');
+    }
+
+    const methodBody = methodMatch[1];
+
+    // Find all .bind(this) calls
+    const bindMatches = methodBody.match(/this\.(\w+)\.bind\(this\)/g);
+
+    if (bindMatches) {
+        const app = new App();
+        for (const match of bindMatches) {
+            const methodName = match.match(/this\.(\w+)\.bind/)[1];
+            if (typeof app[methodName] !== 'function') {
+                throw new Error(`setupGraphEventListeners references undefined method: ${methodName}`);
             }
         }
     }

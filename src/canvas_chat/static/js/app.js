@@ -192,30 +192,7 @@ class App {
         await this.loadSession();
 
         // Setup graph event listeners
-        this.graph
-            .on('nodeAdded', (node) => {
-                this.canvas.renderNode(node);
-                this.updateEmptyState();
-
-                // Auto-zoom to user-created nodes (not during session load or bulk operations)
-                if (this._userNodeCreation) {
-                    this._userNodeCreation = false;
-                    // Use zoomToSelectionAnimated to match 'z' shortcut behavior
-                    this.canvas.zoomToSelectionAnimated([node.id], 0.8, 300);
-                }
-            })
-            .on('nodeRemoved', () => this.updateEmptyState())
-            .on('edgeAdded', (edge) => {
-                // Use safe renderer that fetches fresh positions to prevent stale edges
-                this.canvas.renderEdge(edge, this.graph);
-            })
-            .on('edgeRemoved', (edgeId) => {
-                this.canvas.removeEdge(edgeId);
-            })
-            .on('nodeUpdated', (node) => {
-                this.canvas.renderNode(node);
-            })
-            .on('tagCreated', this.handleTagCreated.bind(this));
+        this.setupGraphEventListeners();
 
         // Setup UI event listeners
         this.setupEventListeners();
@@ -487,6 +464,7 @@ class App {
         this.graph = new CRDTGraph(session.id, session);
         // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
+        this.setupGraphEventListeners();
 
         // Render graph
         this.canvas.renderGraph(this.graph);
@@ -558,6 +536,7 @@ class App {
             this.graph = new CRDTGraph(sessionId);
             // Note: Features are managed by FeatureRegistry, no manual cleanup needed
             await this.graph.enablePersistence();
+            this.setupGraphEventListeners();
 
             // Render empty graph (will populate via sync)
             this.canvas.renderGraph(this.graph);
@@ -594,6 +573,7 @@ class App {
         this.graph = new CRDTGraph(sessionId);
         // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
+        this.setupGraphEventListeners();
 
         this.canvas.clear();
 
@@ -602,6 +582,37 @@ class App {
 
         this.saveSession();
         this.updateEmptyState();
+    }
+
+    /**
+     * Setup graph event listeners (nodeAdded, edgeAdded, etc.).
+     * This method must be called every time a new CRDTGraph is created
+     * (new session, load session, join shared session).
+     */
+    setupGraphEventListeners() {
+        this.graph
+            .on('nodeAdded', (node) => {
+                this.canvas.renderNode(node);
+                this.updateEmptyState();
+
+                // Auto-zoom to user-created nodes (not during session load or bulk operations)
+                if (this._userNodeCreation) {
+                    this._userNodeCreation = false;
+                    this.canvas.zoomToSelectionAnimated([node.id], 0.8, 300);
+                }
+            })
+            .on('nodeRemoved', () => this.updateEmptyState())
+            .on('edgeAdded', (edge) => {
+                // Use safe renderer that fetches fresh positions to prevent stale edges
+                this.canvas.renderEdge(edge, this.graph);
+            })
+            .on('edgeRemoved', (edgeId) => {
+                this.canvas.removeEdge(edgeId);
+            })
+            .on('nodeUpdated', (node) => {
+                this.canvas.renderNode(node);
+            })
+            .on('tagCreated', this.handleTagCreated.bind(this));
     }
 
     /**
