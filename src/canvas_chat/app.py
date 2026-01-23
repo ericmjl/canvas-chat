@@ -16,7 +16,6 @@ merging, and exploration of topics as a DAG.
 """
 
 import asyncio
-import base64
 import importlib.util
 import json
 import logging
@@ -1704,10 +1703,15 @@ async def generate_image(request: ImageGenerationRequest):
     """
     Generate an image from a text prompt using AI.
 
-    Supports multiple providers:
-    - OpenAI: dall-e-3, dall-e-2
-    - Google: gemini/imagen-4.0-generate-001
+    Uses the ImageGenerationRegistry to find the appropriate handler for
+    the requested model. Supports multiple providers through the plugin system.
     """
+    # Import here to ensure plugins are registered
+    from canvas_chat.image_generation_handler_plugin import (
+        ImageGenerationRequest as GenRequest,
+    )
+    from canvas_chat.image_generation_registry import ImageGenerationRegistry
+
     # Inject admin credentials if in admin mode
     inject_admin_credentials(request)
 
@@ -1724,44 +1728,39 @@ async def generate_image(request: ImageGenerationRequest):
     )
 
     try:
-        # Call litellm.aimage_generation
-        response = await litellm.aimage_generation(
+        # Find appropriate handler for this model
+        handler_config = ImageGenerationRegistry.find_handler(request.model)
+
+        if not handler_config:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No handler found for model: {request.model}",
+            )
+
+        logger.info(f"Using handler: {handler_config['id']}")
+
+        # Create request object for handler
+        gen_request = GenRequest(
             prompt=request.prompt,
             model=request.model,
             size=request.size,
             quality=request.quality,
             n=request.n,
             api_key=request.api_key,
-            api_base=request.base_url,
+            base_url=request.base_url,
         )
 
-        # Get the generated image
-        image_data = response.data[0]
-
-        # Handle URL or base64 response
-        if image_data.url:
-            # Download image from URL and convert to base64
-            logger.info(f"Downloading image from URL: {image_data.url[:50]}...")
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                img_response = await client.get(image_data.url)
-                img_response.raise_for_status()
-                image_bytes = img_response.content
-                image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-        elif image_data.b64_json:
-            # Already base64
-            image_base64 = image_data.b64_json
-        else:
-            raise HTTPException(
-                status_code=500, detail="No image data returned from provider"
-            )
+        # Instantiate handler and generate image
+        handler = handler_config["handler"]()
+        response = await handler.generate_image(gen_request)
 
         logger.info("Image generated successfully")
 
         # Return base64 image
         return {
-            "imageData": image_base64,
-            "mimeType": "image/png",
-            "revised_prompt": getattr(image_data, "revised_prompt", None),
+            "imageData": response.image_data,
+            "mimeType": response.mime_type,
+            "revised_prompt": response.revised_prompt,
         }
 
     except litellm.AuthenticationError as e:
