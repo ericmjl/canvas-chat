@@ -260,7 +260,8 @@ class ModelInfo(BaseModel):
     id: str
     name: str
     provider: str
-    context_window: int
+    description: str | None = None
+    context_window: int | None = None
 
 
 class ExaSearchRequest(BaseModel):

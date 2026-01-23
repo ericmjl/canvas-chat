@@ -122,6 +122,17 @@ class App {
         this.selectedIndicator = document.getElementById('selected-nodes-indicator');
         this.selectedCount = document.getElementById('selected-count');
 
+        // Ready state tracking (prevents user interaction during initialization)
+        this._ready = false;
+
+        // Disable send button until app is fully initialized (if button exists)
+        if (this.sendBtn) {
+            this.sendBtn.disabled = true;
+            this.sendBtn.classList.add('disabled');
+        }
+
+        console.log('[App] App created, initialization started');
+
         this.init();
     }
 
@@ -129,99 +140,130 @@ class App {
      *
      */
     async init() {
-        // Configure marked.js early (ensures KaTeX and other extensions are set up)
-        Canvas.configureMarked();
+        try {
+            // Configure marked.js early (ensures KaTeX and other extensions are set up)
+            Canvas.configureMarked();
+            console.log('[App] Step 1: Marked configured');
 
-        // Initialize canvas
-        this.canvas = new Canvas('canvas-container', 'canvas');
+            // Initialize canvas
+            this.canvas = new Canvas('canvas-container', 'canvas');
+            console.log('[App] Step 2: Canvas initialized');
 
-        // Configure streaming manager with canvas and graph getter
-        this.streamingManager.setCanvas(this.canvas);
-        this.streamingManager.setGraphGetter(() => this.graph);
+            // Configure streaming manager with canvas and graph getter
+            this.streamingManager.setCanvas(this.canvas);
+            this.streamingManager.setGraphGetter(() => this.graph);
+            console.log('[App] Step 3: Streaming manager configured');
 
-        // Setup canvas event listeners (using EventEmitter pattern)
-        this.setupCanvasEventListeners();
-        // Note: Feature canvas handlers are registered in initializePluginSystem()
-        // This ensures features are loaded before registering their handlers
+            // Setup canvas event listeners (using EventEmitter pattern)
+            this.setupCanvasEventListeners();
+            console.log('[App] Step 4: Canvas event listeners set up');
 
-        // Attach slash command menu to reply tooltip input
-        const replyInput = this.canvas.getReplyTooltipInput();
-        if (replyInput) {
-            this.slashCommandMenu.attach(replyInput);
-            // Set up callback so canvas can check if menu is handling keys
-            // Note: This callback returns a value, so it must remain as a property
-            this.canvas.onReplyInputKeydown = (e) => {
-                if (this.slashCommandMenu.visible) {
-                    if (['ArrowUp', 'ArrowDown', 'Tab', 'Escape', 'Enter'].includes(e.key)) {
-                        return true; // Menu will handle it
+            // Attach slash command menu to reply tooltip input
+            const tooltipInput = this.canvas.getReplyTooltipInput();
+            if (tooltipInput) {
+                this.slashCommandMenu.attach(tooltipInput);
+                // Set up callback so canvas can check if menu is handling keys
+                // Note: This callback returns a value, so it must remain as a property
+                this.canvas.onReplyInputKeydown = (e) => {
+                    if (this.slashCommandMenu.visible) {
+                        if (['ArrowUp', 'ArrowDown', 'Tab', 'Escape', 'Enter'].includes(e.key)) {
+                            return true; // Menu will handle it
+                        }
                     }
-                }
-                return false;
-            };
+                    return false;
+                };
+            }
+
+            // Load admin config first (determines if admin mode is enabled)
+            await this.loadConfig();
+
+            // Fetch feature flags (determines which features are enabled)
+            await this.fetchFeatureFlags();
+            console.log('[App] Step 6: Feature flags fetched');
+
+            // Hide copilot UI if disabled
+            const copilotSection = document.getElementById('copilot-settings-section');
+            if (copilotSection) {
+                copilotSection.style.display = this.copilotEnabled ? 'block' : 'none';
+            }
+
+            // Skip copilot auth if disabled
+            if (this.copilotEnabled) {
+                await this.handleCopilotAuthOnLoad();
+            }
+
+            // Load models (behavior differs based on admin mode)
+            await this.loadModels();
+            console.log('[App] Step 7: Models loaded');
+
+            // Hide admin-restricted UI elements if in admin mode
+            if (this.adminMode) {
+                this.hideAdminRestrictedUI();
+            }
+
+            // Initialize plugin system (must happen before loadSession since features are accessed during session load)
+            await this.initializePluginSystem();
+            console.log('[App] Step 8: Plugin system initialized');
+
+            // Load or create session
+            await this.loadSession();
+            console.log('[App] Step 9: Session loaded', { graphCreated: !!this.graph });
+
+            // Setup graph event listeners
+            this.graph
+                .on('nodeAdded', (node) => {
+                    this.canvas.renderNode(node);
+                    this.updateEmptyState();
+
+                    // Auto-zoom to user-created nodes (not during session load or bulk operations)
+                    if (this._userNodeCreation) {
+                        this._userNodeCreation = false;
+                        // Use zoomToSelectionAnimated to match 'z' shortcut behavior
+                        this.canvas.zoomToSelectionAnimated([node.id], 0.8, 300);
+                    }
+                })
+                .on('nodeRemoved', () => this.updateEmptyState())
+                .on('edgeAdded', (edge) => {
+                    // Use safe renderer that fetches fresh positions to prevent stale edges
+                    this.canvas.renderEdge(edge, this.graph);
+                })
+                .on('edgeRemoved', (edgeId) => {
+                    this.canvas.removeEdge(edgeId);
+                })
+                .on('nodeUpdated', (node) => {
+                    this.canvas.renderNode(node);
+                })
+                .on('tagCreated', this.handleTagCreated.bind(this));
+            console.log('[App] Step 10: Graph event listeners set up');
+
+            // Setup UI event listeners
+            this.setupEventListeners();
+            console.log('[App] Step 11: UI event listeners set up');
+
+            // Show empty state if needed
+            this.updateEmptyState();
+
+            // App is now ready for user interaction
+            console.log('[App] Step 12: All initialization complete, setting ready state');
+            this._ready = true;
+            console.log('%c[App] App initialization complete', 'color: #4CAF50; font-weight: bold');
+
+            // Enable send button now that app is ready (if button exists)
+            if (this.sendBtn) {
+                this.sendBtn.disabled = false;
+                this.sendBtn.classList.remove('disabled');
+                console.log('[App] Send button enabled');
+            }
+        } catch (err) {
+            console.error('[App] ERROR during initialization:', err);
+            console.error('[App] Error stack:', err.stack);
+            // Still try to enable send button even if init fails
+            if (this.sendBtn) {
+                this.sendBtn.disabled = false;
+                this.sendBtn.classList.remove('disabled');
+            }
+            this._ready = true; // Force ready state to prevent indefinite blocking
         }
-
-        // Load admin config first (determines if admin mode is enabled)
-        await this.loadConfig();
-
-        // Fetch feature flags (determines which features are enabled)
-        await this.fetchFeatureFlags();
-
-        // Hide copilot UI if disabled
-        const copilotSection = document.getElementById('copilot-settings-section');
-        if (copilotSection) {
-            copilotSection.style.display = this.copilotEnabled ? 'block' : 'none';
-        }
-
-        // Skip copilot auth if disabled
-        if (this.copilotEnabled) {
-            await this.handleCopilotAuthOnLoad();
-        }
-
-        // Load models (behavior differs based on admin mode)
-        await this.loadModels();
-
-        // Hide admin-restricted UI elements if in admin mode
-        if (this.adminMode) {
-            this.hideAdminRestrictedUI();
-        }
-
-        // Initialize plugin system (must happen before loadSession since features are accessed during session load)
-        await this.initializePluginSystem();
-
-        // Load or create session
-        await this.loadSession();
-
-        // Setup graph event listeners
-        this.graph
-            .on('nodeAdded', (node) => {
-                this.canvas.renderNode(node);
-                this.updateEmptyState();
-
-                // Auto-zoom to user-created nodes (not during session load or bulk operations)
-                if (this._userNodeCreation) {
-                    this._userNodeCreation = false;
-                    // Use zoomToSelectionAnimated to match 'z' shortcut behavior
-                    this.canvas.zoomToSelectionAnimated([node.id], 0.8, 300);
-                }
-            })
-            .on('nodeRemoved', () => this.updateEmptyState())
-            .on('edgeAdded', (edge) => {
-                // Use safe renderer that fetches fresh positions to prevent stale edges
-                this.canvas.renderEdge(edge, this.graph);
-            })
-            .on('edgeRemoved', (edgeId) => {
-                this.canvas.removeEdge(edgeId);
-            })
-            .on('nodeUpdated', (node) => {
-                this.canvas.renderNode(node);
-            })
-            .on('tagCreated', this.handleTagCreated.bind(this));
-
-        // Setup UI event listeners
-        this.setupEventListeners();
-
-        // Show empty state if needed
-        this.updateEmptyState();
     }
 
     /**
@@ -577,6 +619,16 @@ class App {
      *
      */
     async createNewSession() {
+        // Wait for app initialization to complete if not ready yet
+        if (!this._ready) {
+            console.log('[App] createNewSession called but app not ready, waiting...');
+            // Wait for initialization to complete (poll every 100ms)
+            while (!this._ready) {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+            }
+            console.log('[App] App is ready, proceeding with createNewSession');
+        }
+
         const sessionId = crypto.randomUUID();
         this.session = {
             id: sessionId,
@@ -1280,6 +1332,20 @@ class App {
     async handleSend() {
         const content = this.chatInput.value.trim();
         if (!content) return;
+
+        // Check if app is ready for user interaction
+        if (!this._ready) {
+            console.warn('[App] Send attempted but app is not ready yet');
+            this.showToast('Please wait while the app initializes...');
+            return;
+        }
+
+        console.log('[App] handleSend() called', {
+            ready: this._ready,
+            hasGraph: !!this.graph,
+            hasCanvas: !!this.canvas,
+            contentLength: content.length,
+        });
 
         // Try slash commands first, with context from selected nodes OR text selection
         const selectedIds = this.canvas.getSelectedNodeIds();
@@ -5279,7 +5345,9 @@ export { App };
 
 // Initialize app when DOM is ready
 // Wait for Yjs to load before initializing (Yjs loads as an ES module which is async)
+console.log('[App] Setting up DOMContentLoaded listener for app init');
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('[App] DOMContentLoaded fired, checking for Yjs');
     const initWithYjs = () => {
         console.log('%c[App] Yjs ready, initializing app', 'color: #4CAF50');
         window.app = new App();
