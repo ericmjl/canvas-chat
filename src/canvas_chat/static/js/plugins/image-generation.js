@@ -34,10 +34,18 @@ class ImageGenerationFeature extends FeaturePlugin {
     async onLoad() {
         console.log('[ImageGenerationFeature] Loaded');
 
-        // Fetch available image generation models
+        // Fetch available image generation models FIRST
         this.imageModels = await this.fetchImageModels();
         console.log('[ImageGenerationFeature] Available models:', this.imageModels);
 
+        // THEN register the modal (so template uses fetched models)
+        this.registerModal();
+    }
+
+    /**
+     * Register the modal with current model options.
+     */
+    registerModal() {
         // Register the modal
         const modalTemplate = `
             <div id="image-generation-settings-modal" class="modal" style="display: none">
@@ -120,6 +128,16 @@ class ImageGenerationFeature extends FeaturePlugin {
     }
 
     /**
+     * Refresh model dropdown with current models.
+     */
+    refreshModelOptions() {
+        const modelSelect = document.getElementById('image-gen-model');
+        if (modelSelect) {
+            modelSelect.innerHTML = this.generateModelOptions();
+        }
+    }
+
+    /**
      * Define slash commands provided by this feature.
      * @returns {Array<Object>}
      */
@@ -172,6 +190,9 @@ class ImageGenerationFeature extends FeaturePlugin {
     async showSettingsModal() {
         // Open modal
         this.modalManager.showPluginModal('image-generation', 'settings');
+
+        // Refresh model options (in case they changed since registration)
+        this.refreshModelOptions();
 
         // Setup event listeners
         const generateBtn = document.getElementById('image-gen-generate');
