@@ -24,6 +24,7 @@ class ImageGenerationFeature extends FeaturePlugin {
         // Store current generation state
         this.currentPrompt = null;
         this.parentNodeIds = [];
+        this.imageModels = [];
     }
 
     /**
@@ -32,6 +33,10 @@ class ImageGenerationFeature extends FeaturePlugin {
      */
     async onLoad() {
         console.log('[ImageGenerationFeature] Loaded');
+
+        // Fetch available image generation models
+        this.imageModels = await this.fetchImageModels();
+        console.log('[ImageGenerationFeature] Available models:', this.imageModels);
 
         // Register the modal
         const modalTemplate = `
@@ -45,9 +50,7 @@ class ImageGenerationFeature extends FeaturePlugin {
                         <div class="api-key-group">
                             <label for="image-gen-model">Model</label>
                             <select id="image-gen-model" class="modal-select">
-                                <option value="dall-e-3">DALL-E 3 (OpenAI) - Best quality</option>
-                                <option value="dall-e-2">DALL-E 2 (OpenAI) - Lower cost</option>
-                                <option value="gemini/imagen-4.0-generate-001">Imagen 4.0 (Google) - Fast</option>
+                                ${this.generateModelOptions()}
                             </select>
                         </div>
 
@@ -86,6 +89,34 @@ class ImageGenerationFeature extends FeaturePlugin {
                 this.modalManager.hidePluginModal('image-generation', 'settings');
             });
         }
+    }
+
+    /**
+     * Fetch available image generation models from backend.
+     * @returns {Promise<Array>} List of model info
+     */
+    async fetchImageModels() {
+        try {
+            const response = await fetch(apiUrl('/api/image-models'));
+            const models = await response.json();
+            console.log('[ImageGenerationFeature] Fetched models:', models);
+            return models;
+        } catch (err) {
+            console.error('[ImageGenerationFeature] Failed to fetch image models:', err);
+            return [];
+        }
+    }
+
+    /**
+     * Generate HTML options for model dropdown.
+     * @returns {string} HTML string of options
+     */
+    generateModelOptions() {
+        if (this.imageModels.length === 0) {
+            return '<option value="dall-e-3">DALL-E 3 (OpenAI)</option>';
+        }
+
+        return this.imageModels.map((model) => `<option value="${model.id}">${model.name}</option>`).join('');
     }
 
     /**

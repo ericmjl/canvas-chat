@@ -1781,6 +1781,32 @@ async def generate_image(request: ImageGenerationRequest):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@app.get("/api/image-models")
+async def list_image_models() -> list[ModelInfo]:
+    """List available image generation models from registered handlers."""
+    from canvas_chat.image_generation_registry import ImageGenerationRegistry
+
+    models = []
+
+    # Get all registered handlers
+    handlers = ImageGenerationRegistry.get_all_handlers()
+
+    # Convert handlers to model info format
+    for handler_config in handlers:
+        for model in handler_config["models"]:
+            models.append(
+                ModelInfo(
+                    id=model,
+                    name=model,
+                    provider=handler_config["id"],
+                    description=handler_config.get("description", ""),
+                )
+            )
+
+    logger.info(f"Returning {len(models)} image generation models")
+    return models
+
+
 @app.post("/api/exa/search")
 async def exa_search(request: ExaSearchRequest):
     """
