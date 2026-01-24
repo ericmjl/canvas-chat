@@ -2,9 +2,9 @@
  * Feature Plugin System - Base classes for extensible features
  */
 
-import { apiUrl } from './utils.js';
 import { chat } from './chat.js';
 import { storage } from './storage.js';
+import { apiUrl } from './utils.js';
 
 /**
  * AppContext provides access to app-level APIs for feature plugins.
