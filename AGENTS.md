@@ -398,6 +398,20 @@ gh pr create --title "Title" --body-file /tmp/pr_body.md
 - Use a detailed PR description template (Summary, Root Cause, Solution, Changes breakdown, Tests, Manual Testing if needed).
 - Include concrete file references and test counts when available, and call out any doc/lockfile updates.
 
+### Merging PRs
+
+**NEVER use `--squash` when merging PRs.** Always use the default merge strategy to preserve commit history.
+
+```bash
+# WRONG - Never squash commits
+gh pr merge 180 --squash
+
+# CORRECT - Use default merge (preserves history)
+gh pr merge 180 --delete-branch
+```
+
+**Why:** Squashing loses commit history and makes it harder to track when specific changes were introduced. We want to preserve the full commit history for debugging and attribution.
+
 ### Closing issues
 
 **NEVER close issues directly with `gh issue close`.** Issues should only be closed via pull requests using GitHub's "Closes #N" or "Fixes #N" syntax in the PR description or commit messages.
