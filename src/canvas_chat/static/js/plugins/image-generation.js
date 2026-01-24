@@ -6,7 +6,7 @@
  */
 
 import { FeaturePlugin } from '../feature-plugin.js';
-import { AppContext } from './feature-plugin.js';
+import { AppContext } from '../feature-plugin.js';
 import { NodeType, EdgeType, createNode, createEdge } from '../graph-types.js';
 import { apiUrl } from '../utils.js';
 
