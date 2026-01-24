@@ -197,8 +197,45 @@ jobs:
               if: steps.check_release.outputs.already_released == 'false'
               run: uv build --sdist --wheel
 
-            - name: Publish package (trusted publishing)
+            - name: Check if version exists on PyPI
               if: steps.check_release.outputs.already_released == 'false'
+              id: check_pypi
+              shell: bash
+              run: |
+                  OUTPUT=$(uvx python << 'EOF'
+                  import sys
+                  import requests
+
+                  try:
+                      response = requests.get('https://pypi.org/pypi/canvas-chat/json', timeout=10)
+                      response.raise_for_status()
+                      data = response.json()
+                      version = '${{ env.version_number }}'
+
+                      if version in data.get('releases', {}):
+                          print(f'Version {version} already on PyPI - skipping publish')
+                          print('version_exists=true')
+                      else:
+                          print(f'Version {version} not on PyPI - safe to publish')
+                          print('version_exists=false')
+                  except Exception as e:
+                      print(f'Error checking PyPI: {e}')
+                      print('Proceeding with publish attempt (will fail if version exists)')
+                      print('version_exists=false')
+                  EOF
+                  )
+
+                  if echo "$OUTPUT" | grep -q "version_exists=true"; then
+                    echo "version_exists=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "version_exists=false" >> $GITHUB_OUTPUT
+                  fi
+                  echo "PyPI check complete. version_exists=${{ steps.check_pypi.outputs.version_exists }}"
+
+            - name: Publish package (trusted publishing)
+              if: |
+                  steps.check_release.outputs.already_released == 'false' &&
+                  steps.check_pypi.outputs.version_exists != 'true'
               run: uv publish --trusted-publishing always
 
             - name: Push changes with tags
