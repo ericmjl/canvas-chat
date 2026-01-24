@@ -23,13 +23,13 @@ OLLAMA_SUCCESS_RESPONSE = [
 ]
 
 # Final chunk with only "image" field
-OLLAMA_FINAL_CHUNK_IMAGE_ONLY = '{"model":"x/z-image-turbo:latest","created_at":"2026-01-24T20:46:48.130882Z","image":"iVBORw0KGgoAAAANSUhEUgAAABJRU5ErkJggg==","done":true,"done_reason":"stop"}'
+OLLAMA_FINAL_CHUNK_IMAGE_ONLY = '{"model":"x/z-image-turbo:latest","created_at":"2026-01-24T20:46:48.130882Z","image":"iVBORw0KGgoAAAANSUhEUgAAABJRU5ErkJggg==","done":true,"done_reason":"stop"}'  # noqa: E501
 
 # Final chunk with only "response" field
-OLLAMA_FINAL_CHUNK_RESPONSE_ONLY = '{"model":"x/z-image-turbo:latest","created_at":"2026-01-24T20:46:48.130882Z","response":"iVBORw0KGgoAAAANSUhEUgAAABJRU5ErkJggg==","done":true,"done_reason":"stop"}'
+OLLAMA_FINAL_CHUNK_RESPONSE_ONLY = '{"model":"x/z-image-turbo:latest","created_at":"2026-01-24T20:46:48.130882Z","response":"iVBORw0KGgoAAAANSUhEUgAAABJRU5ErkJggg==","done":true,"done_reason":"stop"}'  # noqa: E501
 
 # Final chunk with empty "image" and "response"
-OLLAMA_FINAL_CHUNK_EMPTY_DATA = '{"model":"x/z-image-turbo:latest","created_at":"2026-01-24T20:46:48.130882Z","image":"","response":"","done":true}'
+OLLAMA_FINAL_CHUNK_EMPTY_DATA = '{"model":"x/z-image-turbo:latest","created_at":"2026-01-24T20:46:48.130882Z","image":"","response":"","done":true}'  # noqa: E501
 
 # Timeout scenario (no final chunk)
 OLLAMA_TIMEOUT_RESPONSE = [
@@ -38,7 +38,7 @@ OLLAMA_TIMEOUT_RESPONSE = [
 ]
 
 # Error response from Ollama
-OLLAMA_ERROR_RESPONSE = '{"error":"model not found"}'
+OLLAMA_ERROR_RESPONSE = '{"error":"model not found"}'  # noqa: E501
 
 # Progress chunk with partial response (edge case)
-OLLAMA_PROGRESS_WITH_PARTIAL_RESPONSE = '{"model":"x/z-image-turbo:latest","created_at":"2026-01-24T20:46:11.930409Z","response":"partial_data","done":false,"completed":1,"total":9}'
+OLLAMA_PROGRESS_WITH_PARTIAL_RESPONSE = '{"model":"x/z-image-turbo:latest","created_at":"2026-01-24T20:46:11.930409Z","response":"partial_data","done":false,"completed":1,"total":9}'  # noqa: E501
