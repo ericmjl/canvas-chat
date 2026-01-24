@@ -172,6 +172,7 @@ test('App event listener methods exist', () => {
         'undo',
         'redo',
         'handleSearch',
+        'setupGraphEventListeners', // Extracted method for graph event listener setup
         // Note: highlightSourceTextInParent migrated to HighlightFeature plugin
         // This method is now accessed via this.featureRegistry.getFeature('highlight')
         // Note: selfHealCode and fixCodeError migrated to CodeFeature
@@ -209,7 +210,7 @@ test('setupCanvasEventListeners .bind(this) references exist', async () => {
     const appSource = fs.readFileSync('src/canvas_chat/static/js/app.js', 'utf-8');
 
     // Find the setupCanvasEventListeners method
-    const methodMatch = appSource.match(/setupCanvasEventListeners\(\)[^{]*\{([^]*?)\n    \/\*\*[^]*?\n    \/\/ \*\//);
+    const methodMatch = appSource.match(/setupCanvasEventListeners\(\)[^{]*\{([^]*?)\n    \/\*\*[^]*?\n    \/\/ \*\*/);
     if (!methodMatch) {
         throw new Error('Could not find setupCanvasEventListeners method');
     }
@@ -220,6 +221,7 @@ test('setupCanvasEventListeners .bind(this) references exist', async () => {
     const bindMatches = methodBody.match(/this\.(\w+)\.bind\(this\)/g);
 
     if (bindMatches) {
+        const app = new App();
         for (const match of bindMatches) {
             const methodName = match.match(/this\.(\w+)\.bind/)[1];
             if (typeof app[methodName] !== 'function') {
@@ -227,6 +229,104 @@ test('setupCanvasEventListeners .bind(this) references exist', async () => {
             }
         }
     }
+});
+
+// Test: Setup graph event listeners doesn't reference undefined methods
+test('setupGraphEventListeners .bind(this) references exist', async () => {
+    // Read the app.js source code using dynamic import
+    const fs = await import('fs');
+    const appSource = fs.readFileSync('src/canvas_chat/static/js/app.js', 'utf-8');
+
+    // Find the setupGraphEventListeners method
+    const methodMatch = appSource.match(/setupGraphEventListeners\(\)[^{]*\{([^]*?)\n    \}/);
+    if (!methodMatch) {
+        throw new Error('Could not find setupGraphEventListeners method');
+    }
+
+    const methodBody = methodMatch[1];
+
+    // Find all .bind(this) calls
+    const bindMatches = methodBody.match(/this\.(\w+)\.bind\(this\)/g);
+
+    if (bindMatches) {
+        const app = new App();
+        for (const match of bindMatches) {
+            const methodName = match.match(/this\.(\w+)\.bind/)[1];
+            if (typeof app[methodName] !== 'function') {
+                throw new Error(`setupGraphEventListeners references undefined method: ${methodName}`);
+            }
+        }
+    }
+});
+
+// Regression Test: Verify setupGraphEventListeners is called after every new CRDTGraph
+// This prevents the bug where nodes don't appear after "New Canvas" because listeners aren't re-attached
+test('setupGraphEventListeners is called after every new CRDTGraph (regression)', async () => {
+    const fs = await import('fs');
+    const appSource = fs.readFileSync('src/canvas_chat/static/js/app.js', 'utf-8');
+
+    // Find all places where `new CRDTGraph` is instantiated and assigned to this.graph
+    const crdtGraphPattern = /this\.graph\s*=\s*new\s+CRDTGraph\([^)]+\)/g;
+    const matches = appSource.match(crdtGraphPattern);
+
+    if (!matches || matches.length === 0) {
+        throw new Error('No CRDTGraph instantiations found - test may need updating');
+    }
+
+    console.log(`  Found ${matches.length} CRDTGraph instantiation(s) - verifying each has setupGraphEventListeners`);
+
+    // For each instantiation, verify setupGraphEventListeners is called nearby
+    for (const match of matches) {
+        const matchIndex = appSource.indexOf(match);
+        if (matchIndex === -1) continue;
+
+        // Get context after the instantiation (next ~600 chars / ~15 lines)
+        const contextAfter = appSource.slice(matchIndex, matchIndex + 600);
+
+        // Verify setupGraphEventListeners is called
+        if (!contextAfter.includes('this.setupGraphEventListeners()')) {
+            throw new Error(
+                `Regression: setupGraphEventListeners() not called after CRDTGraph instantiation.\n` +
+                    `Location: ${match}\n` +
+                    `This will cause nodes to not appear after session creation/load.\n` +
+                    `Add this.setupGraphEventListeners() after this.graph = new CRDTGraph(...)`
+            );
+        }
+    }
+});
+
+// Regression Test: Verify createNewSession actually attaches listeners at runtime
+// This is the specific bug that users reported - nodes didn't appear after "New Canvas"
+test('createNewSession re-attaches graph event listeners (regression)', async () => {
+    // Create app instance
+    const app = new App();
+
+    // Track if nodeAdded listener fires by spying on canvas.renderNode
+    let nodeAddedListenerFired = false;
+    const originalRenderNode = app.canvas.renderNode.bind(app.canvas);
+    app.canvas.renderNode = (node) => {
+        nodeAddedListenerFired = true;
+        return originalRenderNode(node);
+    };
+
+    // Create new session - this was the bug: listeners weren't re-attached
+    await app.createNewSession();
+
+    // Add a node to the NEW graph (not the old one from init)
+    const { createNode, NodeType } = await import('../src/canvas_chat/static/js/graph-types.js');
+    const testNode = createNode(NodeType.NOTE, 'test content', { position: { x: 0, y: 0 } });
+    app.graph.addNode(testNode);
+
+    // Verify the listener fired (canvas.renderNode was called)
+    if (!nodeAddedListenerFired) {
+        throw new Error(
+            'REGRESSION: nodeAdded listener not attached after createNewSession().\n' +
+                'Nodes will not appear after clicking "New Canvas" button.\n' +
+                'Ensure setupGraphEventListeners() is called in createNewSession().'
+        );
+    }
+
+    console.log('  ✓ createNewSession correctly re-attached graph listeners');
 });
 
 // Test: Verify registerFeatureCanvasHandlers was removed (prevent duplicate handler registration)
