@@ -60,7 +60,7 @@ class Property_OllamaRoutingTests:
 
     @pytest.mark.anyio
     async def given_ollama_model_when_extracting_then_return_model_name(self):
-        """Given Ollama model, When extracting, Then return model name without prefix."""
+        """Given Ollama model, When extracting, Then return model name."""
         # Given
         model = "ollama_image/x/z-image-turbo:latest"
 
@@ -186,7 +186,7 @@ class Property_OllamaResponseParsingTests:
 
     @pytest.mark.anyio
     async def given_final_chunk_with_empty_fields_when_parsing_then_return_none(self):
-        """Given final chunk with empty image/response, When parsing, Then return None."""
+        """Given final chunk with empty fields, When parsing, Then return None."""
         # Given
         chunk = json.loads(OLLAMA_FINAL_CHUNK_EMPTY_DATA)
 
@@ -213,7 +213,7 @@ class Property_OllamaErrorHandlingTests:
         """Given timeout scenario, When processing, Then raise HTTP 500 error."""
         from fastapi import HTTPException
 
-        from src.canvas_chat.app import generate_image
+        from src.canvas_chat.app import ImageGenerationRequest, generate_image
 
         # Given
         mock_response = AsyncMock()
