@@ -47,12 +47,24 @@ class AppContext {
 
         // Legacy streaming state management (for backwards compatibility during migration)
         // TODO: Remove after all features migrated to StreamingManager
+        /**
+         * @param {string} nodeId
+         * @param {AbortController} abortController
+         * @param {Object|null} context
+         */
         this.registerStreaming = (nodeId, abortController, context = null) => {
             app.streamingNodes.set(nodeId, { abortController, context });
         };
+        /**
+         * @param {string} nodeId
+         */
         this.unregisterStreaming = (nodeId) => {
             app.streamingNodes.delete(nodeId);
         };
+        /**
+         * @param {string} nodeId
+         * @returns {Object|undefined}
+         */
         this.getStreamingState = (nodeId) => {
             return app.streamingNodes.get(nodeId);
         };
@@ -71,6 +83,10 @@ class AppContext {
         const wrapGraphAddNode = () => {
             if (!app.graph || app.graph.addNode._wrapped) return;
             const originalAddNode = app.graph.addNode.bind(app.graph);
+            /**
+             * @param {Object} node
+             * @returns {*}
+             */
             app.graph.addNode = (node) => {
                 app._userNodeCreation = true;
                 return originalAddNode(node);
@@ -175,7 +191,7 @@ class FeaturePlugin {
 
     /**
      * Get graph instance (live reference - created during session load, after plugins)
-     * @returns {CRDTGraph|null}
+     * @returns {Object|null}
      */
     get graph() {
         return this._context.graph;
