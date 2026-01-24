@@ -32,8 +32,8 @@ This includes:
 - 2026-01-17: Always run tests after making changes.
 - 2026-01-20: NEVER deploy directly to Modal environments (`modal deploy`). Let CI handle Modal deployments via GitHub Actions. Direct deploys bypass testing and can break production.
 - 2026-01-20: Fix tag removal bug - canvas uses callback properties (`canvas.onTagRemove = handler`), not event emitter. Changed app.js to set `this.canvas.onTagRemove` instead of `.on('tagRemove', ...)`. Prefer event emitter pattern for new code.
-- 2026-01-20: New TypeScript files must pass `pixi run typecheck` before committing. When converting JS to TS, verify the new `.ts` file has no type errors. Run `npx tsc --noEmit path/to/file.ts` to check specific files.
 - 2026-01-24: Used `--no-verify` flag with git commit after adding pre-commit hooks (tsc + jsdoc). NEVER use this - always let pre-commit hooks run. If hooks fail, fix issues and commit normally.
+- 2026-01-24: Removed TypeScript type checking from pre-commit hooks and pixi tasks. Project uses plain JavaScript with JSDoc annotations for documentation only, not strict type checking.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -272,22 +272,18 @@ Quick reference guide for finding the right documentation based on what you need
 - Prefer simple, greedy algorithms over complex optimal solutions
 - Local-first: no server-side user data storage
 
-### Type Checking in CI
+### JSDoc Documentation
 
-TypeScript type checking (tsc) and JSDoc linting now run automatically via pre-commit hooks on commit. Type errors will block commits.
+JSDoc linting runs automatically via pre-commit hooks on commit. JSDoc errors will block commits.
 
-**Note:** The project currently uses plain JavaScript (`.js` files) with JSDoc type annotations. The tsc/jsdoc infrastructure is set up for future TypeScript migration, but no immediate conversion is required.
+**Note:** The project uses plain JavaScript (`.js` files) with JSDoc type annotations for documentation purposes only. TypeScript type checking is not enforced - JSDoc annotations are used to improve code documentation and IDE support, but the code remains JavaScript.
 
 ```bash
-# Using npm
-npm run typecheck
-
 # Using pixi
-pixi run typecheck
+pixi run jsdoc
 
-# Direct tools (run by pre-commit hooks)
-npx tsc --noEmit --project tsconfig.json
-jsdoc -c .jsdoc.json
+# Direct tool (run by pre-commit hooks)
+npx -y jsdoc -c .jsdoc.json
 ```
 
 ### Type Annotation Pattern
@@ -318,25 +314,16 @@ function getOverlap(nodeA, nodeB, padding = 40) {
 }
 ```
 
-### Progressive Migration Order
+### Adding JSDoc Annotations
 
-When incrementally adding type annotations, follow this order (pure functions first):
+When adding JSDoc annotations to JavaScript files, focus on improving documentation and IDE support rather than strict type checking. Add annotations for:
 
-1. `layout.js` - Pure positioning/overlap functions ✓ (done)
-2. `highlight-utils.js` - DOM utilities (document parameter)
-3. `graph-types.js` - Data definitions (NodeType, EdgeType)
-4. `crdt-graph.js` - Core data model
-5. `model-utils.js` - Model selection utilities
-6. `storage.js` - localStorage utilities
-7. `search.js` - Search algorithm
-8. `utils.js` - General utilities
-9. Then larger files: `app.js`, `canvas.js`, `chat.js`
+- Function parameters and return types
+- Complex data structures (using `@typedef`)
+- Class properties and methods
+- Important type relationships
 
-### Incremental Migration Prompt
-
-When implementing new features or adding documentation, consider migrating one additional JavaScript file to add type annotations. Check the migration order above and pick the next file in the sequence. This keeps the TypeScript migration progressive and manageable.
-
-Add `npm run typecheck` or `pixi run typecheck` to your PR checklist to ensure type errors are caught before merging.
+JSDoc annotations are optional but encouraged for better code documentation. The project does not enforce TypeScript-style strict type checking.
 
 ## Post-task review
 

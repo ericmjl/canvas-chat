@@ -98,6 +98,9 @@ class Canvas {
         // Tag remove callback (for removing tag from node)
         this.onTagRemove = null; // For removing a tag from a specific node
 
+        // Reply input keydown callback (for slash command menu integration)
+        this.onReplyInputKeydown = null; // For handling keydown in reply tooltip input
+
         // EventEmitter for new event-based API
         this.events = new EventEmitter();
 

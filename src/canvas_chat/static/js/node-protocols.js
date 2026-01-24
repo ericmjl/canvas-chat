@@ -149,7 +149,7 @@ class BaseNode {
      * Get keyboard shortcuts for this node type
      * Default shortcuts: r (reply), e (edit-content), c (copy)
      * Override in subclasses to customize shortcuts
-     * @returns {Object<string, {action: string, handler: string, shift?: boolean, ctrl?: boolean}>}
+     * @returns {Object.<string, Object>} Map of key -> {action, handler, shift?, ctrl?}
      */
     getKeyboardShortcuts() {
         return {
@@ -161,7 +161,7 @@ class BaseNode {
 
     /**
      * Get header buttons for the node header
-     * @returns {Array<{id: string, label: string, title: string, hidden?: boolean}>}
+     * @returns {Array.<Object>} Array of {id, label, title, hidden?}
      */
     getHeaderButtons() {
         return [
@@ -279,7 +279,7 @@ class BaseNode {
      * - multiple: If true, binds to all matching elements (default: false, first only)
      * - getData: Optional function (element) => extraArgs to pass to handler/emit
      *
-     * @returns {Array<{selector: string, event?: string, handler: Function|string, multiple?: boolean, getData?: Function}>}
+     * @returns {Array.<Object>} Array of {selector, event?, handler, multiple?, getData?}
      */
     getEventBindings() {
         // Base class has no custom bindings - common bindings handled by canvas.js

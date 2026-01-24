@@ -70,52 +70,102 @@
 
 /**
  * Matrix node structure (extends BaseNode)
- * @typedef {BaseNode & {
- *   context: string,
- *   contextNodeIds: string[],
- *   rowItems: string[],
- *   colItems: string[],
- *   cells: Object.<string, MatrixCell>,
- *   indexColWidth?: string
- * }} MatrixNode
+ * @typedef {Object} MatrixNode
+ * @property {string} id - Node ID
+ * @property {string} type - Node type
+ * @property {string} content - Node content
+ * @property {Object} position - Node position {x, y}
+ * @property {number} [width] - Node width
+ * @property {number} [height] - Node height
+ * @property {Object} [metadata] - Additional metadata
+ * @property {string[]} tags - Array of tag color keys
+ * @property {string|null} title - User-editable title
+ * @property {string|null} summary - Auto-generated summary
+ * @property {boolean} [collapsed] - Whether children are collapsed
+ * @property {string} context - Matrix context
+ * @property {string[]} contextNodeIds - Context node IDs
+ * @property {string[]} rowItems - Row items
+ * @property {string[]} colItems - Column items
+ * @property {Object.<string, MatrixCell>} cells - Matrix cells
+ * @property {string} [indexColWidth] - Index column width
  */
 
 /**
  * Flashcard node structure (extends BaseNode)
- * @typedef {BaseNode & {
- *   question: string,
- *   answer: string,
- *   srs?: SRSData
- * }} FlashcardNode
+ * @typedef {Object} FlashcardNode
+ * @property {string} id - Node ID
+ * @property {string} type - Node type
+ * @property {string} content - Node content
+ * @property {Object} position - Node position {x, y}
+ * @property {number} [width] - Node width
+ * @property {number} [height] - Node height
+ * @property {Object} [metadata] - Additional metadata
+ * @property {string[]} tags - Array of tag color keys
+ * @property {string|null} title - User-editable title
+ * @property {string|null} summary - Auto-generated summary
+ * @property {boolean} [collapsed] - Whether children are collapsed
+ * @property {string} question - Flashcard question
+ * @property {string} answer - Flashcard answer
+ * @property {SRSData} [srs] - Spaced repetition data
  */
 
 /**
  * Cell node structure (extends BaseNode)
- * @typedef {BaseNode & {
- *   matrixId: string,
- *   rowIndex: number,
- *   colIndex: number,
- *   rowItem: string,
- *   colItem: string
- * }} CellNode
+ * @typedef {Object} CellNode
+ * @property {string} id - Node ID
+ * @property {string} type - Node type
+ * @property {string} content - Node content
+ * @property {Object} position - Node position {x, y}
+ * @property {number} [width] - Node width
+ * @property {number} [height] - Node height
+ * @property {Object} [metadata] - Additional metadata
+ * @property {string[]} tags - Array of tag color keys
+ * @property {string|null} title - User-editable title
+ * @property {string|null} summary - Auto-generated summary
+ * @property {boolean} [collapsed] - Whether children are collapsed
+ * @property {string} matrixId - Parent matrix ID
+ * @property {number} rowIndex - Row index
+ * @property {number} colIndex - Column index
+ * @property {string} rowItem - Row item label
+ * @property {string} colItem - Column item label
  */
 
 /**
  * Row node structure (extends BaseNode)
- * @typedef {BaseNode & {
- *   matrixId: string,
- *   rowIndex: number,
- *   rowItem: string
- * }} RowNode
+ * @typedef {Object} RowNode
+ * @property {string} id - Node ID
+ * @property {string} type - Node type
+ * @property {string} content - Node content
+ * @property {Object} position - Node position {x, y}
+ * @property {number} [width] - Node width
+ * @property {number} [height] - Node height
+ * @property {Object} [metadata] - Additional metadata
+ * @property {string[]} tags - Array of tag color keys
+ * @property {string|null} title - User-editable title
+ * @property {string|null} summary - Auto-generated summary
+ * @property {boolean} [collapsed] - Whether children are collapsed
+ * @property {string} matrixId - Parent matrix ID
+ * @property {number} rowIndex - Row index
+ * @property {string} rowItem - Row item label
  */
 
 /**
  * Column node structure (extends BaseNode)
- * @typedef {BaseNode & {
- *   matrixId: string,
- *   colIndex: number,
- *   colItem: string
- * }} ColumnNode
+ * @typedef {Object} ColumnNode
+ * @property {string} id - Node ID
+ * @property {string} type - Node type
+ * @property {string} content - Node content
+ * @property {Object} position - Node position {x, y}
+ * @property {number} [width] - Node width
+ * @property {number} [height] - Node height
+ * @property {Object} [metadata] - Additional metadata
+ * @property {string[]} tags - Array of tag color keys
+ * @property {string|null} title - User-editable title
+ * @property {string|null} summary - Auto-generated summary
+ * @property {boolean} [collapsed] - Whether children are collapsed
+ * @property {string} matrixId - Parent matrix ID
+ * @property {number} colIndex - Column index
+ * @property {string} colItem - Column item label
  */
 
 /**
@@ -384,7 +434,7 @@ function createCellNode(matrixId, rowIndex, colIndex, rowItem, colItem, content,
  * @param {number} rowIndex - Row index in matrix
  * @param {string} rowItem - Row item label
  * @param {string[]} colItems - Column item labels
- * @param {(string|null)[]} cellContents - Cell contents for each column
+ * @param {Array.<string|null>} cellContents - Cell contents for each column
  * @param {CreateNodeOptions} [options={}] - Additional options
  * @returns {RowNode} New row node object
  */
@@ -426,7 +476,7 @@ function createRowNode(matrixId, rowIndex, rowItem, colItems, cellContents, opti
  * @param {number} colIndex - Column index in matrix
  * @param {string} colItem - Column item label
  * @param {string[]} rowItems - Row item labels
- * @param {(string|null)[]} cellContents - Cell contents for each row
+ * @param {Array.<string|null>} cellContents - Cell contents for each row
  * @param {CreateNodeOptions} [options={}] - Additional options
  * @returns {ColumnNode} New column node object
  */
