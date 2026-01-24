@@ -169,20 +169,31 @@ class ImageGenerationFeature extends FeaturePlugin {
         // Close modal
         this.modalManager.hidePluginModal('image-generation', 'settings');
 
-        // Create loading node
+        // Create HUMAN node with the prompt
+        const humanNode = createNode(NodeType.HUMAN, `/image ${this.currentPrompt}`, {
+            position: this.graph.autoPosition(this.parentNodeIds),
+        });
+        this.graph.addNode(humanNode);
+
+        // Create edges from any selected nodes to HUMAN
+        for (const parentId of this.parentNodeIds) {
+            const edge = createEdge(parentId, humanNode.id, EdgeType.REPLY);
+            this.graph.addEdge(edge);
+        }
+
+        // Create IMAGE node with model stored
         const loadingNode = createNode(NodeType.IMAGE, '', {
-            position: this.graph.autoPosition(this.parentNodeIds.length > 0 ? this.parentNodeIds : []),
+            position: this.graph.autoPosition([humanNode.id]),
             imageData: null,
             mimeType: 'image/png',
+            model: model,
         });
 
         this.graph.addNode(loadingNode);
 
-        // Create edges from selected nodes
-        for (const parentId of this.parentNodeIds) {
-            const edge = createEdge(parentId, loadingNode.id, EdgeType.REPLY);
-            this.graph.addEdge(edge);
-        }
+        // Create edge from HUMAN to IMAGE
+        const edge = createEdge(humanNode.id, loadingNode.id, EdgeType.REPLY);
+        this.graph.addEdge(edge);
 
         this.canvas.clearSelection();
         this.saveSession();
