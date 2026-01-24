@@ -1,0 +1,6 @@
+{
+    "source": {
+        "include": ["src/canvas_chat/static/js/**/*.js"],
+        "exclude": ["src/canvas_chat/static/js/**/*.test.js", "src/canvas_chat/static/js/example-plugins/**/*.js"]
+    }
+}
