@@ -32,6 +32,18 @@ repos:
                 - jsdom@24.0.0
     - repo: local
       hooks:
+          - id: tsc
+            name: TypeScript type check
+            entry: tsc --noEmit --project tsconfig.json
+            language: system
+            files: ^src/canvas_chat/static/js/.*\.js$
+            pass_filenames: false
+          - id: jsdoc
+            name: JSDoc linter
+            entry: jsdoc -c .jsdoc.json
+            language: system
+            files: ^src/canvas_chat/static/js/.*\.js$
+            pass_filenames: false
           - id: pixi-lock
             name: Update pixi.lock
             entry: pixi lock
