@@ -32,15 +32,15 @@ repos:
                 - jsdom@24.0.0
     - repo: local
       hooks:
-          - id: tsc
+          - id: typecheck
             name: TypeScript type check
-            entry: tsc --noEmit --project tsconfig.json
+            entry: pixi run typecheck
             language: system
             files: ^src/canvas_chat/static/js/.*\.js$
             pass_filenames: false
           - id: jsdoc
             name: JSDoc linter
-            entry: jsdoc -c .jsdoc.json
+            entry: pixi run jsdoc
             language: system
             files: ^src/canvas_chat/static/js/.*\.js$
             pass_filenames: false
