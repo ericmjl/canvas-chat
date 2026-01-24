@@ -202,7 +202,7 @@ jobs:
               id: check_pypi
               shell: bash
               run: |
-                  OUTPUT=$(uvx python << 'EOF'
+                  OUTPUT=$(uvx --with httpx python << 'EOF'
                   import sys
                   import httpx
 
