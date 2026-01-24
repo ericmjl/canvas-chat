@@ -204,10 +204,10 @@ jobs:
               run: |
                   OUTPUT=$(uvx python << 'EOF'
                   import sys
-                  import requests
+                  import httpx
 
                   try:
-                      response = requests.get('https://pypi.org/pypi/canvas-chat/json', timeout=10)
+                      response = httpx.get('https://pypi.org/pypi/canvas-chat/json', timeout=10)
                       response.raise_for_status()
                       data = response.json()
                       version = '${{ env.version_number }}'
