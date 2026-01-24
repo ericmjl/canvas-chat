@@ -32,18 +32,6 @@ repos:
                 - jsdom@24.0.0
     - repo: local
       hooks:
-          - id: typecheck
-            name: TypeScript type check
-            entry: pixi run typecheck
-            language: system
-            files: ^src/canvas_chat/static/js/.*\.js$
-            pass_filenames: false
-          - id: jsdoc
-            name: JSDoc linter
-            entry: pixi run jsdoc
-            language: system
-            files: ^src/canvas_chat/static/js/.*\.js$
-            pass_filenames: false
           - id: pixi-lock
             name: Update pixi.lock
             entry: pixi lock

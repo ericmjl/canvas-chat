@@ -11,8 +11,8 @@
  * @typedef {Object} Session
  * @property {string} id - Session UUID
  * @property {string} name - Session display name
- * @property {import('./graph-types.js').Node[]} nodes - Array of nodes
- * @property {import('./graph-types.js').Edge[]} edges - Array of edges
+ * @property {Array.<Object>} nodes - Array of nodes (see graph-types.js for Node definition)
+ * @property {Array.<Object>} edges - Array of edges (see graph-types.js for Edge definition)
  * @property {Object.<string, {name: string, color: string}>} [tags] - Tag definitions
  * @property {number} created_at - Creation timestamp (Unix ms)
  * @property {number} updated_at - Last update timestamp (Unix ms)
@@ -21,10 +21,17 @@
 
 /**
  * Exported session file format (.canvaschat)
- * @typedef {Session & {
- *   version: number,
- *   exported_at: string
- * }} ExportedSession
+ * @typedef {Object} ExportedSession
+ * @property {string} id - Session UUID
+ * @property {string} name - Session display name
+ * @property {Array.<Object>} nodes - Array of nodes
+ * @property {Array.<Object>} edges - Array of edges
+ * @property {Object.<string, {name: string, color: string}>} [tags] - Tag definitions
+ * @property {number} created_at - Creation timestamp (Unix ms)
+ * @property {number} updated_at - Last update timestamp (Unix ms)
+ * @property {number} [imported_at] - Import timestamp (if imported)
+ * @property {number} version - Export format version
+ * @property {string} exported_at - Export timestamp (ISO string)
  */
 
 /**

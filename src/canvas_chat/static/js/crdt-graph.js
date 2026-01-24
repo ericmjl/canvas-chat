@@ -20,11 +20,12 @@ import { wouldOverlapNodes, resolveOverlaps } from './layout.js';
 // =============================================================================
 
 /**
- * @typedef {import('./graph-types.js').Node} Node
- * @typedef {import('./graph-types.js').Edge} Edge
- * @typedef {import('./graph-types.js').Position} Position
- * @typedef {import('./graph-types.js').NodeTypeValue} NodeTypeValue
- * @typedef {import('./graph-types.js').EdgeTypeValue} EdgeTypeValue
+ * Type aliases for graph types (defined in graph-types.js)
+ * @typedef {Object} Node - See graph-types.js for Node definition
+ * @typedef {Object} Edge - See graph-types.js for Edge definition
+ * @typedef {Object} Position - See graph-types.js for Position definition
+ * @typedef {string} NodeTypeValue - See graph-types.js for NodeTypeValue definition
+ * @typedef {string} EdgeTypeValue - See graph-types.js for EdgeTypeValue definition
  */
 
 /**

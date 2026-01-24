@@ -31,6 +31,16 @@ import { NodeType } from './graph-types.js';
  */
 
 /**
+ * @typedef {Object} SlashCommandWithType
+ * @property {string} command - Slash command (e.g., '/poll')
+ * @property {string} description - Description for autocomplete menu
+ * @property {string} placeholder - Placeholder text for input
+ * @property {Function} handler - Handler function(app, args, context)
+ * @property {boolean} [requiresContext] - Whether command requires selected nodes
+ * @property {string} type - Node type identifier linked to this command
+ */
+
+/**
  * @typedef {Object} NodeTypeConfig
  * @property {string} type - Unique node type identifier (e.g., 'poll', 'diagram')
  * @property {Function} protocol - Class extending BaseNode
@@ -55,7 +65,7 @@ const NodeRegistry = {
 
     /**
      * Registered slash commands
-     * @type {Map<string, SlashCommandConfig & {type: string}>}
+     * @type {Map<string, SlashCommandWithType>}
      * @private
      */
     _slashCommands: new Map(),

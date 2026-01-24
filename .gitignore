@@ -179,6 +179,10 @@ pyrightconfig.json
 # Node.js
 node_modules/
 
+# JSDoc output
+out/
+.jsdoc-out/
+
 # Admin mode config (contains API key env var references)
 config.yaml
 
