@@ -48,6 +48,7 @@ class ImageGenerationFeature extends FeaturePlugin {
                                 <option value="dall-e-3">DALL-E 3 (OpenAI) - Best quality</option>
                                 <option value="dall-e-2">DALL-E 2 (OpenAI) - Lower cost</option>
                                 <option value="gemini/imagen-4.0-generate-001">Imagen 4.0 (Google) - Fast</option>
+                                <option value="ollama_image/x/z-image-turbo:latest">Z Image Turbo (Ollama) - Local</option>
                             </select>
                         </div>
 

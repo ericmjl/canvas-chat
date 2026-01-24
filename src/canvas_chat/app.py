@@ -1707,61 +1707,124 @@ async def generate_image(request: ImageGenerationRequest):
     Supports multiple providers:
     - OpenAI: dall-e-3, dall-e-2
     - Google: gemini/imagen-4.0-generate-001
+    - Ollama: ollama_image/x/z-image-turbo:latest (local)
     """
     # Inject admin credentials if in admin mode
     inject_admin_credentials(request)
 
-    # Validate API key exists
-    if not request.api_key and not get_admin_config().admin_mode:
-        raise HTTPException(
-            status_code=400,
-            detail="API key required. Please configure in Settings.",
-        )
-
-    logger.info(
-        f"Image generation request: model={request.model}, "
-        f"size={request.size}, quality={request.quality}"
-    )
-
     try:
-        # Call litellm.aimage_generation
-        response = await litellm.aimage_generation(
-            prompt=request.prompt,
-            model=request.model,
-            size=request.size,
-            quality=request.quality,
-            n=request.n,
-            api_key=request.api_key,
-            api_base=request.base_url,
-        )
+        # Handle Ollama image models FIRST (before validation)
+        api_base = request.base_url
+        api_key = request.api_key
+        quality = request.quality
+        model_to_use = request.model
 
-        # Get the generated image
-        image_data = response.data[0]
+        if request.model.startswith("ollama_image/"):
+            # Convert to LiteLLM format: "ollama_image/x/z..." → "ollama/x/z..."
+            model_to_use = request.model.replace("ollama_image/", "ollama/")
 
-        # Handle URL or base64 response
-        if image_data.url:
-            # Download image from URL and convert to base64
-            logger.info(f"Downloading image from URL: {image_data.url[:50]}...")
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                img_response = await client.get(image_data.url)
-                img_response.raise_for_status()
-                image_bytes = img_response.content
-                image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-        elif image_data.b64_json:
-            # Already base64
-            image_base64 = image_data.b64_json
-        else:
+            # Use Ollama's base URL
+            api_base = OLLAMA_BASE_URL
+
+            # Ollama doesn't require API key, use dummy value for litellm
+            api_key = "dummy"
+
+            # Ollama doesn't support quality parameter
+            quality = None
+
+            logger.info(f"Using Ollama image model: {model_to_use}")
+
+        # Validate API key exists (only for non-Ollama models)
+        if not api_key and not get_admin_config().admin_mode:
             raise HTTPException(
-                status_code=500, detail="No image data returned from provider"
+                status_code=400,
+                detail="API key required. Please configure in Settings.",
             )
 
-        logger.info("Image generated successfully")
+        logger.info(
+            f"Image generation request: model={request.model}, "
+            f"size={request.size}, quality={request.quality}"
+        )
+
+        # Generate image based on provider
+        if request.model.startswith("ollama_image/"):
+            # Call Ollama API directly
+            ollama_model = request.model.replace("ollama_image/", "")
+            logger.info(f"Calling Ollama API directly: {ollama_model}")
+
+            async with httpx.AsyncClient(timeout=600.0) as client:
+                # Call Ollama's /api/generate endpoint
+                response = await client.post(
+                    f"{OLLAMA_BASE_URL}/api/generate",
+                    json={
+                        "model": ollama_model,
+                        "prompt": request.prompt,
+                        "stream": False,  # Get single response
+                    },
+                )
+
+                logger.info(f"Ollama response status: {response.status_code}")
+
+                # Parse streamed JSON responses
+                image_base64 = None
+                async for line in response.aiter_lines():
+                    logger.info(f"Ollama chunk: {line[:200]}")  # Log first 200 chars
+                    chunk = json.loads(line)
+                    if chunk.get("done"):
+                        # Try both "image" and "response" fields (Ollama uses "image")
+                        image_base64 = chunk.get("image") or chunk.get("response")
+                        logger.info(
+                            f"Ollama done: image={bool(image_base64)}, "
+                            f"done={chunk.get('done')}"
+                        )
+                        break
+
+            if not image_base64:
+                raise HTTPException(
+                    status_code=500, detail="No image data returned from Ollama"
+                )
+
+            logger.info("Ollama image generated successfully")
+
+        else:
+            # Call LiteLLM for other providers
+            response = await litellm.aimage_generation(
+                prompt=request.prompt,
+                model=model_to_use,
+                size=request.size,
+                quality=quality,
+                n=request.n,
+                api_key=api_key,
+                api_base=api_base,
+            )
+
+            # Get the generated image
+            image_data = response.data[0]
+
+            # Handle URL or base64 response
+            if image_data.url:
+                # Download image from URL and convert to base64
+                logger.info(f"Downloading image from URL: {image_data.url[:50]}...")
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    img_response = await client.get(image_data.url)
+                    img_response.raise_for_status()
+                    image_bytes = img_response.content
+                    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+            elif image_data.b64_json:
+                # Already base64
+                image_base64 = image_data.b64_json
+            else:
+                raise HTTPException(
+                    status_code=500, detail="No image data returned from provider"
+                )
+
+            logger.info("Image generated successfully")
 
         # Return base64 image
         return {
             "imageData": image_base64,
             "mimeType": "image/png",
-            "revised_prompt": getattr(image_data, "revised_prompt", None),
+            "revised_prompt": None,  # Ollama doesn't support revised prompt
         }
 
     except litellm.AuthenticationError as e:
