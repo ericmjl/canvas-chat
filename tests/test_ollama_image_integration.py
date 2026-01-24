@@ -36,9 +36,9 @@ class Integration_OllamaImageGenerationTests:
     @pytest.mark.anyio
     @patch("httpx.AsyncClient")
     async def given_ollama_request_when_api_succeeds_then_return_image(
-        self, mock_client_class
+        self, mock_client_class, client
     ):
-        """Given successful Ollama generation, When calling API, Then return image data."""
+        """Given successful Ollama generation, When calling API, Then return image."""
         from src.canvas_chat.app import ImageGenerationRequest
 
         # Given: Mock Ollama HTTP response
@@ -75,7 +75,7 @@ class Integration_OllamaImageGenerationTests:
     @pytest.mark.anyio
     @patch("httpx.AsyncClient")
     async def given_ollama_timeout_when_generating_then_return_error(
-        self, mock_client_class
+        self, mock_client_class, client
     ):
         """Given Ollama timeout, When calling API, Then return 500 error."""
         from src.canvas_chat.app import ImageGenerationRequest
@@ -110,7 +110,9 @@ class Integration_OllamaImageGenerationTests:
 
     @pytest.mark.anyio
     @patch("httpx.AsyncClient")
-    async def given_ollama_error_when_failing_then_propagate(self, mock_client_class):
+    async def given_ollama_error_when_failing_then_propagate(
+        self, mock_client_class, client
+    ):
         """Given Ollama API error, When calling API, Then return 500 error."""
         from src.canvas_chat.app import ImageGenerationRequest
 
@@ -145,7 +147,7 @@ class Integration_OllamaImageGenerationTests:
     @pytest.mark.anyio
     @patch("httpx.AsyncClient")
     async def given_dalle_e3_request_when_non_ollama_then_use_litellm(
-        self, mock_client_class, mock_litellm
+        self, mock_client_class, mock_litellm, client
     ):
         """Given DALL-E model, When calling API, Then use LiteLLM path."""
         from src.canvas_chat.app import ImageGenerationRequest
@@ -157,7 +159,6 @@ class Integration_OllamaImageGenerationTests:
             {"url": "https://example.com/image.png", "revised_prompt": "enhanced"}
         ]
 
-        mock_client = AsyncMock()
         mock_litellm.aimage_generation.return_value = mock_response
 
         request = ImageGenerationRequest(
@@ -193,8 +194,8 @@ class Integration_OllamaImageGenerationTests:
 
         mock_litellm.aimage_generation.return_value = mock_response
 
-        # When: First Ollama
-        request_ollama = ImageGenerationRequest(
+        # When: First Ollama (should not call LiteLLM)
+        ImageGenerationRequest(
             prompt="test",
             model="ollama_image/x/z-image-turbo:latest",
             size="1024x1024",
@@ -204,8 +205,8 @@ class Integration_OllamaImageGenerationTests:
             base_url=None,
         )
 
-        # When: Then DALL-E
-        request_dalle = ImageGenerationRequest(
+        # When: Then DALL-E (should call LiteLLM)
+        ImageGenerationRequest(
             prompt="test",
             model="dall-e-3",
             size="1024x1024",
