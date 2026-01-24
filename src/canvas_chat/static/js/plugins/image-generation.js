@@ -6,6 +6,7 @@
  */
 
 import { FeaturePlugin } from '../feature-plugin.js';
+import { AppContext } from './feature-plugin.js';
 import { NodeType, EdgeType, createNode, createEdge } from '../graph-types.js';
 import { apiUrl } from '../utils.js';
 
@@ -22,7 +23,6 @@ class ImageGenerationFeature extends FeaturePlugin {
         super(context);
 
         // Store current generation state
-        this.currentPrompt = null;
         this.parentNodeIds = [];
     }
 
@@ -161,9 +161,13 @@ class ImageGenerationFeature extends FeaturePlugin {
      */
     async generateImage() {
         // Get settings from modal
-        const model = document.getElementById('image-gen-model')?.value || 'dall-e-3';
-        const size = document.getElementById('image-gen-size')?.value || '1024x1024';
-        const quality = document.getElementById('image-gen-quality')?.value || 'hd';
+        const modelInput = document.getElementById('image-gen-model');
+        const sizeInput = document.getElementById('image-gen-size');
+        const qualityInput = document.getElementById('image-gen-quality');
+
+        const model = modelInput?.value || 'dall-e-3';
+        const size = sizeInput?.value || '1024x1024';
+        const quality = qualityInput?.value || 'hd';
 
         console.log('[ImageGeneration] Generating with:', { model, size, quality });
 
@@ -186,7 +190,6 @@ class ImageGenerationFeature extends FeaturePlugin {
         const loadingNode = createNode(NodeType.IMAGE, '', {
             position: this.graph.autoPosition([humanNode.id]),
             imageData: null,
-            mimeType: 'image/png',
             model: model,
         });
 
