@@ -271,11 +271,13 @@ Quick reference guide for finding the right documentation based on what you need
 - Prefer simple, greedy algorithms over complex optimal solutions
 - Local-first: no server-side user data storage
 
-## TypeScript Type Checking
+````
 
-The project uses TypeScript's `checkJs` mode to add compile-time error detection to JavaScript files without requiring a full migration. This catches errors like calling non-existent methods before runtime.
+### Type Checking in CI
 
-### Running Type Checks
+TypeScript type checking (tsc) and JSDoc linting now run automatically via pre-commit hooks on commit. Type errors will block commits.
+
+**Note:** The project currently uses plain JavaScript (`.js` files) with JSDoc type annotations. The tsc/jsdoc infrastructure is set up for future TypeScript migration, but no immediate conversion is required.
 
 ```bash
 # Using npm
@@ -284,8 +286,9 @@ npm run typecheck
 # Using pixi
 pixi run typecheck
 
-# Direct tsc
-npx tsc --noEmit
+# Direct tools (run by pre-commit hooks)
+npx tsc --noEmit --project tsconfig.json
+jsdoc -c .jsdoc.json
 ```
 
 ### Type Annotation Pattern
@@ -2140,3 +2143,4 @@ class MyFeature extends FeaturePlugin {
 ```
 
 See [Canvas Event Handlers Registration](docs/reference/canvas-event-handlers.md) for details.
+````
