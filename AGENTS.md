@@ -33,6 +33,7 @@ This includes:
 - 2026-01-20: NEVER deploy directly to Modal environments (`modal deploy`). Let CI handle Modal deployments via GitHub Actions. Direct deploys bypass testing and can break production.
 - 2026-01-20: Fix tag removal bug - canvas uses callback properties (`canvas.onTagRemove = handler`), not event emitter. Changed app.js to set `this.canvas.onTagRemove` instead of `.on('tagRemove', ...)`. Prefer event emitter pattern for new code.
 - 2026-01-20: New TypeScript files must pass `pixi run typecheck` before committing. When converting JS to TS, verify the new `.ts` file has no type errors. Run `npx tsc --noEmit path/to/file.ts` to check specific files.
+- 2026-01-24: Used `--no-verify` flag with git commit after adding pre-commit hooks (tsc + jsdoc). NEVER use this - always let pre-commit hooks run. If hooks fail, fix issues and commit normally.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -271,8 +272,6 @@ Quick reference guide for finding the right documentation based on what you need
 - Prefer simple, greedy algorithms over complex optimal solutions
 - Local-first: no server-side user data storage
 
-````
-
 ### Type Checking in CI
 
 TypeScript type checking (tsc) and JSDoc linting now run automatically via pre-commit hooks on commit. Type errors will block commits.
@@ -336,8 +335,6 @@ When incrementally adding type annotations, follow this order (pure functions fi
 ### Incremental Migration Prompt
 
 When implementing new features or adding documentation, consider migrating one additional JavaScript file to add type annotations. Check the migration order above and pick the next file in the sequence. This keeps the TypeScript migration progressive and manageable.
-
-### Type Checking in CI
 
 Add `npm run typecheck` or `pixi run typecheck` to your PR checklist to ensure type errors are caught before merging.
 
@@ -2143,4 +2140,3 @@ class MyFeature extends FeaturePlugin {
 ```
 
 See [Canvas Event Handlers Registration](docs/reference/canvas-event-handlers.md) for details.
-````
