@@ -493,6 +493,7 @@ class MockUndoManager {
      */
     constructor() {
         this.actions = [];
+        this.pluginActionHandlers = new Map();
     }
 
     /**
@@ -511,6 +512,24 @@ class MockUndoManager {
      *
      */
     redo() {}
+
+    /**
+     * Allow plugins to register custom undo/redo handlers
+     * @param {string} actionType - The action type (e.g., 'FILL_CELL')
+     * @param {Object} handlers - { undo: Function, redo: Function }
+     */
+    registerActionHandler(actionType, handlers) {
+        this.pluginActionHandlers.set(actionType, handlers);
+    }
+
+    /**
+     * Check if action type has a plugin handler
+     * @param {string} actionType
+     * @returns {boolean}
+     */
+    hasActionHandler(actionType) {
+        return this.pluginActionHandlers.has(actionType);
+    }
 }
 
 /**

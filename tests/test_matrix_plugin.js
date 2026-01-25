@@ -117,7 +117,7 @@ await asyncTest('MatrixFeature has all required dependencies', async () => {
     // Check matrix-specific dependencies
     assertTrue(typeof feature.getModelPicker === 'function', 'Has getModelPicker');
     assertTrue(typeof feature.generateNodeSummary === 'function', 'Has generateNodeSummary');
-    assertTrue(typeof feature.pushUndo === 'function', 'Has pushUndo');
+    assertTrue(feature.undoManager !== undefined, 'Has undoManager');
 });
 
 // Test: /matrix slash command routes correctly

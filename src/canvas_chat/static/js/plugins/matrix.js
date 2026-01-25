@@ -474,7 +474,6 @@ class MatrixFeature extends FeaturePlugin {
         // Additional dependencies specific to matrix (not in base FeaturePlugin)
         this.getModelPicker = () => context.modelPicker;
         this.generateNodeSummary = context.generateNodeSummary;
-        this.pushUndo = context.pushUndo || (() => {});
 
         // Matrix modal state
         this._matrixData = null;
@@ -494,7 +493,7 @@ class MatrixFeature extends FeaturePlugin {
         console.log('[MatrixFeature] Loaded');
 
         // Register undo/redo handlers
-        this.context.undoManager?.registerActionHandler('FILL_CELL', {
+        this.undoManager?.registerActionHandler('FILL_CELL', {
             undo: this.undoFillCell.bind(this),
             redo: this.redoFillCell.bind(this),
         });
@@ -1342,7 +1341,7 @@ class MatrixFeature extends FeaturePlugin {
             this.graph.updateNode(nodeId, { cells: updatedCells });
 
             // Push undo action for cell fill
-            this.pushUndo({
+            this.undoManager.push({
                 type: 'FILL_CELL',
                 nodeId,
                 row,
