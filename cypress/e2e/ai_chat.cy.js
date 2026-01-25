@@ -13,8 +13,8 @@ describe('AI Chat with Ollama - Basic Flow', { tags: '@ai' }, () => {
         // Wait for models to be fetched
         cy.get('#model-picker', { timeout: 10000 }).should('not.be.empty');
 
-        // Select smallest available model for fastest tests
-        cy.get('#model-picker').select('ollama_chat/gemma3:270m');
+        // Select the configured Ollama model for CI
+        cy.get('#model-picker').select('ollama_chat/gemma3n:e4b');
 
         // Send a simple message
         cy.sendMessage('Hello from Cypress test!');
@@ -35,11 +35,11 @@ describe('AI Chat with Ollama - Basic Flow', { tags: '@ai' }, () => {
         // Wait for models to be fetched
         cy.get('#model-picker', { timeout: 10000 }).should('not.be.empty');
 
-        // Check that ollama_chat/gemma3:1b is in the list
+        // Check that ollama_chat/gemma3n:e4b is in the list
         cy.get('#model-picker').then(($select) => {
             const options = Array.from($select.find('option')).map((opt) => opt.value);
             cy.log('Available models:', options);
-            expect(options).to.include('ollama_chat/gemma3:1b');
+            expect(options).to.include('ollama_chat/gemma3n:e4b');
         });
     });
 
@@ -49,10 +49,9 @@ describe('AI Chat with Ollama - Basic Flow', { tags: '@ai' }, () => {
         // Wait for models to be fetched
         cy.get('#model-picker', { timeout: 10000 }).should('not.be.empty');
 
-        // Verify both small and original models are available
+        // Verify the configured model is available
         cy.get('#model-picker').then(($select) => {
             const options = Array.from($select.find('option')).map((opt) => opt.value);
-            expect(options).to.include('ollama_chat/gemma3:1b');
             expect(options).to.include('ollama_chat/gemma3n:e4b');
         });
     });
@@ -69,8 +68,8 @@ describe('AI Chat with Ollama - Streaming Tests', { tags: '@ai' }, () => {
     });
 
     it('sends simple math question and receives answer', { tags: '@ai' }, () => {
-        // Select smallest model for fastest tests
-        cy.get('#model-picker').select('ollama_chat/gemma3:270m');
+        // Select the configured Ollama model for CI
+        cy.get('#model-picker').select('ollama_chat/gemma3n:e4b');
 
         // Send math question
         cy.sendMessage('What is 5 + 3?');
@@ -89,7 +88,7 @@ describe('AI Chat with Ollama - Streaming Tests', { tags: '@ai' }, () => {
     });
 
     it('handles multi-turn conversation with context', { tags: '@ai' }, () => {
-        cy.get('#model-picker').select('ollama_chat/gemma3:270m');
+        cy.get('#model-picker').select('ollama_chat/gemma3n:e4b');
 
         // First message
         cy.sendMessage('My name is Alice');
@@ -110,7 +109,7 @@ describe('AI Chat with Ollama - Streaming Tests', { tags: '@ai' }, () => {
     });
 
     it('verifies streaming UI shows correctly', { tags: '@ai' }, () => {
-        cy.get('#model-picker').select('ollama_chat/gemma3:270m');
+        cy.get('#model-picker').select('ollama_chat/gemma3n:e4b');
 
         cy.sendMessage('Count to 5');
 
