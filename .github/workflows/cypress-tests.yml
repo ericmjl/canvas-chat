@@ -7,8 +7,9 @@ on:
         branches: [main]
 
 jobs:
-    cypress:
-        name: Run Cypress tests
+    # Job 1: Basic E2E Tests (fast, no external dependencies)
+    cypress-basic:
+        name: Basic E2E Tests
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
@@ -25,17 +26,87 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
-            - name: Run Cypress
+            - name: Run Cypress (basic tests)
               uses: cypress-io/github-action@v7
               with:
                   start: pixi run dev
                   wait-on: http://127.0.0.1:7865
                   record: false
-                  config: baseUrl=http://127.0.0.1:7865
+                  config: |
+                      baseUrl=http://127.0.0.1:7865
+                      specPattern="cypress/e2e/**/*"
+                      excludeSpecPattern="**/*ai*.cy.js"
 
             - name: Upload screenshots on failure
               uses: actions/upload-artifact@v4
               if: failure()
               with:
                   name: cypress-screenshots
+                  path: cypress/screenshots
+
+    # Job 2: AI E2E Tests (with Ollama, slower)
+    cypress-ai:
+        name: AI E2E Tests (Ollama)
+        runs-on: ubuntu-latest
+
+        services:
+            ollama:
+                image: ollama/ollama:latest
+                ports:
+                    - 11434:11434
+                options: >-
+                    --name ollama-service
+                    --health-cmd "ollama list || exit 1"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '22'
+
+            - name: Install pixi
+              uses: prefix-dev/setup-pixi@v0.9.3
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Cache Ollama model weights
+              id: cache-ollama-model
+              uses: actions/cache@v4
+              with:
+                  path: ~/.ollama/models
+                  key: ollama-gemma3n-e4b
+                  restore-keys: |
+                      ollama-gemma3n-
+
+            - name: Pull gemma3n:e4b model
+              if: steps.cache-ollama-model.outputs.cache-hit != 'true'
+              run: |
+                  # Wait for Ollama service to be healthy
+                  timeout 300 bash -c 'until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 2; done'
+                  # Pull model (first time takes 2-5 minutes)
+                  ollama pull gemma3n:e4b
+                  echo "Model pulled successfully"
+
+            - name: Run Cypress (AI tests only)
+              uses: cypress-io/github-action@v7
+              with:
+                  start: pixi run dev
+                  wait-on: http://127.0.0.1:7865
+                  record: false
+                  config: |
+                      baseUrl=http://127.0.0.1:7865
+                      specPattern="cypress/e2e/**/*ai*.cy.js"
+
+            - name: Upload screenshots on failure
+              uses: actions/upload-artifact@v4
+              if: failure()
+              with:
+                  name: cypress-ai-screenshots
                   path: cypress/screenshots
