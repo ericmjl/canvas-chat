@@ -1826,7 +1826,36 @@ class MatrixFeature extends FeaturePlugin {
             matrixColExtract: this.handleMatrixColExtract.bind(this),
             matrixEdit: this.handleMatrixEdit.bind(this),
             matrixIndexColResize: this.handleMatrixIndexColResize.bind(this),
+            nodeSelect: this.handleNodeSelect.bind(this),
+            nodeDeselect: this.handleNodeDeselect.bind(this),
         };
+    }
+
+    /**
+     * Handle node selection - clear matrix cell highlights, highlight if cell node selected
+     * @param {string[]} selectedIds
+     */
+    handleNodeSelect(selectedIds) {
+        this.canvas.clearMatrixCellHighlights();
+
+        if (selectedIds.length === 1) {
+            const node = this.graph.getNode(selectedIds[0]);
+            if (node) {
+                const wrapped = wrapNode(node);
+                const matrixId = wrapped.getMatrixId();
+                if (matrixId && node.rowIndex !== undefined && node.colIndex !== undefined) {
+                    this.canvas.highlightMatrixCell(matrixId, node.rowIndex, node.colIndex);
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle node deselection - clear matrix cell highlights
+     * @param {string[]} selectedIds
+     */
+    handleNodeDeselect(selectedIds) {
+        this.canvas.clearMatrixCellHighlights();
     }
 }
 
