@@ -47,7 +47,6 @@ import {
     buildMessagesForApi,
     escapeHtmlText,
     extractUrlFromReferenceNode,
-    formatMatrixAsText,
     formatUserError,
     truncateText,
 } from './utils.js';
@@ -3009,33 +3008,18 @@ print("Hello from Pyodide!")
         this.updateContextHighlight(selectedIds);
         this.updateContextBudget(selectedIds);
 
-        // Clear any previous matrix cell highlights
-        this.canvas.clearMatrixCellHighlights();
-
         // Clear any previous source text highlights
         this.canvas.clearSourceTextHighlights();
 
         // Don't auto-focus chat input when selecting nodes - user must explicitly
-        // type 'r' or click the text box to focus. This allows other shortcuts
+        // type 'r' or click on text box to focus. This allows other shortcuts
         // (like 'c' for copy, 'e' for edit) to work when nodes are selected.
         if (document.activeElement === this.chatInput) {
             this.chatInput.blur();
         }
 
-        // If a cell node is selected, highlight its source cell in the matrix
-        if (selectedIds.length === 1) {
-            const node = this.graph.getNode(selectedIds[0]);
-            if (node) {
-                const wrapped = wrapNode(node);
-                const matrixId = wrapped.getMatrixId();
-                if (matrixId && node.rowIndex !== undefined && node.colIndex !== undefined) {
-                    this.canvas.highlightMatrixCell(matrixId, node.rowIndex, node.colIndex);
-                }
-
-                // Note: Highlight source text highlighting is now handled by HighlightFeature plugin
-                // via getCanvasEventHandlers() -> 'nodeSelect' event handler
-            }
-        }
+        // Note: Matrix cell highlighting is now handled by MatrixFeature plugin
+        // via getCanvasEventHandlers() -> 'nodeSelect' event handler
 
         // Auto-open tag drawer when 2+ nodes selected
         if (selectedIds.length >= 2) {
@@ -3055,8 +3039,27 @@ print("Hello from Pyodide!")
         this.updateContextHighlight(selectedIds);
         this.updateContextBudget(selectedIds);
 
-        // Clear matrix cell highlights when deselecting
-        this.canvas.clearMatrixCellHighlights();
+        // Clear source text highlights when deselecting
+        this.canvas.clearSourceTextHighlights();
+
+        // Clear tag highlighting when clicking on canvas background (no nodes selected)
+        if (selectedIds.length === 0 && this.highlightedTagColor) {
+            this.canvas.highlightNodesByTag(null);
+            this.highlightedTagColor = null;
+        }
+
+        // Update tag drawer state
+        this.updateTagDrawer();
+    }
+
+    /**
+     *
+     * @param selectedIds
+     */
+    handleNodeDeselect(selectedIds) {
+        this.updateSelectedIndicator(selectedIds);
+        this.updateContextHighlight(selectedIds);
+        this.updateContextBudget(selectedIds);
 
         // Clear source text highlights when deselecting
         this.canvas.clearSourceTextHighlights();
@@ -3733,15 +3736,6 @@ print("Hello from Pyodide!")
         } catch (err) {
             console.error('Failed to copy:', err);
         }
-    }
-
-    /**
-     * Format a matrix node as a markdown table
-     * @param {Object} matrixNode
-     * @returns {string}
-     */
-    formatMatrixAsText(matrixNode) {
-        return formatMatrixAsText(matrixNode);
     }
 
     /**

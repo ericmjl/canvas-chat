@@ -6,7 +6,7 @@ import { EventEmitter } from './event-emitter.js';
 import { wrapNode } from './node-protocols.js';
 import { NodeType, getDefaultNodeSize } from './graph-types.js';
 import { highlightTextInHtml } from './highlight-utils.js';
-import { escapeHtmlText, truncateText } from './utils.js';
+import { escapeHtmlText, formatMatrixAsText, truncateText } from './utils.js';
 import { findScrollableContainer } from './scroll-utils.js';
 
 /**
@@ -2676,41 +2676,11 @@ class Canvas {
                     // Use app callback/event (handles matrix formatting)
                     this.emit('nodeCopy', node.id);
                 } else {
-                    // Fallback: use protocol directly, providing a minimal app for matrix formatting
+                    // Fallback: use protocol directly with formatMatrixAsText utility
                     try {
                         const wrapped = wrapNode(node);
                         const fallbackApp = {
-                            // Generic matrix formatting to avoid errors when app is not available
-                            formatMatrixAsText(matrix) {
-                                try {
-                                    const { context, rowItems, colItems, cells } = matrix;
-                                    let text = `## ${context}\n\n| |`;
-                                    for (const colItem of colItems) {
-                                        text += ` ${colItem} |`;
-                                    }
-                                    text += '\n|---|';
-                                    for (let c = 0; c < colItems.length; c++) {
-                                        text += '---|';
-                                    }
-                                    text += '\n';
-                                    for (let r = 0; r < rowItems.length; r++) {
-                                        text += `| ${rowItems[r]} |`;
-                                        for (let c = 0; c < colItems.length; c++) {
-                                            const cellKey = `${r}-${c}`;
-                                            const cell = cells[cellKey];
-                                            const content =
-                                                cell && cell.content
-                                                    ? cell.content.replace(/\n/g, ' ').replace(/\|/g, '\\|')
-                                                    : '';
-                                            text += ` ${content} |`;
-                                        }
-                                        text += '\n';
-                                    }
-                                    return text;
-                                } catch (e) {
-                                    return JSON.stringify(matrix);
-                                }
-                            },
+                            formatMatrixAsText,
                         };
                         await wrapped.copyToClipboard(this, fallbackApp);
                     } catch (err) {
