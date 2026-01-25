@@ -228,9 +228,23 @@ class MatrixNode extends BaseNode {
             cell.innerHTML = `<div class="matrix-cell-content">${canvas.escapeHtml(content)}</div>`;
         } else {
             cell.classList.remove('loading');
-            cell.classList.add('filled');
-            cell.classList.remove('empty');
-            cell.innerHTML = `<div class="matrix-cell-content">${canvas.escapeHtml(content)}</div>`;
+
+            // Check if content is empty
+            if (!content || content === '') {
+                // Show empty state with "+" button
+                cell.classList.add('empty');
+                cell.classList.remove('filled');
+                cell.innerHTML = `
+                    <div class="matrix-cell-empty">
+                        <button class="matrix-cell-fill" title="Fill with concise AI evaluation">+</button>
+                    </div>
+                `;
+            } else {
+                // Show filled state with content
+                cell.classList.add('filled');
+                cell.classList.remove('empty');
+                cell.innerHTML = `<div class="matrix-cell-content">${canvas.escapeHtml(content)}</div>`;
+            }
         }
         return true;
     }
@@ -249,14 +263,26 @@ class MatrixNode extends BaseNode {
             const [row, col] = cellKey.split('-').map(Number);
             const cellEl = wrapper.querySelector(`.matrix-cell[data-row="${row}"][data-col="${col}"]`);
             if (cellEl) {
-                const contentEl = cellEl.querySelector('.matrix-cell-content');
-                if (contentEl && cellData.content) {
-                    contentEl.textContent = cellData.content;
+                if (cellData.content) {
+                    // Cell has content - update it
+                    const contentEl = cellEl.querySelector('.matrix-cell-content');
+                    if (contentEl) {
+                        contentEl.textContent = cellData.content;
+                    } else {
+                        // Create content element if it doesn't exist
+                        cellEl.innerHTML = `<div class="matrix-cell-content">${canvas.escapeHtml(cellData.content)}</div>`;
+                    }
                     cellEl.classList.remove('empty');
                     cellEl.classList.add('filled');
-                } else if (!cellData.content) {
+                } else {
+                    // Cell is empty - show "+" button
                     cellEl.classList.add('empty');
                     cellEl.classList.remove('filled');
+                    cellEl.innerHTML = `
+                        <div class="matrix-cell-empty">
+                            <button class="matrix-cell-fill" title="Fill with concise AI evaluation">+</button>
+                        </div>
+                    `;
                 }
             }
         }
@@ -834,6 +860,20 @@ class MatrixFeature extends FeaturePlugin {
                 }
             });
         }
+    }
+
+    /**
+     * Get slash commands for this feature
+     * @returns {Array<Object>}
+     */
+    getSlashCommands() {
+        return [
+            {
+                command: '/matrix',
+                description: 'Create a matrix for cross-product evaluation',
+                placeholder: 'Enter matrix context (e.g., "Compare programming languages by performance")',
+            },
+        ];
     }
 
     /**
@@ -1669,7 +1709,14 @@ class MatrixFeature extends FeaturePlugin {
             title: cellTitle,
         });
 
-        this.graph.addNode(cellNode);
+        // Update matrix node's cells property directly
+        const currentNode = this.graph.getNode(matrixId);
+        if (currentNode) {
+            const cells = currentNode.cells || {};
+            const cellKey = `${row}-${col}`;
+            cells[cellKey] = { content, filled: true };
+            this.graph.updateNode(matrixId, { cells });
+        }
 
         // Create edge from matrix to cell (arrow points to the pinned cell)
         const edge = createEdge(matrixId, cellNode.id, EdgeType.MATRIX_CELL);
@@ -1905,9 +1952,9 @@ class MatrixFeature extends FeaturePlugin {
 
     /**
      * Handle node deselection - clear matrix cell highlights
-     * @param {string[]} selectedIds
+     * @param {string[]} _selectedIds
      */
-    handleNodeDeselect(selectedIds) {
+    handleNodeDeselect(_selectedIds) {
         this.canvas.clearMatrixCellHighlights();
     }
 }
