@@ -24,8 +24,10 @@ jobs:
 
             - name: Start dev server
               run: |
-                  pixi run dev &
-                  sleep 10
+                  pixi run dev > /tmp/dev.log 2>&1 &
+                  echo "Waiting for dev server to be ready..."
+                  timeout 60s bash -c 'until curl -s http://127.0.0.1:7865 > /dev/null; do sleep 2; done' || echo "Server failed to start within timeout"
+                  echo "Dev server is ready!"
               env:
                   CYPRESS_baseUrl: http://127.0.0.1:7865
 
