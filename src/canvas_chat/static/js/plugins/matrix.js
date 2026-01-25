@@ -493,6 +493,12 @@ class MatrixFeature extends FeaturePlugin {
     async onLoad() {
         console.log('[MatrixFeature] Loaded');
 
+        // Register undo/redo handlers
+        this.context.undoManager?.registerActionHandler('FILL_CELL', {
+            undo: this.undoFillCell.bind(this),
+            redo: this.redoFillCell.bind(this),
+        });
+
         // Register matrix creation modal
         const createModalTemplate = `
             <div id="matrix-main-modal" class="modal" style="display: none">
@@ -1433,6 +1439,54 @@ class MatrixFeature extends FeaturePlugin {
         cellModal.querySelector('#cell-col-item').textContent = colItem;
         cellModal.querySelector('#cell-content').textContent = cell.content;
         this.modalManager.showPluginModal('matrix', 'cell');
+    }
+
+    /**
+     * Undo a matrix cell fill
+     * @param {Object} action - The FILL_CELL action
+     */
+    undoFillCell(action) {
+        const matrixNode = this.graph.getNode(action.nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        const wrapped = wrapNode(matrixNode);
+        const cellKey = `${action.row}-${action.col}`;
+        const updatedCells = { ...matrixNode.cells, [cellKey]: { ...action.oldCell } };
+
+        // Update graph
+        this.graph.updateNode(action.nodeId, { cells: updatedCells });
+
+        // Update UI
+        wrapped.updateCellContent(
+            action.nodeId,
+            cellKey,
+            action.oldCell.filled ? action.oldCell.content : '',
+            false,
+            this.canvas
+        );
+
+        console.log(`[MatrixFeature] Undid cell fill: node=${action.nodeId}, row=${action.row}, col=${action.col}`);
+    }
+
+    /**
+     * Redo a matrix cell fill
+     * @param {Object} action - The FILL_CELL action
+     */
+    redoFillCell(action) {
+        const matrixNode = this.graph.getNode(action.nodeId);
+        if (!matrixNode || matrixNode.type !== NodeType.MATRIX) return;
+
+        const wrapped = wrapNode(matrixNode);
+        const cellKey = `${action.row}-${action.col}`;
+        const updatedCells = { ...matrixNode.cells, [cellKey]: { ...action.newCell } };
+
+        // Update graph
+        this.graph.updateNode(action.nodeId, { cells: updatedCells });
+
+        // Update UI
+        wrapped.updateCellContent(action.nodeId, cellKey, action.newCell.content || '', false, this.canvas);
+
+        console.log(`[MatrixFeature] Redid cell fill: node=${action.nodeId}, row=${action.row}, col=${action.col}`);
     }
 
     /**

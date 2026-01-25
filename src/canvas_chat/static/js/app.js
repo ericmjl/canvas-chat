@@ -4581,24 +4581,6 @@ print("Hello from Pyodide!")
                     this.canvas.renderNode(tagNode);
                 }
                 break;
-
-            case 'FILL_CELL':
-                // Restore old cell state (immutable pattern)
-                const matrixNodeUndo = this.graph.getNode(action.nodeId);
-                if (matrixNodeUndo) {
-                    const wrapped = wrapNode(matrixNodeUndo);
-                    const cellKey = `${action.row}-${action.col}`;
-                    const updatedCells = { ...matrixNodeUndo.cells, [cellKey]: { ...action.oldCell } };
-                    this.graph.updateNode(action.nodeId, { cells: updatedCells });
-                    wrapped.updateCellContent(
-                        action.nodeId,
-                        cellKey,
-                        action.oldCell.filled ? action.oldCell.content : '',
-                        false,
-                        this.canvas
-                    );
-                }
-                break;
         }
     }
 
@@ -4676,18 +4658,6 @@ print("Hello from Pyodide!")
                 const tagNodeRedo = this.graph.getNode(action.nodeId);
                 if (tagNodeRedo) {
                     this.canvas.renderNode(tagNodeRedo);
-                }
-                break;
-
-            case 'FILL_CELL':
-                // Re-apply cell fill (immutable pattern)
-                const matrixNodeRedo = this.graph.getNode(action.nodeId);
-                if (matrixNodeRedo) {
-                    const wrapped = wrapNode(matrixNodeRedo);
-                    const cellKey = `${action.row}-${action.col}`;
-                    const updatedCells = { ...matrixNodeRedo.cells, [cellKey]: { ...action.newCell } };
-                    this.graph.updateNode(action.nodeId, { cells: updatedCells });
-                    wrapped.updateCellContent(action.nodeId, cellKey, action.newCell.content || '', false, this.canvas);
                 }
                 break;
         }
