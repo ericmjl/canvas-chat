@@ -32,10 +32,15 @@ jobs:
                   start: pixi run dev
                   wait-on: http://127.0.0.1:7865
                   record: false
-                  config: |
-                      baseUrl=http://127.0.0.1:7865
-                      specPattern=cypress/e2e/**/*
-                      excludeSpecPattern=**/*ai*.cy.js
+                  spec: |
+                      cypress/e2e/canvas_interactions.cy.js
+                      cypress/e2e/help_modal.cy.js
+                      cypress/e2e/keyboard_interactions.cy.js
+                      cypress/e2e/new_canvas.cy.js
+                      cypress/e2e/node_selection.cy.js
+                      cypress/e2e/note_node.cy.js
+                      cypress/e2e/settings_modal.cy.js
+                      cypress/e2e/undo_redo.cy.js
 
             - name: Upload screenshots on failure
               uses: actions/upload-artifact@v4
@@ -101,9 +106,7 @@ jobs:
                   start: pixi run dev
                   wait-on: http://127.0.0.1:7865
                   record: false
-                  config: |
-                      baseUrl=http://127.0.0.1:7865
-                      specPattern="cypress/e2e/**/*ai*.cy.js"
+                  spec: cypress/e2e/**/*ai*.cy.js
 
             - name: Upload screenshots on failure
               uses: actions/upload-artifact@v4
