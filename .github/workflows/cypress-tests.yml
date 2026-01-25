@@ -82,6 +82,11 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
+            - name: Wait for Ollama to be healthy
+              run: |
+                  timeout 300 bash -c 'until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 2; done'
+                  echo "Ollama service is ready"
+
             - name: Cache Ollama model weights
               id: cache-ollama-model
               uses: actions/cache@v4
@@ -90,12 +95,11 @@ jobs:
                   key: ollama-gemma3n-e4b
                   restore-keys: |
                       ollama-gemma3n-
+                      ollama-gemma3n-e4b
 
             - name: Pull gemma3n:e4b model
               if: steps.cache-ollama-model.outputs.cache-hit != 'true'
               run: |
-                  # Wait for Ollama service to be healthy
-                  timeout 300 bash -c 'until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 2; done'
                   # Pull model (first time takes 2-5 minutes)
                   curl -sSf -X POST http://localhost:11434/api/pull -d '{"name":"gemma3n:e4b"}'
                   echo "Model pulled successfully"
