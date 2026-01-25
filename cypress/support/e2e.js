@@ -9,8 +9,10 @@ beforeEach(() => {
 // Custom command to clear IndexedDB
 Cypress.Commands.add('clearIndexedDB', () => {
     cy.window().then((win) => {
-        const request = win.indexedDB.deleteDatabase('canvas-chat');
-        request.onsuccess = () => cy.log('IndexedDB cleared');
-        request.onerror = (err) => cy.log('IndexedDB clear error:', err);
+        return new Promise((resolve, reject) => {
+            const request = win.indexedDB.deleteDatabase('canvas-chat');
+            request.onsuccess = () => resolve();
+            request.onerror = (err) => reject(err);
+        });
     });
 });
