@@ -13,7 +13,7 @@ describe('Canvas Pan and Zoom', () => {
         cy.get('#canvas').as('canvas');
 
         // Store initial transform
-        cy.get('#canvas svg').invoke('attr', 'transform').as('initialTransform');
+        cy.get('#canvas').invoke('attr', 'transform').as('initialTransform');
 
         // Simulate drag pan (mouse down, move, mouse up)
         cy.get('#canvas')
@@ -22,7 +22,7 @@ describe('Canvas Pan and Zoom', () => {
             .trigger('mouseup');
 
         // Verify canvas transform changed
-        cy.get('#canvas svg').invoke('attr', 'transform').should('not.equal', '@initialTransform');
+        cy.get('#canvas').invoke('attr', 'transform').should('not.equal', '@initialTransform');
     });
 
     it('zooms canvas with mouse wheel', () => {
@@ -30,12 +30,12 @@ describe('Canvas Pan and Zoom', () => {
         cy.get('#chat-input').type('/note Zoom me{enter}');
 
         // Get initial transform
-        cy.get('#canvas svg').invoke('attr', 'transform').as('initialTransform');
+        cy.get('#canvas').invoke('attr', 'transform').as('initialTransform');
 
         // Simulate scroll wheel zoom
         cy.get('#canvas').trigger('wheel', { deltaY: -100 }); // Negative = zoom in
 
         // Verify transform changed (scale changed)
-        cy.get('#canvas svg').invoke('attr', 'transform').should('not.equal', '@initialTransform');
+        cy.get('#canvas').invoke('attr', 'transform').should('not.equal', '@initialTransform');
     });
 });
