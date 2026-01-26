@@ -172,7 +172,15 @@ const pyodideRunner = (function() {
             await yieldToBrowser(10);
         }
 
-        const micropip = pyodide.pyimport('micropip');
+        // Ensure micropip is loaded before trying to use it
+        let micropip;
+        try {
+            micropip = pyodide.pyimport('micropip');
+        } catch (e) {
+            console.log('micropip not loaded, loading now...');
+            await pyodide.loadPackage('micropip');
+            micropip = pyodide.pyimport('micropip');
+        }
 
         for (const { importName, pipName } of toInstall) {
             try {

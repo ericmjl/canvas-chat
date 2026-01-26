@@ -1084,7 +1084,7 @@ class App {
                         const wrapped = wrapNode(node);
                         if (wrapped.supportsCodeExecution && wrapped.supportsCodeExecution()) {
                             e.preventDefault();
-                            this.handleNodeRunCode(selectedNodeIds[0]);
+                            this.canvas.emit('nodeRunCode', selectedNodeIds[0]);
                         }
                     }
                 }
@@ -1102,7 +1102,7 @@ class App {
                         // Check for AI-related actions
                         if (actions.some((a) => a.id === 'generate')) {
                             e.preventDefault();
-                            this.handleNodeGenerate(selectedNodeIds[0]);
+                            this.canvas.emit('nodeGenerate', selectedNodeIds[0]);
                         } else if (actions.some((a) => a.id === 'analyze')) {
                             e.preventDefault();
                             this.handleNodeAnalyze(selectedNodeIds[0]);
@@ -1245,13 +1245,7 @@ class App {
 
         // Fall through to built-in commands that haven't been migrated yet
         // Note: /note command is now handled by NoteFeature plugin
-
-        // Check for /code command
-        if (content.startsWith('/code')) {
-            const description = content.slice(5).trim();
-            await this.handleCode(description);
-            return true;
-        }
+        // Note: /code command is now handled by CodeFeature plugin
 
         return false;
     }
@@ -1990,77 +1984,6 @@ class App {
     // Handle Run Code button click from CSV node (now handled via CSV node protocol)
 
     /**
-     * Handle /code slash command - creates a Code node, optionally with AI-generated code
-     * @param {string} description - Optional prompt for AI code generation
-     */
-    async handleCode(description) {
-        const selectedIds = this.canvas.getSelectedNodeIds();
-        const csvNodeIds = selectedIds.filter((id) => {
-            const node = this.graph.getNode(id);
-            return node && node.type === NodeType.CSV;
-        });
-
-        // Determine position based on all selected nodes
-        const position = selectedIds.length > 0 ? this.graph.autoPosition(selectedIds) : this.graph.autoPosition([]);
-
-        // Create code node with placeholder if we're generating, or template if not
-        let initialCode;
-        const hasPrompt = description && description.trim();
-
-        if (hasPrompt) {
-            // AI generation - start with placeholder
-            initialCode = '# Generating code...\n';
-        } else if (csvNodeIds.length > 0) {
-            // Template with CSV context
-            const csvNames = csvNodeIds.map((_id, i) => (csvNodeIds.length === 1 ? 'df' : `df${i + 1}`));
-            initialCode = `# Available DataFrames: ${csvNames.join(', ')}
-# Analyze the data
-
-import pandas as pd
-
-# Example: Display first few rows
-${csvNames[0]}.head()
-`;
-        } else {
-            // Standalone template
-            initialCode = `# Python code
-
-import numpy as np
-
-# Your code here
-print("Hello from Pyodide!")
-`;
-        }
-
-        const codeNode = createNode(NodeType.CODE, initialCode, {
-            position,
-            csvNodeIds: csvNodeIds, // Empty array if no CSVs
-        });
-
-        this.addUserNode(codeNode);
-
-        // Create edges from all selected nodes to code node
-        for (const nodeId of selectedIds) {
-            const edge = createEdge(nodeId, codeNode.id, EdgeType.REPLY);
-            this.graph.addEdge(edge);
-        }
-
-        this.canvas.updateAllEdges(this.graph);
-        this.canvas.updateAllNavButtonStates(this.graph);
-        this.saveSession();
-
-        // Preload Pyodide in the background so it's ready when user clicks Run
-        pyodideRunner.preload();
-
-        // If description provided, trigger AI generation
-        if (hasPrompt) {
-            // Use the currently selected model
-            const model = this.modelPicker.value;
-            await this.handleNodeGenerateSubmit(codeNode.id, description.trim(), model);
-        }
-    }
-
-    /**
      * Handle Analyze button click on CSV node - delegates to CsvNode protocol.
      * @param {string} nodeId - The CSV node ID
      */
@@ -2074,153 +1997,72 @@ print("Hello from Pyodide!")
     }
 
     /**
-     * Handle Run button click on Code node - executes Python with Pyodide
+     * Initialize the plugin system and register built-in features.
+     * MUST be called before loadSession() since features may be accessed during session loading.
+     */
+    async initializePluginSystem() {
+        // Create AppContext for dependency injection
+        const appContext = new AppContext(this);
+        this.featureRegistry.setAppContext(appContext);
+
+        // Register all built-in features (handles 6 features automatically)
+        await this.featureRegistry.registerBuiltInFeatures();
+
+        // Note: Canvas event handlers are already registered by featureRegistry.register()
+
+        // Inject FeatureRegistry into slash command menu so it can show feature plugin commands
+        setFeatureRegistry(this.featureRegistry);
+
+        // Update file input accept attribute based on registered file upload handlers
+        this.updateFileInputAcceptAttribute();
+    }
+
+    /**
+     * Update the file input accept attribute based on registered file upload handlers
+     */
+    async updateFileInputAcceptAttribute() {
+        const { FileUploadRegistry } = await import('./file-upload-registry.js');
+        const fileInput = document.getElementById('pdf-file-input');
+        if (fileInput) {
+            const acceptAttr = FileUploadRegistry.getAcceptAttribute();
+            fileInput.setAttribute('accept', acceptAttr);
+            console.log('[App] Updated file input accept attribute:', acceptAttr);
+        }
+
+        // TODO (Task 4.3): Load additional plugins from config file
+        // await this.featureRegistry.loadPluginsFromConfig();
+
+        // Dispatch event so external plugins can register features
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('app-plugin-system-ready', { detail: { app: this } }));
+        }
+
+        console.log('[App] Plugin system initialized');
+    }
+
+    /**
+     * Handle output clear button click - delegates to CodeFeature plugin
      * @param {string} nodeId - The Code node ID
      */
-    async handleNodeRunCode(nodeId) {
-        const codeNode = this.graph.getNode(nodeId);
-        if (!codeNode) return;
-        const wrapped = wrapNode(codeNode);
-        if (!wrapped.supportsCodeExecution || !wrapped.supportsCodeExecution()) return;
+    handleNodeOutputClear(nodeId) {
+        this.canvas.emit('nodeOutputClear', nodeId);
+    }
 
-        // Get code from node via protocol
-        const code = wrapped.getCode() || '';
+    /**
+     * Handle output toggle button click - delegates to CodeFeature plugin
+     * @param {string} nodeId - The Code node ID
+     */
+    handleNodeOutputToggle(nodeId) {
+        this.canvas.emit('nodeOutputToggle', nodeId);
+    }
 
-        console.log('🏃 Running code, length:', code.length, 'chars');
-
-        const csvNodeIds = codeNode.csvNodeIds || [];
-
-        // Build csvDataMap from linked CSV nodes
-        const csvDataMap = {};
-        csvNodeIds.forEach((csvId, index) => {
-            const csvNode = this.graph.getNode(csvId);
-            if (csvNode && csvNode.csvData) {
-                const varName = csvNodeIds.length === 1 ? 'df' : `df${index + 1}`;
-                csvDataMap[varName] = csvNode.csvData;
-            }
-        });
-
-        // Set execution state to 'running' and re-render the node
-        // (CodeNode.renderContent() handles showing the "Running..." indicator)
-        this.graph.updateNode(nodeId, {
-            executionState: 'running',
-            lastError: null,
-            installProgress: [], // Track installation messages
-            outputExpanded: false, // Start collapsed
-        });
-        this.canvas.renderNode(this.graph.getNode(nodeId));
-
-        // Collect installation progress messages
-        const installMessages = [];
-        let drawerOpenedForInstall = false;
-
-        const onInstallProgress = (msg) => {
-            installMessages.push(msg);
-
-            // On first message, expand drawer with animation
-            if (!drawerOpenedForInstall) {
-                this.graph.updateNode(nodeId, {
-                    installProgress: [...installMessages],
-                    outputExpanded: true, // Expand it
-                });
-                // Re-render to create drawer in expanded state (will animate automatically)
-                this.canvas.renderNode(this.graph.getNode(nodeId));
-                drawerOpenedForInstall = true;
-            } else {
-                // For subsequent messages, just update the content without re-rendering
-                this.graph.updateNode(nodeId, {
-                    installProgress: [...installMessages],
-                });
-                const node = this.graph.getNode(nodeId);
-                this.canvas.updateOutputPanelContent(nodeId, node);
-            }
-        };
-
-        try {
-            // Run code with Pyodide and installation progress callback
-            const result = await pyodideRunner.run(code, csvDataMap, onInstallProgress);
-
-            // Check for Python errors returned from Pyodide
-            if (result.error) {
-                this.graph.updateNode(nodeId, {
-                    executionState: 'error',
-                    lastError: result.error,
-                    outputStdout: result.stdout?.trim() || null, // May have partial stdout before error
-                    outputHtml: null,
-                    outputText: null,
-                    outputExpanded: true,
-                    installProgress: null, // Clear installation progress
-                });
-                this.canvas.renderNode(this.graph.getNode(nodeId));
-                this.saveSession();
-                return;
-            }
-
-            // Store stdout and result in the node for inline display
-            const stdout = result.stdout?.trim() || null;
-            const resultHtml = result.resultHtml || null;
-            const resultText = result.resultText || null;
-
-            // Only auto-expand if there's actual output to show
-            const hasOutput = !!(stdout || resultHtml || resultText);
-
-            // Update node with output for inline drawer display
-            // Keep drawer open if it was opened for installation, or open it if there's output
-            // Keep installProgress to preserve drawer, but mark as complete
-            this.graph.updateNode(nodeId, {
-                executionState: 'idle',
-                lastError: null,
-                outputStdout: stdout,
-                outputHtml: resultHtml,
-                outputText: resultText,
-                outputExpanded: drawerOpenedForInstall || hasOutput, // Keep open if installation opened it, or if there's output
-                installProgress: drawerOpenedForInstall ? installMessages : null, // Keep messages if drawer was opened
-                installComplete: drawerOpenedForInstall, // Mark installation as complete
-            });
-
-            // Create child nodes only for figures (they need visual space)
-            if (result.figures && result.figures.length > 0) {
-                for (let i = 0; i < result.figures.length; i++) {
-                    const dataUrl = result.figures[i];
-                    // dataUrl is already "data:image/png;base64,..." from pyodide-runner
-                    // Extract just the base64 part for ImageNode
-                    const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-                    if (base64Match) {
-                        const position = this.graph.autoPosition([nodeId]);
-                        const outputNode = createNode(NodeType.IMAGE, '', {
-                            position,
-                            title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`,
-                            imageData: base64Match[2],
-                            mimeType: base64Match[1],
-                        });
-
-                        this.graph.addNode(outputNode);
-                        const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
-                        this.graph.addEdge(edge);
-                        this.canvas.renderNode(outputNode);
-                    }
-                }
-            }
-
-            // Re-render code node to clear "Running..." and show output drawer
-            this.canvas.renderNode(this.graph.getNode(nodeId));
-            this.canvas.updateAllEdges(this.graph);
-            this.canvas.updateAllNavButtonStates(this.graph);
-            this.saveSession();
-        } catch (error) {
-            // Show error in the inline drawer (not as child node)
-            this.graph.updateNode(nodeId, {
-                executionState: 'error',
-                lastError: error.message,
-                outputStdout: null,
-                outputHtml: null,
-                outputText: null,
-                outputExpanded: true,
-                installProgress: null, // Clear installation progress
-            });
-            this.canvas.renderNode(this.graph.getNode(nodeId));
-            this.saveSession();
-        }
+    /**
+     * Handle output resize - delegates to CodeFeature plugin
+     * @param {string} nodeId - The Code node ID
+     * @param {number} height - New height
+     */
+    handleNodeOutputResize(nodeId, height) {
+        this.canvas.emit('nodeOutputResize', nodeId, height);
     }
 
     /**
@@ -2444,86 +2286,6 @@ print("Hello from Pyodide!")
             }));
 
         return { dataframeInfo, ancestorContext, existingCode };
-    }
-
-    /**
-     * Initialize the plugin system and register built-in features.
-     * MUST be called before loadSession() since features may be accessed during session loading.
-     */
-    async initializePluginSystem() {
-        // Create AppContext for dependency injection
-        const appContext = new AppContext(this);
-        this.featureRegistry.setAppContext(appContext);
-
-        // Register all built-in features (handles 6 features automatically)
-        await this.featureRegistry.registerBuiltInFeatures();
-
-        // Note: Canvas event handlers are already registered by featureRegistry.register()
-
-        // Inject FeatureRegistry into slash command menu so it can show feature plugin commands
-        setFeatureRegistry(this.featureRegistry);
-
-        // Update file input accept attribute based on registered file upload handlers
-        this.updateFileInputAcceptAttribute();
-    }
-
-    /**
-     * Update the file input accept attribute based on registered file upload handlers
-     */
-    async updateFileInputAcceptAttribute() {
-        const { FileUploadRegistry } = await import('./file-upload-registry.js');
-        const fileInput = document.getElementById('pdf-file-input');
-        if (fileInput) {
-            const acceptAttr = FileUploadRegistry.getAcceptAttribute();
-            fileInput.setAttribute('accept', acceptAttr);
-            console.log('[App] Updated file input accept attribute:', acceptAttr);
-        }
-
-        // TODO (Task 4.3): Load additional plugins from config file
-        // await this.featureRegistry.loadPluginsFromConfig();
-
-        // Dispatch event so external plugins can register features
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('app-plugin-system-ready', { detail: { app: this } }));
-        }
-
-        console.log('[App] Plugin system initialized');
-    }
-
-    /**
-     * Handle output clear button click
-     * @param {string} nodeId - The Code node ID
-     */
-    handleNodeOutputClear(nodeId) {
-        const node = this.graph.getNode(nodeId);
-        if (!node) return;
-        const wrapped = wrapNode(node);
-        if (!wrapped.hasOutput || !wrapped.hasOutput()) return;
-
-        this.graph.updateNode(nodeId, {
-            outputStdout: null,
-            outputHtml: null,
-            outputText: null,
-            lastError: null,
-            executionState: 'idle',
-        });
-        this.canvas.renderNode(this.graph.getNode(nodeId));
-        this.saveSession();
-    }
-
-    /**
-     * Handle output panel resize
-     * @param {string} nodeId - The Code node ID
-     * @param {number} height - The new panel height
-     */
-    handleNodeOutputResize(nodeId, height) {
-        const node = this.graph.getNode(nodeId);
-        if (!node) return;
-        const wrapped = wrapNode(node);
-        if (!wrapped.hasOutput || !wrapped.hasOutput()) return;
-
-        this.graph.updateNode(nodeId, { outputPanelHeight: height });
-        this.saveSession();
     }
 
     /**

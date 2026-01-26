@@ -4,19 +4,19 @@
  */
 
 import { EventEmitter } from './event-emitter.js';
-import { CanvasEvent, CancellableEvent } from './plugin-events.js';
-import { CommitteeFeature } from './plugins/committee.js';
-import { FlashcardFeature } from './plugins/flashcards.js';
-import { MatrixFeature } from './plugins/matrix.js';
-import { FactcheckFeature } from './plugins/factcheck.js';
-import { ResearchFeature } from './plugins/research.js';
+import { CancellableEvent, CanvasEvent } from './plugin-events.js';
 import { CodeFeature } from './plugins/code.js';
-import { NoteFeature } from './plugins/note.js';
+import { CommitteeFeature } from './plugins/committee.js';
+import { FactcheckFeature } from './plugins/factcheck.js';
+import { FlashcardFeature } from './plugins/flashcards.js';
 import { GitRepoFeature } from './plugins/git-repo.js';
+import { HighlightFeature } from './plugins/highlight.js';
+import { ImageGenerationFeature } from './plugins/image-generation.js';
+import { MatrixFeature } from './plugins/matrix.js';
+import { NoteFeature } from './plugins/note.js';
+import { ResearchFeature } from './plugins/research.js';
 import { UrlFetchFeature } from './plugins/url-fetch.js';
 import { YouTubeFeature } from './plugins/youtube.js';
-import { ImageGenerationFeature } from './plugins/image-generation.js';
-import { HighlightFeature } from './plugins/highlight.js';
 
 /**
  * Priority levels for slash command resolution
@@ -127,7 +127,12 @@ class FeatureRegistry {
             {
                 id: 'code',
                 feature: CodeFeature,
-                slashCommands: [], // Event-driven, no slash commands
+                slashCommands: [
+                    {
+                        command: '/code',
+                        handler: 'handleCommand',
+                    },
+                ],
                 priority: PRIORITY.BUILTIN,
             },
             {

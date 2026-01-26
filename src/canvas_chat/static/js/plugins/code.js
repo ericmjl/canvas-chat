@@ -7,15 +7,12 @@
  * - CodeFeature (self-healing and error recovery)
  */
 
-import { BaseNode, Actions, HeaderButtons } from '../node-protocols.js';
-import { NodeRegistry } from '../node-registry.js';
-import { NodeType, DEFAULT_NODE_SIZES } from '../graph-types.js';
 import { FeaturePlugin } from '../feature-plugin.js';
+import { DEFAULT_NODE_SIZES, EdgeType, NodeType, createEdge, createNode } from '../graph-types.js';
+import { Actions, BaseNode, HeaderButtons, wrapNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 import { CancellableEvent } from '../plugin-events.js';
-import { EdgeType, createNode, createEdge } from '../graph-types.js';
 import { readSSEStream } from '../sse.js';
-import { wrapNode } from '../node-protocols.js';
-import { apiUrl } from '../utils.js';
 
 // =============================================================================
 // Code Node Protocol
@@ -433,6 +430,109 @@ export class CodeFeature extends FeaturePlugin {
         this.canvas.on('nodeGenerateSubmit', async (nodeId, prompt, model) => {
             await this.handleNodeGenerateSubmit(nodeId, prompt, model);
         });
+    }
+
+    /**
+     * Get slash commands for this feature
+     * @returns {Array<Object>}
+     */
+    getSlashCommands() {
+        return [
+            {
+                command: '/code',
+                description: 'Create a Python code node',
+                placeholder: 'Optional: Describe code to generate...',
+            },
+        ];
+    }
+
+    /**
+     * Handle slash command
+     * @param {string} command - The slash command
+     * @param {string} args - Command arguments
+     * @param {Object} context - Command context
+     * @returns {Promise<boolean>}
+     */
+    async handleCommand(command, args, context) {
+        if (command === '/code') {
+            await this.handleCodeCommand(args);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Handle /code slash command - creates a Code node, optionally with AI-generated code
+     * @param {string} description - Optional prompt for AI code generation
+     */
+    async handleCodeCommand(description) {
+        const selectedIds = this.canvas.getSelectedNodeIds();
+        const csvNodeIds = selectedIds.filter((id) => {
+            const node = this.graph.getNode(id);
+            return node && node.type === NodeType.CSV;
+        });
+
+        // Determine position based on all selected nodes
+        const position = selectedIds.length > 0 ? this.graph.autoPosition(selectedIds) : this.graph.autoPosition([]);
+
+        // Create code node with placeholder if we're generating, or template if not
+        let initialCode;
+        const hasPrompt = description && description.trim();
+
+        if (hasPrompt) {
+            // AI generation - start with placeholder
+            initialCode = '# Generating code...\n';
+        } else if (csvNodeIds.length > 0) {
+            // Template with CSV context
+            const csvNames = csvNodeIds.map((_id, i) => (csvNodeIds.length === 1 ? 'df' : `df${i + 1}`));
+            initialCode = `# Available DataFrames: ${csvNames.join(', ')}
+# Analyze the data
+
+import pandas as pd
+
+# Example: Display first few rows
+${csvNames[0]}.head()
+`;
+        } else {
+            // Standalone template
+            initialCode = `# Python code
+
+import numpy as np
+
+# Your code here
+print("Hello from Pyodide!")
+`;
+        }
+
+        const codeNode = createNode(NodeType.CODE, initialCode, {
+            position,
+            csvNodeIds: csvNodeIds,
+        });
+
+        this.graph.addNode(codeNode);
+        this.canvas.renderNode(codeNode);
+
+        // Create edges from all selected nodes to code node
+        for (const nodeId of selectedIds) {
+            const edge = createEdge(nodeId, codeNode.id, EdgeType.REPLY);
+            this.graph.addEdge(edge);
+        }
+
+        this.canvas.updateAllEdges(this.graph);
+        this.canvas.updateAllNavButtonStates(this.graph);
+        this.saveSession();
+
+        // Preload Pyodide in the background so it's ready when user clicks Run
+        if (this.pyodideRunner) {
+            this.pyodideRunner.preload();
+        }
+
+        // If description provided, trigger AI generation
+        if (hasPrompt) {
+            // Use the currently selected model
+            const model = this.modelPicker.value;
+            await this.handleNodeGenerateSubmit(codeNode.id, description.trim(), model);
+        }
     }
 
     /**
@@ -1123,7 +1223,7 @@ Output ONLY the corrected Python code, no explanations.`;
         });
 
         try {
-            const response = await fetch(apiUrl('/api/generate-code'), {
+            const response = await fetch(this.apiUrl('/api/generate-code'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(request),
