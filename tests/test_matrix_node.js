@@ -41,9 +41,9 @@ if (!global.indexedDB) {
 }
 
 // Now import modules
-import { assertTrue, assertFalse, assertEqual } from './test_helpers/assertions.js';
 import { createNode, NodeType } from '../src/canvas_chat/static/js/graph-types.js';
-import { wrapNode, HeaderButtons } from '../src/canvas_chat/static/js/node-protocols.js';
+import { HeaderButtons, wrapNode } from '../src/canvas_chat/static/js/node-protocols.js';
+import { assertEqual, assertFalse, assertTrue } from './test_helpers/assertions.js';
 
 async function asyncTest(description, fn) {
     try {
