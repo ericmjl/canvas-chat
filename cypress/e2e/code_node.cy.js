@@ -110,3 +110,125 @@ plt.show()`;
         cy.get('.node.code .code-display code').should('not.contain', 'Generating code');
     });
 });
+
+describe('Code Node Generate UI Workflow', () => {
+    beforeEach(() => {
+        cy.clearLocalStorage();
+        cy.clearIndexedDB();
+        cy.visit('/');
+        cy.wait(1000);
+    });
+
+    it('shows and cancels generate UI via cancel button', () => {
+        // Create code node
+        cy.get('#chat-input').type('/code');
+        cy.get('#send-btn').click();
+        cy.get('.node.code', { timeout: 5000 }).should('be.visible');
+
+        // Click Generate button
+        cy.get('.node.code .generate-btn').click();
+
+        // Verify generate UI appears
+        cy.get('.code-generate-input').should('be.visible');
+        cy.get('.generate-prompt-input').should('be.visible');
+        cy.get('.generate-model-select').should('be.visible');
+        cy.get('.generate-submit-btn').should('be.visible');
+        cy.get('.generate-cancel-btn').should('be.visible');
+
+        // Click Cancel
+        cy.get('.generate-cancel-btn').click();
+
+        // Verify generate UI is removed
+        cy.get('.code-generate-input').should('not.exist');
+    });
+
+    it('cancels generate UI via Escape key', () => {
+        // Create code node
+        cy.get('#chat-input').type('/code');
+        cy.get('#send-btn').click();
+        cy.get('.node.code', { timeout: 5000 }).should('be.visible');
+
+        // Click Generate button
+        cy.get('.node.code .generate-btn').click();
+        cy.get('.code-generate-input').should('be.visible');
+
+        // Press Escape on the input
+        cy.get('.generate-prompt-input').type('{esc}');
+
+        // Verify generate UI is removed
+        cy.get('.code-generate-input').should('not.exist');
+    });
+
+    it('generates code via inline generate UI', () => {
+        // Set up mock SSE response (reuse pattern from existing test)
+        const pythonCode = `print("Hello from generated code!")`;
+
+        // Build SSE response format - send each line as a separate 'data:' line
+        let sseResponse = '';
+        const lines = pythonCode.split('\n');
+        sseResponse += 'event: message\n';
+        for (const line of lines) {
+            sseResponse += `data: ${line}\n`;
+        }
+        sseResponse += '\n'; // End of event (double newline)
+        sseResponse += 'event: done\ndata: \n\n';
+
+        // Set up mock FIRST (before any other setup) to intercept the API call
+        cy.intercept('POST', '**/api/generate-code', (req) => {
+            // Verify the request contains the expected prompt
+            expect(req.body).to.have.property('prompt');
+            expect(req.body.prompt).to.include('hello world');
+
+            // Return mocked SSE stream response immediately (no real LLM call)
+            req.reply({
+                statusCode: 200,
+                headers: {
+                    'Content-Type': 'text/event-stream',
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                },
+                body: sseResponse,
+            });
+        }).as('generateCode');
+
+        // Wait for app to be fully initialized
+        cy.get('#chat-input', { timeout: 10000 }).should('be.visible');
+
+        // Wait for model picker to be ready (needed for code generation to work)
+        cy.get('#model-picker', { timeout: 10000 }).should('not.be.empty');
+
+        // Create code node
+        cy.get('#chat-input').type('/code');
+        cy.get('#send-btn').click();
+        cy.get('.node.code', { timeout: 5000 }).should('be.visible');
+
+        // Select any available model (we're mocking the response, so model doesn't matter)
+        cy.get('#model-picker').then(($select) => {
+            const firstOption = $select.find('option:not([value=""])').first();
+            if (firstOption.length > 0) {
+                cy.wrap($select).select(firstOption.val());
+            }
+        });
+
+        // Click Generate button
+        cy.get('.node.code .generate-btn').click();
+        cy.get('.code-generate-input').should('be.visible');
+
+        // Type prompt and submit
+        cy.get('.generate-prompt-input').type('Print hello world');
+        cy.get('.generate-submit-btn').click();
+
+        // Wait for API call
+        cy.wait('@generateCode', { timeout: 10000 });
+
+        // Wait for the SSE stream to be processed
+        cy.wait(1000);
+
+        // Verify generate UI is removed after submission
+        cy.get('.code-generate-input').should('not.exist');
+
+        // Verify generated code appears
+        cy.get('.node.code .code-display code', { timeout: 10000 })
+            .should('contain', 'Hello from generated code');
+    });
+});
