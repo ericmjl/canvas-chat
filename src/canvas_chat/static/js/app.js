@@ -38,7 +38,6 @@ import './plugins/summary.js'; // Side-effect import for SummaryNode plugin regi
 import './plugins/synthesis-node.js'; // Side-effect import for SynthesisNode plugin registration
 import './plugins/youtube-node.js'; // Side-effect import for YouTubeNode plugin registration
 // Note: poll.js is an external plugin - load via config.yaml
-import { extractExcerptText as _extractExcerptText } from './highlight-utils.js';
 import { wrapNode } from './node-protocols.js';
 import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { readSSEStream } from './sse.js';
@@ -1047,7 +1046,11 @@ class App {
                             const shiftMatches = !config.shift || e.shiftKey;
                             const ctrlMatches = !config.ctrl || e.ctrlKey || e.metaKey;
                             // Don't trigger if Ctrl/Cmd is pressed (unless required by shortcut)
-                            const noAccidentalCtrl = !config.ctrl || e.ctrlKey || e.metaKey;
+                            // If shortcut requires Ctrl: Ctrl must be pressed
+                            // If shortcut doesn't require Ctrl: Ctrl must NOT be pressed
+                            const noAccidentalCtrl = config.ctrl
+                                ? (e.ctrlKey || e.metaKey)
+                                : !(e.ctrlKey || e.metaKey);
 
                             if (keyMatches && shiftMatches && ctrlMatches && noAccidentalCtrl) {
                                 // Special handling for 'r' - focus chat input instead of emitting event
@@ -1058,6 +1061,7 @@ class App {
                                 }
 
                                 // Special handling for 'c' - don't trigger if Ctrl/Cmd is pressed
+                                // (This is redundant with noAccidentalCtrl check above, but kept for clarity)
                                 if (key === 'c' && (e.ctrlKey || e.metaKey)) {
                                     return; // Let browser handle Ctrl+C
                                 }

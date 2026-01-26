@@ -690,6 +690,35 @@ Run the dev server with `pixi run dev` before testing UI changes.
 **Important:** Never kill the dev server process. The developer runs it in reload mode,
 so code changes are automatically picked up. Just make your edits and the server will reload.
 
+### E2E tests (Cypress)
+
+**CRITICAL:** Always run relevant Cypress E2E tests when making UI changes, keyboard interactions, or feature modifications.
+
+```bash
+# Run a specific Cypress test file
+pixi run npx cypress run --browser chrome --headless cypress/e2e/matrix.cy.js
+
+# Run with Electron instead of Chrome
+pixi run npx cypress run --browser electron --headless cypress/e2e/matrix.cy.js
+```
+
+**Test pattern:** `pixi run npx cypress run --browser [chrome|electron] --headless /path/to/test.cy.js`
+
+**E2E test files:**
+
+- `cypress/e2e/ai_chat.cy.js` - AI chat interaction tests
+- `cypress/e2e/matrix.cy.js` - Matrix creation and interaction tests
+- `cypress/e2e/matrix_undo_redo.cy.js` - Matrix undo/redo tests
+- `cypress/e2e/matrix_copy.cy.js` - Matrix copy-to-clipboard tests
+- `cypress/e2e/note_node.cy.js` - Note node tests
+- `cypress/e2e/settings_modal.cy.js` - Settings modal tests
+- `cypress/e2e/keyboard_interactions.cy.js` - Keyboard shortcut tests
+- `cypress/e2e/canvas_interactions.cy.js` - Canvas pan/zoom/select tests
+- `cypress/e2e/node_selection.cy.js` - Node selection behavior tests
+- `cypress/e2e/help_modal.cy.js` - Help modal tests
+- `cypress/e2e/new_canvas.cy.js` - New canvas creation tests
+- `cypress/e2e/undo_redo.cy.js` - Global undo/redo tests
+
 ### Unit tests
 
 Write unit tests for logic that does not require API calls:

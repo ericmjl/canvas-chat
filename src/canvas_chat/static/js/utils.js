@@ -428,7 +428,6 @@ export {
     formatUserError,
     truncateText,
     escapeHtmlText,
-    formatMatrixAsText,
     buildMessagesForApi,
     applySM2,
     isFlashcardDue,

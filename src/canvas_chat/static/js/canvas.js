@@ -6,7 +6,7 @@ import { EventEmitter } from './event-emitter.js';
 import { wrapNode } from './node-protocols.js';
 import { NodeType, getDefaultNodeSize } from './graph-types.js';
 import { highlightTextInHtml } from './highlight-utils.js';
-import { escapeHtmlText, formatMatrixAsText, truncateText } from './utils.js';
+import { escapeHtmlText, truncateText } from './utils.js';
 import { findScrollableContainer } from './scroll-utils.js';
 
 /**
@@ -2673,16 +2673,13 @@ class Canvas {
                 e.stopPropagation();
                 // Check if there are listeners (legacy callback or event listeners)
                 if (this.onNodeCopy || this.events.listenerCount('nodeCopy') > 0) {
-                    // Use app callback/event (handles matrix formatting)
+                    // Use app callback/event
                     this.emit('nodeCopy', node.id);
                 } else {
-                    // Fallback: use protocol directly with formatMatrixAsText utility
+                    // Use protocol directly (nodes handle their own formatting)
                     try {
                         const wrapped = wrapNode(node);
-                        const fallbackApp = {
-                            formatMatrixAsText,
-                        };
-                        await wrapped.copyToClipboard(this, fallbackApp);
+                        await wrapped.copyToClipboard(this, null);
                     } catch (err) {
                         console.error('Failed to copy:', err);
                     }
