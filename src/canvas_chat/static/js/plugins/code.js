@@ -1021,31 +1021,65 @@ Output ONLY the corrected Python code, no explanations.`;
 
         // Execute code with Pyodide
         try {
-            const result = await pyodideRunner.runPython(code, csvDataMap, onInstallProgress);
+            const result = await this.pyodideRunner.run(code, csvDataMap, onInstallProgress);
+
+            // Extract output fields from result
+            const stdout = result.stdout?.trim() || null;
+            const resultHtml = result.resultHtml || null;
+            const resultText = result.resultText || null;
+            const hasOutput = !!(stdout || resultHtml || resultText);
 
             // Update node with execution results
-            this.graph.updateNode(nodeId, {
-                executionState: 'success',
-                lastError: null,
-                installProgress: [],
-            });
-            this.canvas.renderNode(this.graph.getNode(nodeId));
-
-            // Update output if code printed something
-            if (result && result.stdout) {
-                this.graph.updateNode(nodeId, {
-                    output: result.stdout,
-                });
-            }
-
-            // Show error if code raised an exception
-            if (result && result.stderr) {
+            if (result.error) {
+                // Show error if code raised an exception
                 this.graph.updateNode(nodeId, {
                     executionState: 'error',
-                    lastError: result.stderr,
+                    lastError: result.error,
+                    outputStdout: stdout,
+                    outputHtml: null,
+                    outputText: null,
+                    outputExpanded: true, // Show panel for errors
+                    installProgress: drawerOpenedForInstall ? installMessages : null,
                 });
+            } else {
+                // Success - update with output
+                this.graph.updateNode(nodeId, {
+                    executionState: 'idle',
+                    lastError: null,
+                    outputStdout: stdout,
+                    outputHtml: resultHtml,
+                    outputText: resultText,
+                    outputExpanded: drawerOpenedForInstall || hasOutput, // Show panel if there's output
+                    installProgress: drawerOpenedForInstall ? installMessages : null,
+                    installComplete: drawerOpenedForInstall,
+                });
+
+                // Create child nodes for figures
+                if (result.figures && result.figures.length > 0) {
+                    for (let i = 0; i < result.figures.length; i++) {
+                        const dataUrl = result.figures[i];
+                        const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+                        if (base64Match) {
+                            const position = this.graph.autoPosition([nodeId]);
+                            const outputNode = createNode(NodeType.IMAGE, '', {
+                                position,
+                                title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`,
+                                imageData: base64Match[2],
+                                mimeType: base64Match[1],
+                            });
+
+                            this.graph.addNode(outputNode);
+                            const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
+                            this.graph.addEdge(edge);
+                            this.canvas.renderNode(outputNode);
+                        }
+                    }
+                }
             }
 
+            this.canvas.renderNode(this.graph.getNode(nodeId));
+            this.canvas.updateAllEdges(this.graph);
+            this.canvas.updateAllNavButtonStates(this.graph);
             this.saveSession();
         } catch (error) {
             console.error('Code execution error:', error);
@@ -1078,6 +1112,19 @@ Output ONLY the corrected Python code, no explanations.`;
             lastError: null,
         });
 
+        // Update the visual display of the node
+        const updatedNode = this.graph.getNode(nodeId);
+        if (updatedNode) {
+            const wrapped = wrapNode(updatedNode);
+            // Use updateContent for in-place updates (more efficient than full render)
+            if (wrapped.updateContent) {
+                wrapped.updateContent(nodeId, code, false, this.canvas);
+            } else {
+                // Fallback to full render if updateContent not available
+                this.canvas.renderNode(updatedNode);
+            }
+        }
+
         // Update node title based on code
         const wrapped = wrapNode(node);
         if (typeof wrapped.updateTitle === 'function') {
@@ -1088,12 +1135,17 @@ Output ONLY the corrected Python code, no explanations.`;
     }
 
     /**
-     * Handle Edit button click on Code node - opens edit modal
+     * Handle Edit button click on Code node - opens code editor modal
      * @param {string} nodeId - The Code node ID
      */
     async handleNodeEditCode(nodeId) {
-        // Emit nodeEditContent for the app's edit-content modal handler
-        this.canvas.emit('nodeEditContent', nodeId);
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+        const wrapped = wrapNode(node);
+        if (!wrapped.supportsCodeExecution || !wrapped.supportsCodeExecution()) return;
+
+        // Open the code editor modal directly (not the edit content modal)
+        this.modalManager.showCodeEditorModal(nodeId);
     }
 
     /**
@@ -1144,7 +1196,7 @@ Output ONLY the corrected Python code, no explanations.`;
                 });
 
                 // Run introspection
-                dataframeInfo = await pyodideRunner.introspectDataFrames(csvDataMap);
+                dataframeInfo = await this.pyodideRunner.introspectDataFrames(csvDataMap);
 
                 console.log('📊 DataFrame introspection results:', dataframeInfo);
 

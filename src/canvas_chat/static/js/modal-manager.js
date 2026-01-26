@@ -11,10 +11,9 @@
  * - escapeHtmlText: HTML escaping utility
  */
 
-import { storage } from './storage.js';
-import { escapeHtmlText, apiUrl } from './utils.js';
-import { NodeType as _NodeType } from './graph-types.js';
 import { wrapNode } from './node-protocols.js';
+import { storage } from './storage.js';
+import { apiUrl, escapeHtmlText } from './utils.js';
 
 /**
  *
@@ -952,19 +951,16 @@ class ModalManager {
             return;
         }
 
-        // Update code via graph
-        this.app.graph.updateNode(this.app.editingCodeNodeId, { code: newCode, content: newCode });
+        // Store nodeId before closing modal (since hideCodeEditorModal clears editingCodeNodeId)
+        const nodeId = this.app.editingCodeNodeId;
 
-        // Update the code display in the node (uses highlight.js)
-        const codeNode = this.app.graph.getNode(this.app.editingCodeNodeId);
-        if (codeNode) {
-            const codeWrapped = wrapNode(codeNode);
-            codeWrapped.updateContent(this.app.editingCodeNodeId, newCode, false, this.app.canvas);
-        }
-
-        // Close modal and save
+        // Close modal first to clear state
         this.hideCodeEditorModal();
-        this.app.saveSession();
+
+        // Emit nodeCodeChange event so CodeFeature can handle it properly
+        // This ensures execution state is cleared and title is updated
+        // Note: We emit after closing the modal to prevent any modal state conflicts
+        this.app.canvas.emit('nodeCodeChange', nodeId, newCode);
     }
 
     // --- Edit Title Modal ---
