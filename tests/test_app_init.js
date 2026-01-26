@@ -165,9 +165,11 @@ test('App event listener methods exist', () => {
         'handleCreateFlashcards',
         'handleFlipCard',
         'reviewSingleCard',
-        'handleNodeRunCode',
+        // Note: handleNodeRunCode migrated to CodeFeature plugin
+        // This method is now accessed via canvas events -> CodeFeature.getCanvasEventHandlers()
         'handleNodeCodeChange',
-        'handleCode',
+        // Note: handleCode migrated to CodeFeature plugin
+        // This method is now accessed via CodeFeature.handleCommand('/code', ...)
         'handleSend',
         'undo',
         'redo',
