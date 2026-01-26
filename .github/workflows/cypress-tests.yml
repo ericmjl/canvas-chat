@@ -91,18 +91,31 @@ jobs:
               id: cache-ollama-model
               uses: actions/cache@v4
               with:
-                  path: ~/.ollama/models
+                  # Cache path must match Docker volume mount: /home/runner/.ollama:/root/.ollama
+                  path: /home/runner/.ollama
                   key: ollama-gemma3n-e4b
                   restore-keys: |
                       ollama-gemma3n-
                       ollama-gemma3n-e4b
 
-            - name: Pull gemma3n:e4b model
-              if: steps.cache-ollama-model.outputs.cache-hit != 'true'
+            - name: Check if model exists and pull if needed
               run: |
-                  # Pull model (first time takes 2-5 minutes)
-                  curl -sSf -X POST http://localhost:11434/api/pull -d '{"name":"gemma3n:e4b"}'
-                  echo "Model pulled successfully"
+                  # Check if model is already available in Ollama
+                  MODEL_EXISTS=$(curl -s http://localhost:11434/api/tags | grep -o '"name":"gemma3n:e4b"' || echo "")
+
+                  if [ -z "$MODEL_EXISTS" ]; then
+                      if [ "${{ steps.cache-ollama-model.outputs.cache-hit }}" == "true" ]; then
+                          echo "Cache hit: Model files restored, but Ollama doesn't see them yet"
+                          echo "This can happen if Ollama's manifest is out of sync with cached files"
+                      else
+                          echo "Cache miss: Model not in cache, will download from internet"
+                      fi
+                      # Pull model (will use cached files if available, otherwise downloads)
+                      curl -sSf -X POST http://localhost:11434/api/pull -d '{"name":"gemma3n:e4b"}'
+                      echo "Model pull completed"
+                  else
+                      echo "Model already exists in Ollama, skipping pull"
+                  fi
 
             - name: Run Cypress (AI tests only)
               uses: cypress-io/github-action@v7
