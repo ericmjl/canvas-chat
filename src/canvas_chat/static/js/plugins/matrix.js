@@ -7,23 +7,22 @@
  * - MatrixFeature (slash command and event handling)
  */
 
+import { FeaturePlugin } from '../feature-plugin.js';
 import {
-    NodeType,
-    EdgeType,
-    createMatrixNode,
     createCellNode,
-    createRowNode,
     createColumnNode,
     createEdge,
+    createMatrixNode,
+    createRowNode,
     DEFAULT_NODE_SIZES,
+    EdgeType,
+    NodeType,
 } from '../graph-types.js';
-import { streamSSEContent } from '../sse.js';
-import { apiUrl, escapeHtmlText, buildMessagesForApi } from '../utils.js';
-import { BaseNode, HeaderButtons } from '../node-protocols.js';
+import { BaseNode, HeaderButtons, wrapNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
-import { FeaturePlugin } from '../feature-plugin.js';
 import { CancellableEvent } from '../plugin-events.js';
-import { wrapNode } from '../node-protocols.js';
+import { streamSSEContent } from '../sse.js';
+import { apiUrl, buildMessagesForApi, escapeHtmlText } from '../utils.js';
 
 // =============================================================================
 // Matrix Node Protocol
@@ -172,23 +171,6 @@ class MatrixNode extends BaseNode {
     }
 
     /**
-     *
-     * @param canvas
-     * @param app
-     */
-    async copyToClipboard(canvas, app) {
-        // Format matrix as markdown table
-        if (!app?.formatMatrixAsText) {
-            console.error('MatrixNode.copyToClipboard: app.formatMatrixAsText is not available');
-            return;
-        }
-        const text = app.formatMatrixAsText(this.node);
-        if (!text) return;
-        await navigator.clipboard.writeText(text);
-        canvas.showCopyFeedback(this.node.id);
-    }
-
-    /**
      * Format node content for summary generation.
      * Matrix nodes need special formatting to describe structure.
      * @returns {string}
@@ -202,6 +184,45 @@ class MatrixNode extends BaseNode {
             `Columns: ${this.node.colItems?.join(', ')}\n` +
             `Progress: ${filledCells}/${totalCells} cells filled`
         );
+    }
+
+    /**
+     * Format this matrix node for copying to clipboard.
+     * Returns markdown table representation of the matrix.
+     * @returns {string} Markdown table string
+     */
+    formatForClipboard() {
+        const { context, rowItems, colItems, cells } = this.node;
+
+        let text = `## ${context}\n\n`;
+
+        // Header row
+        text += '| |';
+        for (const colItem of colItems) {
+            text += ` ${colItem} |`;
+        }
+        text += '\n';
+
+        // Separator row
+        text += '|---|';
+        for (let c = 0; c < colItems.length; c++) {
+            text += '---|';
+        }
+        text += '\n';
+
+        // Data rows
+        for (let r = 0; r < rowItems.length; r++) {
+            text += `| ${rowItems[r]} |`;
+            for (let c = 0; c < colItems.length; c++) {
+                const cellKey = `${r}-${c}`;
+                const cell = cells[cellKey];
+                const content = cell && cell.content ? cell.content.replace(/\n/g, ' ').replace(/\|/g, '\\|') : '';
+                text += ` ${content} |`;
+            }
+            text += '\n';
+        }
+
+        return text;
     }
 
     /**
@@ -290,13 +311,47 @@ class MatrixNode extends BaseNode {
     }
 
     /**
-     * Get the table element for resize operations.
-     * @param {string} nodeId - The node ID
-     * @param {Canvas} canvas - Canvas instance
-     * @returns {HTMLElement|null}
+     * Copy node content to clipboard.
+     * Matrix nodes use markdown table format for easy sharing.
+     *
+     * Protocol pattern: Use `this.formatForClipboard()` instead of external dependencies.
+     * This ensures the method is self-contained and doesn't rely on App methods.
+     *
+     * @param {Canvas} canvas - Canvas instance for feedback
+     * @param {App} _app - App instance (unused, kept for protocol compatibility)
+     * @returns {Promise<void>}
      */
-    getTableElement(nodeId, canvas) {
-        return this.getElement(nodeId, '.matrix-table', canvas);
+    async copyToClipboard(canvas, _app) {
+        // Validate required method exists (defensive programming)
+        if (typeof this.formatForClipboard !== 'function') {
+            console.error(
+                'MatrixNode.copyToClipboard: formatForClipboard() method not found. ' +
+                'This should never happen - check MatrixNode class definition.'
+            );
+            return;
+        }
+
+        // Validate canvas parameter
+        if (!canvas || typeof canvas.showCopyFeedback !== 'function') {
+            console.error(
+                'MatrixNode.copyToClipboard: canvas.showCopyFeedback is not available. ' +
+                'Ensure canvas parameter is provided and has showCopyFeedback method.'
+            );
+            return;
+        }
+
+        try {
+            const text = this.formatForClipboard();
+            if (!text) {
+                console.warn('MatrixNode.copyToClipboard: formatForClipboard() returned empty string');
+                return;
+            }
+            await navigator.clipboard.writeText(text);
+            canvas.showCopyFeedback(this.node.id);
+        } catch (err) {
+            console.error('MatrixNode.copyToClipboard: Failed to copy to clipboard:', err);
+            // Don't throw - fail gracefully so UI doesn't break
+        }
     }
 
     /**
@@ -506,10 +561,6 @@ class MatrixFeature extends FeaturePlugin {
         this._editMatrixData = null;
         this._currentCellData = null;
         this._currentSliceData = null;
-
-        // Legacy streaming state - kept for backwards compatibility during migration
-        // TODO: Remove after StreamingManager migration is complete
-        this.streamingMatrixCells = new Map();
     }
 
     /**
@@ -1279,14 +1330,6 @@ class MatrixFeature extends FeaturePlugin {
             this.canvas.showStopButton(nodeId);
         }
 
-        // Legacy tracking for backwards compatibility
-        let cellControllers = this.streamingMatrixCells.get(nodeId);
-        if (!cellControllers) {
-            cellControllers = new Map();
-            this.streamingMatrixCells.set(nodeId, cellControllers);
-        }
-        cellControllers.set(cellKey, abortController);
-
         try {
             // Extension hook: matrix:cell:prompt - allow plugins to customize the prompt/request
             const promptEvent = new CancellableEvent('matrix:cell:prompt', {
@@ -1432,15 +1475,6 @@ class MatrixFeature extends FeaturePlugin {
             const groupNodes = this.streamingManager.getGroupNodes(`matrix-${nodeId}`);
             if (groupNodes.size === 0) {
                 this.canvas.hideStopButton(nodeId);
-            }
-
-            // Legacy cleanup
-            const controllers = this.streamingMatrixCells.get(nodeId);
-            if (controllers) {
-                controllers.delete(cellKey);
-                if (controllers.size === 0) {
-                    this.streamingMatrixCells.delete(nodeId);
-                }
             }
         }
     }
@@ -1909,7 +1943,6 @@ class MatrixFeature extends FeaturePlugin {
         this._currentCellData = null;
         this._currentSliceData = null;
         // StreamingManager handles cleanup via clear() when session changes
-        this.streamingMatrixCells.clear();
     }
 
     /**

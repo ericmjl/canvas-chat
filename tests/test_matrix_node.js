@@ -41,7 +41,7 @@ if (!global.indexedDB) {
 }
 
 // Now import modules
-import { assertTrue, assertEqual } from './test_helpers/assertions.js';
+import { assertTrue, assertFalse, assertEqual } from './test_helpers/assertions.js';
 import { createNode, NodeType } from '../src/canvas_chat/static/js/graph-types.js';
 import { wrapNode, HeaderButtons } from '../src/canvas_chat/static/js/node-protocols.js';
 
@@ -258,24 +258,76 @@ await asyncTest('MatrixNode isScrollable returns true', async () => {
     assertTrue(wrapped.isScrollable(), 'MatrixNode should be scrollable');
 });
 
-// Test: MatrixNode wrapNode integration
-await asyncTest('wrapNode returns MatrixNode for MATRIX type', async () => {
+// Test: MatrixNode formatForClipboard
+await asyncTest('MatrixNode formatForClipboard: basic 2x2 matrix', async () => {
     await import('../src/canvas_chat/static/js/plugins/matrix.js');
 
     const node = {
+        id: 'test-matrix',
         type: NodeType.MATRIX,
-        content: '',
-        context: 'Test',
-        rowItems: [],
-        colItems: [],
-        cells: {},
+        context: 'Compare products',
+        rowItems: ['Product A', 'Product B'],
+        colItems: ['Price', 'Quality'],
+        cells: {
+            '0-0': { content: '$10', filled: true },
+            '0-1': { content: 'Good', filled: true },
+            '1-0': { content: '$20', filled: true },
+            '1-1': { content: 'Excellent', filled: true },
+        },
     };
     const wrapped = wrapNode(node);
+    const result = wrapped.formatForClipboard();
 
-    // Verify it's wrapped correctly (not BaseNode)
-    assertTrue(wrapped.getTypeLabel() === 'Matrix', 'Should return Matrix node protocol');
-    assertTrue(wrapped.getTypeIcon() === '📊', 'Should have matrix icon');
-    assertTrue(wrapped.getContentClasses() === 'matrix-table-container', 'Should have matrix content class');
+    assertTrue(result.includes('## Compare products'), 'Should have header');
+    assertTrue(result.includes('| Product A |'), 'Should have row item');
+    assertTrue(result.includes('| Price |'), 'Should have col item');
+    assertTrue(result.includes('|---|'), 'Should have separator row');
+    assertTrue(result.includes('$10'), 'Should have cell content');
+    assertTrue(result.includes('Excellent'), 'Should have cell content');
+});
+
+await asyncTest('MatrixNode formatForClipboard: empty cells', async () => {
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
+
+    const node = {
+        id: 'test-matrix',
+        type: NodeType.MATRIX,
+        context: 'Empty matrix',
+        rowItems: ['Row 1'],
+        colItems: ['Col 1'],
+        cells: {
+            '0-0': { content: null, filled: false },
+        },
+    };
+    const wrapped = wrapNode(node);
+    const result = wrapped.formatForClipboard();
+
+    assertTrue(result.includes('## Empty matrix'), 'Should have header');
+    assertTrue(result.includes('| Row 1 |'), 'Should have row item');
+    // Empty cells should have pipes with minimal whitespace
+    const cellPattern = /\|\s+\|\s*\n/;
+    const matches = result.match(cellPattern);
+    assertTrue(matches && matches.length > 0, 'Empty cell should have pipe separators');
+});
+
+await asyncTest('MatrixNode formatForClipboard: newlines flattened, pipes escaped', async () => {
+    await import('../src/canvas_chat/static/js/plugins/matrix.js');
+
+    const node = {
+        id: 'test-matrix',
+        type: NodeType.MATRIX,
+        context: 'Test',
+        rowItems: ['Row'],
+        colItems: ['Col'],
+        cells: {
+            '0-0': { content: 'Line 1\nLine 2', filled: true },
+        },
+    };
+    const wrapped = wrapNode(node);
+    const result = wrapped.formatForClipboard();
+
+    assertTrue(result.includes('Line 1 Line 2'), 'Newlines should be replaced with spaces');
+    assertFalse(result.includes('Line 1\nLine 2'), 'Should not contain literal newlines in cell');
 });
 
 console.log('\n✅ All Matrix node plugin tests passed!\n');
