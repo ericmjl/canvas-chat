@@ -1,6 +1,6 @@
 [project]
 name = "canvas-chat"
-version = "0.1.79"
+version = "0.1.80"
 description = "A visual, non-linear chat interface where conversations are nodes on an infinite canvas"
 readme = "README.md"
 requires-python = ">=3.11"
