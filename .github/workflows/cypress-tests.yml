@@ -89,6 +89,12 @@ jobs:
                   timeout 300 bash -c 'until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 2; done'
                   echo "Ollama service is ready"
 
+            - name: Ensure Ollama cache directory exists
+              run: |
+                  # Ensure the directory exists and has correct permissions
+                  mkdir -p /home/runner/.ollama
+                  echo "Cache directory created/verified: /home/runner/.ollama"
+
             - name: Cache Ollama model weights
               id: cache-ollama-model
               uses: actions/cache@v4
@@ -97,8 +103,8 @@ jobs:
                   path: /home/runner/.ollama
                   key: ollama-gemma3n-e4b
                   restore-keys: |
-                      ollama-gemma3n-
                       ollama-gemma3n-e4b
+                      ollama-gemma3n-
 
             - name: Check if model exists and pull if needed
               run: |
@@ -107,14 +113,31 @@ jobs:
 
                   if [ -z "$MODEL_EXISTS" ]; then
                       if [ "${{ steps.cache-ollama-model.outputs.cache-hit }}" == "true" ]; then
-                          echo "Cache hit: Model files restored, but Ollama doesn't see them yet"
-                          echo "This can happen if Ollama's manifest is out of sync with cached files"
+                          echo "Cache hit: Model files restored from cache"
+                          echo "Cache directory size before pull: $(du -sh /home/runner/.ollama 2>/dev/null | cut -f1 || echo 'N/A')"
                       else
-                          echo "Cache miss: Model not in cache, will download from internet"
+                          echo "Cache miss: Model not in cache (this is expected on first run or after cache expiry)"
                       fi
                       # Pull model (will use cached files if available, otherwise downloads)
                       curl -sSf -X POST http://localhost:11434/api/pull -d '{"name":"gemma3n:e4b"}'
                       echo "Model pull completed"
+
+                      # Wait for files to be written to disk
+                      sleep 3
+
+                      # Verify model is now available
+                      MODEL_EXISTS_AFTER=$(curl -s http://localhost:11434/api/tags | grep -o '"name":"gemma3n:e4b"' || echo "")
+                      if [ -z "$MODEL_EXISTS_AFTER" ]; then
+                          echo "Warning: Model pull completed but model not found in Ollama"
+                      else
+                          echo "Model verified in Ollama"
+                      fi
+
+                      # Show cache directory info for debugging (files written by container are visible on host)
+                      if [ -d "/home/runner/.ollama" ]; then
+                          echo "Cache directory size after pull: $(du -sh /home/runner/.ollama | cut -f1)"
+                          echo "Cache will be saved automatically at end of job"
+                      fi
                   else
                       echo "Model already exists in Ollama, skipping pull"
                   fi
