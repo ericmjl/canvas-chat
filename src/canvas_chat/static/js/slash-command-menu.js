@@ -2,8 +2,8 @@
  * Slash command autocomplete menu
  */
 
-import { storage } from './storage.js';
 import { NodeRegistry } from './node-registry.js';
+import { storage } from './storage.js';
 
 // FeatureRegistry will be injected at runtime (after app initialization)
 let featureRegistry = null;
@@ -30,11 +30,7 @@ const BUILTIN_SLASH_COMMANDS = [
         placeholder: 'claim(s) to verify',
         requiresContext: true,
     },
-    {
-        command: '/code',
-        description: 'Create Python code node (optionally linked to selected CSVs)',
-        placeholder: 'optional description',
-    },
+    // Note: /code is now handled by CodeFeature plugin (removed from here to avoid duplicate)
 ];
 
 /**
@@ -344,4 +340,4 @@ window.SlashCommandMenu = SlashCommandMenu;
 window.SLASH_COMMANDS = getAllSlashCommands();
 window.getAllSlashCommands = getAllSlashCommands;
 
-export { SlashCommandMenu, SLASH_COMMANDS, getAllSlashCommands };
+export { getAllSlashCommands, SLASH_COMMANDS, SlashCommandMenu };
