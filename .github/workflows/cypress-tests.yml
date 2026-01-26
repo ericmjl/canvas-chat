@@ -92,15 +92,17 @@ jobs:
             - name: Ensure Ollama cache directory exists
               run: |
                   # Ensure the directory exists and has correct permissions
-                  mkdir -p /home/runner/.ollama
-                  echo "Cache directory created/verified: /home/runner/.ollama"
+                  mkdir -p /home/runner/.ollama/models
+                  echo "Cache directory created/verified: /home/runner/.ollama/models"
 
             - name: Cache Ollama model weights
               id: cache-ollama-model
               uses: actions/cache@v4
               with:
-                  # Cache path must match Docker volume mount: /home/runner/.ollama:/root/.ollama
-                  path: /home/runner/.ollama
+                  # Cache only the models subdirectory to avoid permission issues with other .ollama files
+                  # Models are stored in /root/.ollama/models inside the container
+                  # which maps to /home/runner/.ollama/models on the host via volume mount
+                  path: /home/runner/.ollama/models
                   key: ollama-gemma3n-e4b
                   restore-keys: |
                       ollama-gemma3n-e4b
@@ -114,7 +116,7 @@ jobs:
                   if [ -z "$MODEL_EXISTS" ]; then
                       if [ "${{ steps.cache-ollama-model.outputs.cache-hit }}" == "true" ]; then
                           echo "Cache hit: Model files restored from cache"
-                          echo "Cache directory size before pull: $(du -sh /home/runner/.ollama 2>/dev/null | cut -f1 || echo 'N/A')"
+                          echo "Models directory size before pull: $(du -sh /home/runner/.ollama/models 2>/dev/null | cut -f1 || echo 'N/A')"
                       else
                           echo "Cache miss: Model not in cache (this is expected on first run or after cache expiry)"
                       fi
@@ -134,8 +136,8 @@ jobs:
                       fi
 
                       # Show cache directory info for debugging (files written by container are visible on host)
-                      if [ -d "/home/runner/.ollama" ]; then
-                          echo "Cache directory size after pull: $(du -sh /home/runner/.ollama | cut -f1)"
+                      if [ -d "/home/runner/.ollama/models" ]; then
+                          echo "Models directory size after pull: $(du -sh /home/runner/.ollama/models | cut -f1)"
                           echo "Cache will be saved automatically at end of job"
                       fi
                   else
