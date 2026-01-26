@@ -292,5 +292,3 @@ describe('Code Node Execution and Output Panel', () => {
 
     });
 });
-
-it('test', function() {});
