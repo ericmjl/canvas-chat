@@ -19,6 +19,12 @@ app = modal.App("canvas-chat")
 # Define the image with all dependencies
 image = (
     modal.Image.debian_slim(python_version="3.11")
+    .apt_install(
+        "libreoffice-impress",
+        "libreoffice-common",
+        "fonts-dejavu-core",
+        "libwebp6",
+    )
     .pip_install(
         "fastapi[standard]>=0.115.0",
         "uvicorn>=0.32.0",
@@ -27,6 +33,8 @@ image = (
         "pydantic>=2.0.0",
         "exa-py>=1.0.0",
         "pymupdf>=1.24.0",
+        "pillow>=12.1.0,<13",
+        "python-pptx>=1.0.0",
         "python-multipart>=0.0.9",
         "html2text>=2024.0.0",
         "ruamel.yaml>=0.18.0",
