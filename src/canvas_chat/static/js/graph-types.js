@@ -11,7 +11,7 @@
 
 /**
  * Valid node type values
- * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'code'|'youtube'|'git_repo'} NodeTypeValue
+ * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'powerpoint'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'code'|'youtube'|'git_repo'} NodeTypeValue
  */
 
 /**
@@ -226,6 +226,7 @@ const NodeType = {
     COLUMN: 'column', // Extracted column from a matrix
     FETCH_RESULT: 'fetch_result', // Fetched content from URL (generic)
     PDF: 'pdf', // Imported PDF document
+    POWERPOINT: 'powerpoint', // Imported PowerPoint deck (PPTX)
     YOUTUBE: 'youtube', // YouTube video with transcript
     GIT_REPO: 'git_repo', // Git repository with file selection
     OPINION: 'opinion', // Committee member's opinion
@@ -252,6 +253,7 @@ const DEFAULT_NODE_SIZES = {
     [NodeType.RESEARCH]: { width: 640, height: 480 },
     [NodeType.FETCH_RESULT]: { width: 640, height: 480 },
     [NodeType.PDF]: { width: 640, height: 480 },
+    [NodeType.POWERPOINT]: { width: 480, height: 400 },
     [NodeType.YOUTUBE]: { width: 640, height: 480 },
     [NodeType.GIT_REPO]: { width: 640, height: 480 },
     [NodeType.OPINION]: { width: 640, height: 480 },
@@ -569,16 +571,5 @@ function createEdge(sourceId, targetId, type = EdgeType.REPLY, options = {}) {
 // =============================================================================
 
 export {
-    NodeType,
-    EdgeType,
-    TAG_COLORS,
-    DEFAULT_NODE_SIZES,
-    getDefaultNodeSize,
-    createNode,
-    createEdge,
-    createMatrixNode,
-    createCellNode,
-    createRowNode,
-    createColumnNode,
-    createFlashcardNode,
+    DEFAULT_NODE_SIZES, EdgeType, NodeType, TAG_COLORS, createCellNode, createColumnNode, createEdge, createFlashcardNode, createMatrixNode, createNode, createRowNode, getDefaultNodeSize
 };
