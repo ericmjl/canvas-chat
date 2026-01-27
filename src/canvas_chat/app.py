@@ -57,6 +57,7 @@ from canvas_chat.plugins import (
     matrix_handler,  # noqa: F401
     pdf_handler,  # noqa: F401
     pdf_url_handler,  # noqa: F401
+    pptx_handler,  # noqa: F401
     youtube_handler,  # noqa: F401
 )
 from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE
