@@ -1507,27 +1507,24 @@ class App {
         // Store old tags for undo
         const oldTags = [...(node.tags || [])];
 
-        // Remove the tag
+        // Remove the tag - this emits 'nodeUpdated' which triggers renderNode automatically
         this.graph.removeTagFromNode(nodeId, color);
 
-        // Store new tags for undo
-        const newTags = [...(node.tags || [])];
+        // Get fresh node to capture new tags for undo
+        const updatedNode = this.graph.getNode(nodeId);
+        const newTags = [...(updatedNode?.tags || [])];
 
-        // Register undo action
-        this.undoManager.execute({
-            name: 'Remove Tag',
-            do: () => {
-                this.graph.updateNode(nodeId, { tags: newTags });
-                this.canvas.renderNode(this.graph.getNode(nodeId));
-            },
-            undo: () => {
-                this.graph.updateNode(nodeId, { tags: oldTags });
-                this.canvas.renderNode(this.graph.getNode(nodeId));
-            },
+        // Register undo action (using same format as toggleTagOnNodes)
+        this.undoManager.push({
+            type: 'TAG_CHANGE',
+            nodeId: nodeId,
+            oldTags: oldTags,
+            newTags: newTags,
         });
 
-        // Re-render the node to show updated tags
-        this.canvas.renderNode(node);
+        // Note: renderNode is NOT called here because removeTagFromNode emits
+        // 'nodeUpdated' which triggers renderNode via the graph event listener.
+        // Calling renderNode here with the old snapshot would overwrite the correct render.
 
         // Update tag drawer UI if it's open (selection state may have changed)
         const drawer = document.getElementById('tag-drawer');

@@ -3,11 +3,11 @@
  */
 
 import { EventEmitter } from './event-emitter.js';
-import { wrapNode } from './node-protocols.js';
 import { NodeType, getDefaultNodeSize } from './graph-types.js';
 import { highlightTextInHtml } from './highlight-utils.js';
-import { escapeHtmlText, truncateText } from './utils.js';
+import { wrapNode } from './node-protocols.js';
 import { findScrollableContainer } from './scroll-utils.js';
+import { escapeHtmlText, truncateText } from './utils.js';
 
 /**
  *
@@ -2452,18 +2452,8 @@ class Canvas {
                 // Skip resize handles - they shouldn't select
                 if (e.target.closest('.resize-handle')) return;
 
-                // Handle tag remove button
-                const removeBtn = e.target.closest('.node-tag-remove');
-                if (removeBtn) {
-                    e.stopPropagation();
-                    const tagEl = removeBtn.closest('.node-tag');
-                    const color = tagEl?.dataset.color;
-                    const nodeId = tagEl?.dataset.nodeId;
-                    if (color && nodeId && this.onTagRemove) {
-                        this.onTagRemove(nodeId, color);
-                    }
-                    return;
-                }
+                // Skip tag remove button - it has its own dedicated handler
+                if (e.target.closest('.node-tag-remove')) return;
 
                 // Skip tag chips - clicking a tag should highlight by tag, not select node
                 if (e.target.closest('.node-tag')) return;
@@ -2841,6 +2831,30 @@ class Canvas {
             });
         }
 
+        // Tag remove buttons - set up dedicated listeners for each tag
+        // Use capture phase to ensure it fires before tag chip handler
+        const tagRemoveButtons = div.querySelectorAll('.node-tag-remove');
+        tagRemoveButtons.forEach((removeBtn) => {
+            removeBtn.addEventListener(
+                'click',
+                (e) => {
+                    // Ensure we're actually clicking the remove button or its child
+                    if (!e.target.closest('.node-tag-remove')) {
+                        return;
+                    }
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const tagEl = removeBtn.closest('.node-tag');
+                    const color = tagEl?.dataset.color;
+                    const nodeId = tagEl?.dataset.nodeId;
+                    if (color && nodeId && this.onTagRemove) {
+                        this.onTagRemove(nodeId, color);
+                    }
+                },
+                true
+            ); // true = capture phase
+        });
+
         // Apply protocol-defined event bindings (for plugins and type-specific handlers)
         // This replaces hardcoded if (node.type === ...) blocks with a declarative approach
         this.applyProtocolEventBindings(div, node);
@@ -2893,9 +2907,14 @@ class Canvas {
         }
 
         // Tag chip click handlers (for highlighting nodes by tag)
+        // Skip the remove button - it has its own handler
         const tagChips = div.querySelectorAll('.node-tag');
         tagChips.forEach((chip) => {
             chip.addEventListener('click', (e) => {
+                // Don't handle clicks on the remove button
+                if (e.target.closest('.node-tag-remove')) {
+                    return;
+                }
                 e.stopPropagation();
                 const color = chip.dataset.color;
                 this.emit('tagChipClick', color);
