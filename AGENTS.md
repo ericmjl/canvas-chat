@@ -118,6 +118,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/plugins/git-repo.js`  | GitRepoFeature class   | Git repository fetching with file selection (`/git` command) |
 | `src/canvas_chat/static/js/plugins/youtube.js`   | YouTubeFeature class   | YouTube video fetching with transcript (`/youtube` command)  |
 | `src/canvas_chat/static/js/plugins/url-fetch.js` | UrlFetchFeature class  | Generic URL fetching (`/fetch` command)                      |
+| `src/canvas_chat/static/js/plugins/powerpoint-node.js` | PowerPointFeature + PowerPointNode | PPTX upload, slide navigation drawer, per-slide captioning, slide extraction |
 
 #### Example plugins
 
@@ -166,6 +167,7 @@ canvas-chat/
 | `src/canvas_chat/__init__.py`                   | Package initialization             | Package metadata, version                            |
 | `src/canvas_chat/file_upload_registry.py`       | File upload handler registration   | Registering Python file upload handlers              |
 | `src/canvas_chat/file_upload_handler_plugin.py` | FileUploadHandlerPlugin base class | File upload handler plugin base class                |
+| `src/canvas_chat/plugins/pptx_handler.py`       | PPTX file upload handler           | PowerPoint slide rendering (LibreOffice) + text extraction (python-pptx) |
 | `src/canvas_chat/plugins/`                      | Python plugin modules              | Backend plugins (matrix_handler, code_handler, etc.) |
 | `modal_app.py`                                  | Modal deployment config            | Deployment settings                                  |
 
