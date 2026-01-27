@@ -4640,8 +4640,8 @@ class App {
         this.canvas.clearSelection();
         this.canvas.selectNode(nodeId);
 
-        // Smoothly pan to center the node in view
-        this.canvas.panToNodeAnimated(nodeId, 300);
+        // Smoothly zoom and pan to fit the node in view (like pressing 'z')
+        this.canvas.zoomToSelectionAnimated([nodeId], 0.8, 300);
     }
 
     /**
