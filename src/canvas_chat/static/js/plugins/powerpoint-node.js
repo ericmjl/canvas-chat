@@ -131,6 +131,26 @@ class PowerPointNode extends BaseNode {
     }
 
     /**
+     * Add PowerPoint-specific actions to the bottom action bar.
+     * @returns {Array<{id: string, label: string, title: string}>}
+     */
+    getAdditionalActions() {
+        const processing = this.node.processing || { state: 'idle' };
+        const slides = this.node.pptxData?.slides || [];
+
+        if (processing.state === 'converting') return [];
+        if (!slides || slides.length === 0) return [];
+
+        return [
+            {
+                id: 'pptxCaptionCurrent',
+                label: '🖼️ Caption',
+                title: 'Caption the current slide with AI',
+            },
+        ];
+    }
+
+    /**
      *
      * @param {any} _canvas
      * @returns {string}
@@ -204,7 +224,6 @@ class PowerPointNode extends BaseNode {
                 </div>
                 <div class="pptx-actions">
                     <button class="pptx-action-btn pptx-extract" title="Extract this slide as an image node">Extract</button>
-                    <button class="pptx-action-btn pptx-caption" title="Caption this slide with AI">Caption</button>
                 </div>
                 ${
                     renderingMode === 'placeholder'
@@ -318,15 +337,6 @@ class PowerPointNode extends BaseNode {
             {
                 selector: '.pptx-extract',
                 handler: 'pptxExtractSlide',
-            },
-            {
-                selector: '.pptx-caption',
-                handler: (_nodeId, e, canvas) => {
-                    const nodeId = this.node.id;
-                    const index = this.node.currentSlideIndex || 0;
-                    e?.preventDefault?.();
-                    canvas.emit('pptxCaptionSlide', nodeId, index);
-                },
             },
 
             // Drawer: slide selection
@@ -586,6 +596,7 @@ class PowerPointFeature extends FeaturePlugin {
             pptxExtractSlide: this.extractSlide.bind(this),
             pptxSetSlideTitle: this.setSlideTitle.bind(this),
             pptxAutoTitle: this.autoTitleSlide.bind(this),
+            pptxCaptionCurrent: this.captionCurrentSlide.bind(this),
             pptxCaptionSlide: this.captionSlide.bind(this),
             pptxCaptionAll: this.captionAllSlides.bind(this),
             pptxWeaveNarrative: this.weaveNarrative.bind(this),
@@ -820,6 +831,18 @@ class PowerPointFeature extends FeaturePlugin {
             this._updateAndRerender(nodeId, { slideCaptionStatuses: statuses, slideCaptions: captions });
             this.saveSession?.();
         }
+    }
+
+    /**
+     * Caption the currently visible slide (node action button).
+     * @param {string} nodeId
+     * @returns {Promise<void>}
+     */
+    async captionCurrentSlide(nodeId) {
+        const node = this._getPptxNode(nodeId);
+        if (!node) return;
+        const idx = node.currentSlideIndex || 0;
+        await this.captionSlide(nodeId, idx);
     }
 
     /**

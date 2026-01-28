@@ -1903,7 +1903,7 @@ class Canvas {
                                               : action.id === 'run-code'
                                                 ? 'run-code-btn'
                                                 : '';
-                return `<button class="node-action ${actionClass}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
+                return `<button class="node-action ${actionClass}" data-action-id="${this.escapeHtml(action.id)}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
             })
             .join('');
 
@@ -2623,6 +2623,41 @@ class Canvas {
         });
 
         // Action buttons
+        const nodeActions = div.querySelector('.node-actions');
+        if (nodeActions) {
+            // Generic handler for plugin-defined node actions (added via getAdditionalActions()).
+            // Built-in actions are handled by dedicated listeners below.
+            nodeActions.addEventListener('click', (e) => {
+                const btn = e.target?.closest?.('button.node-action');
+                if (!btn) return;
+
+                const actionId = btn.dataset?.actionId;
+                if (!actionId) return;
+
+                // Skip built-ins (handled elsewhere, and some like "branch" require extra context).
+                if (
+                    actionId === 'reply' ||
+                    actionId === 'branch' ||
+                    actionId === 'summarize' ||
+                    actionId === 'fetch-summarize' ||
+                    actionId === 'edit-content' ||
+                    actionId === 'copy' ||
+                    actionId === 'create-flashcards' ||
+                    actionId === 'flip-card' ||
+                    actionId === 'review-card' ||
+                    actionId === 'analyze' ||
+                    actionId === 'edit-code' ||
+                    actionId === 'generate' ||
+                    actionId === 'run-code'
+                ) {
+                    return;
+                }
+
+                e.stopPropagation();
+                this.emit(actionId, node.id);
+            });
+        }
+
         const replyBtn = div.querySelector('.reply-btn');
         const summarizeBtn = div.querySelector('.summarize-btn');
         const fetchSummarizeBtn = div.querySelector('.fetch-summarize-btn');
