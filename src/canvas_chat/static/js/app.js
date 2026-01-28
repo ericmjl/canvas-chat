@@ -54,8 +54,6 @@ import { AppContext } from './feature-plugin.js';
 import { FeatureRegistry } from './feature-registry.js';
 import { StreamingManager } from './streaming-manager.js';
 
-/* global pyodideRunner */
-
 /**
  *
  */
@@ -1460,12 +1458,12 @@ class App {
 
         if (action === 'ask') {
             // Extract image to a new node, select it, and focus chat input
-            await this.extractImageToNode(nodeId, imgSrc);
+            await this.extractImageToNode(nodeId, imgSrc, options);
             this.chatInput.focus();
             this.showCanvasHint('Image extracted! Type a question about it.');
         } else if (action === 'extract') {
             // Just extract image to a new node
-            await this.extractImageToNode(nodeId, imgSrc);
+            await this.extractImageToNode(nodeId, imgSrc, options);
         }
     }
 
@@ -1804,8 +1802,9 @@ class App {
      *
      * @param {string} parentNodeId - The ID of the node containing the image
      * @param {string} imgSrc - The src of the image (data URL or external URL)
+     * @param options
      */
-    async extractImageToNode(parentNodeId, imgSrc) {
+    async extractImageToNode(parentNodeId, imgSrc, options = {}) {
         const parentNode = this.graph.getNode(parentNodeId);
         if (!parentNode) return;
 
@@ -1839,6 +1838,7 @@ class App {
                 position: this.graph.autoPosition([parentNodeId]),
                 imageData: base64Data,
                 mimeType: mimeType,
+                title: options.title || undefined,
             });
 
             this.addUserNode(imageNode);

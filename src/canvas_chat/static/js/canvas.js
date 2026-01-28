@@ -282,6 +282,7 @@ class Canvas {
         // State
         this.pendingImageSrc = null;
         this.pendingImageNodeId = null;
+        this.pendingImageMeta = null;
 
         // Ask button - select image node and focus chat
         const askBtn = this.imageTooltip.querySelector('.ask-btn');
@@ -307,10 +308,12 @@ class Canvas {
      * Show the image tooltip near the clicked image
      * @param imgSrc
      * @param position
+     * @param meta
      */
-    showImageTooltip(imgSrc, position) {
+    showImageTooltip(imgSrc, position, meta = null) {
         // Store image info
         this.pendingImageSrc = imgSrc;
+        this.pendingImageMeta = meta;
 
         // Update preview image
         const previewImg = this.imageTooltip.querySelector('.image-tooltip-img');
@@ -330,6 +333,7 @@ class Canvas {
         this.imageTooltip.style.display = 'none';
         this.pendingImageSrc = null;
         this.pendingImageNodeId = null;
+        this.pendingImageMeta = null;
     }
 
     /**
@@ -338,7 +342,10 @@ class Canvas {
      */
     handleImageAsk() {
         if (this.pendingImageSrc && this.pendingImageNodeId) {
-            this.emit('imageClick', this.pendingImageNodeId, this.pendingImageSrc, { action: 'ask' });
+            this.emit('imageClick', this.pendingImageNodeId, this.pendingImageSrc, {
+                action: 'ask',
+                ...(this.pendingImageMeta || {}),
+            });
         }
         this.hideImageTooltip();
     }
@@ -349,7 +356,10 @@ class Canvas {
      */
     handleImageExtract() {
         if (this.pendingImageSrc && this.pendingImageNodeId) {
-            this.emit('imageClick', this.pendingImageNodeId, this.pendingImageSrc, { action: 'extract' });
+            this.emit('imageClick', this.pendingImageNodeId, this.pendingImageSrc, {
+                action: 'extract',
+                ...(this.pendingImageMeta || {}),
+            });
         }
         this.hideImageTooltip();
     }
