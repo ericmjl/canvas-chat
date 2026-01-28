@@ -73,6 +73,7 @@ describe('PowerPoint Upload and Navigation', () => {
 
         // Drawer should be present (output panel body contains our drawer content)
         cy.get('.pptx-drawer', { timeout: 30000 }).should('exist');
+        cy.get('.node.powerpoint .node-actions [data-action-id="pptxWeaveNarrative"]').should('exist');
 
         // Click slide 2 in drawer
         cy.get('.pptx-slide-row[data-slide-index="1"] .pptx-slide-select').click();
