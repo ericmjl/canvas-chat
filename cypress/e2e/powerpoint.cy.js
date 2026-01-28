@@ -11,6 +11,34 @@ describe('PowerPoint Upload and Navigation', () => {
 
         // Ensure the upload endpoint is actually hit
         cy.intercept('POST', '**/api/upload-file').as('uploadFile');
+        // Stub narrative style suggestions (modal generates these on open)
+        cy.intercept('POST', '**/api/pptx/narrative-style-suggestions', {
+            statusCode: 200,
+            body: {
+                presets: [
+                    {
+                        id: 'story-arc',
+                        label: 'Story arc',
+                        description: 'A coherent narrative that flows slide-to-slide with a clear throughline.',
+                        voice: 'Warm, confident, and clear.',
+                        audience_hint: '',
+                        length: 'medium',
+                        structure: 'narrative',
+                        inclusion: 'captioned_only',
+                    },
+                    {
+                        id: 'executive-summary',
+                        label: 'Executive summary',
+                        description: 'High-level summary with key points and next steps.',
+                        voice: 'Direct, crisp, and business-friendly.',
+                        audience_hint: 'Leadership / stakeholders',
+                        length: 'short',
+                        structure: 'executive_summary',
+                        inclusion: 'captioned_only',
+                    },
+                ],
+            },
+        }).as('pptxWeaveSuggestions');
 
         // Wait for app initialization (depends on Yjs readiness)
         cy.window().its('app', { timeout: 30000 }).should('exist');
@@ -74,6 +102,15 @@ describe('PowerPoint Upload and Navigation', () => {
         // Drawer should be present (output panel body contains our drawer content)
         cy.get('.pptx-drawer', { timeout: 30000 }).should('exist');
         cy.get('.node.powerpoint .node-actions [data-action-id="pptxWeaveNarrative"]').should('exist');
+
+        // Weave narrative opens a configurable modal
+        cy.get('.node.powerpoint .node-actions [data-action-id="pptxWeaveNarrative"]').click();
+        cy.wait('@pptxWeaveSuggestions', { timeout: 30000 });
+        cy.get('#powerpoint-weave-modal', { timeout: 10000 }).should('be.visible');
+        cy.get('#pptx-weave-presets-list').should('contain', 'Story arc');
+        cy.get('#pptx-weave-generate-btn').should('not.be.disabled');
+        cy.get('#pptx-weave-cancel-btn').click();
+        cy.get('#powerpoint-weave-modal').should('not.be.visible');
 
         // Click slide 2 in drawer
         cy.get('.pptx-slide-row[data-slide-index="1"] .pptx-slide-select').click();

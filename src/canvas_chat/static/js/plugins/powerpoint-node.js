@@ -569,9 +569,140 @@ class PowerPointFeature extends FeaturePlugin {
             .pptx-slide-caption-missing { color: var(--text-muted); }
             .pptx-drawer-footer { display: flex; gap: 8px; padding-top: 4px; }
             .pptx-enrich-all, .pptx-weave { flex: 1; border: 1px solid var(--bg-secondary); background: var(--bg-primary); color: var(--text-primary); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 12px; }
+
+            /* Weave narrative modal */
+            .pptx-weave-presets { display: flex; flex-direction: column; gap: 8px; }
+            .pptx-weave-presets-header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+            .pptx-weave-presets-header label { font-weight: 600; }
+            .pptx-weave-presets-status { font-size: 12px; color: var(--text-secondary); }
+            .pptx-weave-presets-loading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+            .pptx-weave-presets-list { display: grid; grid-template-columns: 1fr; gap: 8px; }
+            .pptx-weave-preset { display: block; border: 1px solid var(--bg-secondary); border-radius: 10px; padding: 10px; background: var(--bg-primary); cursor: pointer; }
+            .pptx-weave-preset:hover { border-color: var(--accent); }
+            .pptx-weave-preset input { margin-right: 8px; }
+            .pptx-weave-preset-title { font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+            .pptx-weave-preset-desc { font-size: 12px; color: var(--text-secondary); margin-top: 4px; line-height: 1.35; }
+            .pptx-weave-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+            .pptx-weave-controls .full { grid-column: 1 / -1; }
+            .pptx-weave-controls label { font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px; }
+            .pptx-weave-controls input, .pptx-weave-controls select, .pptx-weave-controls textarea {
+                width: 100%;
+                border: 1px solid var(--bg-secondary);
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                border-radius: 8px;
+                padding: 8px 10px;
+                font-size: 13px;
+            }
+            .pptx-weave-controls textarea { min-height: 70px; resize: vertical; }
             `,
             'plugin-styles-powerpoint'
         );
+
+        // Register weave narrative modal
+        const modalTemplate = `
+            <div id="powerpoint-weave-modal" class="modal" style="display: none">
+                <div class="modal-content modal-wide">
+                    <div class="modal-header">
+                        <h2>Weave narrative</h2>
+                        <button class="modal-close" id="pptx-weave-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="pptx-weave-presets">
+                            <div class="pptx-weave-presets-header">
+                                <label>Presets (AI-suggested)</label>
+                                <span class="pptx-weave-presets-status" id="pptx-weave-presets-status">Loading…</span>
+                            </div>
+                            <div class="pptx-weave-presets-loading" id="pptx-weave-presets-loading">
+                                <div style="display: inline-flex; align-items: center; gap: 10px">
+                                    <div class="spinner"></div>
+                                    <span class="pptx-weave-presets-status">Generating suggestions…</span>
+                                </div>
+                                <button id="pptx-weave-suggest-cancel-btn" class="secondary-btn">Cancel</button>
+                            </div>
+                            <div class="pptx-weave-presets-list" id="pptx-weave-presets-list"></div>
+                        </div>
+
+                        <div class="pptx-weave-controls">
+                            <div class="full">
+                                <label for="pptx-weave-voice">Voice / persona</label>
+                                <textarea id="pptx-weave-voice" placeholder="e.g., warm, confident, a bit playful."></textarea>
+                            </div>
+                            <div>
+                                <label for="pptx-weave-audience">Audience</label>
+                                <input id="pptx-weave-audience" type="text" placeholder="e.g., engineering leadership" />
+                            </div>
+                            <div>
+                                <label for="pptx-weave-length">Length</label>
+                                <select id="pptx-weave-length">
+                                    <option value="short">Short</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="long">Long</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="pptx-weave-structure">Output structure</label>
+                                <select id="pptx-weave-structure">
+                                    <option value="narrative" selected>Narrative</option>
+                                    <option value="executive_summary">Executive summary</option>
+                                    <option value="speaker_notes">Speaker notes</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="pptx-weave-inclusion">Slide inclusion</label>
+                                <select id="pptx-weave-inclusion">
+                                    <option value="all">All slides</option>
+                                    <option value="captioned_only" selected>Only captioned slides</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="modal-actions">
+                            <button id="pptx-weave-cancel-btn" class="secondary-btn">Cancel</button>
+                            <button id="pptx-weave-generate-btn" class="primary-btn" disabled>Generate</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.modalManager.registerModal('powerpoint', 'weave', modalTemplate);
+        const modal = this.modalManager.getPluginModal('powerpoint', 'weave');
+        this._pptxWeaveModal = modal;
+
+        // Modal event listeners
+        const closeBtn = modal.querySelector('#pptx-weave-close');
+        const cancelBtn = modal.querySelector('#pptx-weave-cancel-btn');
+        const generateBtn = modal.querySelector('#pptx-weave-generate-btn');
+        const suggestCancelBtn = modal.querySelector('#pptx-weave-suggest-cancel-btn');
+        const presetsList = modal.querySelector('#pptx-weave-presets-list');
+
+        closeBtn?.addEventListener('click', () => this._closeWeaveNarrativeModal());
+        cancelBtn?.addEventListener('click', () => this._closeWeaveNarrativeModal());
+        suggestCancelBtn?.addEventListener('click', () => this._cancelWeaveSuggestions());
+
+        // Preset selection (radio cards)
+        presetsList?.addEventListener('change', (e) => {
+            const target = /** @type {HTMLInputElement|null} */ (e.target);
+            if (!target || target.name !== 'pptx-weave-preset') return;
+            this._selectWeavePreset(target.value);
+        });
+
+        // Enable generate after any control change (once we have a nodeId)
+        const controlIds = [
+            '#pptx-weave-voice',
+            '#pptx-weave-audience',
+            '#pptx-weave-length',
+            '#pptx-weave-structure',
+            '#pptx-weave-inclusion',
+        ];
+        for (const sel of controlIds) {
+            const el = modal.querySelector(sel);
+            el?.addEventListener('input', () => this._updateWeaveGenerateEnabled());
+            el?.addEventListener('change', () => this._updateWeaveGenerateEnabled());
+        }
+
+        generateBtn?.addEventListener('click', () => this._handleWeaveGenerateClick());
     }
 
     /**
@@ -1021,22 +1152,348 @@ class PowerPointFeature extends FeaturePlugin {
      * @returns {Promise<void>}
      */
     async weaveNarrative(nodeId) {
+        // In test/non-browser environments, don't attempt modal/DOM work.
+        if (typeof document === 'undefined') return;
+        this.openWeaveNarrativeModal(nodeId);
+    }
+
+    /**
+     * Open the weave narrative modal for a given deck.
+     * Suggestions are generated automatically on open.
+     *
+     * @param {string} nodeId
+     * @returns {void}
+     */
+    openWeaveNarrativeModal(nodeId) {
+        const node = this._getPptxNode(nodeId);
+        const slides = node?.pptxData?.slides || [];
+        if (!node || slides.length === 0) return;
+
+        const modal = this.modalManager?.getPluginModal?.('powerpoint', 'weave') || this._pptxWeaveModal;
+        if (!modal) {
+            // If modal isn't available, fall back to a reasonable default.
+            this._runWeaveNarrative(nodeId, this._getDefaultWeaveSettings());
+            return;
+        }
+
+        // Reset per-run state
+        this._weaveModalState = {
+            nodeId,
+            presets: [],
+            selectedPresetId: null,
+        };
+
+        // Reset UI
+        this._resetWeaveModalUi(modal);
+
+        // Show modal and start fetching suggestions
+        this.modalManager.showPluginModal('powerpoint', 'weave');
+        this._startWeaveSuggestionsFetch(nodeId);
+    }
+
+    /**
+     * @returns {{voice: string, audience: string, length: string, structure: string, inclusion: string}}
+     */
+    _getDefaultWeaveSettings() {
+        return {
+            voice: 'Warm, confident, and clear.',
+            audience: '',
+            length: 'medium',
+            structure: 'narrative',
+            inclusion: 'captioned_only',
+        };
+    }
+
+    /**
+     * @param {HTMLElement} modal
+     * @returns {void}
+     */
+    _resetWeaveModalUi(modal) {
+        modal.querySelector('#pptx-weave-presets-status').textContent = 'Loading…';
+        modal.querySelector('#pptx-weave-presets-loading').style.display = 'flex';
+        modal.querySelector('#pptx-weave-presets-list').innerHTML = '';
+
+        const defaults = this._getDefaultWeaveSettings();
+        modal.querySelector('#pptx-weave-voice').value = defaults.voice;
+        modal.querySelector('#pptx-weave-audience').value = defaults.audience;
+        modal.querySelector('#pptx-weave-length').value = defaults.length;
+        modal.querySelector('#pptx-weave-structure').value = defaults.structure;
+        modal.querySelector('#pptx-weave-inclusion').value = defaults.inclusion;
+
+        modal.querySelector('#pptx-weave-generate-btn').disabled = true;
+    }
+
+    /**
+     * Cancel in-flight suggestions generation (if any), but keep the modal open.
+     * @returns {void}
+     */
+    _cancelWeaveSuggestions() {
+        if (this._weaveSuggestionsAbortController) {
+            this._weaveSuggestionsAbortController.abort();
+            this._weaveSuggestionsAbortController = null;
+        }
+        const modal = this.modalManager?.getPluginModal?.('powerpoint', 'weave') || this._pptxWeaveModal;
+        if (!modal) return;
+        modal.querySelector('#pptx-weave-presets-loading').style.display = 'none';
+        modal.querySelector('#pptx-weave-presets-status').textContent = 'Suggestions cancelled';
+        this._updateWeaveGenerateEnabled();
+    }
+
+    /**
+     * Close weave narrative modal and clear per-run state.
+     * @returns {void}
+     */
+    _closeWeaveNarrativeModal() {
+        this._cancelWeaveSuggestions();
+        this.modalManager?.hidePluginModal?.('powerpoint', 'weave');
+        this._weaveModalState = null;
+    }
+
+    /**
+     * @param {string} presetId
+     * @returns {void}
+     */
+    _selectWeavePreset(presetId) {
+        if (!this._weaveModalState) return;
+        const presets = this._weaveModalState.presets || [];
+        const preset = presets.find((p) => p.id === presetId) || null;
+        this._weaveModalState.selectedPresetId = presetId;
+
+        const modal = this.modalManager?.getPluginModal?.('powerpoint', 'weave') || this._pptxWeaveModal;
+        if (!modal) return;
+
+        if (preset) {
+            if (preset.voice != null) modal.querySelector('#pptx-weave-voice').value = preset.voice;
+            if (preset.audience_hint != null) modal.querySelector('#pptx-weave-audience').value = preset.audience_hint;
+            if (preset.length) modal.querySelector('#pptx-weave-length').value = preset.length;
+            if (preset.structure) modal.querySelector('#pptx-weave-structure').value = preset.structure;
+            if (preset.inclusion) modal.querySelector('#pptx-weave-inclusion').value = preset.inclusion;
+        }
+
+        this._updateWeaveGenerateEnabled();
+    }
+
+    /**
+     * Enable/disable Generate button based on modal state.
+     * @returns {void}
+     */
+    _updateWeaveGenerateEnabled() {
+        const modal = this.modalManager?.getPluginModal?.('powerpoint', 'weave') || this._pptxWeaveModal;
+        if (!modal) return;
+        const btn = modal.querySelector('#pptx-weave-generate-btn');
+        if (!btn) return;
+        btn.disabled = !this._weaveModalState?.nodeId;
+    }
+
+    /**
+     * @returns {void}
+     */
+    _handleWeaveGenerateClick() {
+        const modal = this.modalManager?.getPluginModal?.('powerpoint', 'weave') || this._pptxWeaveModal;
+        if (!modal) return;
+        const nodeId = this._weaveModalState?.nodeId;
+        if (!nodeId) return;
+
+        const settings = {
+            voice: String(modal.querySelector('#pptx-weave-voice')?.value || ''),
+            audience: String(modal.querySelector('#pptx-weave-audience')?.value || ''),
+            length: String(modal.querySelector('#pptx-weave-length')?.value || 'medium'),
+            structure: String(modal.querySelector('#pptx-weave-structure')?.value || 'narrative'),
+            inclusion: String(modal.querySelector('#pptx-weave-inclusion')?.value || 'captioned_only'),
+        };
+
+        this._closeWeaveNarrativeModal();
+        this._runWeaveNarrative(nodeId, settings);
+    }
+
+    /**
+     * Kick off AI suggestions fetch and render presets on completion.
+     *
+     * @param {string} nodeId
+     * @returns {Promise<void>}
+     */
+    async _startWeaveSuggestionsFetch(nodeId) {
+        const node = this._getPptxNode(nodeId);
+        const slides = node?.pptxData?.slides || [];
+        if (!node || slides.length === 0) return;
+
+        const modal = this.modalManager?.getPluginModal?.('powerpoint', 'weave') || this._pptxWeaveModal;
+        if (!modal) return;
+
+        // Abort any prior request
+        if (this._weaveSuggestionsAbortController) {
+            this._weaveSuggestionsAbortController.abort();
+        }
+        const abortController = new AbortController();
+        this._weaveSuggestionsAbortController = abortController;
+
+        // Prepare compact deck summary
+        const captions = node.slideCaptions || {};
+        const summarySlides = [];
+        for (let i = 0; i < Math.min(slides.length, 25); i++) {
+            const title = getEffectiveSlideTitle(node, i) || '';
+            const caption = captions[i] ? String(captions[i]).trim() : '';
+            if (!title && !caption) continue;
+            summarySlides.push({ index: i, title, caption });
+        }
+
+        const requestBody = this.buildLLMRequest({
+            slides: summarySlides,
+            filename: node.filename || node.title || null,
+        });
+
+        try {
+            const resp = await fetch(apiUrl('/api/pptx/narrative-style-suggestions'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+                signal: abortController.signal,
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(err.detail || 'Failed to generate style suggestions');
+            }
+
+            const data = await resp.json();
+            const presets = Array.isArray(data?.presets) ? data.presets : [];
+            if (!this._weaveModalState || this._weaveModalState.nodeId !== nodeId) return;
+            this._weaveModalState.presets = presets;
+
+            this._renderWeavePresets(presets);
+        } catch (err) {
+            if (err?.name === 'AbortError') return;
+            // Even if suggestions fail, keep modal usable with simple fallbacks.
+            const fallback = this._getFallbackWeavePresets();
+            if (this._weaveModalState && this._weaveModalState.nodeId === nodeId) {
+                this._weaveModalState.presets = fallback;
+            }
+            this._renderWeavePresets(fallback);
+        } finally {
+            if (this._weaveSuggestionsAbortController === abortController) {
+                this._weaveSuggestionsAbortController = null;
+            }
+        }
+    }
+
+    /**
+     * @returns {Array<{id: string, label: string, description: string, voice?: string, length?: string, structure?: string, audience_hint?: string, inclusion?: string}>}
+     */
+    _getFallbackWeavePresets() {
+        return [
+            {
+                id: 'story',
+                label: 'Story arc',
+                description: 'A coherent narrative that flows slide-to-slide with a clear throughline.',
+                voice: 'Warm, confident, and clear.',
+                length: 'medium',
+                structure: 'narrative',
+                audience_hint: '',
+                inclusion: 'captioned_only',
+            },
+            {
+                id: 'exec',
+                label: 'Executive summary',
+                description: 'High-level summary: goals, key points, and recommended next steps.',
+                voice: 'Direct, crisp, and business-friendly.',
+                length: 'short',
+                structure: 'executive_summary',
+                audience_hint: 'Leadership / stakeholders',
+                inclusion: 'captioned_only',
+            },
+            {
+                id: 'speaker',
+                label: 'Speaker notes',
+                description: 'Slide-by-slide speaker notes that are easy to present from.',
+                voice: 'Conversational and engaging.',
+                length: 'long',
+                structure: 'speaker_notes',
+                audience_hint: '',
+                inclusion: 'all',
+            },
+        ];
+    }
+
+    /**
+     * @param {Array<Object>} presets
+     * @returns {void}
+     */
+    _renderWeavePresets(presets) {
+        const modal = this.modalManager?.getPluginModal?.('powerpoint', 'weave') || this._pptxWeaveModal;
+        if (!modal) return;
+
+        const loading = modal.querySelector('#pptx-weave-presets-loading');
+        const statusEl = modal.querySelector('#pptx-weave-presets-status');
+        const listEl = modal.querySelector('#pptx-weave-presets-list');
+        loading.style.display = 'none';
+        statusEl.textContent = presets.length ? `${presets.length} options` : 'No suggestions available';
+        listEl.innerHTML = '';
+
+        for (const p of presets) {
+            const id = String(p.id || '');
+            const label = String(p.label || 'Preset');
+            const desc = String(p.description || '');
+            const item = document.createElement('label');
+            item.className = 'pptx-weave-preset';
+
+            const titleRow = document.createElement('div');
+            titleRow.className = 'pptx-weave-preset-title';
+
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'pptx-weave-preset';
+            input.value = id || `preset_${Math.random().toString(16).slice(2)}`;
+
+            const titleText = document.createElement('span');
+            titleText.textContent = label;
+
+            const descEl = document.createElement('div');
+            descEl.className = 'pptx-weave-preset-desc';
+            descEl.textContent = desc;
+
+            titleRow.appendChild(input);
+            titleRow.appendChild(titleText);
+            item.appendChild(titleRow);
+            item.appendChild(descEl);
+            listEl.appendChild(item);
+        }
+
+        // Default-select first preset if present
+        if (presets.length > 0) {
+            const firstId = String(presets[0].id || '');
+            const firstRadio = listEl.querySelector('input[name="pptx-weave-preset"]');
+            if (firstRadio) firstRadio.checked = true;
+            this._selectWeavePreset(firstId);
+        } else {
+            this._updateWeaveGenerateEnabled();
+        }
+    }
+
+    /**
+     * Run narrative generation with the chosen settings and stream into a new AI node.
+     *
+     * @param {string} nodeId
+     * @param {{voice: string, audience: string, length: string, structure: string, inclusion: string}} settings
+     * @returns {Promise<void>}
+     */
+    async _runWeaveNarrative(nodeId, settings) {
         const node = this._getPptxNode(nodeId);
         const slides = node?.pptxData?.slides || [];
         if (!node || slides.length === 0) return;
 
         const captions = node.slideCaptions || {};
-
         const items = [];
         for (let i = 0; i < slides.length; i++) {
             const title = getEffectiveSlideTitle(node, i) || '';
             const caption = captions[i] ? String(captions[i]).trim() : '';
+
+            const hasCaption = !!caption;
+            const include =
+                settings.inclusion === 'all' ? true : settings.inclusion === 'captioned_only' ? hasCaption : true;
+
+            if (!include) continue;
             if (!title && !caption) continue;
-            items.push({
-                idx: i,
-                title,
-                caption,
-            });
+            items.push({ idx: i, title, caption });
         }
 
         if (items.length === 0) {
@@ -1050,10 +1507,16 @@ class PowerPointFeature extends FeaturePlugin {
         }
 
         const model = this.modelPicker?.value;
+        const titleSuffix =
+            settings.structure === 'executive_summary'
+                ? 'Executive summary'
+                : settings.structure === 'speaker_notes'
+                  ? 'Speaker notes'
+                  : 'Narrative';
         const aiNode = createNode(NodeType.AI, '', {
             position: this.graph.autoPosition([nodeId]),
             model: (model || '').split('/').pop(),
-            title: 'Narrative: Deck',
+            title: `Deck: ${titleSuffix}`,
         });
 
         if (this._app?.addUserNode) {
@@ -1067,7 +1530,33 @@ class PowerPointFeature extends FeaturePlugin {
         this.updateCollapseButtonForNode?.(nodeId);
         this.saveSession?.();
 
-        const systemPrompt = `You are a concise technical writer.\n\nWrite a coherent narrative summary of this slide deck from top to bottom.\n\nRules:\n- Use the provided slide titles and one-paragraph captions.\n- Output should be 3-8 short paragraphs.\n- No bullet points.\n- Do not invent details not supported by the captions.\n`;
+        // UX: select + center on the new narrative node
+        this.canvas.selectNode?.(aiNode.id);
+        this.canvas.centerOnAnimated?.(aiNode.position.x + 160, aiNode.position.y + 100, 300);
+
+        const lengthRule =
+            settings.length === 'short'
+                ? 'Aim for ~3 short paragraphs.'
+                : settings.length === 'long'
+                  ? 'Aim for ~8 short paragraphs.'
+                  : 'Aim for ~5 short paragraphs.';
+
+        const structureRule =
+            settings.structure === 'executive_summary'
+                ? 'Write an executive summary with a short heading, then 5-10 bullet points, then "Next steps".'
+                : settings.structure === 'speaker_notes'
+                  ? 'Write slide-by-slide speaker notes. For each slide, include a short "Say:" paragraph and (optional) "Emphasize:" line.'
+                  : 'Write a coherent narrative from start to finish. No bullet points.';
+
+        const audienceRule = settings.audience ? `Audience: ${settings.audience}\n` : '';
+        const voiceRule = settings.voice ? `Voice/persona: ${settings.voice}\n` : '';
+
+        const systemPrompt =
+            `You are a skilled writer.\n\n` +
+            audienceRule +
+            voiceRule +
+            `Task: weave the slide deck into a cohesive output.\n\n` +
+            `Rules:\n- Use only the provided slide titles and one-paragraph captions.\n- Do not invent facts.\n- ${lengthRule}\n- ${structureRule}\n`;
 
         const userPrompt =
             `Slide notes (ordered):\n\n` +
@@ -1078,7 +1567,7 @@ class PowerPointFeature extends FeaturePlugin {
                     return `Slide ${s.idx + 1}:\n${t}${c}`.trim();
                 })
                 .join('\n\n') +
-            `\n\nWrite the narrative now.`;
+            `\n\nWrite the output now.`;
 
         const messages = [
             { role: 'system', content: systemPrompt },

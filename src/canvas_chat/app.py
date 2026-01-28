@@ -21,6 +21,7 @@ import importlib.util
 import json
 import logging
 import os
+import re
 import sys
 import time
 import traceback
@@ -1770,6 +1771,97 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     return {}
 
 
+class PptxNarrativeStyleSuggestionsRequest(BaseModel):
+    """Request body for PPTX narrative style suggestions (text-only)."""
+
+    slides: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Compact slide summaries, each with optional title/caption.",
+    )
+    filename: str | None = None
+
+    model: str = "openai/gpt-4o-mini"
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+class NarrativeStylePreset(BaseModel):
+    """A narrative preset suggested for weaving a deck."""
+
+    id: str = Field(..., description="Stable slug id (lowercase, hyphenated).")
+    label: str = Field(..., description="Short name shown in the UI.")
+    description: str = Field(..., description="1-2 sentence description.")
+    voice: str = Field("", description="Voice/persona guidance.")
+    audience_hint: str = Field("", description="Suggested audience hint.")
+    length: str = Field(
+        "medium",
+        description="One of: short|medium|long.",
+    )
+    structure: str = Field(
+        "narrative",
+        description="One of: narrative|executive_summary|speaker_notes.",
+    )
+    inclusion: str = Field(
+        "captioned_only",
+        description="One of: all|captioned_only.",
+    )
+
+
+class NarrativeStyleSuggestionsOutput(BaseModel):
+    """Structured output for narrative style suggestions."""
+
+    presets: list[NarrativeStylePreset]
+
+
+def _pptx_fallback_narrative_presets() -> list[dict[str, Any]]:
+    """Fallback presets returned when LLM suggestions are unavailable."""
+    return [
+        {
+            "id": "story-arc",
+            "label": "Story arc",
+            "description": (
+                "A coherent narrative that flows slide-to-slide with a clear "
+                "throughline."
+            ),
+            "voice": "Warm, confident, and clear.",
+            "audience_hint": "",
+            "length": "medium",
+            "structure": "narrative",
+            "inclusion": "captioned_only",
+        },
+        {
+            "id": "executive-summary",
+            "label": "Executive summary",
+            "description": (
+                "High-level summary: goals, key points, and recommended next steps."
+            ),
+            "voice": "Direct, crisp, and business-friendly.",
+            "audience_hint": "Leadership / stakeholders",
+            "length": "short",
+            "structure": "executive_summary",
+            "inclusion": "captioned_only",
+        },
+        {
+            "id": "speaker-notes",
+            "label": "Speaker notes",
+            "description": (
+                "Slide-by-slide speaker notes that are easy to present from."
+            ),
+            "voice": "Conversational and engaging.",
+            "audience_hint": "",
+            "length": "long",
+            "structure": "speaker_notes",
+            "inclusion": "all",
+        },
+    ]
+
+
+def _slugify_id(text: str) -> str:
+    text = (text or "").strip().lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    return re.sub(r"-+", "-", text).strip("-") or "preset"
+
+
 @app.post("/api/pptx/caption-title-slide")
 async def pptx_caption_title_slide(request: PptxSlideCaptionTitleRequest):
     """
@@ -1984,6 +2076,136 @@ Rules:
         logger.error(f"PPTX deck caption/title failed: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/pptx/narrative-style-suggestions")
+async def pptx_narrative_style_suggestions(
+    request: PptxNarrativeStyleSuggestionsRequest,
+):
+    """Suggest 3-5 narrative style presets for weaving a PPTX deck.
+
+    This endpoint is designed to keep the modal usable even when the LLM call fails:
+    it returns a small static preset list as a fallback.
+    """
+    inject_admin_credentials(request)
+
+    # Keep payload bounded and stable
+    prepared: list[dict[str, str]] = []
+    for s in (request.slides or [])[:25]:
+        title = _one_paragraph(str((s or {}).get("title") or ""))[:120]
+        caption = _one_paragraph(str((s or {}).get("caption") or ""))[:500]
+        if not title and not caption:
+            continue
+        prepared.append({"title": title, "caption": caption})
+
+    system_prompt = """You propose narrative presets for weaving a slide deck into text.
+
+Return JSON matching the provided schema.
+
+Rules:
+- Provide 3-5 distinct presets.
+- Each preset must be usable without further context.
+- id: lowercase slug (letters, numbers, dashes) and stable.
+- label: short and friendly.
+- description: 1-2 sentences, concrete and specific.
+- length must be one of: short|medium|long
+- structure must be one of: narrative|executive_summary|speaker_notes
+- inclusion must be one of: all|captioned_only
+"""
+
+    filename = (request.filename or "").strip()
+    user_prompt = (
+        (f"Filename: {filename}\n\n" if filename else "")
+        + "Deck signals (titles/captions; may be partial):\n\n"
+        + "\n\n".join(
+            [
+                f"Slide {i + 1}:\n"
+                + (f"Title: {s['title']}\n" if s["title"] else "")
+                + (f"Caption: {s['caption']}\n" if s["caption"] else "")
+                for i, s in enumerate(prepared)
+            ]
+        )
+        + "\n\nReturn presets."
+    )
+
+    try:
+        supports_structured = litellm.supports_response_schema(
+            model=request.model, custom_llm_provider=None
+        )
+
+        kwargs: dict[str, Any] = {
+            "model": request.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.3,
+            "max_tokens": 800,
+        }
+        if request.api_key:
+            kwargs["api_key"] = request.api_key
+        if request.base_url:
+            kwargs["base_url"] = request.base_url
+
+        kwargs = prepare_copilot_openai_request(kwargs, request.model, request.api_key)
+
+        if supports_structured:
+            kwargs["response_format"] = NarrativeStyleSuggestionsOutput
+            response = await litellm.acompletion(**kwargs)
+            content = response.choices[0].message.content
+            if isinstance(content, str):
+                out = NarrativeStyleSuggestionsOutput.model_validate(
+                    _extract_json_object(content)
+                )
+            elif hasattr(content, "presets"):
+                out = NarrativeStyleSuggestionsOutput(presets=content.presets)
+            else:
+                out = NarrativeStyleSuggestionsOutput.model_validate(content)
+        else:
+            text = await _llm_text(
+                model=request.model,
+                api_key=request.api_key,
+                base_url=request.base_url,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.3,
+                max_tokens=800,
+            )
+            out = NarrativeStyleSuggestionsOutput.model_validate(
+                _extract_json_object(text)
+            )
+
+        # Normalize and guardrail outputs
+        presets: list[dict[str, Any]] = []
+        for p in out.presets[:5]:
+            label = _one_paragraph(p.label)[:60]
+            desc = _one_paragraph(p.description)[:240]
+            pid = _slugify_id(getattr(p, "id", "") or label)
+            presets.append(
+                {
+                    "id": pid,
+                    "label": label,
+                    "description": desc,
+                    "voice": _one_paragraph(getattr(p, "voice", "") or "")[:200],
+                    "audience_hint": _one_paragraph(
+                        getattr(p, "audience_hint", "") or ""
+                    )[:120],
+                    "length": getattr(p, "length", "medium") or "medium",
+                    "structure": getattr(p, "structure", "narrative") or "narrative",
+                    "inclusion": getattr(p, "inclusion", "captioned_only")
+                    or "captioned_only",
+                }
+            )
+
+        if not presets:
+            presets = _pptx_fallback_narrative_presets()
+
+        return {"presets": presets}
+    except Exception as e:
+        logger.warning(f"PPTX narrative style suggestions failed: {e}")
+        return {"presets": _pptx_fallback_narrative_presets()}
 
 
 class ImageGenerationRequest(BaseModel):
