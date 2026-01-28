@@ -23,7 +23,7 @@ image = (
         "libreoffice-impress",
         "libreoffice-common",
         "fonts-dejavu-core",
-        "libwebp6",
+        "libwebp7",
     )
     .pip_install(
         "fastapi[standard]>=0.115.0",
