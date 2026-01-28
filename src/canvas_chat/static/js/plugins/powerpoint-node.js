@@ -5,7 +5,7 @@
  * - Renders slide images inside the node
  * - Provides a slide navigator drawer (output panel)
  * - Supports extracting a slide as an IMAGE node
- * - Supports per-slide captioning + narrative weaving (user-triggered)
+ * - Supports user-triggered structured caption+title generation (text-only)
  */
 
 import { FeaturePlugin } from '../feature-plugin.js';
@@ -45,34 +45,6 @@ function getSlideImage(slide) {
 }
 
 /**
- * Convert a base64-encoded WebP image to PNG base64 in-browser.
- * Used as a fallback for LLM providers that don't accept WebP image inputs.
- *
- * @param {string} webpBase64
- * @returns {Promise<string>} base64 PNG (no data: prefix)
- */
-async function webpBase64ToPngBase64(webpBase64) {
-    const dataUrl = `data:image/webp;base64,${webpBase64}`;
-    const img = new Image();
-    img.src = dataUrl;
-    await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = () => reject(new Error('Failed to load WebP image'));
-    });
-
-    const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth || img.width;
-    canvas.height = img.naturalHeight || img.height;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
-
-    const pngDataUrl = canvas.toDataURL('image/png');
-    const match = pngDataUrl.match(/^data:image\/png;base64,(.*)$/);
-    if (!match) throw new Error('Failed to convert WebP to PNG');
-    return match[1];
-}
-
-/**
  * @param {Object} node
  * @param {number} index
  * @returns {string|null}
@@ -93,7 +65,7 @@ function getEffectiveSlideTitle(node, index) {
  * @returns {string}
  */
 function getSlideStatus(node, index) {
-    const statuses = node.slideCaptionStatuses || {};
+    const statuses = node.slideEnrichStatuses || node.slideCaptionStatuses || {};
     return statuses[index] || 'idle'; // idle|queued|running|done|error
 }
 
@@ -143,9 +115,9 @@ class PowerPointNode extends BaseNode {
 
         return [
             {
-                id: 'pptxCaptionCurrent',
-                label: '🖼️ Caption',
-                title: 'Caption the current slide with AI',
+                id: 'pptxEnrichCurrent',
+                label: '🖼️ Caption+Title',
+                title: 'Generate title + one-paragraph caption for the current slide',
             },
         ];
     }
@@ -222,6 +194,13 @@ class PowerPointNode extends BaseNode {
                 <div class="pptx-slide-title">
                     ${title ? `"${canvas.escapeHtml(title)}"` : `<span class="pptx-slide-title-missing">No title</span>`}
                 </div>
+                <div class="pptx-slide-caption">
+                    ${
+                        (this.node.slideCaptions || {})[current]
+                            ? canvas.escapeHtml((this.node.slideCaptions || {})[current])
+                            : '<span class="pptx-slide-caption-missing">No caption</span>'
+                    }
+                </div>
                 <div class="pptx-actions">
                     <button class="pptx-action-btn pptx-extract" title="Extract this slide as an image node">Extract</button>
                 </div>
@@ -278,11 +257,11 @@ class PowerPointNode extends BaseNode {
                 const status = getSlideStatus(this.node, i);
                 const statusLabel =
                     status === 'running'
-                        ? '<span class="pptx-slide-status"><span class="spinner pptx-inline-spinner"></span> Captioning</span>'
+                        ? '<span class="pptx-slide-status"><span class="spinner pptx-inline-spinner"></span> Generating</span>'
                         : status === 'queued'
                           ? '<span class="pptx-slide-status">Queued</span>'
                           : status === 'done'
-                            ? '<span class="pptx-slide-status">✓ Captioned</span>'
+                            ? '<span class="pptx-slide-status">✓ Done</span>'
                             : status === 'error'
                               ? '<span class="pptx-slide-status pptx-error">Error</span>'
                               : '';
@@ -300,11 +279,13 @@ class PowerPointNode extends BaseNode {
                             <div class="pptx-slide-title-row">
                                 <input class="pptx-title-input" type="text" value="${canvas.escapeHtml(title || '')}" placeholder="(no title)" data-slide-index="${i}">
                                 <button class="pptx-title-save" title="Save title" data-slide-index="${i}">Save</button>
-                                <button class="pptx-auto-title" title="Auto-title with AI" data-slide-index="${i}">Auto-title</button>
+                                <button class="pptx-enrich-slide" title="Generate title + one-paragraph caption" data-slide-index="${i}">Caption+Title</button>
                             </div>
-                            <div class="pptx-slide-actions-row">
-                                <button class="pptx-caption-slide" data-slide-index="${i}">Caption</button>
-                            </div>
+                            ${
+                                (this.node.slideCaptions || {})[i]
+                                    ? `<div class="pptx-slide-caption-preview">${canvas.escapeHtml((this.node.slideCaptions || {})[i])}</div>`
+                                    : '<div class="pptx-slide-caption-preview pptx-slide-caption-missing">(no caption)</div>'
+                            }
                         </div>
                     </div>
                 `;
@@ -318,8 +299,7 @@ class PowerPointNode extends BaseNode {
                     ${itemsHtml}
                 </div>
                 <div class="pptx-drawer-footer">
-                    <button class="pptx-caption-all" title="Caption all slides (sequential)">Caption all slides</button>
-                    <button class="pptx-weave" title="Weave captions into a narrative">Weave story</button>
+                    <button class="pptx-enrich-all" title="Generate title + one-paragraph caption for all slides">Caption+Title all slides</button>
                 </div>
             </div>
         `;
@@ -365,27 +345,16 @@ class PowerPointNode extends BaseNode {
                 },
             },
             {
-                selector: '.pptx-auto-title',
+                selector: '.pptx-enrich-slide',
                 multiple: true,
                 handler: (_nodeId, e, canvas) => {
                     const idx = Number(e.currentTarget.dataset.slideIndex);
-                    canvas.emit('pptxAutoTitle', this.node.id, idx);
-                },
-            },
-
-            // Drawer: caption per slide
-            {
-                selector: '.pptx-caption-slide',
-                multiple: true,
-                handler: (_nodeId, e, canvas) => {
-                    const idx = Number(e.currentTarget.dataset.slideIndex);
-                    canvas.emit('pptxCaptionSlide', this.node.id, idx);
+                    canvas.emit('pptxEnrichSlide', this.node.id, idx);
                 },
             },
 
             // Drawer: batch actions
-            { selector: '.pptx-caption-all', handler: (_nodeId, _e, canvas) => canvas.emit('pptxCaptionAll', this.node.id) },
-            { selector: '.pptx-weave', handler: (_nodeId, _e, canvas) => canvas.emit('pptxWeaveNarrative', this.node.id) },
+            { selector: '.pptx-enrich-all', handler: (_nodeId, _e, canvas) => canvas.emit('pptxEnrichAll', this.node.id) },
         ];
     }
 
@@ -552,6 +521,8 @@ class PowerPointFeature extends FeaturePlugin {
             .pptx-nav-btn:disabled { opacity: 0.5; cursor: default; }
             .pptx-slide-title { padding: 0 10px 8px 10px; font-size: 12px; color: var(--text-secondary); }
             .pptx-slide-title-missing { color: var(--text-muted); }
+            .pptx-slide-caption { padding: 0 10px 10px 10px; font-size: 11px; color: var(--text-secondary); line-height: 1.35; }
+            .pptx-slide-caption-missing { color: var(--text-muted); }
             .pptx-actions { display: flex; gap: 8px; padding: 0 10px 10px 10px; }
             .pptx-action-btn { border: 1px solid var(--bg-secondary); background: var(--bg-primary); color: var(--text-primary); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
             .pptx-rendering-note { padding: 0 10px 10px 10px; font-size: 11px; color: var(--text-muted); }
@@ -575,10 +546,11 @@ class PowerPointFeature extends FeaturePlugin {
             .pptx-inline-spinner.spinner { width: 14px; height: 14px; border-width: 2px; }
             .pptx-title-input { width: 100%; padding: 4px 6px; font-size: 12px; border: 1px solid var(--bg-secondary); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); }
             .pptx-slide-title-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; margin-top: 4px; }
-            .pptx-title-save, .pptx-auto-title, .pptx-caption-slide { border: 1px solid var(--bg-secondary); background: var(--bg-primary); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
-            .pptx-slide-actions-row { display: flex; justify-content: flex-end; margin-top: 6px; }
+            .pptx-title-save, .pptx-enrich-slide { border: 1px solid var(--bg-secondary); background: var(--bg-primary); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
+            .pptx-slide-caption-preview { margin-top: 6px; font-size: 11px; color: var(--text-secondary); line-height: 1.35; max-height: 4.2em; overflow: auto; }
+            .pptx-slide-caption-missing { color: var(--text-muted); }
             .pptx-drawer-footer { display: flex; gap: 8px; padding-top: 4px; }
-            .pptx-caption-all, .pptx-weave { flex: 1; border: 1px solid var(--bg-secondary); background: var(--bg-primary); color: var(--text-primary); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 12px; }
+            .pptx-enrich-all { flex: 1; border: 1px solid var(--bg-secondary); background: var(--bg-primary); color: var(--text-primary); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 12px; }
             `,
             'plugin-styles-powerpoint'
         );
@@ -595,11 +567,9 @@ class PowerPointFeature extends FeaturePlugin {
             pptxGoToSlide: this.goToSlide.bind(this),
             pptxExtractSlide: this.extractSlide.bind(this),
             pptxSetSlideTitle: this.setSlideTitle.bind(this),
-            pptxAutoTitle: this.autoTitleSlide.bind(this),
-            pptxCaptionCurrent: this.captionCurrentSlide.bind(this),
-            pptxCaptionSlide: this.captionSlide.bind(this),
-            pptxCaptionAll: this.captionAllSlides.bind(this),
-            pptxWeaveNarrative: this.weaveNarrative.bind(this),
+            pptxEnrichCurrent: this.enrichCurrentSlide.bind(this),
+            pptxEnrichSlide: this.enrichSlide.bind(this),
+            pptxEnrichAll: this.enrichAllSlides.bind(this),
         };
     }
 
@@ -696,6 +666,16 @@ class PowerPointFeature extends FeaturePlugin {
             }
         }
 
+        const captionEl = pptxRoot.querySelector('.pptx-slide-caption');
+        if (captionEl) {
+            const caption = (node.slideCaptions || {})[current];
+            if (caption && String(caption).trim()) {
+                captionEl.textContent = String(caption).trim();
+            } else {
+                captionEl.innerHTML = '<span class="pptx-slide-caption-missing">No caption</span>';
+            }
+        }
+
         // --- Patch drawer (current row highlight + caption status labels) ---
         const panelWrapper = this.canvas.outputPanels.get(node.id);
         const panelBody = panelWrapper?.querySelector?.('.code-output-panel-body');
@@ -723,16 +703,42 @@ class PowerPointFeature extends FeaturePlugin {
                 statusEl.className = `pptx-slide-status${status === 'error' ? ' pptx-error' : ''}`;
 
                 if (status === 'running') {
-                    statusEl.innerHTML = '<span class="spinner pptx-inline-spinner"></span> Captioning';
+                    statusEl.innerHTML = '<span class="spinner pptx-inline-spinner"></span> Generating';
                 } else if (status === 'queued') {
                     statusEl.textContent = 'Queued';
                 } else if (status === 'done') {
-                    statusEl.textContent = '✓ Captioned';
+                    statusEl.textContent = '✓ Done';
                 } else {
                     statusEl.textContent = 'Error';
                 }
 
                 if (!existing) line.appendChild(statusEl);
+            });
+
+            // Update title inputs + caption previews without rebuilding the drawer.
+            panelBody.querySelectorAll('.pptx-slide-row[data-slide-index]').forEach((row) => {
+                const idx = Number(row.dataset.slideIndex);
+                if (!Number.isFinite(idx)) return;
+
+                // Title input (only update if not actively being edited)
+                const input = row.querySelector('.pptx-title-input');
+                const effectiveTitle = getEffectiveSlideTitle(node, idx) || '';
+                if (input && document.activeElement !== input) {
+                    input.value = effectiveTitle;
+                }
+
+                // Caption preview
+                const caption = (node.slideCaptions || {})[idx];
+                const preview = row.querySelector('.pptx-slide-caption-preview');
+                if (preview) {
+                    if (caption && String(caption).trim()) {
+                        preview.classList.remove('pptx-slide-caption-missing');
+                        preview.textContent = String(caption).trim();
+                    } else {
+                        preview.classList.add('pptx-slide-caption-missing');
+                        preview.textContent = '(no caption)';
+                    }
+                }
             });
         }
 
@@ -800,49 +806,6 @@ class PowerPointFeature extends FeaturePlugin {
     /**
      *
      * @param nodeId
-     * @param slideIndex
-     */
-    async autoTitleSlide(nodeId, slideIndex) {
-        const node = this._getPptxNode(nodeId);
-        const idx = Number(slideIndex);
-        if (!node || !Number.isFinite(idx)) return;
-        const slide = node.pptxData?.slides?.[idx];
-        if (!slide) return;
-
-        const { mimeType, imageData } = getSlideImage(slide);
-        if (!imageData) return;
-
-        // Create a child AI node to hold the title suggestion (so user can see provenance)
-        const aiNode = this._createChildAiNode(nodeId, `Auto-title: Slide ${idx + 1}`);
-
-        const model = this.modelPicker?.value;
-        const prompt = 'Generate a short, descriptive title for this slide (max 8 words). Return ONLY the title.';
-
-        const messages = [
-            {
-                role: 'user',
-                content: [
-                    {
-                        type: 'image_url',
-                        image_url: { url: `data:${mimeType};base64,${imageData}` },
-                    },
-                    { type: 'text', text: prompt },
-                ],
-            },
-        ];
-
-        const titleText = await this._streamIntoAiNode(aiNode.id, messages, model, { featureId: 'powerpoint' }).catch(
-            () => null
-        );
-
-        if (titleText) {
-            this.setSlideTitle(nodeId, idx, titleText.trim().replace(/^"|"$/g, ''));
-        }
-    }
-
-    /**
-     *
-     * @param nodeId
      */
     extractSlide(nodeId) {
         const node = this._getPptxNode(nodeId);
@@ -875,222 +838,160 @@ class PowerPointFeature extends FeaturePlugin {
     }
 
     /**
-     *
-     * @param nodeId
-     * @param slideIndex
+     * Generate title + one-paragraph caption for a single slide.
+     * @param {string} nodeId
+     * @param {number} slideIndex
+     * @returns {Promise<void>}
      */
-    async captionSlide(nodeId, slideIndex) {
+    async enrichSlide(nodeId, slideIndex) {
         const node = this._getPptxNode(nodeId);
         const idx = Number(slideIndex);
         if (!node || !Number.isFinite(idx)) return;
+
         const slide = node.pptxData?.slides?.[idx];
         if (!slide) return;
 
-        const { mimeType, imageData } = getSlideImage(slide);
-        if (!imageData) return;
+        const statuses = { ...(node.slideEnrichStatuses || node.slideCaptionStatuses || {}) };
+        const errors = { ...(node.slideEnrichErrors || {}) };
+        statuses[idx] = 'running';
+        delete errors[idx];
+        this._updateAndRerender(nodeId, { slideEnrichStatuses: statuses, slideEnrichErrors: errors });
 
-        // Status -> running
-        const nextStatuses = { ...(node.slideCaptionStatuses || {}) };
-        nextStatuses[idx] = 'running';
-        this._updateAndRerender(nodeId, { slideCaptionStatuses: nextStatuses });
-
-        const aiNode = this._createChildAiNode(nodeId, `Caption: Slide ${idx + 1}`);
-        const model = this.modelPicker?.value;
-        const slideText = slide.text_content || '';
-
-        const prompt = `Caption this presentation slide. Include key points, any numbers, and what the visual shows.\n\nSlide text (may be incomplete):\n${slideText}`;
-
-        const tryMessages = [
-            {
-                role: 'user',
-                content: [
-                    { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageData}` } },
-                    { type: 'text', text: prompt },
-                ],
-            },
-        ];
-
-        let finalText = null;
         try {
-            finalText = await this._streamIntoAiNode(aiNode.id, tryMessages, model, { featureId: 'powerpoint' });
-        } catch (err) {
-            // If WebP rejected by provider, retry with PNG conversion
-            const msg = String(err?.message || '');
-            const looksLikeWebpIssue = mimeType === 'image/webp' && /webp|image|mime|unsupported/i.test(msg);
-            if (looksLikeWebpIssue) {
-                try {
-                    const pngB64 = await webpBase64ToPngBase64(imageData);
-                    const retryMessages = [
-                        {
-                            role: 'user',
-                            content: [
-                                { type: 'image_url', image_url: { url: `data:image/png;base64,${pngB64}` } },
-                                { type: 'text', text: prompt },
-                            ],
-                        },
-                    ];
-                    finalText = await this._streamIntoAiNode(aiNode.id, retryMessages, model, { featureId: 'powerpoint' });
-                } catch (retryErr) {
-                    console.error('[PowerPointFeature] caption retry failed', retryErr);
-                    throw retryErr;
-                }
-            } else {
-                throw err;
+            const existingTitle = getEffectiveSlideTitle(node, idx) || '';
+            const slideText = slide.text_content || '';
+
+            const requestBody = this.buildLLMRequest({
+                slide_text: slideText,
+                slide_title: existingTitle,
+                filename: node.filename || node.title || null,
+            });
+
+            const response = await fetch(apiUrl('/api/pptx/caption-title-slide'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.detail || 'Failed to caption+title slide');
             }
-        } finally {
-            const refreshed = this._getPptxNode(nodeId);
-            const statuses = { ...(refreshed?.slideCaptionStatuses || {}) };
-            statuses[idx] = finalText ? 'done' : 'error';
-            const captions = { ...(refreshed?.slideCaptions || {}) };
-            if (finalText) captions[idx] = finalText;
-            this._updateAndRerender(nodeId, { slideCaptionStatuses: statuses, slideCaptions: captions });
+
+            const data = await response.json();
+            const refreshed = this._getPptxNode(nodeId) || node;
+
+            const nextTitles = { ...(refreshed.slideTitles || {}) };
+            const nextCaptions = { ...(refreshed.slideCaptions || {}) };
+            const nextStatuses = { ...(refreshed.slideEnrichStatuses || refreshed.slideCaptionStatuses || {}) };
+            nextStatuses[idx] = 'done';
+
+            if (data?.title) nextTitles[idx] = String(data.title).trim();
+            if (data?.caption) nextCaptions[idx] = String(data.caption).trim();
+
+            this._updateAndRerender(nodeId, {
+                slideTitles: nextTitles,
+                slideCaptions: nextCaptions,
+                slideEnrichStatuses: nextStatuses,
+            });
             this.saveSession?.();
+        } catch (err) {
+            const refreshed = this._getPptxNode(nodeId) || node;
+            const nextStatuses = { ...(refreshed.slideEnrichStatuses || refreshed.slideCaptionStatuses || {}) };
+            const nextErrors = { ...(refreshed.slideEnrichErrors || {}) };
+
+            nextStatuses[idx] = 'error';
+            nextErrors[idx] = String(err?.message || err);
+
+            this._updateAndRerender(nodeId, { slideEnrichStatuses: nextStatuses, slideEnrichErrors: nextErrors });
+            this.showToast?.(nextErrors[idx], 'error');
         }
     }
 
     /**
-     * Caption the currently visible slide (node action button).
+     * Generate title + one-paragraph caption for the current slide (node action button).
      * @param {string} nodeId
      * @returns {Promise<void>}
      */
-    async captionCurrentSlide(nodeId) {
+    async enrichCurrentSlide(nodeId) {
         const node = this._getPptxNode(nodeId);
         if (!node) return;
         const idx = node.currentSlideIndex || 0;
-        await this.captionSlide(nodeId, idx);
+        await this.enrichSlide(nodeId, idx);
     }
 
     /**
-     *
-     * @param nodeId
+     * Generate title + one-paragraph captions for all slides (single structured call).
+     * @param {string} nodeId
+     * @returns {Promise<void>}
      */
-    async captionAllSlides(nodeId) {
+    async enrichAllSlides(nodeId) {
         const node = this._getPptxNode(nodeId);
         const slides = node?.pptxData?.slides || [];
         if (!node || slides.length === 0) return;
 
-        // Queue all
-        const statuses = { ...(node.slideCaptionStatuses || {}) };
+        // Mark all as running
+        const statuses = { ...(node.slideEnrichStatuses || node.slideCaptionStatuses || {}) };
         for (let i = 0; i < slides.length; i++) {
-            if (statuses[i] !== 'done') statuses[i] = 'queued';
+            statuses[i] = 'running';
         }
-        this._updateAndRerender(nodeId, { slideCaptionStatuses: statuses });
+        this._updateAndRerender(nodeId, { slideEnrichStatuses: statuses });
 
-        // Sequentially caption
-        for (let i = 0; i < slides.length; i++) {
-            const refreshed = this._getPptxNode(nodeId);
-            const currentStatus = getSlideStatus(refreshed, i);
-            if (currentStatus === 'done') continue;
-            await this.captionSlide(nodeId, i);
-        }
-    }
+        try {
+            const payloadSlides = slides.map((s, i) => ({
+                title: getEffectiveSlideTitle(node, i) || '',
+                text_content: s.text_content || '',
+            }));
 
-    /**
-     *
-     * @param nodeId
-     */
-    async weaveNarrative(nodeId) {
-        const node = this._getPptxNode(nodeId);
-        if (!node) return;
-        const captions = node.slideCaptions || {};
-        const slides = node.pptxData?.slides || [];
-        if (!slides.length) return;
+            const requestBody = this.buildLLMRequest({
+                slides: payloadSlides,
+                filename: node.filename || node.title || null,
+            });
 
-        const ordered = [];
-        for (let i = 0; i < slides.length; i++) {
-            const c = captions[i];
-            if (c && String(c).trim()) {
-                ordered.push(`Slide ${i + 1}:\n${String(c).trim()}`);
+            const response = await fetch(apiUrl('/api/pptx/caption-title-deck'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.detail || 'Failed to caption+title all slides');
             }
+
+            const data = await response.json();
+            const outSlides = Array.isArray(data?.slides) ? data.slides : [];
+            if (outSlides.length !== slides.length) {
+                throw new Error(`Expected ${slides.length} slides, got ${outSlides.length}`);
+            }
+
+            const refreshed = this._getPptxNode(nodeId) || node;
+            const nextTitles = { ...(refreshed.slideTitles || {}) };
+            const nextCaptions = { ...(refreshed.slideCaptions || {}) };
+            const nextStatuses = { ...(refreshed.slideEnrichStatuses || refreshed.slideCaptionStatuses || {}) };
+
+            for (let i = 0; i < outSlides.length; i++) {
+                const item = outSlides[i] || {};
+                if (item.title) nextTitles[i] = String(item.title).trim();
+                if (item.caption) nextCaptions[i] = String(item.caption).trim();
+                nextStatuses[i] = 'done';
+            }
+
+            this._updateAndRerender(nodeId, {
+                slideTitles: nextTitles,
+                slideCaptions: nextCaptions,
+                slideEnrichStatuses: nextStatuses,
+            });
+            this.saveSession?.();
+        } catch (err) {
+            const refreshed = this._getPptxNode(nodeId) || node;
+            const nextStatuses = { ...(refreshed.slideEnrichStatuses || refreshed.slideCaptionStatuses || {}) };
+            for (let i = 0; i < slides.length; i++) {
+                nextStatuses[i] = 'error';
+            }
+            this._updateAndRerender(nodeId, { slideEnrichStatuses: nextStatuses });
+            this.showToast?.(String(err?.message || err), 'error');
         }
-        if (ordered.length === 0) {
-            this.showToast?.('No slide captions found. Run "Caption all slides" first.', 'error');
-            return;
-        }
-
-        const aiNode = this._createChildAiNode(nodeId, 'Narrative: Deck');
-        const model = this.modelPicker?.value;
-        const prompt = `Weave these slide captions into a coherent narrative from top to bottom.\n\n${ordered.join('\n\n')}`;
-        const messages = [{ role: 'user', content: prompt }];
-        await this._streamIntoAiNode(aiNode.id, messages, model, { featureId: 'powerpoint' });
-    }
-
-    // --- Streaming helpers (reuse App's streaming infra) ---
-
-    /**
-     *
-     * @param {string} parentNodeId
-     * @param {string} title
-     * @returns {Object}
-     */
-    _createChildAiNode(parentNodeId, title) {
-        const model = this.modelPicker?.value || '';
-        const node = createNode(NodeType.AI, '', {
-            position: this.graph.autoPosition([parentNodeId]),
-            model: model.split('/').pop(),
-            title,
-        });
-        if (this._app?.addUserNode) {
-            this._app.addUserNode(node);
-        } else {
-            // Test harness / fallback
-            this.graph.addNode(node);
-            this.canvas.renderNode(node);
-        }
-        this.graph.addEdge(createEdge(parentNodeId, node.id, EdgeType.REPLY));
-        this.updateCollapseButtonForNode?.(parentNodeId);
-        this.saveSession?.();
-        return node;
-    }
-
-    /**
-     * Stream an LLM response into an existing AI node and return full content when done.
-     * @param {string} nodeId
-     * @param {Array} messages
-     * @param {string} model
-     * @param {{featureId?: string}} [meta]
-     * @returns {Promise<string>}
-     */
-    async _streamIntoAiNode(nodeId, messages, model, meta = {}) {
-        if (!this._app?.streamWithAbort || !this.streamingManager?.register) {
-            throw new Error('Streaming infrastructure not available');
-        }
-
-        const abortController = new AbortController();
-
-        this.streamingManager.register(nodeId, {
-            abortController,
-            featureId: meta.featureId || 'powerpoint',
-            context: { messages, model },
-            onContinue: async (id, state) => {
-                await this._app.continueAIResponse(id, state.context);
-            },
-        });
-
-        return await new Promise((resolve, reject) => {
-            this._app.streamWithAbort(
-                nodeId,
-                abortController,
-                messages,
-                model,
-                (chunk, fullContent) => {
-                    this.canvas.updateNodeContent(nodeId, fullContent, true);
-                    this.graph.updateNode(nodeId, { content: fullContent });
-                },
-                (fullContent) => {
-                    this.streamingManager.unregister(nodeId);
-                    this.canvas.updateNodeContent(nodeId, fullContent, false);
-                    this.graph.updateNode(nodeId, { content: fullContent });
-                    this.saveSession?.();
-                    this.generateNodeSummary?.(nodeId);
-                    resolve(fullContent);
-                },
-                (err) => {
-                    this.streamingManager.unregister(nodeId);
-                    reject(err);
-                }
-            );
-        });
     }
 }
 

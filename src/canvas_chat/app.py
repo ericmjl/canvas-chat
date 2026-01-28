@@ -1688,6 +1688,304 @@ Examples:
         }
 
 
+def _one_paragraph(text: str) -> str:
+    """Normalize text to a single paragraph (no newlines, collapsed whitespace)."""
+    # Split/join collapses all whitespace (including newlines) to single spaces.
+    return " ".join((text or "").strip().split())
+
+
+class PptxSlideCaptionTitleRequest(BaseModel):
+    """Request body for PPTX slide caption+title generation (text-only)."""
+
+    slide_text: str = ""
+    slide_title: str | None = None
+    filename: str | None = None
+
+    model: str = "openai/gpt-4o-mini"
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+class SlideCaptionTitleOutput(BaseModel):
+    """Structured output for a single slide (title + one-paragraph caption)."""
+
+    title: str = Field(
+        ...,
+        description="Short slide title (max ~8 words).",
+    )
+    caption: str = Field(
+        ...,
+        description="One paragraph caption (3-5 sentences). No bullets. No newlines.",
+    )
+
+
+class PptxDeckCaptionTitleRequest(BaseModel):
+    """Request body for PPTX deck caption+title generation (text-only)."""
+
+    slides: list[dict[str, Any]]
+    filename: str | None = None
+
+    model: str = "openai/gpt-4o-mini"
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+class DeckCaptionTitleOutput(BaseModel):
+    """Structured output for an ordered list of slide title/caption pairs."""
+
+    slides: list[SlideCaptionTitleOutput] = Field(
+        ...,
+        description=(
+            "Ordered list of title/caption pairs, one per input slide, "
+            "in the same order."
+        ),
+    )
+
+
+def _extract_json_object(text: str) -> dict[str, Any]:
+    """Parse a JSON object from LLM output (best-effort)."""
+    text = (text or "").strip()
+    if not text:
+        return {}
+
+    # Strict parse
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+
+    # Best-effort: find first {...} region
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            data = json.loads(text[start : end + 1])
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            return {}
+
+    return {}
+
+
+@app.post("/api/pptx/caption-title-slide")
+async def pptx_caption_title_slide(request: PptxSlideCaptionTitleRequest):
+    """
+    Generate a slide title + one-paragraph caption (text-only).
+
+    This avoids vision-specific provider quirks and works with non-vision models.
+    """
+    inject_admin_credentials(request)
+
+    system_prompt = """You generate slide titles and captions.
+
+Rules:
+- Return JSON matching the provided schema.
+- Caption must be ONE paragraph (no newlines, no bullet points).
+- Title must be short (max ~8 words).
+"""
+
+    slide_text = (request.slide_text or "").strip()
+    slide_title = (request.slide_title or "").strip()
+    filename = (request.filename or "").strip()
+
+    user_prompt = (
+        (f"Filename: {filename}\n\n" if filename else "")
+        + (f"Existing slide title: {slide_title}\n\n" if slide_title else "")
+        + "Slide text (may be incomplete):\n"
+        + (slide_text[:4000] if slide_text else "(no text found)")
+        + "\n\nReturn title + caption."
+    )
+
+    try:
+        supports_structured = litellm.supports_response_schema(
+            model=request.model, custom_llm_provider=None
+        )
+
+        kwargs: dict[str, Any] = {
+            "model": request.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 300,
+        }
+        if request.api_key:
+            kwargs["api_key"] = request.api_key
+        if request.base_url:
+            kwargs["base_url"] = request.base_url
+
+        kwargs = prepare_copilot_openai_request(kwargs, request.model, request.api_key)
+
+        if supports_structured:
+            kwargs["response_format"] = SlideCaptionTitleOutput
+            response = await litellm.acompletion(**kwargs)
+            content = response.choices[0].message.content
+            if isinstance(content, str):
+                parsed = _extract_json_object(content)
+                out = SlideCaptionTitleOutput.model_validate(parsed)
+            elif hasattr(content, "title") and hasattr(content, "caption"):
+                out = SlideCaptionTitleOutput(
+                    title=content.title, caption=content.caption
+                )
+            else:
+                out = SlideCaptionTitleOutput.model_validate(content)
+        else:
+            text = await _llm_text(
+                model=request.model,
+                api_key=request.api_key,
+                base_url=request.base_url,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.2,
+                max_tokens=300,
+            )
+            out = SlideCaptionTitleOutput.model_validate(_extract_json_object(text))
+
+        # Normalize outputs (enforce one-paragraph caption)
+        out.title = _one_paragraph(out.title).strip('"')
+        out.caption = _one_paragraph(out.caption)
+
+        return {"title": out.title, "caption": out.caption}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"PPTX slide caption/title failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/pptx/caption-title-deck")
+async def pptx_caption_title_deck(request: PptxDeckCaptionTitleRequest):
+    """
+    Generate titles + one-paragraph captions for all slides (single structured call).
+
+    Input slides are text-only objects of shape: {title?: str, text_content?: str}.
+    Output slides are returned in the same order.
+    """
+    inject_admin_credentials(request)
+
+    slides = request.slides or []
+    if not isinstance(slides, list) or len(slides) == 0:
+        raise HTTPException(status_code=400, detail="No slides provided")
+
+    # Keep payload bounded
+    prepared: list[dict[str, str]] = []
+    for s in slides:
+        title = _one_paragraph(str((s or {}).get("title") or ""))[:120]
+        text = str((s or {}).get("text_content") or "")
+        prepared.append(
+            {
+                "title": title,
+                "text_content": (text.strip()[:2500] if text else ""),
+            }
+        )
+
+    system_prompt = """You generate slide titles and captions for an entire deck.
+
+Rules:
+- Return JSON matching the provided schema.
+- You MUST return exactly one {title, caption} object per input slide, in the same
+  order.
+- Each caption must be ONE paragraph (no newlines, no bullet points).
+- Each title must be short (max ~8 words).
+"""
+
+    # Build a compact list prompt
+    items = []
+    for i, s in enumerate(prepared):
+        items.append(
+            f"Slide {i + 1}:\n"
+            + (f"Existing title: {s['title']}\n" if s["title"] else "")
+            + ("Text:\n" + (s["text_content"] or "(no text found)") + "\n")
+        )
+
+    filename = (request.filename or "").strip()
+    user_prompt = (
+        (f"Filename: {filename}\n\n" if filename else "")
+        + "\n\n".join(items)
+        + "\n\nReturn JSON with slides: [{title, caption}, ...]."
+    )
+
+    try:
+        supports_structured = litellm.supports_response_schema(
+            model=request.model, custom_llm_provider=None
+        )
+
+        kwargs: dict[str, Any] = {
+            "model": request.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 1200,
+        }
+        if request.api_key:
+            kwargs["api_key"] = request.api_key
+        if request.base_url:
+            kwargs["base_url"] = request.base_url
+
+        kwargs = prepare_copilot_openai_request(kwargs, request.model, request.api_key)
+
+        if supports_structured:
+            kwargs["response_format"] = DeckCaptionTitleOutput
+            response = await litellm.acompletion(**kwargs)
+            content = response.choices[0].message.content
+            if isinstance(content, str):
+                out = DeckCaptionTitleOutput.model_validate(
+                    _extract_json_object(content)
+                )
+            elif hasattr(content, "slides"):
+                out = DeckCaptionTitleOutput(slides=content.slides)
+            else:
+                out = DeckCaptionTitleOutput.model_validate(content)
+        else:
+            text = await _llm_text(
+                model=request.model,
+                api_key=request.api_key,
+                base_url=request.base_url,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.2,
+                max_tokens=1200,
+            )
+            out = DeckCaptionTitleOutput.model_validate(_extract_json_object(text))
+
+        # Enforce count + normalize outputs
+        if len(out.slides) != len(prepared):
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Model returned {len(out.slides)} slides, expected {len(prepared)}"
+                ),
+            )
+
+        normalized = []
+        for s in out.slides:
+            normalized.append(
+                {
+                    "title": _one_paragraph(s.title).strip('"'),
+                    "caption": _one_paragraph(s.caption),
+                }
+            )
+
+        return {"slides": normalized}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"PPTX deck caption/title failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 class ImageGenerationRequest(BaseModel):
     """Request body for AI image generation."""
 
