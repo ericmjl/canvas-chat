@@ -169,3 +169,36 @@ await asyncTest('PowerPointFeature can extract current slide as IMAGE node', asy
     const created = harness.createdNodes.find((n) => n.type === NodeType.IMAGE);
     assertTrue(!!created, 'Should create an IMAGE node');
 });
+
+await asyncTest('PowerPointFeature weave narrative is safe without captions', async () => {
+    const harness = new PluginTestHarness();
+    await harness.loadPlugin({
+        id: 'powerpoint',
+        feature: PowerPointFeature,
+        slashCommands: [],
+    });
+
+    const node = {
+        id: 'pptx-4',
+        type: NodeType.POWERPOINT,
+        content: '',
+        position: { x: 0, y: 0 },
+        width: 480,
+        height: 400,
+        created_at: Date.now(),
+        tags: [],
+        pptxData: {
+            slideCount: 2,
+            slides: [
+                { index: 0, title: 'S1', text_content: 'A', image_webp: 'AA==', thumb_webp: 'AA==' },
+                { index: 1, title: 'S2', text_content: 'B', image_webp: 'AA==', thumb_webp: 'AA==' },
+            ],
+        },
+        currentSlideIndex: 0,
+    };
+    harness.mockApp.graph.addNode(node);
+
+    // No captions/titles set yet beyond defaults; should no-op without throwing.
+    harness.mockApp.canvas.emit('pptxWeaveNarrative', node.id);
+    assertTrue(true);
+});

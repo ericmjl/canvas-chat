@@ -119,6 +119,11 @@ class PowerPointNode extends BaseNode {
                 label: '🖼️ Caption+Title',
                 title: 'Generate title + one-paragraph caption for the current slide',
             },
+            {
+                id: 'pptxWeaveNarrative',
+                label: '🧵 Weave narrative',
+                title: 'Weave slide titles + captions into a narrative',
+            },
         ];
     }
 
@@ -563,7 +568,7 @@ class PowerPointFeature extends FeaturePlugin {
             .pptx-slide-caption-preview { margin-top: 6px; font-size: 11px; color: var(--text-secondary); line-height: 1.35; max-height: 4.2em; overflow: auto; }
             .pptx-slide-caption-missing { color: var(--text-muted); }
             .pptx-drawer-footer { display: flex; gap: 8px; padding-top: 4px; }
-            .pptx-enrich-all { flex: 1; border: 1px solid var(--bg-secondary); background: var(--bg-primary); color: var(--text-primary); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 12px; }
+            .pptx-enrich-all, .pptx-weave { flex: 1; border: 1px solid var(--bg-secondary); background: var(--bg-primary); color: var(--text-primary); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 12px; }
             `,
             'plugin-styles-powerpoint'
         );
@@ -583,6 +588,7 @@ class PowerPointFeature extends FeaturePlugin {
             pptxEnrichCurrent: this.enrichCurrentSlide.bind(this),
             pptxEnrichSlide: this.enrichSlide.bind(this),
             pptxEnrichAll: this.enrichAllSlides.bind(this),
+            pptxWeaveNarrative: this.weaveNarrative.bind(this),
         };
     }
 
@@ -1005,6 +1011,119 @@ class PowerPointFeature extends FeaturePlugin {
             this._updateAndRerender(nodeId, { slideEnrichStatuses: nextStatuses });
             this.showToast?.(String(err?.message || err), 'error');
         }
+    }
+
+    /**
+     * Weave slide titles + captions into a narrative summary.
+     * This creates a new AI node and streams into it (text-only).
+     *
+     * @param {string} nodeId
+     * @returns {Promise<void>}
+     */
+    async weaveNarrative(nodeId) {
+        const node = this._getPptxNode(nodeId);
+        const slides = node?.pptxData?.slides || [];
+        if (!node || slides.length === 0) return;
+
+        const captions = node.slideCaptions || {};
+
+        const items = [];
+        for (let i = 0; i < slides.length; i++) {
+            const title = getEffectiveSlideTitle(node, i) || '';
+            const caption = captions[i] ? String(captions[i]).trim() : '';
+            if (!title && !caption) continue;
+            items.push({
+                idx: i,
+                title,
+                caption,
+            });
+        }
+
+        if (items.length === 0) {
+            this.showToast?.('No titles/captions found yet. Run Caption+Title first.', 'error');
+            return;
+        }
+
+        if (!this._app?.streamWithAbort || !this.streamingManager?.register) {
+            this.showToast?.('Streaming infrastructure not available', 'error');
+            return;
+        }
+
+        const model = this.modelPicker?.value;
+        const aiNode = createNode(NodeType.AI, '', {
+            position: this.graph.autoPosition([nodeId]),
+            model: (model || '').split('/').pop(),
+            title: 'Narrative: Deck',
+        });
+
+        if (this._app?.addUserNode) {
+            this._app.addUserNode(aiNode);
+        } else {
+            // Test harness / fallback
+            this.graph.addNode(aiNode);
+            this.canvas.renderNode(aiNode);
+        }
+        this.graph.addEdge(createEdge(nodeId, aiNode.id, EdgeType.REPLY));
+        this.updateCollapseButtonForNode?.(nodeId);
+        this.saveSession?.();
+
+        const systemPrompt = `You are a concise technical writer.\n\nWrite a coherent narrative summary of this slide deck from top to bottom.\n\nRules:\n- Use the provided slide titles and one-paragraph captions.\n- Output should be 3-8 short paragraphs.\n- No bullet points.\n- Do not invent details not supported by the captions.\n`;
+
+        const userPrompt =
+            `Slide notes (ordered):\n\n` +
+            items
+                .map((s) => {
+                    const t = s.title ? `Title: ${s.title}\n` : '';
+                    const c = s.caption ? `Caption: ${s.caption}\n` : '';
+                    return `Slide ${s.idx + 1}:\n${t}${c}`.trim();
+                })
+                .join('\n\n') +
+            `\n\nWrite the narrative now.`;
+
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+        ];
+
+        const abortController = new AbortController();
+        this.streamingManager.register(aiNode.id, {
+            abortController,
+            featureId: 'powerpoint',
+            context: { messages, model },
+            onContinue: async (id, state) => {
+                await this._app.continueAIResponse(id, state.context);
+            },
+        });
+
+        this._app.streamWithAbort(
+            aiNode.id,
+            abortController,
+            messages,
+            model,
+            // onChunk
+            (_chunk, fullContent) => {
+                this.canvas.updateNodeContent(aiNode.id, fullContent, true);
+                this.graph.updateNode(aiNode.id, { content: fullContent });
+            },
+            // onDone
+            (fullContent) => {
+                this.streamingManager.unregister(aiNode.id);
+                this.canvas.updateNodeContent(aiNode.id, fullContent, false);
+                this.graph.updateNode(aiNode.id, { content: fullContent });
+                this.saveSession?.();
+                this.generateNodeSummary?.(aiNode.id);
+            },
+            // onError
+            (err) => {
+                this.streamingManager.unregister(aiNode.id);
+                const msg = String(err?.message || err);
+                const errorContent = `*Error generating narrative: ${msg}*`;
+                this.canvas.updateNodeContent(aiNode.id, errorContent, false);
+                this.graph.updateNode(aiNode.id, { content: errorContent });
+                this.saveSession?.();
+                this.showToast?.(msg, 'error');
+            }
+        );
     }
 }
 
