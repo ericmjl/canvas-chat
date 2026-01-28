@@ -87,8 +87,10 @@ describe('PowerPoint Upload and Navigation', () => {
         // Title should show in node body for current slide
         cy.get('.node.powerpoint .pptx-slide-title').should('contain', 'My Slide Title');
 
-        // Extract slide as image node
-        cy.get('.node.powerpoint .pptx-extract').click();
+        // Extract slide as image node (via tooltip on slide image)
+        cy.get('.node.powerpoint .pptx-slide-image').click();
+        cy.get('.image-tooltip', { timeout: 10000 }).should('be.visible');
+        cy.get('.image-tooltip .extract-btn').click();
         cy.get('.node.image', { timeout: 10000 }).should('exist');
     });
 });

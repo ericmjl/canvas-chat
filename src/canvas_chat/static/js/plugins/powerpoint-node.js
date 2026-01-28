@@ -201,9 +201,6 @@ class PowerPointNode extends BaseNode {
                             : '<span class="pptx-slide-caption-missing">No caption</span>'
                     }
                 </div>
-                <div class="pptx-actions">
-                    <button class="pptx-action-btn pptx-extract" title="Extract this slide as an image node">Extract</button>
-                </div>
                 ${
                     renderingMode === 'placeholder'
                         ? `<div class="pptx-rendering-note">Slide images are placeholders (LibreOffice not available).</div>`
@@ -315,8 +312,24 @@ class PowerPointNode extends BaseNode {
             { selector: '.pptx-prev', handler: 'pptxPrevSlide' },
             { selector: '.pptx-next', handler: 'pptxNextSlide' },
             {
-                selector: '.pptx-extract',
-                handler: 'pptxExtractSlide',
+                selector: '.pptx-slide-image',
+                handler: (_nodeId, e, canvas) => {
+                    const img = e?.currentTarget;
+                    if (!img?.src) return;
+
+                    const rect = img.getBoundingClientRect();
+                    const current = this.node.currentSlideIndex || 0;
+                    const title = getEffectiveSlideTitle(this.node, current);
+                    const imageTitle = title ? `Slide ${current + 1}: ${title}` : `Slide ${current + 1}`;
+
+                    // Mirror the PDF/webpage image UX: click image → tooltip with Extract.
+                    canvas.pendingImageNodeId = this.node.id;
+                    canvas.showImageTooltip(
+                        img.src,
+                        { x: rect.left + rect.width / 2, y: rect.top },
+                        { title: imageTitle }
+                    );
+                },
             },
 
             // Drawer: slide selection
