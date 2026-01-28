@@ -35,6 +35,7 @@ image = (
         "pymupdf>=1.24.0",
         "pillow>=12.1.0,<13",
         "python-pptx>=1.0.0",
+        "python-slugify",
         "python-multipart>=0.0.9",
         "html2text>=2024.0.0",
         "ruamel.yaml>=0.18.0",

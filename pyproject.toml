@@ -17,6 +17,7 @@ dependencies = [
     "youtube-transcript-api>=1.2.3,<2",
     "pillow>=12.1.0,<13",
     "python-pptx>=1.0.0",
+    "python-slugify",
     "defusedxml",
 ]
 
