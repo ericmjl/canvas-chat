@@ -621,7 +621,122 @@ class PowerPointFeature extends FeaturePlugin {
     _updateAndRerender(nodeId, patch) {
         this.graph.updateNode(nodeId, patch);
         const updated = this.graph.getNode(nodeId);
-        if (updated) this.canvas.renderNode(updated);
+        if (!updated) return;
+
+        // Avoid full re-render when possible: re-rendering destroys and rebuilds the output
+        // panel, which causes the drawer to "flash" and can steal focus from inputs.
+        const patched = this._patchPowerPointDomInPlace(updated);
+        if (!patched) {
+            this.canvas.renderNode(updated);
+        }
+    }
+
+    /**
+     * Update PowerPoint node DOM without full Canvas.renderNode().
+     * Returns true if we successfully patched the DOM in-place.
+     *
+     * @param {Object} node
+     * @returns {boolean}
+     */
+    _patchPowerPointDomInPlace(node) {
+        // In unit tests, Canvas may be a lightweight stub; fall back to renderNode.
+        if (!this.canvas?.nodeElements || !this.canvas?.outputPanels) return false;
+
+        const wrapper = this.canvas.nodeElements.get(node.id);
+        if (!wrapper) return false;
+
+        const nodeEl = wrapper.querySelector('.node');
+        if (!nodeEl) return false;
+
+        const contentEl = nodeEl.querySelector('.node-content');
+        if (!contentEl) return false;
+
+        const slides = node.pptxData?.slides || [];
+        const processing = node.processing || { state: 'idle' };
+        if (processing.state === 'converting') return false;
+        if (!slides || slides.length === 0) return false;
+
+        // --- Patch node body (current slide image + counter + title) ---
+        const pptxRoot = contentEl.querySelector('.pptx-node');
+        if (!pptxRoot) return false;
+
+        const current = Math.max(0, Math.min(node.currentSlideIndex || 0, slides.length - 1));
+        const slide = slides[current];
+        const { mimeType, imageData } = getSlideImage(slide);
+        const imgSrc = imageData ? `data:${mimeType};base64,${imageData}` : '';
+
+        const slideEl = pptxRoot.querySelector('.pptx-slide');
+        if (slideEl) {
+            if (imgSrc) {
+                const img = slideEl.querySelector('img.pptx-slide-image');
+                if (img) {
+                    img.src = imgSrc;
+                    img.alt = `Slide ${current + 1}`;
+                } else {
+                    slideEl.innerHTML = `<img class="pptx-slide-image" src="${imgSrc}" alt="Slide ${current + 1}">`;
+                }
+            } else {
+                slideEl.innerHTML = '<div class="pptx-slide-missing">No slide image</div>';
+            }
+        }
+
+        const counterEl = pptxRoot.querySelector('.pptx-counter');
+        if (counterEl) {
+            const slideCount = node.pptxData?.slideCount ?? node.slide_count ?? slides.length ?? 0;
+            counterEl.textContent = `Slide ${current + 1} of ${slideCount || slides.length}`;
+        }
+
+        const titleEl = pptxRoot.querySelector('.pptx-slide-title');
+        if (titleEl) {
+            const title = getEffectiveSlideTitle(node, current);
+            if (title) {
+                titleEl.textContent = `"${title}"`;
+            } else {
+                titleEl.innerHTML = '<span class="pptx-slide-title-missing">No title</span>';
+            }
+        }
+
+        // --- Patch drawer (current row highlight + caption status labels) ---
+        const panelWrapper = this.canvas.outputPanels.get(node.id);
+        const panelBody = panelWrapper?.querySelector?.('.code-output-panel-body');
+        if (panelBody) {
+            // Ensure a single "current" row.
+            panelBody.querySelectorAll('.pptx-slide-row.current').forEach((el) => el.classList.remove('current'));
+            const currentRow = panelBody.querySelector(`.pptx-slide-row[data-slide-index="${current}"]`);
+            if (currentRow) currentRow.classList.add('current');
+
+            // Update per-slide caption status labels without rebuilding the drawer.
+            panelBody.querySelectorAll('.pptx-slide-row[data-slide-index]').forEach((row) => {
+                const idx = Number(row.dataset.slideIndex);
+                if (!Number.isFinite(idx)) return;
+                const status = getSlideStatus(node, idx);
+                const line = row.querySelector('.pptx-slide-line');
+                if (!line) return;
+
+                const existing = line.querySelector('.pptx-slide-status');
+                if (status === 'idle') {
+                    existing?.remove();
+                    return;
+                }
+
+                const statusEl = existing || document.createElement('span');
+                statusEl.className = `pptx-slide-status${status === 'error' ? ' pptx-error' : ''}`;
+
+                if (status === 'running') {
+                    statusEl.innerHTML = '<span class="spinner pptx-inline-spinner"></span> Captioning';
+                } else if (status === 'queued') {
+                    statusEl.textContent = 'Queued';
+                } else if (status === 'done') {
+                    statusEl.textContent = '✓ Captioned';
+                } else {
+                    statusEl.textContent = 'Error';
+                }
+
+                if (!existing) line.appendChild(statusEl);
+            });
+        }
+
+        return true;
     }
 
     /**
