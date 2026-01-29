@@ -1,0 +1,17 @@
+{
+  "query": "test query",
+  "results": [
+    {
+      "title": "Example Result 1",
+      "url": "https://example.com/1",
+      "snippet": "Snippet one."
+    },
+    {
+      "title": "Example Result 2",
+      "url": "https://example.com/2",
+      "snippet": "Snippet two."
+    }
+  ],
+  "num_results": 2,
+  "provider": "duckduckgo"
+}
