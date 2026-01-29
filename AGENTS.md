@@ -168,6 +168,7 @@ canvas-chat/
 | `src/canvas_chat/file_upload_registry.py`       | File upload handler registration   | Registering Python file upload handlers              |
 | `src/canvas_chat/file_upload_handler_plugin.py` | FileUploadHandlerPlugin base class | File upload handler plugin base class                |
 | `src/canvas_chat/plugins/pptx_handler.py`       | PPTX file upload handler           | PowerPoint slide rendering (LibreOffice) + text extraction (python-pptx) |
+| `src/canvas_chat/plugins/ddg_endpoints.py`     | DuckDuckGo search + research API   | DDG search/research endpoints (fallback when no Exa key); edit for DDG behavior |
 | `src/canvas_chat/plugins/pptx_endpoints.py`     | PPTX API endpoints                 | PPTX caption/title and narrative preset endpoints    |
 | `src/canvas_chat/plugins/`                      | Python plugin modules              | Backend plugins (matrix_handler, code_handler, etc.) |
 | `modal_app.py`                                  | Modal deployment config            | Deployment settings                                  |
@@ -465,7 +466,7 @@ Plugins can be configured in `config.yaml` with three formats:
 - **Python-only**: `- py: ./plugins/my_handler.py`
 - **Paired (JS + Python)**: `- js: ./plugins/my-plugin.js, py: ./plugins/my_handler.py, id: my-plugin`
 
-Python plugins are loaded dynamically at startup via `importlib`. JavaScript plugins are served via `/api/plugins/{name}` and injected into HTML.
+Python plugins are loaded dynamically at startup via `importlib`. JavaScript plugins are served via `/api/plugins/{name}` and injected into HTML. Python endpoint plugins (e.g. `pptx_endpoints`, `ddg_endpoints`) register routes via `register_endpoints(app)` in `app.py`.
 
 #### When to use each level
 
