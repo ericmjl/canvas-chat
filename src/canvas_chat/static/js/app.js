@@ -3496,7 +3496,7 @@ class App {
         let emptyState = container.querySelector('.empty-state');
 
         if (this.graph.isEmpty()) {
-            const hasApiKeys = storage.hasAnyLLMApiKey();
+            const hasConfiguredProviders = this.adminMode ? this.adminModels.length > 0 : storage.hasAnyLLMApiKey();
 
             if (!emptyState) {
                 emptyState = document.createElement('div');
@@ -3504,12 +3504,18 @@ class App {
                 container.appendChild(emptyState);
             }
 
-            if (hasApiKeys) {
-                // User has API keys configured - show normal onboarding
+            if (hasConfiguredProviders) {
+                // Providers configured - show normal onboarding
                 emptyState.innerHTML = `
                     <h2>Start a conversation</h2>
                     <p>Type a message below to begin exploring ideas on the canvas.</p>
                     <p><kbd>Cmd/Ctrl+Click</kbd> to multi-select nodes</p>
+                `;
+            } else if (this.adminMode) {
+                // Admin mode with no models configured
+                emptyState.innerHTML = `
+                    <h2>No models configured</h2>
+                    <p>Contact your administrator to enable LLM models.</p>
                 `;
             } else {
                 // No API keys - guide user to settings first
