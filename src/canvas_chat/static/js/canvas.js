@@ -1865,8 +1865,9 @@ class Canvas {
         const div = document.createElement('div');
 
         // Build node classes: base + type + viewport-fitted
-        // Protocol can add additional classes via getContentClasses()
-        let nodeClasses = `node ${node.type} viewport-fitted`;
+        // Use hyphenated type for DOM (CSS convention) e.g. fetch_result → fetch-result
+        const typeClass = node.type.replace(/_/g, '-');
+        let nodeClasses = `node ${typeClass} viewport-fitted`;
 
         div.className = nodeClasses;
         div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
@@ -4493,6 +4494,12 @@ class Canvas {
                         }
                     }
                 }
+
+                // Strip <style> and <script> so node content cannot break the app UI
+                // (e.g. body { display: none } or .node { visibility: hidden }).
+                // Backend converts fetched HTML to markdown, but we defend in depth.
+                result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+                result = result.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
 
                 // Debug logging for math content
                 if (text.includes('\\[') || text.includes('\\(') || text.includes('$$')) {
