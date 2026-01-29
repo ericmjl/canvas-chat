@@ -62,6 +62,16 @@ The zero-config path uses:
 - **html2text** — Python library for HTML-to-markdown conversion (fallback)
 - **httpx** — async HTTP client (already a dependency)
 
+## Markdown-only output (no raw HTML/CSS)
+
+Both URL fetching paths **always return markdown**, never raw HTML or page CSS. This is intentional:
+
+- **Security and isolation**: Node content is rendered in a `.node-content` div in the main document (no iframe or Shadow DOM). If we stored and rendered raw HTML from a fetched page, any `<style>` tags in that HTML would apply to the whole app and could hide the toolbar, break layout, or make the canvas unclickable (similar to custom CSS in embedded notebooks like Marimo affecting the host UI).
+- **Jina path**: We request `Accept: text/markdown` and receive markdown directly.
+- **Direct-fetch path**: We convert the response with html2text before returning, so the frontend never receives raw HTML. That way we never inject page CSS into the canvas.
+
+Keeping fetched content as markdown-only ensures that third-party page styles and structure cannot interfere with Canvas Chat’s UI.
+
 ## Future considerations
 
 The current architecture could be extended:

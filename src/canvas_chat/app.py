@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 from uuid import uuid4
 
+import html2text
 import httpx
 import litellm
 from exa_py import Exa
@@ -2190,25 +2191,31 @@ async def fetch_url_directly(url: str, client: httpx.AsyncClient) -> tuple[str, 
     Fetch URL content directly (fallback when Jina fails).
 
     Returns (title, content) tuple.
-    Content is returned as plain text (HTML not converted to markdown).
+    Content is converted to markdown via html2text so we never send raw HTML
+    (and thus no embedded <style> or scripts) to the frontend.
     """
     response = await client.get(url, follow_redirects=True)
 
     if response.status_code != 200:
         raise Exception(f"Direct fetch returned {response.status_code}")
 
-    # Extract title from HTML if possible
-    title = "Untitled"
-    content = response.text
+    html = response.text
 
-    # Try to extract title from HTML
+    # Extract title from HTML before converting
     import re
 
+    title = "Untitled"
     title_match = re.search(
-        r"<title[^>]*>(.*?)</title>", content, re.IGNORECASE | re.DOTALL
+        r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL
     )
     if title_match:
         title = re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
+
+    # Convert HTML to markdown so we never inject raw HTML/CSS into node content
+    h2t = html2text.HTML2Text()
+    h2t.ignore_links = False
+    h2t.body_width = 0  # do not wrap lines
+    content = h2t.handle(html)
 
     return title, content
 

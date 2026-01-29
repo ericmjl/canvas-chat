@@ -699,15 +699,17 @@ so code changes are automatically picked up. Just make your edits and the server
 
 **CRITICAL:** Always run relevant Cypress E2E tests when making UI changes, keyboard interactions, or feature modifications.
 
+**When running a single test file, always use `--spec`** so Cypress runs only that file:
+
 ```bash
-# Run a specific Cypress test file
-pixi run npx cypress run --browser chrome --headless cypress/e2e/matrix.cy.js
+# Run a specific Cypress test file (use --spec)
+pixi run npx cypress run --browser chrome --headless --spec cypress/e2e/matrix.cy.js
 
 # Run with Electron instead of Chrome
-pixi run npx cypress run --browser electron --headless cypress/e2e/matrix.cy.js
+pixi run npx cypress run --browser electron --headless --spec cypress/e2e/matrix.cy.js
 ```
 
-**Test pattern:** `pixi run npx cypress run --browser [chrome|electron] --headless /path/to/test.cy.js`
+**Test pattern:** `pixi run npx cypress run --browser [chrome|electron] --headless --spec cypress/e2e/<file>.cy.js`
 
 **E2E test files:**
 
@@ -723,6 +725,7 @@ pixi run npx cypress run --browser electron --headless cypress/e2e/matrix.cy.js
 - `cypress/e2e/help_modal.cy.js` - Help modal tests
 - `cypress/e2e/new_canvas.cy.js` - New canvas creation tests
 - `cypress/e2e/undo_redo.cy.js` - Global undo/redo tests
+- `cypress/e2e/url_fetch_no_ui_break.cy.js` - URL fetch: dangerous HTML does not break UI
 
 ### Unit tests
 
