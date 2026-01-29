@@ -5,10 +5,6 @@ from pydantic import ValidationError
 
 from canvas_chat.app import (
     CommitteeRequest,
-    DDGResearchRequest,
-    DDGResearchSource,
-    DDGSearchRequest,
-    DDGSearchResult,
     ExaContentsResult,
     ExaGetContentsRequest,
     FetchPdfRequest,
@@ -17,6 +13,12 @@ from canvas_chat.app import (
     Message,
     PdfResult,
     RefineQueryRequest,
+)
+from canvas_chat.plugins.ddg_endpoints import (
+    DDGResearchRequest,
+    DDGResearchSource,
+    DDGSearchRequest,
+    DDGSearchResult,
 )
 
 
