@@ -59,7 +59,7 @@ indent-style = "space"
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["osx-arm64", "linux-64", "osx-64"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "linux-aarch64"]
 
 [tool.pixi.pypi-dependencies]
 canvas-chat = { path = ".", editable = true }
@@ -77,7 +77,8 @@ docs-deploy = "mkdocs gh-deploy"
 docs = ["docs"]
 
 [tool.pixi.tasks]
-dev = "uvicorn canvas_chat.app:app --reload --port 7865"
+dev = "python -m uvicorn canvas_chat.app:app --reload --port 7865"
+serve = "python -m uvicorn canvas_chat.app:app --host 0.0.0.0 --port 7865"
 modal-serve = "modal serve modal_app.py"
 modal-deploy = "modal deploy modal_app.py"
 test = "pytest tests/ -v"

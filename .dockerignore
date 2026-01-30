@@ -1,0 +1,44 @@
+# Git and IDE
+.git/
+.gitignore
+.cursor/
+.vscode/
+*.md
+!README.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pixi/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Node (not needed for pixi install; backend runs without)
+node_modules/
+out/
+.jsdoc-out/
+
+# Local config and secrets
+.env
+.envrc
+config.yaml
+
+# Test and dev artifacts
+cypress/screenshots/
+cypress/videos/
+cypress/downloads/
+.plans/
+*.plan
+
+# Docs build (optional; exclude to keep image smaller)
+# Uncomment to include docs in image: docs/
+
+# Misc
+.DS_Store
