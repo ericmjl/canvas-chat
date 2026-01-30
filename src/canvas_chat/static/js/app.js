@@ -10,7 +10,7 @@ import { FileUploadHandler } from './file-upload-handler.js';
 import { EdgeType, NodeType, TAG_COLORS, createEdge, createNode, getDefaultNodeSize } from './graph-types.js';
 import { ModalManager } from './modal-manager.js';
 import { NodeRegistry } from './node-registry.js';
-import { SlashCommandMenu, setFeatureRegistry, setBaseAgent } from './slash-command-menu.js';
+import { SlashCommandMenu, setFeatureRegistry } from './slash-command-menu.js';
 import { storage } from './storage.js';
 import { UndoManager } from './undo-manager.js';
 // CodeFeature is now in code.js (consolidated plugin)
@@ -105,7 +105,6 @@ class App {
 
         // Plugin system (all features managed by FeatureRegistry)
         this.featureRegistry = new FeatureRegistry();
-        this._pluginSystemStage = null;
 
         // Undo/Redo manager
         this.undoManager = new UndoManager();
@@ -127,66 +126,6 @@ class App {
         this.selectedCount = document.getElementById('selected-count');
 
         this.init();
-    }
-
-    /**
-     * Test-only hooks for deterministic Cypress assertions.
-     * Exposed only when Cypress is present.
-     */
-    setupTestHooks() {
-        if (typeof window === 'undefined' || !window.Cypress) {
-            return;
-        }
-
-        if (!window.__APP_TEST__) {
-            window.__APP_TEST__ = {};
-        }
-
-        window.__APP_TEST__.pluginSystemReady = this._pluginSystemStage;
-        window.__APP_TEST__.externalPlugins = window.__APP_TEST__.externalPlugins || {
-            loaded: [],
-            failed: [],
-        };
-        window.__APP_TEST__.errors = window.__APP_TEST__.errors || [];
-
-        if (!window.__APP_TEST__._errorHandlersAttached) {
-            window.__APP_TEST__._errorHandlersAttached = true;
-            window.addEventListener('error', (event) => {
-                window.__APP_TEST__.errors.push({
-                    message: event.message,
-                    filename: event.filename,
-                    lineno: event.lineno,
-                    colno: event.colno,
-                });
-            });
-            window.addEventListener('unhandledrejection', (event) => {
-                window.__APP_TEST__.errors.push({
-                    message: event.reason?.message || String(event.reason),
-                    filename: null,
-                    lineno: null,
-                    colno: null,
-                });
-            });
-        }
-
-        window.__APP_TEST__.graph = {
-            serialize: () => {
-                if (!this.graph) {
-                    return { nodes: [], edges: [], tags: {} };
-                }
-                return this.graph.toJSON();
-            },
-        };
-
-        window.__APP_TEST__.reset = async () => {
-            await this.createNewSession();
-        };
-
-        window.__APP_TEST__.seed = async (seedFn) => {
-            if (typeof seedFn === 'function') {
-                seedFn(this.graph);
-            }
-        };
     }
 
     /**
@@ -266,10 +205,6 @@ class App {
 
         // Show empty state if needed
         this.updateEmptyState();
-
-        // Ensure external plugins have a chance to register after full init
-        await this.loadExternalJsPlugins();
-        this.notifyPluginSystemReady('init-complete');
     }
 
     /**
@@ -533,11 +468,9 @@ class App {
         // Create CRDTGraph with automatic persistence
         console.log('%c[App] Using CRDT Graph mode', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(session.id, session);
-        this.canvas.graph = this.graph;
         // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
         this.setupGraphEventListeners();
-        this.setupTestHooks();
 
         // Render graph
         this.canvas.renderGraph(this.graph);
@@ -607,11 +540,9 @@ class App {
 
             console.log('%c[App] Creating empty CRDT Graph for shared session', 'color: #2196F3; font-weight: bold');
             this.graph = new CRDTGraph(sessionId);
-            this.canvas.graph = this.graph;
             // Note: Features are managed by FeatureRegistry, no manual cleanup needed
             await this.graph.enablePersistence();
             this.setupGraphEventListeners();
-            this.setupTestHooks();
 
             // Render empty graph (will populate via sync)
             this.canvas.renderGraph(this.graph);
@@ -646,11 +577,9 @@ class App {
         // Create new CRDT Graph
         console.log('%c[App] Creating new session with CRDT Graph', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(sessionId);
-        this.canvas.graph = this.graph;
         // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
         this.setupGraphEventListeners();
-        this.setupTestHooks();
 
         this.canvas.clear();
 
@@ -898,13 +827,6 @@ class App {
                 this.modalManager.hideEditContentModal();
             }
         });
-        // Click-to-flip flashcard in edit content preview (same UX as node)
-        document.getElementById('edit-content-preview').addEventListener('click', (e) => {
-            const wrap = e.target.closest('.flashcard-edit-preview');
-            if (wrap) {
-                wrap.classList.toggle('flashcard-flipped');
-            }
-        });
 
         // Edit title modal
         document.getElementById('edit-title-close').addEventListener('click', () => {
@@ -1150,11 +1072,6 @@ class App {
                                 // (This is redundant with noAccidentalCtrl check above, but kept for clarity)
                                 if (key === 'c' && (e.ctrlKey || e.metaKey)) {
                                     return; // Let browser handle Ctrl+C
-                                }
-
-                                // Don't open edit modal for node types that are not content-editable
-                                if (config.handler === 'nodeEditContent' && typeof wrapped.isContentEditable === 'function' && !wrapped.isContentEditable()) {
-                                    return;
                                 }
 
                                 e.preventDefault();
@@ -2139,7 +2056,7 @@ class App {
         setFeatureRegistry(this.featureRegistry);
 
         // Update file input accept attribute based on registered file upload handlers
-        await this.updateFileInputAcceptAttribute();
+        this.updateFileInputAcceptAttribute();
     }
 
     /**
@@ -2154,89 +2071,15 @@ class App {
             console.log('[App] Updated file input accept attribute:', acceptAttr);
         }
 
-        // Load external JS plugins from backend config (if any)
-        await this.loadExternalJsPlugins();
+        // TODO (Task 4.3): Load additional plugins from config file
+        // await this.featureRegistry.loadPluginsFromConfig();
 
-        this.notifyPluginSystemReady('file-input');
+        // Dispatch event so external plugins can register features
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('app-plugin-system-ready', { detail: { app: this } }));
+        }
 
         console.log('[App] Plugin system initialized');
-    }
-
-    /**
-     * Load external JS plugins registered on the backend.
-     * Plugins are served from /api/plugins and loaded as ES modules.
-     */
-    async loadExternalJsPlugins() {
-        if (this._externalPluginsLoaded) {
-            return;
-        }
-
-        this._externalPluginsLoaded = true;
-        try {
-            const response = await fetch('/api/plugins');
-            if (!response.ok) {
-                console.warn('[App] Failed to load plugin list:', response.status);
-                return;
-            }
-
-            const data = await response.json();
-            const plugins = data.plugins || [];
-            for (const plugin of plugins) {
-                if (!plugin.url) continue;
-                const testHook = typeof window !== 'undefined' ? window.__APP_TEST__ : null;
-                try {
-                    const module = await import(plugin.url);
-                    if (module?.registerPlugin) {
-                        try {
-                            module.registerPlugin(this);
-                        } catch (error) {
-                            if (testHook?.externalPlugins) {
-                                testHook.externalPlugins.failed.push({
-                                    id: plugin.id || plugin.url,
-                                    url: plugin.url,
-                                    error: error?.message || String(error),
-                                });
-                            }
-                            console.error('[App] Failed to register external plugin:', plugin.url, error);
-                        }
-                    }
-                    if (testHook?.externalPlugins) {
-                        testHook.externalPlugins.loaded.push({
-                            id: plugin.id || plugin.url,
-                            url: plugin.url,
-                        });
-                    }
-                    console.log('[App] Loaded external plugin:', plugin.id || plugin.url);
-                } catch (error) {
-                    if (testHook?.externalPlugins) {
-                        testHook.externalPlugins.failed.push({
-                            id: plugin.id || plugin.url,
-                            url: plugin.url,
-                            error: error?.message || String(error),
-                        });
-                    }
-                    console.error('[App] Failed to import plugin:', plugin.url, error);
-                }
-            }
-        } catch (error) {
-            console.error('[App] Error loading external plugins:', error);
-        }
-    }
-
-    /**
-     * Dispatch plugin system ready event for external plugins.
-     * @param {string} stage
-     */
-    notifyPluginSystemReady(stage = 'init') {
-        this._pluginSystemStage = stage;
-        if (typeof window === 'undefined') {
-            return;
-        }
-        if (window.Cypress) {
-            window.__APP_TEST__ = window.__APP_TEST__ || {};
-            window.__APP_TEST__.pluginSystemReady = stage;
-        }
-        window.dispatchEvent(new CustomEvent('app-plugin-system-ready', { detail: { app: this, stage } }));
     }
 
     /**
@@ -2270,9 +2113,6 @@ class App {
         this.baseAgent.on('*', (event) => {
             console.log('[BaseAgent] Event:', event.type, event.data);
         });
-
-        // Inject BaseAgent into slash command menu so it can show config agent commands
-        setBaseAgent(this.baseAgent);
 
         // Fetch and register config-based agents (async, non-blocking)
         this.loadConfigAgents();
@@ -2317,15 +2157,11 @@ class App {
                 }
 
                 // Convert config to AgentDefinition format
-                // Normalize engine name: 'built-in', 'Builtin', 'BUILTIN' -> 'builtin'
-                let engine = agentConfig.engine || 'builtin';
-                engine = engine.toLowerCase().replace(/-/g, '');
-
                 /** @type {import('./agent/agent-types.js').AgentDefinition} */
                 const agentDef = {
                     id: agentConfig.id,
                     name: agentConfig.name,
-                    engine: engine,
+                    engine: agentConfig.engine || 'built-in',
                     model: agentConfig.model || '',
                     systemPrompt: agentConfig.systemPrompt || '',
                     allowedTools: agentConfig.allowedTools || [],
@@ -4009,31 +3845,56 @@ class App {
     /**
      * Show a temporary toast notification
      * @param {string} message - Message to display
-     * @param {number} duration - Duration in ms (default 3000)
+     * @param {string|number} [typeOrDuration] - Toast type (e.g., 'error') or duration in ms
+     * @param {number} [duration] - Duration in ms (default 3000)
      */
-    showToast(message, duration = 3000) {
+    showToast(message, typeOrDuration = 3000, duration = 3000) {
         // Remove existing toast if any
         const existingToast = document.querySelector('.toast-notification');
         if (existingToast) {
             existingToast.remove();
         }
 
+        if (window.Cypress && window.__APP_TEST__) {
+            window.__APP_TEST__.lastToast = {
+                message,
+                type: typeof typeOrDuration === 'string' ? typeOrDuration : 'info',
+                timestamp: Date.now(),
+            };
+        }
+
+        const isType = typeof typeOrDuration === 'string';
+        const type = isType ? typeOrDuration : null;
+        const timeout =
+            typeof typeOrDuration === 'number'
+                ? typeOrDuration
+                : typeof duration === 'number'
+                  ? duration
+                  : 3000;
+
         // Create toast element
         const toast = document.createElement('div');
         toast.className = 'toast-notification';
+        if (type) {
+            toast.classList.add(`toast-${type}`);
+        }
         toast.textContent = message;
         document.body.appendChild(toast);
 
-        // Trigger animation
-        requestAnimationFrame(() => {
+        // Trigger animation (deterministic for Cypress)
+        if (window.Cypress) {
             toast.classList.add('show');
-        });
+        } else {
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+        }
 
         // Remove after duration
         setTimeout(() => {
             toast.classList.remove('show');
             setTimeout(() => toast.remove(), 300);
-        }, duration);
+        }, timeout);
     }
 
     /**
@@ -5059,7 +4920,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const initWithYjs = () => {
         console.log('%c[App] Yjs ready, initializing app', 'color: #4CAF50');
         window.app = new App();
-        window.app.notifyPluginSystemReady?.('app-created');
     };
 
     if (window.Y) {

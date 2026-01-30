@@ -245,26 +245,6 @@ class BaseAgent {
     }
 
     /**
-     * Get all sub-agent slash commands in the format expected by slash-command-menu.
-     * This includes config-based agents registered via registerSubAgent().
-     * @returns {Array<{command: string, description: string}>}
-     */
-    getSlashCommands() {
-        const commands = [];
-        for (const [command, registration] of this.subAgents.entries()) {
-            // Skip feature-backed sub-agents (they report their own commands)
-            if (registration.feature) {
-                continue;
-            }
-            commands.push({
-                command: command,
-                description: registration.description || registration.agentDef?.description || '',
-            });
-        }
-        return commands;
-    }
-
-    /**
      * Register a feature plugin as a sub-agent.
      * If the feature has an AgentDefinition (via getAgentDefinition()),
      * it will be registered for automatic routing.

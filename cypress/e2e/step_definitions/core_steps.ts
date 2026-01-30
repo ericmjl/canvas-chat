@@ -214,6 +214,18 @@ Then('slash command {string} should be registered', (command) => {
     });
 });
 
+Then('slash command {string} should not be registered', (command) => {
+    cy.window().should((win) => {
+        if (typeof win.getAllSlashCommands !== 'function') {
+            throw new Error('Slash command registry not available on window');
+        }
+        const commands = win.getAllSlashCommands().map((cmd) => cmd.command);
+        if (commands.includes(command)) {
+            throw new Error(`Expected slash command ${command} to be absent, but it was registered.`);
+        }
+    });
+});
+
 Then('feature plugin {string} should be registered', (featureId) => {
     cy.window().should((win) => {
         const app = win.app;

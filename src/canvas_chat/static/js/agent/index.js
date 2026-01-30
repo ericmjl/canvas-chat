@@ -48,8 +48,6 @@
  *   window.setAgentLogLevel('DEBUG')
  */
 
-import { getToolRegistry } from './tool-registry.js';
-
 // Base Agent - primary orchestrator
 export { BaseAgent, createBaseAgentDefinition } from './base-agent.js';
 
@@ -99,10 +97,7 @@ export {
     initializeToolRegistry,
     registerBuiltInTools,
     loadToolsFromBackend,
-    createToolDefinition,
 } from './tool-registry.js';
-
-export const toolRegistry = getToolRegistry();
 
 export {
     // Graph tools for agents
@@ -169,38 +164,3 @@ export {
     createNodeStorageMetadata,
     getNodeFileData,
 } from './blob-store-utils.js';
-
-export {
-    // Working node manager - live progress indicators for agent/skill execution
-    WorkingNodeManager,
-    createWorkingNodeManager,
-} from './working-node-manager.js';
-
-export {
-    // Skill types
-    DEFAULT_SKILL_PERMISSIONS,
-    createSkillMetadata,
-    createSkillDefinition,
-    createSkillRun,
-    createSkillInvocationRequest,
-} from './skill-types.js';
-
-export {
-    // Skill registry - metadata storage and discovery
-    SkillRegistry,
-    getSkillRegistry,
-    registerBuiltInSkills,
-} from './skill-registry.js';
-
-export {
-    // Skill resolver - on-demand definition loading
-    SkillResolver,
-    getBuiltinInstructions,
-    BUILTIN_SKILL_INSTRUCTIONS,
-} from './skill-resolver.js';
-
-export {
-    // Skill invocation service - main entry point
-    SkillInvocationService,
-    createSkillInvocationService,
-} from './skill-invocation-service.js';

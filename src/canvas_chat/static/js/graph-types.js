@@ -11,12 +11,12 @@
 
 /**
  * Valid node type values
- * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'powerpoint'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'code'|'youtube'|'git_repo'|'run'|'artifact'|'reflection'|'skill_run'} NodeTypeValue
+ * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'powerpoint'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'code'|'youtube'|'git_repo'|'run'|'artifact'|'reflection'} NodeTypeValue
  */
 
 /**
  * Valid edge type values
- * @typedef {'reply'|'branch'|'merge'|'reference'|'search_result'|'highlight'|'matrix_cell'|'opinion'|'synthesis'|'review'|'generates'|'run_trigger'|'run_artifact'|'subagent'|'run_reflection'|'skill_input'|'skill_output'} EdgeTypeValue
+ * @typedef {'reply'|'branch'|'merge'|'reference'|'search_result'|'highlight'|'matrix_cell'|'opinion'|'synthesis'|'review'|'generates'|'run_trigger'|'run_artifact'|'subagent'|'run_reflection'} EdgeTypeValue
  */
 
 /**
@@ -283,7 +283,6 @@ const NodeType = {
     RUN: 'run', // Agent execution run
     ARTIFACT: 'artifact', // Agent-produced artifact
     REFLECTION: 'reflection', // Reflection analysis of a branch/path
-    SKILL_RUN: 'skill_run', // Skill execution (working or completed)
 };
 
 /**
@@ -333,9 +332,6 @@ const DEFAULT_NODE_SIZES = {
 
     // Reflection nodes - Large for detailed analysis
     [NodeType.REFLECTION]: { width: 640, height: 480 },
-
-    // Skill run nodes - Medium size for status/progress display
-    [NodeType.SKILL_RUN]: { width: 500, height: 350 },
 };
 
 /**
@@ -358,8 +354,6 @@ const EdgeType = {
     RUN_ARTIFACT: 'run_artifact', // Run node → Artifact nodes (what the run produced)
     SUBAGENT: 'subagent', // Parent Run → Child Run (sub-agent relationship)
     RUN_REFLECTION: 'run_reflection', // Run node → Reflection nodes (analysis of the path)
-    SKILL_INPUT: 'skill_input', // Input node(s) → Skill Run node
-    SKILL_OUTPUT: 'skill_output', // Skill Run node → Output artifact nodes
 };
 
 /**

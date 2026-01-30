@@ -16,13 +16,13 @@
  *      plugins:
  *        - path: ./src/canvas_chat/static/js/example-plugins/example-agent-plugin.js
  * 2. Run with: uvx canvas-chat launch --config config.yaml
- * 3. Use the /analyze command in the chat input
+ * 3. (Disabled) This example no longer registers slash commands
  *
  * @module example-agent-plugin
  */
 
-import { FeaturePlugin } from '/static/js/feature-plugin.js';
-import { FeatureRegistry, PRIORITY } from '/static/js/feature-registry.js';
+import { FeaturePlugin, PRIORITY } from '/static/js/feature-plugin.js';
+import { FeatureRegistry } from '/static/js/feature-registry.js';
 import {
     createAgentDefinition,
     createRunRequest,
@@ -186,18 +186,7 @@ class AnalyzerFeature extends FeaturePlugin {
      * @returns {Array<{command: string, description: string, placeholder?: string}>}
      */
     getSlashCommands() {
-        return [
-            {
-                command: '/analyze',
-                description: 'Analyze selected content using the agent architecture',
-                placeholder: 'Optional: specific aspect to analyze...',
-            },
-            {
-                command: '/coordinate',
-                description: 'Start a coordinated research task with sub-agents',
-                placeholder: 'Research question...',
-            },
-        ];
+        return [];
     }
 
     /**
@@ -210,14 +199,7 @@ class AnalyzerFeature extends FeaturePlugin {
     async handleCommand(command, args, context) {
         const { selectedNodeIds } = context;
 
-        switch (command) {
-            case '/analyze':
-                return await this.handleAnalyze(args, selectedNodeIds);
-            case '/coordinate':
-                return await this.handleCoordinate(args, selectedNodeIds);
-            default:
-                return false;
-        }
+        return false;
     }
 
     /**
@@ -387,67 +369,22 @@ class AnalyzerFeature extends FeaturePlugin {
 // Plugin Registration
 // =============================================================================
 
-let registerFeature = null;
-
-if (typeof window !== 'undefined') {
-    let registering = false;
-    let registered = false;
-    let attempts = 0;
-    const maxAttempts = 120; // ~30s at 250ms intervals
-    registerFeature = (app) => {
-        if (registered || registering) return;
-        if (attempts >= maxAttempts) {
-            console.warn('[AnalyzerFeature] Gave up registering after max attempts');
-            return;
-        }
-        const targetApp = app || window.app;
-        if (!targetApp || !targetApp.featureRegistry) {
-            attempts += 1;
-            setTimeout(() => registerFeature(window.app), 250);
-            return;
-        }
-        if (!targetApp.featureRegistry._appContext) {
-            attempts += 1;
-            setTimeout(() => registerFeature(targetApp), 250);
-            return;
-        }
-        registering = true;
-        targetApp.featureRegistry
-            .register({
-                id: 'example-agent',
-                feature: AnalyzerFeature,
-                slashCommands: [
-                    { command: '/analyze', handler: 'handleCommand' },
-                    { command: '/coordinate', handler: 'handleCommand' },
-                ],
-                priority: PRIORITY.COMMUNITY,
-            })
-            .then(() => {
-                registered = true;
-                console.log('[AnalyzerFeature] Registered with FeatureRegistry');
-            })
-            .catch((err) => {
-                registering = false;
-                attempts += 1;
-                console.error('[AnalyzerFeature] Failed to register with FeatureRegistry:', err);
-                setTimeout(() => registerFeature(targetApp), 500);
-            });
+// Register with the FeatureRegistry when loaded
+if (typeof window !== 'undefined' && window.app) {
+    // Get context from app
+    const ctx = {
+        graph: window.app.graph,
+        canvas: window.app.canvas,
+        chat: window.app.chat,
+        storage: window.app.storage,
+        modalManager: window.app.modalManager,
+        undoManager: window.app.undoManager,
+        runController: window.app.runController, // New: agent run controller
     };
 
-    if (window.app) {
-        registerFeature(window.app);
-    }
-
-    window.addEventListener('app-plugin-system-ready', (event) => {
-        registerFeature(event.detail?.app || window.app);
-    });
-}
-
-export function registerPlugin(app) {
-    if (typeof window === 'undefined' || !registerFeature) {
-        return;
-    }
-    registerFeature(app || window.app);
+    const feature = new AnalyzerFeature(ctx);
+    FeatureRegistry.getInstance().registerFeature(feature, PRIORITY.COMMUNITY);
+    console.log('[AnalyzerFeature] Registered with FeatureRegistry');
 }
 
 // Export for testing

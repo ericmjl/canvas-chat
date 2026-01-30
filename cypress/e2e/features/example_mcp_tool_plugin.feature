@@ -5,5 +5,5 @@ Feature: Example MCP Tool Plugin
     When I wait for the app to initialize
     Then slash command "/tools" should be registered
     And slash command "/search-web" should be registered
-    And slash command "/analyze-text" should be registered
+    And slash command "/analyze-text" should not be registered
     And slash command "/calculate" should be registered

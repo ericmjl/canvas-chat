@@ -64,10 +64,6 @@ canvas-chat/
 │           ├── agent/       # Agent architecture (types, engine, memory, controller)
 │           └── example-plugins/ # Example plugins (test, smart-fix, poll node)
 ├── tests/                    # Test files
-├── specs/user-stories/       # Optional story specs (story → feature generator input)
-├── cypress/e2e/features/      # Gherkin feature specs (executable UI specs)
-├── cypress/e2e/step_definitions/ # Cypress step definitions for features
-├── scripts/                  # Test enforcement + generation scripts
 ├── docs/                     # Documentation (Diataxis)
 ├── modal_app.py              # Modal deployment config
 └── pyproject.toml            # Project config (pixi)
@@ -125,7 +121,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/plugins/reflect-feature.js` | ReflectFeature class   | Reflection analysis of conversation paths via `/reflect`    |
 | `src/canvas_chat/static/js/plugins/git-repo.js`  | GitRepoFeature class   | Git repository fetching with file selection (`/git` command) |
 | `src/canvas_chat/static/js/plugins/youtube.js`   | YouTubeFeature class   | YouTube video fetching with transcript (`/youtube` command)  |
-| `src/canvas_chat/static/js/plugins/url-fetch.js` | UrlFetchFeature class  | Generic URL fetching (`/fetch`), PDF viewer hydration + pagination (Prev/Next, ←/→) |
+| `src/canvas_chat/static/js/plugins/url-fetch.js` | UrlFetchFeature class  | Generic URL fetching (`/fetch` command)                      |
 | `src/canvas_chat/static/js/plugins/powerpoint-node.js` | PowerPointFeature + PowerPointNode | PPTX upload, slide navigation drawer, per-slide captioning, slide extraction |
 
 #### Example plugins
@@ -150,7 +146,6 @@ canvas-chat/
 | `src/canvas_chat/static/js/pyodide-runner.js`      | Python code execution (Pyodide)       | Code execution, environment setup     |
 | `src/canvas_chat/static/js/highlight-utils.js`     | Text highlighting utilities           | Text selection, excerpt extraction    |
 | `src/canvas_chat/static/js/scroll-utils.js`        | Scroll container detection            | Scroll event handling, DOM traversal  |
-| `src/canvas_chat/static/js/plugins/pdf-viewer.js`  | PDF.js viewer + text extraction       | PDF worker config, load/render/extract, IndexedDB for uploads |
 | `src/canvas_chat/static/js/event-emitter.js`       | Event emitter pattern                 | Event-driven architecture             |
 
 ### Frontend (HTML/CSS)
@@ -799,29 +794,6 @@ pixi run npx cypress run --browser electron --headless --spec cypress/e2e/matrix
 - `cypress/e2e/new_canvas.cy.js` - New canvas creation tests
 - `cypress/e2e/undo_redo.cy.js` - Global undo/redo tests
 - `cypress/e2e/url_fetch_no_ui_break.cy.js` - URL fetch: dangerous HTML does not break UI
-
-### BDD feature tests (Gherkin)
-
-For user-visible behavior, define `.feature` specs and implement step definitions so the features run in Cypress.
-
-**Workflow:**
-
-- Optional story specs: `specs/user-stories/*.story.md`
-- Generated/hand-authored features: `cypress/e2e/features/*.feature`
-- Step definitions: `cypress/e2e/step_definitions/*.ts`
-- Custom commands: `cypress/support/e2e.js` (use `cy.getByTestId`)
-
-**Generation and enforcement:**
-
-```bash
-node scripts/generate_features.js      # story -> feature (idempotent)
-node scripts/generate_step_stubs.js    # fails if any steps are missing
-node scripts/check_tests_present.js    # CI-only: ensures code changes have tests
-```
-
-**Selector rule:** Use `data-testid` for all UI selectors referenced in `.feature` steps.
-
-**Graph assertions:** Prefer `window.__APP_TEST__.graph.serialize()` for deterministic checks.
 
 ### Unit tests
 
