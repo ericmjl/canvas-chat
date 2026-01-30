@@ -125,9 +125,301 @@ plugins:
     # Example 3: Python-only plugin (backend handler)
     # - py: ./plugins/my_backend_handler.py
 
+    # Example 4: Agent-backed feature plugin (uses agent architecture)
+    # - path: ./src/canvas_chat/static/js/example-plugins/example-agent-plugin.js
+
+    # Example 5: Minimal agent plugin (simplest agent pattern)
+    # - path: ./src/canvas_chat/static/js/example-plugins/example-minimal-agent.js
+
     # Add your custom plugins here:
     # - path: ./plugins/my-custom-node.js
     # - path: /absolute/path/to/plugin.js
+
+# ============================================================================
+# AGENTS - Define agent behaviors for complex workflows
+# ============================================================================
+#
+# Optional. Agents are declarative specifications describing what an agent is
+# and what it is allowed to do. They enable complex workflows like delegation,
+# research, and synthesis while keeping execution traceable in the DAG.
+#
+# Key concepts:
+# - Base Agent: User-facing, owns the response, may delegate to sub-agents
+# - Sub-Agents: Workers with narrower scope, invoked by base agent
+# - Engine: Execution strategy (built-in, or custom adapters)
+# - Budgets: Token/tool/time limits for execution
+# - HITL: Human-in-the-loop policies for approvals
+#
+# See docs/explanation/agent-architecture.md for design details.
+
+agents:
+    # Example 1: Simple research agent
+    # - id: research-agent
+    #   name: Research Assistant
+    #   engine: built-in
+    #   model: openai/gpt-4o
+    #   systemPrompt: |
+    #     You are a research assistant. When asked about a topic:
+    #     1. Create a plan for researching the topic
+    #     2. Use available tools to gather information
+    #     3. Synthesize findings into a comprehensive summary
+    #   allowedTools:
+    #     - web_search
+    #     - fetch_url
+    #   budgets:
+    #     maxTokens: 100000
+    #     maxToolCalls: 30
+    #     timeoutMs: 300000
+    #   hitl:
+    #     requireToolApproval: false
+    #     requireMutationApproval: true
+
+    # Example 2: Supervisor with sub-agents
+    # - id: supervisor
+    #   name: Task Supervisor
+    #   engine: built-in
+    #   model: anthropic/claude-sonnet-4-20250514
+    #   systemPrompt: |
+    #     You are a task supervisor that coordinates specialized workers.
+    #     Delegate research tasks to the retriever sub-agent.
+    #     Delegate summarization to the summarizer sub-agent.
+    #     Synthesize their outputs into a final response.
+    #   allowedTools: []
+    #   budgets:
+    #     maxTokens: 150000
+    #     maxToolCalls: 10
+    #     timeoutMs: 600000
+    #   subagents:
+    #     retriever:
+    #       id: retriever
+    #       name: Information Retriever
+    #       model: openai/gpt-4o-mini
+    #       systemPrompt: You retrieve and filter relevant information.
+    #       allowedTools:
+    #         - web_search
+    #         - fetch_url
+    #       budgets:
+    #         maxTokens: 30000
+    #         maxToolCalls: 15
+    #         timeoutMs: 120000
+    #     summarizer:
+    #       id: summarizer
+    #       name: Content Summarizer
+    #       model: openai/gpt-4o-mini
+    #       systemPrompt: You summarize content clearly and concisely.
+    #       allowedTools: []
+    #       budgets:
+    #         maxTokens: 20000
+    #         maxToolCalls: 0
+    #         timeoutMs: 60000
+
+    # Example 3: Code review agent with strict HITL
+    # - id: code-reviewer
+    #   name: Code Reviewer
+    #   engine: built-in
+    #   model: anthropic/claude-sonnet-4-20250514
+    #   systemPrompt: |
+    #     You review code for bugs, security issues, and best practices.
+    #     Be thorough but constructive in your feedback.
+    #   allowedTools:
+    #     - read_file
+    #     - grep_search
+    #   defaultOutputNodeType: review
+    #   budgets:
+    #     maxTokens: 50000
+    #     maxToolCalls: 20
+    #     timeoutMs: 180000
+    #   hitl:
+    #     requireToolApproval: true
+    #     requireSubagentApproval: true
+    #     requireMutationApproval: true
+    #     autoApproveTools:
+    #       - read_file  # Auto-approve reads, require approval for writes
+
+# ============================================================================
+# MCP SERVERS - Model Context Protocol tool providers
+# ============================================================================
+#
+# Optional. Connect to MCP servers for external tool capabilities.
+# MCP (Model Context Protocol) defines a standard interface for tools.
+#
+# Tools from MCP servers are automatically registered in the ToolRegistry
+# and can be referenced in agent allowedTools configurations.
+#
+# Server types:
+# - stdio: Local process communicating via stdin/stdout (most common)
+# - http: Remote HTTP endpoint (for cloud-hosted tools)
+# - ws: WebSocket connection (for real-time tools)
+
+mcpServers:
+    # Example 1: Local filesystem tools via stdio
+    # - name: filesystem
+    #   type: stdio
+    #   command: npx
+    #   args:
+    #     - -y
+    #     - "@modelcontextprotocol/server-filesystem"
+    #     - "/path/to/allowed/directory"
+    #   tools:
+    #     - read_file
+    #     - write_file
+    #     - list_directory
+
+    # Example 2: Git tools via stdio
+    # - name: git
+    #   type: stdio
+    #   command: uvx
+    #   args:
+    #     - mcp-server-git
+    #     - "--repository"
+    #     - "."
+    #   tools:
+    #     - "*"  # Allow all tools from this server
+
+    # Example 3: Remote HTTP MCP server
+    # - name: cloud-tools
+    #   type: http
+    #   url: https://mcp.example.com/api
+    #   headers:
+    #     Authorization: Bearer ${MCP_API_KEY}
+    #   tools:
+    #     - web_search
+    #     - fetch_url
+
+    # Example 4: Custom Python MCP server
+    # - name: custom-tools
+    #   type: stdio
+    #   command: python
+    #   args:
+    #     - -m
+    #     - my_mcp_server
+    #   env:
+    #     MY_API_KEY: ${MY_API_KEY}
+    #   tools:
+    #     - custom_tool_1
+    #     - custom_tool_2
+
+    # Example 5: Brave search MCP server
+    # - name: brave-search
+    #   type: stdio
+    #   command: npx
+    #   args:
+    #     - -y
+    #     - "@anthropics/mcp-server-brave-search"
+    #   env:
+    #     BRAVE_API_KEY: ${BRAVE_API_KEY}
+    #   tools:
+    #     - brave_search
+
+# ============================================================================
+# BUILT-IN TOOLS - Tools provided by Canvas Chat
+# ============================================================================
+#
+# These tools are always available and don't require MCP server configuration:
+#
+# - web_search: Search the web using Exa API (requires EXA_API_KEY)
+# - fetch_url: Fetch and extract content from URLs
+# - read_file: Read file contents (within allowed directories)
+# - execute_code: Execute code in Pyodide sandbox
+# - transform_text: Transform text (uppercase, lowercase, trim, etc.)
+# - text_analysis: Analyze text for sentiment, entities, key phrases
+# - calculator: Perform mathematical calculations
+#
+# Plugins can register additional tools via the ToolRegistry.
+# See example-mcp-tool-plugin.js for how to add custom tools.
+
+# ============================================================================
+# GUARDRAILS - Safety limits for agent execution
+# ============================================================================
+#
+# Optional. Global safety limits that apply to all agent executions.
+
+guardrails:
+    maxSubagentDepth: 1          # Maximum sub-agent nesting (default: 1)
+    maxSubagentSpawnsPerRun: 5   # Maximum sub-agents per run (default: 5)
+    inheritBudgets: true          # Sub-agents inherit parent budgets (default: true)
+    debounceTriggerMs: 500        # Debounce for node-triggered runs (default: 500)
+
+# ============================================================================
+# MEMORY STORE - Long-horizon memory configuration
+# ============================================================================
+#
+# Optional. Configure memory storage for retain/recall/reflect operations.
+# Memory enables agents to remember past interactions and learned facts.
+#
+# Store types:
+# - in-memory: Simple in-memory store (default, lost on restart)
+# - postgres: PostgreSQL with pgvector for semantic search (future)
+# - dag: Store memories as nodes in the DAG (future)
+
+memoryStore:
+    type: in-memory
+    # connectionStringEnvVar: DATABASE_URL  # For postgres type
+    policy:
+        enabled: true
+        defaultBankId: default
+        maxMemoriesPerBank: 1000
+        # ttlDays: 30  # Optional: Auto-expire memories
+        allowedTypes:
+            - world       # Facts about entities, relationships
+            - experience  # What happened, events, outcomes
+            - opinion     # Beliefs, preferences, assessments
+
+# ============================================================================
+# BLOB STORE - Pluggable binary object storage
+# ============================================================================
+#
+# Optional. Configure where large binary objects (images, files, etc.) are stored.
+# Blob storage is separate from the DAG to keep node data lightweight.
+#
+# Backend types:
+# - local: Local filesystem (default)
+# - s3: Amazon S3 or S3-compatible storage (MinIO, DigitalOcean Spaces, etc.)
+# - gcs: Google Cloud Storage (future)
+# - azure: Azure Blob Storage (future)
+#
+# Each backend can be registered via plugins for maximum flexibility.
+
+blobStore:
+    # Default: Local filesystem storage
+    type: local
+    config:
+        storageDir: ~/.canvas-chat/blobs  # Where to store blobs
+
+    # Example: AWS S3 backend
+    # type: s3
+    # config:
+    #   bucket: my-canvas-chat-blobs
+    #   region: us-west-2
+    #   # Credentials from environment: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+    #   # Or specify explicit credential env vars:
+    #   accessKeyEnvVar: AWS_ACCESS_KEY_ID
+    #   secretKeyEnvVar: AWS_SECRET_ACCESS_KEY
+    #   # Optional: custom endpoint for S3-compatible services
+    #   endpointEnvVar: S3_ENDPOINT_URL  # e.g., for MinIO or DigitalOcean Spaces
+
+    # Example: MinIO (S3-compatible)
+    # type: s3
+    # config:
+    #   bucket: canvas-chat
+    #   region: us-east-1
+    #   endpointEnvVar: MINIO_ENDPOINT  # http://localhost:9000
+    #   accessKeyEnvVar: MINIO_ACCESS_KEY
+    #   secretKeyEnvVar: MINIO_SECRET_KEY
+
+    # Example: Google Cloud Storage (future)
+    # type: gcs
+    # config:
+    #   bucket: my-canvas-chat-blobs
+    #   projectId: my-gcp-project
+    #   credentialsEnvVar: GOOGLE_APPLICATION_CREDENTIALS
+
+    # Example: Azure Blob Storage (future)
+    # type: azure
+    # config:
+    #   containerName: canvas-chat-blobs
+    #   accountNameEnvVar: AZURE_STORAGE_ACCOUNT
+    #   accountKeyEnvVar: AZURE_STORAGE_KEY
 
 # ============================================================================
 # FIELD REFERENCE

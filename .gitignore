@@ -194,3 +194,6 @@ FETCHING*.md
 cypress/screenshots/
 cypress/videos/
 cypress/downloads/
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md

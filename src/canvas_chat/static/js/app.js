@@ -1048,9 +1048,7 @@ class App {
                             // Don't trigger if Ctrl/Cmd is pressed (unless required by shortcut)
                             // If shortcut requires Ctrl: Ctrl must be pressed
                             // If shortcut doesn't require Ctrl: Ctrl must NOT be pressed
-                            const noAccidentalCtrl = config.ctrl
-                                ? (e.ctrlKey || e.metaKey)
-                                : !(e.ctrlKey || e.metaKey);
+                            const noAccidentalCtrl = config.ctrl ? e.ctrlKey || e.metaKey : !(e.ctrlKey || e.metaKey);
 
                             if (keyMatches && shiftMatches && ctrlMatches && noAccidentalCtrl) {
                                 // Special handling for 'r' - focus chat input instead of emitting event
@@ -2686,6 +2684,11 @@ class App {
             .filter((e) => e.source === nodeId || e.target === nodeId)
             .map((e) => ({ ...e }));
 
+        // Delete any associated blobs (fire-and-forget, don't block deletion)
+        // Note: For undo support, we'd need to re-upload the blob on undo.
+        // For now, we prioritize cleanup over perfect undo of blob-backed nodes.
+        this._cleanupNodeBlobs(node);
+
         // Push undo action
         this.undoManager.push({
             type: 'DELETE_NODES',
@@ -2710,6 +2713,44 @@ class App {
 
         this.saveSession();
         this.updateEmptyState();
+    }
+
+    /**
+     * Cleanup blob storage for a node (fire-and-forget)
+     * @param {Object} node - Node to clean up
+     * @private
+     */
+    async _cleanupNodeBlobs(node) {
+        try {
+            // Dynamically import to avoid circular dependencies
+            const { deleteNodeBlobs } = await import('./agent/blob-store-utils.js');
+            const result = await deleteNodeBlobs(node);
+            if (result.deleted.length > 0) {
+                console.log(`[App] Cleaned up ${result.deleted.length} blob(s) for node ${node.id}`);
+            }
+        } catch (err) {
+            // Don't fail deletion if blob cleanup fails
+            console.warn('[App] Failed to cleanup node blobs:', err.message);
+        }
+    }
+
+    /**
+     * Cleanup blob storage for multiple nodes (fire-and-forget)
+     * @param {Object[]} nodes - Nodes to clean up
+     * @private
+     */
+    async _cleanupNodesBlobs(nodes) {
+        try {
+            // Dynamically import to avoid circular dependencies
+            const { deleteNodesBlobs } = await import('./agent/blob-store-utils.js');
+            const result = await deleteNodesBlobs(nodes);
+            if (result.deleted.length > 0) {
+                console.log(`[App] Cleaned up ${result.deleted.length} blob(s) for ${nodes.length} nodes`);
+            }
+        } catch (err) {
+            // Don't fail deletion if blob cleanup fails
+            console.warn('[App] Failed to cleanup nodes blobs:', err.message);
+        }
     }
 
     // Edit Title Modal methods moved to modal-manager.js
@@ -3183,6 +3224,9 @@ class App {
             }
         }
 
+        // Cleanup blobs for all selected nodes (fire-and-forget)
+        this._cleanupNodesBlobs(deletedNodes);
+
         // Push undo action
         this.undoManager.push({
             type: 'DELETE_NODES',
@@ -3469,10 +3513,15 @@ class App {
     }
 
     /**
-     *
+     * Export session, resolving any blob references to inline data
      */
-    exportSession() {
-        storage.exportSession(this.session);
+    async exportSession() {
+        try {
+            await storage.exportSession(this.session);
+        } catch (error) {
+            console.error('[App] Export failed:', error);
+            this.canvas.showToast?.(`Export failed: ${error.message}`, 'error');
+        }
     }
 
     /**

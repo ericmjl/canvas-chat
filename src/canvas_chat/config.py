@@ -28,6 +28,199 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class BudgetsConfig:
+    """Budget limits for agent execution."""
+
+    max_tokens: int = 50000  # Maximum tokens to use
+    max_tool_calls: int = 20  # Maximum tool invocations
+    timeout_ms: int = 300000  # Timeout in milliseconds (5 minutes)
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "BudgetsConfig":
+        """Create BudgetsConfig from YAML dict."""
+        if not data:
+            return cls()
+        return cls(
+            max_tokens=data.get("maxTokens", 50000),
+            max_tool_calls=data.get("maxToolCalls", 20),
+            timeout_ms=data.get("timeoutMs", 300000),
+        )
+
+
+@dataclass
+class HITLConfig:
+    """Human-in-the-loop policy configuration."""
+
+    require_tool_approval: bool = False  # Require approval for tool calls
+    require_subagent_approval: bool = False  # Require approval for sub-agent spawns
+    require_mutation_approval: bool = True  # Require approval for canvas mutations
+    auto_approve_tools: list[str] = field(default_factory=list)  # Tools to auto-approve
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "HITLConfig":
+        """Create HITLConfig from YAML dict."""
+        if not data:
+            return cls()
+        return cls(
+            require_tool_approval=data.get("requireToolApproval", False),
+            require_subagent_approval=data.get("requireSubagentApproval", False),
+            require_mutation_approval=data.get("requireMutationApproval", True),
+            auto_approve_tools=data.get("autoApproveTools", []),
+        )
+
+
+@dataclass
+class AgentConfig:
+    """Configuration for an agent definition.
+
+    Agents are declarative specifications describing what an agent is
+    and what it is allowed to do.
+    """
+
+    id: str  # Unique agent identifier
+    name: str  # Display name
+    engine: str = "built-in"  # Engine adapter identifier
+    model: str = ""  # LLM model identifier (uses default if empty)
+    system_prompt: str = ""  # System prompt for the agent
+    allowed_tools: list[str] = field(default_factory=list)  # Allowed tool IDs
+    budgets: BudgetsConfig = field(default_factory=BudgetsConfig)
+    hitl: HITLConfig = field(default_factory=HITLConfig)
+    subagents: dict[str, "AgentConfig"] = field(default_factory=dict)
+    default_output_node_type: str | None = None  # Default node type for outputs
+
+    @classmethod
+    def from_dict(
+        cls, data: dict, index: int | None = None
+    ) -> "AgentConfig":
+        """Create AgentConfig from YAML dict with validation.
+
+        Args:
+            data: YAML dictionary
+            index: Index in agents list (for error messages)
+        """
+        # Validate required fields
+        if "id" not in data:
+            idx_str = f" at index {index}" if index is not None else ""
+            raise ValueError(f"Agent{idx_str} missing 'id' field")
+
+        agent_id = data["id"]
+
+        # Parse subagents recursively
+        subagents = {}
+        if "subagents" in data and data["subagents"]:
+            for sub_id, sub_data in data["subagents"].items():
+                sub_data["id"] = sub_id  # Ensure id is set
+                subagents[sub_id] = cls.from_dict(sub_data)
+
+        return cls(
+            id=agent_id,
+            name=data.get("name", agent_id),
+            engine=data.get("engine", "built-in"),
+            model=data.get("model", ""),
+            system_prompt=data.get("systemPrompt", ""),
+            allowed_tools=data.get("allowedTools", []),
+            budgets=BudgetsConfig.from_dict(data.get("budgets")),
+            hitl=HITLConfig.from_dict(data.get("hitl")),
+            subagents=subagents,
+            default_output_node_type=data.get("defaultOutputNodeType"),
+        )
+
+    def to_frontend_dict(self) -> dict:
+        """Convert to a safe dict for frontend (no sensitive data)."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "engine": self.engine,
+            "model": self.model,
+            "allowedTools": self.allowed_tools,
+            "budgets": {
+                "maxTokens": self.budgets.max_tokens,
+                "maxToolCalls": self.budgets.max_tool_calls,
+                "timeoutMs": self.budgets.timeout_ms,
+            },
+            "hitl": {
+                "requireToolApproval": self.hitl.require_tool_approval,
+                "requireSubagentApproval": self.hitl.require_subagent_approval,
+                "requireMutationApproval": self.hitl.require_mutation_approval,
+            },
+            "subagents": {
+                sid: sub.to_frontend_dict() for sid, sub in self.subagents.items()
+            },
+            "defaultOutputNodeType": self.default_output_node_type,
+        }
+
+
+@dataclass
+class GuardrailsConfig:
+    """Safety guardrails for agent execution."""
+
+    max_subagent_depth: int = 1  # Maximum sub-agent nesting depth
+    max_subagent_spawns_per_run: int = 5  # Maximum sub-agents per run
+    inherit_budgets: bool = True  # Whether sub-agents inherit parent budgets
+    debounce_trigger_ms: int = 500  # Debounce for node-triggered runs
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "GuardrailsConfig":
+        """Create GuardrailsConfig from YAML dict."""
+        if not data:
+            return cls()
+        return cls(
+            max_subagent_depth=data.get("maxSubagentDepth", 1),
+            max_subagent_spawns_per_run=data.get("maxSubagentSpawnsPerRun", 5),
+            inherit_budgets=data.get("inheritBudgets", True),
+            debounce_trigger_ms=data.get("debounceTriggerMs", 500),
+        )
+
+
+@dataclass
+class MemoryPolicyConfig:
+    """Memory retention policy configuration."""
+
+    enabled: bool = True  # Whether memory is enabled
+    default_bank_id: str = "default"  # Default memory bank
+    max_memories_per_bank: int = 1000  # Maximum memories per bank
+    ttl_days: int | None = None  # Time-to-live for memories (None = forever)
+    allowed_types: list[str] = field(
+        default_factory=lambda: ["world", "experience", "opinion"]
+    )
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "MemoryPolicyConfig":
+        """Create MemoryPolicyConfig from YAML dict."""
+        if not data:
+            return cls()
+        return cls(
+            enabled=data.get("enabled", True),
+            default_bank_id=data.get("defaultBankId", "default"),
+            max_memories_per_bank=data.get("maxMemoriesPerBank", 1000),
+            ttl_days=data.get("ttlDays"),
+            allowed_types=data.get(
+                "allowedTypes", ["world", "experience", "opinion"]
+            ),
+        )
+
+
+@dataclass
+class MemoryStoreConfig:
+    """Configuration for the memory store backend."""
+
+    type: str = "in-memory"  # Store type (in-memory, postgres, etc.)
+    connection_string_env_var: str | None = None  # Env var for connection string
+    policy: MemoryPolicyConfig = field(default_factory=MemoryPolicyConfig)
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "MemoryStoreConfig":
+        """Create MemoryStoreConfig from YAML dict."""
+        if not data:
+            return cls()
+        return cls(
+            type=data.get("type", "in-memory"),
+            connection_string_env_var=data.get("connectionStringEnvVar"),
+            policy=MemoryPolicyConfig.from_dict(data.get("policy")),
+        )
+
+
+@dataclass
 class ModelConfig:
     """Configuration for a single model.
 
@@ -197,21 +390,26 @@ class PluginConfig:
 
 @dataclass
 class AppConfig:
-    """Application configuration for models, plugins, and admin mode.
+    """Application configuration for models, plugins, agents, and admin mode.
 
     When loaded with admin_mode=False:
     - Models are pre-populated in UI, users add their own API keys via settings
     - Plugins are loaded and available
+    - Agents are registered and available
     - API key settings UI is shown
 
     When loaded with admin_mode=True:
     - Models use server-side API keys from environment variables
     - Plugins are loaded and available
+    - Agents are registered and available
     - API key settings UI is hidden (users can't configure keys)
     """
 
     models: list[ModelConfig] = field(default_factory=list)
     plugins: list[PluginConfig] = field(default_factory=list)
+    agents: list[AgentConfig] = field(default_factory=list)
+    guardrails: GuardrailsConfig = field(default_factory=GuardrailsConfig)
+    memory_store: MemoryStoreConfig = field(default_factory=MemoryStoreConfig)
     admin_mode: bool = False
     _config_path: Path | None = None
 
@@ -226,7 +424,7 @@ class AppConfig:
             admin_mode: Whether to enable admin mode (server-side API keys)
 
         Returns:
-            AppConfig with models and plugins loaded
+            AppConfig with models, plugins, and agents loaded
 
         Raises:
             FileNotFoundError: If config.yaml doesn't exist
@@ -279,9 +477,26 @@ class AppConfig:
                             f"Registered Python plugin: {plugin_config.py_path.name}"
                         )
 
+        # Load agents (optional)
+        agents = []
+        if "agents" in data and data["agents"]:
+            for i, agent_data in enumerate(data["agents"]):
+                agent = AgentConfig.from_dict(agent_data, i)
+                agents.append(agent)
+                logger.info(f"Registered agent: {agent.id} ({agent.name})")
+
+        # Load guardrails (optional)
+        guardrails = GuardrailsConfig.from_dict(data.get("guardrails"))
+
+        # Load memory store config (optional)
+        memory_store = MemoryStoreConfig.from_dict(data.get("memoryStore"))
+
         config = cls(
             models=models,
             plugins=plugins,
+            agents=agents,
+            guardrails=guardrails,
+            memory_store=memory_store,
             admin_mode=admin_mode,
             _config_path=config_path,
         )
@@ -292,13 +507,22 @@ class AppConfig:
         )
         if plugins:
             logger.info(f"Loaded {len(plugins)} plugin(s)")
+        if agents:
+            logger.info(f"Loaded {len(agents)} agent(s)")
 
         return config
 
     @classmethod
     def empty(cls) -> "AppConfig":
-        """Create empty config (no models or plugins)."""
-        return cls(models=[], plugins=[], admin_mode=False)
+        """Create empty config (no models, plugins, or agents)."""
+        return cls(
+            models=[],
+            plugins=[],
+            agents=[],
+            guardrails=GuardrailsConfig(),
+            memory_store=MemoryStoreConfig(),
+            admin_mode=False,
+        )
 
     def validate_environment(self) -> None:
         """Validate that all required environment variables are set.
@@ -397,6 +621,47 @@ class AppConfig:
                 }
             )
         return result
+
+    def get_agent_config(self, agent_id: str) -> AgentConfig | None:
+        """Get configuration for a specific agent by ID.
+
+        Args:
+            agent_id: The agent ID
+
+        Returns:
+            AgentConfig if found, None otherwise
+        """
+        for agent in self.agents:
+            if agent.id == agent_id:
+                return agent
+            # Check subagents
+            if agent_id in agent.subagents:
+                return agent.subagents[agent_id]
+        return None
+
+    def get_frontend_agents(self) -> list[dict]:
+        """Get a safe agent list for the frontend (no sensitive data).
+
+        Returns a list of agent info dicts suitable for the frontend.
+        """
+        return [agent.to_frontend_dict() for agent in self.agents]
+
+    def get_frontend_guardrails(self) -> dict:
+        """Get guardrails configuration for the frontend."""
+        return {
+            "maxSubagentDepth": self.guardrails.max_subagent_depth,
+            "maxSubagentSpawnsPerRun": self.guardrails.max_subagent_spawns_per_run,
+            "inheritBudgets": self.guardrails.inherit_budgets,
+            "debounceTriggerMs": self.guardrails.debounce_trigger_ms,
+        }
+
+    def get_frontend_memory_config(self) -> dict:
+        """Get memory configuration for the frontend."""
+        return {
+            "enabled": self.memory_store.policy.enabled,
+            "defaultBankId": self.memory_store.policy.default_bank_id,
+            "allowedTypes": self.memory_store.policy.allowed_types,
+        }
 
 
 def is_github_copilot_enabled() -> bool:

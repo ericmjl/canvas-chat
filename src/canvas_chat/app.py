@@ -53,6 +53,7 @@ from canvas_chat.file_upload_registry import FileUploadRegistry
 # Import built-in file upload handler plugins (registers them)
 # Import built-in URL fetch handler plugins (registers them)
 from canvas_chat.plugins import (
+    blob_store_handler,  # noqa: F401
     code_handler,  # noqa: F401
     ddg_endpoints,  # noqa: F401
     git_repo_handler,  # noqa: F401
@@ -81,6 +82,7 @@ code_handler.register_endpoints(app)
 matrix_handler.register_endpoints(app)
 ddg_endpoints.register_endpoints(app)
 pptx_endpoints.register_endpoints(app)
+blob_store_handler.register_endpoints(app)
 
 # --- Configuration Management ---
 # This is initialized at module load time based on environment variables

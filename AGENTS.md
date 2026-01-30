@@ -59,6 +59,7 @@ canvas-chat/
 │           ├── crdt-graph.js # Graph data model
 │           ├── chat.js      # LLM API integration
 │           ├── feature-*.js # Feature plugins
+│           ├── agent/       # Agent architecture (types, engine, memory, controller)
 │           └── example-plugins/ # Example plugins (test, smart-fix, poll node)
 ├── tests/                    # Test files
 ├── docs/                     # Documentation (Diataxis)
@@ -122,11 +123,13 @@ canvas-chat/
 
 #### Example plugins
 
-| File                                                               | Purpose                                | Edit for...                 |
-| ------------------------------------------------------------------ | -------------------------------------- | --------------------------- |
-| `src/canvas_chat/static/js/example-plugins/smart-fix-plugin.js`    | SmartFixPlugin - Enhanced self-healing | Example of extension hooks  |
-| `src/canvas_chat/static/js/example-plugins/example-test-plugin.js` | Simple test plugin                     | Plugin development examples |
-| `src/canvas_chat/static/js/example-plugins/example-poll-node.js`   | Example poll node custom node type     | Custom node type examples   |
+| File                                                               | Purpose                                | Edit for...                     |
+| ------------------------------------------------------------------ | -------------------------------------- | ------------------------------- |
+| `src/canvas_chat/static/js/example-plugins/smart-fix-plugin.js`    | SmartFixPlugin - Enhanced self-healing | Example of extension hooks      |
+| `src/canvas_chat/static/js/example-plugins/example-test-plugin.js` | Simple test plugin                     | Plugin development examples     |
+| `src/canvas_chat/static/js/example-plugins/example-poll-node.js`   | Example poll node custom node type     | Custom node type examples       |
+| `src/canvas_chat/static/js/example-plugins/example-agent-plugin.js`| Agent-backed feature with sub-agents   | Agent architecture examples     |
+| `src/canvas_chat/static/js/example-plugins/example-minimal-agent.js`| Minimal agent-backed plugin           | Simplest agent pattern          |
 
 #### Support modules
 
@@ -640,6 +643,51 @@ When a plugin pushes an action with a registered type, UndoManager delegates to 
 
 - Don't register handlers for core action types (DELETE_NODES, ADD_NODE, MOVE_NODES, EDIT_TITLE, TAG_CHANGE)
 - Don't modify core undo/redo logic in app.js
+
+### Agent architecture
+
+Canvas-Chat uses a **Base Agent + Sub-Agent architecture** for complex AI workflows.
+
+**Core Principle:** The canvas is the clock. The DAG is the truth. Agents are reactors, not daemons.
+
+#### Key components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `AgentDefinition` | `js/agent/agent-types.js` | Declarative agent specification |
+| `EngineAdapter` | `js/agent/engine-adapter.js` | Engine interface for execution |
+| `RunController` | `js/agent/run-controller.js` | Orchestrates agent runs |
+| `MemoryStore` | `js/agent/memory-store.js` | Retain/recall/reflect memory |
+
+#### New node types
+
+| Type | Purpose |
+|------|---------|
+| `NodeType.RUN` | Agent execution record with trace and plan |
+| `NodeType.ARTIFACT` | Structured output from an agent run |
+
+#### New edge types
+
+| Type | Purpose |
+|------|---------|
+| `EdgeType.RUN_TRIGGER` | Connects triggering node to Run Node |
+| `EdgeType.RUN_ARTIFACT` | Connects Run Node to its artifacts |
+| `EdgeType.SUBAGENT` | Connects parent run to sub-agent run |
+
+#### Event model
+
+Agent execution produces events (see `EventType` in `agent-types.js`):
+
+- `run.started`, `run.completed`, `run.failed` — Lifecycle
+- `token.delta` — LLM streaming
+- `tool.call.requested`, `tool.call.completed` — Tool use
+- `subagent.spawn.*` — Delegation
+- `artifact.created` — Output creation
+- `plan.*`, `progress.update` — Progress visibility
+
+**For detailed information**, see:
+
+- [Agent Architecture ADR](docs/explanation/agent-architecture.md) - Full design rationale
 
 ## Design standards
 
