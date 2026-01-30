@@ -9,6 +9,7 @@ import { FeaturePlugin } from '../feature-plugin.js';
 import { AppContext } from '../feature-plugin.js';
 import { NodeType, EdgeType, createNode, createEdge } from '../graph-types.js';
 import { apiUrl } from '../utils.js';
+import { createAgentDefinition } from '../agent/agent-types.js';
 
 /**
  * ImageGenerationFeature - Handles /image command with DALL-E and Imagen.
@@ -101,6 +102,21 @@ class ImageGenerationFeature extends FeaturePlugin {
                 placeholder: 'optional additional instructions...',
             },
         ];
+    }
+
+    /**
+     * Get the AgentDefinition for this feature.
+     * Uses 'feature' engine for direct dispatch (image generation with modal).
+     * @returns {import('../agent/agent-types.js').AgentDefinition}
+     */
+    getAgentDefinition() {
+        return createAgentDefinition({
+            id: 'image-agent',
+            name: 'Image Agent',
+            engine: 'feature', // Feature handles modal and image generation
+            systemPrompt: 'Generate images from text descriptions.',
+            description: 'Generates images using DALL-E, Imagen, or local Ollama models',
+        });
     }
 
     /**

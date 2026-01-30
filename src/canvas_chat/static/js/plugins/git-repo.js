@@ -11,6 +11,7 @@ import { createEdge, EdgeType } from '../graph-types.js';
 import { isUrlContent, apiUrl } from '../utils.js';
 import { BaseNode, Actions } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
+import { createAgentDefinition } from '../agent/agent-types.js';
 
 /**
  * GitRepoFeature class manages git repository URL fetching.
@@ -39,6 +40,21 @@ export class GitRepoFeature extends FeaturePlugin {
                 placeholder: 'https://github.com/user/repo',
             },
         ];
+    }
+
+    /**
+     * Get the AgentDefinition for this feature.
+     * Uses 'feature' engine for direct dispatch.
+     * @returns {import('../agent/agent-types.js').AgentDefinition}
+     */
+    getAgentDefinition() {
+        return createAgentDefinition({
+            id: 'git-repo-agent',
+            name: 'Git Repository Agent',
+            engine: 'feature', // Direct dispatch via handleCommand
+            systemPrompt: 'Fetch git repositories with interactive file selection.',
+            description: 'Fetches git repositories and allows file selection for context',
+        });
     }
 
     /**

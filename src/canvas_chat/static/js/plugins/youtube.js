@@ -9,6 +9,7 @@ import { FeaturePlugin } from '../feature-plugin.js';
 import { createNode, NodeType } from '../graph-types.js';
 import { createEdge, EdgeType } from '../graph-types.js';
 import { isUrlContent, apiUrl } from '../utils.js';
+import { createAgentDefinition } from '../agent/agent-types.js';
 
 /**
  * YouTubeFeature - Handles YouTube video fetching
@@ -26,6 +27,21 @@ export class YouTubeFeature extends FeaturePlugin {
                 placeholder: 'https://youtube.com/watch?v=...',
             },
         ];
+    }
+
+    /**
+     * Get the AgentDefinition for this feature.
+     * Uses 'feature' engine for direct dispatch.
+     * @returns {import('../agent/agent-types.js').AgentDefinition}
+     */
+    getAgentDefinition() {
+        return createAgentDefinition({
+            id: 'youtube-agent',
+            name: 'YouTube Agent',
+            engine: 'feature', // Direct dispatch via handleCommand
+            systemPrompt: 'Fetch YouTube videos with transcript extraction.',
+            description: 'Fetches YouTube videos and extracts transcripts',
+        });
     }
 
     /**

@@ -9,6 +9,7 @@
 
 import { chat } from '../chat.js';
 import { FeaturePlugin } from '../feature-plugin.js';
+import { createAgentDefinition } from '../agent/agent-types.js';
 import { EdgeType, NodeType, createEdge, createNode } from '../graph-types.js';
 import { Actions, BaseNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
@@ -271,6 +272,35 @@ class FactcheckFeature extends FeaturePlugin {
                 e.preventDefault();
                 this.addFactcheckClaim();
             }
+        });
+    }
+
+    /**
+     * Get slash commands for this feature.
+     * @returns {Array<Object>}
+     */
+    getSlashCommands() {
+        return [
+            {
+                command: '/factcheck',
+                description: 'Verify claims with web search',
+                placeholder: 'statement to verify...',
+            },
+        ];
+    }
+
+    /**
+     * Get the AgentDefinition for this feature.
+     * Uses 'feature' engine for direct dispatch (modal + LLM streaming handled internally).
+     * @returns {import('../agent/agent-types.js').AgentDefinition}
+     */
+    getAgentDefinition() {
+        return createAgentDefinition({
+            id: 'factcheck-agent',
+            name: 'Factcheck Agent',
+            engine: 'feature', // Feature handles modal + LLM calls internally
+            systemPrompt: 'Verify claims by searching the web and analyzing sources.',
+            description: 'Verifies factual claims with web search and source analysis',
         });
     }
 

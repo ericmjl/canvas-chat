@@ -28,6 +28,405 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class BudgetsConfig:
+    """Budget limits for agent execution."""
+
+    max_tokens: int = 50000  # Maximum tokens to use
+    max_tool_calls: int = 20  # Maximum tool invocations
+    timeout_ms: int = 300000  # Timeout in milliseconds (5 minutes)
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "BudgetsConfig":
+        """Create BudgetsConfig from YAML dict."""
+        if not data:
+            return cls()
+        return cls(
+            max_tokens=data.get("maxTokens", 50000),
+            max_tool_calls=data.get("maxToolCalls", 20),
+            timeout_ms=data.get("timeoutMs", 300000),
+        )
+
+
+@dataclass
+class HITLConfig:
+    """Human-in-the-loop policy configuration."""
+
+    require_tool_approval: bool = False  # Require approval for tool calls
+    require_subagent_approval: bool = False  # Require approval for sub-agent spawns
+    require_mutation_approval: bool = True  # Require approval for canvas mutations
+    auto_approve_tools: list[str] = field(default_factory=list)  # Tools to auto-approve
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "HITLConfig":
+        """Create HITLConfig from YAML dict."""
+        if not data:
+            return cls()
+        return cls(
+            require_tool_approval=data.get("requireToolApproval", False),
+            require_subagent_approval=data.get("requireSubagentApproval", False),
+            require_mutation_approval=data.get("requireMutationApproval", True),
+            auto_approve_tools=data.get("autoApproveTools", []),
+        )
+
+
+@dataclass
+class OutputDisplayConfig:
+    """Data-driven display configuration for agent output nodes.
+
+    Allows config-based agents to customize their output node appearance
+    without requiring JavaScript code.
+    """
+
+    type_label: str | None = None  # Display label (e.g., 'Reflection')
+    type_icon: str | None = None  # Emoji icon (e.g., '🔮')
+    actions: list[str] = field(default_factory=list)  # Action button IDs
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "OutputDisplayConfig | None":
+        """Create OutputDisplayConfig from YAML dict."""
+        if not data:
+            return None
+        return cls(
+            type_label=data.get("typeLabel"),
+            type_icon=data.get("typeIcon"),
+            actions=data.get("actions", []),
+        )
+
+    def to_dict(self) -> dict:
+        """Convert to dict for frontend."""
+        result = {}
+        if self.type_label:
+            result["typeLabel"] = self.type_label
+        if self.type_icon:
+            result["typeIcon"] = self.type_icon
+        if self.actions:
+            result["actions"] = self.actions
+        return result
+
+
+@dataclass
+class EdgeSpec:
+    """Specification for an edge to create after artifact creation.
+
+    Variable references are resolved at runtime:
+        - $artifact: The artifact node just created (always available)
+        - $source: Each source node that triggered the run (expands to multiple)
+        - $branch: Branch point node (requires usePathContext: true)
+        - $leaf: Leaf node where agent was triggered (requires usePathContext: true)
+        - Any other string is treated as a literal node ID
+
+    Edge types:
+        - reply: Standard conversation edge
+        - run_reflection: Reflection analysis edge
+        - run_artifact: Run to artifact edge
+        - run_trigger: Trigger to run edge
+        - subagent: Parent to sub-agent edge
+
+    Example YAML:
+        edges:
+          - from: $branch
+            to: $artifact
+            edgeType: run_reflection
+    """
+
+    from_: str  # Source node reference
+    to: str  # Target node reference
+    edge_type: str = "reply"  # Edge type (reply, run_reflection, etc.)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "EdgeSpec":
+        """Create EdgeSpec from YAML dict."""
+        return cls(
+            from_=data.get("from", "$artifact"),
+            to=data.get("to", "$source"),
+            edge_type=data.get("edgeType", "reply"),
+        )
+
+    def to_dict(self) -> dict:
+        """Convert to dict for frontend."""
+        return {
+            "from": self.from_,
+            "to": self.to,
+            "edgeType": self.edge_type,
+        }
+
+
+@dataclass
+class MetadataUpdateSpec:
+    """Specification for a metadata update after artifact creation.
+
+    Variable references are resolved at runtime (same as EdgeSpec):
+        - $artifact: The artifact node just created
+        - $source: Each source node (updates applied to each)
+        - $branch: Branch point node (requires usePathContext: true)
+        - $leaf: Leaf node (requires usePathContext: true)
+
+    Metadata values can also contain variable references:
+        metadata:
+          reflectionNodeIds: [$artifact]  # Stores artifact ID
+
+    Merge behavior:
+        - Arrays are appended (existing + new)
+        - Objects are shallow-merged
+        - Primitives are overwritten
+
+    Example YAML:
+        metadataUpdates:
+          - target: $branch
+            metadata:
+              reflectionNodeIds: [$artifact]
+              hasReflection: true
+    """
+
+    target: str  # Node reference
+    metadata: dict = field(default_factory=dict)  # Metadata to merge
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "MetadataUpdateSpec":
+        """Create MetadataUpdateSpec from YAML dict."""
+        return cls(
+            target=data.get("target", "$artifact"),
+            metadata=data.get("metadata", {}),
+        )
+
+    def to_dict(self) -> dict:
+        """Convert to dict for frontend."""
+        return {
+            "target": self.target,
+            "metadata": self.metadata,
+        }
+
+
+@dataclass
+class PostCreateConfig:
+    """Post-creation hooks executed after an artifact is created.
+
+    Allows declarative graph manipulation without custom JavaScript code.
+    This enables config-based agents to create edges and update metadata
+    on the conversation graph, similar to what code-based plugins do.
+
+    Variable references (resolved at runtime):
+        - $artifact: The artifact node just created (always available)
+        - $source: Each source node that triggered the run (may expand)
+        - $branch: Branch point node (requires usePathContext: true)
+        - $leaf: Leaf node where agent was triggered (requires usePathContext)
+
+    Path context (usePathContext: true):
+        When enabled, traces back from the source node to find:
+        - $leaf: The node where the user triggered the agent
+        - $branch: The nearest branch point (node with multiple children) or root
+
+    Use cases:
+        - Creating edges from source nodes to output (like reflection links)
+        - Updating metadata on related nodes (tracking reflections)
+        - Building graph relationships based on conversation context
+
+    Example YAML:
+        postCreate:
+          usePathContext: true
+          edges:
+            - from: $branch
+              to: $artifact
+              edgeType: run_reflection
+          metadataUpdates:
+            - target: $branch
+              metadata:
+                reflectionNodeIds: [$artifact]
+    """
+
+    edges: list[EdgeSpec] = field(default_factory=list)  # Edges to create
+    metadata_updates: list[MetadataUpdateSpec] = field(
+        default_factory=list
+    )  # Metadata updates
+    use_path_context: bool = False  # Enable $branch/$leaf resolution
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "PostCreateConfig | None":
+        """Create PostCreateConfig from YAML dict."""
+        if not data:
+            return None
+        return cls(
+            edges=[EdgeSpec.from_dict(e) for e in data.get("edges", [])],
+            metadata_updates=[
+                MetadataUpdateSpec.from_dict(m) for m in data.get("metadataUpdates", [])
+            ],
+            use_path_context=data.get("usePathContext", False),
+        )
+
+    def to_dict(self) -> dict:
+        """Convert to dict for frontend."""
+        result = {}
+        if self.edges:
+            result["edges"] = [e.to_dict() for e in self.edges]
+        if self.metadata_updates:
+            result["metadataUpdates"] = [m.to_dict() for m in self.metadata_updates]
+        if self.use_path_context:
+            result["usePathContext"] = self.use_path_context
+        return result
+
+
+@dataclass
+class AgentConfig:
+    """Configuration for an agent definition.
+
+    Agents are declarative specifications describing what an agent is
+    and what it is allowed to do.
+    """
+
+    id: str  # Unique agent identifier
+    name: str  # Display name
+    engine: str = "built-in"  # Engine adapter identifier
+    model: str = ""  # LLM model identifier (uses default if empty)
+    system_prompt: str = ""  # System prompt for the agent
+    allowed_tools: list[str] = field(default_factory=list)  # Allowed tool IDs
+    budgets: BudgetsConfig = field(default_factory=BudgetsConfig)
+    hitl: HITLConfig = field(default_factory=HITLConfig)
+    subagents: dict[str, "AgentConfig"] = field(default_factory=dict)
+    default_output_node_type: str | None = None  # Default node type for outputs
+    output_display: OutputDisplayConfig | None = None  # Data-driven display config
+    post_create: PostCreateConfig | None = None  # Post-creation hooks
+    slash_command: str | None = None  # Slash command trigger (e.g., "/reflect")
+
+    @classmethod
+    def from_dict(
+        cls, data: dict, index: int | None = None
+    ) -> "AgentConfig":
+        """Create AgentConfig from YAML dict with validation.
+
+        Args:
+            data: YAML dictionary
+            index: Index in agents list (for error messages)
+        """
+        # Validate required fields
+        if "id" not in data:
+            idx_str = f" at index {index}" if index is not None else ""
+            raise ValueError(f"Agent{idx_str} missing 'id' field")
+
+        agent_id = data["id"]
+
+        # Parse subagents recursively
+        subagents = {}
+        if "subagents" in data and data["subagents"]:
+            for sub_id, sub_data in data["subagents"].items():
+                sub_data["id"] = sub_id  # Ensure id is set
+                subagents[sub_id] = cls.from_dict(sub_data)
+
+        return cls(
+            id=agent_id,
+            name=data.get("name", agent_id),
+            engine=data.get("engine", "built-in"),
+            model=data.get("model", ""),
+            system_prompt=data.get("systemPrompt", ""),
+            allowed_tools=data.get("allowedTools", []),
+            budgets=BudgetsConfig.from_dict(data.get("budgets")),
+            hitl=HITLConfig.from_dict(data.get("hitl")),
+            subagents=subagents,
+            default_output_node_type=data.get("defaultOutputNodeType"),
+            output_display=OutputDisplayConfig.from_dict(data.get("outputDisplay")),
+            post_create=PostCreateConfig.from_dict(data.get("postCreate")),
+            slash_command=data.get("slashCommand"),
+        )
+
+    def to_frontend_dict(self) -> dict:
+        """Convert to a safe dict for frontend (no sensitive data)."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "engine": self.engine,
+            "model": self.model,
+            "systemPrompt": self.system_prompt,
+            "allowedTools": self.allowed_tools,
+            "budgets": {
+                "maxTokens": self.budgets.max_tokens,
+                "maxToolCalls": self.budgets.max_tool_calls,
+                "timeoutMs": self.budgets.timeout_ms,
+            },
+            "hitl": {
+                "requireToolApproval": self.hitl.require_tool_approval,
+                "requireSubagentApproval": self.hitl.require_subagent_approval,
+                "requireMutationApproval": self.hitl.require_mutation_approval,
+            },
+            "subagents": {
+                sid: sub.to_frontend_dict() for sid, sub in self.subagents.items()
+            },
+            "defaultOutputNodeType": self.default_output_node_type,
+            "outputDisplay": self.output_display.to_dict() if self.output_display else None,
+            "postCreate": self.post_create.to_dict() if self.post_create else None,
+            "slashCommand": self.slash_command,
+        }
+
+
+@dataclass
+class GuardrailsConfig:
+    """Safety guardrails for agent execution."""
+
+    max_subagent_depth: int = 1  # Maximum sub-agent nesting depth
+    max_subagent_spawns_per_run: int = 5  # Maximum sub-agents per run
+    inherit_budgets: bool = True  # Whether sub-agents inherit parent budgets
+    debounce_trigger_ms: int = 500  # Debounce for node-triggered runs
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "GuardrailsConfig":
+        """Create GuardrailsConfig from YAML dict."""
+        if not data:
+            return cls()
+        return cls(
+            max_subagent_depth=data.get("maxSubagentDepth", 1),
+            max_subagent_spawns_per_run=data.get("maxSubagentSpawnsPerRun", 5),
+            inherit_budgets=data.get("inheritBudgets", True),
+            debounce_trigger_ms=data.get("debounceTriggerMs", 500),
+        )
+
+
+@dataclass
+class MemoryPolicyConfig:
+    """Memory retention policy configuration."""
+
+    enabled: bool = True  # Whether memory is enabled
+    default_bank_id: str = "default"  # Default memory bank
+    max_memories_per_bank: int = 1000  # Maximum memories per bank
+    ttl_days: int | None = None  # Time-to-live for memories (None = forever)
+    allowed_types: list[str] = field(
+        default_factory=lambda: ["world", "experience", "opinion"]
+    )
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "MemoryPolicyConfig":
+        """Create MemoryPolicyConfig from YAML dict."""
+        if not data:
+            return cls()
+        return cls(
+            enabled=data.get("enabled", True),
+            default_bank_id=data.get("defaultBankId", "default"),
+            max_memories_per_bank=data.get("maxMemoriesPerBank", 1000),
+            ttl_days=data.get("ttlDays"),
+            allowed_types=data.get(
+                "allowedTypes", ["world", "experience", "opinion"]
+            ),
+        )
+
+
+@dataclass
+class MemoryStoreConfig:
+    """Configuration for the memory store backend."""
+
+    type: str = "in-memory"  # Store type (in-memory, postgres, etc.)
+    connection_string_env_var: str | None = None  # Env var for connection string
+    policy: MemoryPolicyConfig = field(default_factory=MemoryPolicyConfig)
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "MemoryStoreConfig":
+        """Create MemoryStoreConfig from YAML dict."""
+        if not data:
+            return cls()
+        return cls(
+            type=data.get("type", "in-memory"),
+            connection_string_env_var=data.get("connectionStringEnvVar"),
+            policy=MemoryPolicyConfig.from_dict(data.get("policy")),
+        )
+
+
+@dataclass
 class ModelConfig:
     """Configuration for a single model.
 
@@ -197,21 +596,26 @@ class PluginConfig:
 
 @dataclass
 class AppConfig:
-    """Application configuration for models, plugins, and admin mode.
+    """Application configuration for models, plugins, agents, and admin mode.
 
     When loaded with admin_mode=False:
     - Models are pre-populated in UI, users add their own API keys via settings
     - Plugins are loaded and available
+    - Agents are registered and available
     - API key settings UI is shown
 
     When loaded with admin_mode=True:
     - Models use server-side API keys from environment variables
     - Plugins are loaded and available
+    - Agents are registered and available
     - API key settings UI is hidden (users can't configure keys)
     """
 
     models: list[ModelConfig] = field(default_factory=list)
     plugins: list[PluginConfig] = field(default_factory=list)
+    agents: list[AgentConfig] = field(default_factory=list)
+    guardrails: GuardrailsConfig = field(default_factory=GuardrailsConfig)
+    memory_store: MemoryStoreConfig = field(default_factory=MemoryStoreConfig)
     admin_mode: bool = False
     _config_path: Path | None = None
 
@@ -226,7 +630,7 @@ class AppConfig:
             admin_mode: Whether to enable admin mode (server-side API keys)
 
         Returns:
-            AppConfig with models and plugins loaded
+            AppConfig with models, plugins, and agents loaded
 
         Raises:
             FileNotFoundError: If config.yaml doesn't exist
@@ -279,9 +683,26 @@ class AppConfig:
                             f"Registered Python plugin: {plugin_config.py_path.name}"
                         )
 
+        # Load agents (optional)
+        agents = []
+        if "agents" in data and data["agents"]:
+            for i, agent_data in enumerate(data["agents"]):
+                agent = AgentConfig.from_dict(agent_data, i)
+                agents.append(agent)
+                logger.info(f"Registered agent: {agent.id} ({agent.name})")
+
+        # Load guardrails (optional)
+        guardrails = GuardrailsConfig.from_dict(data.get("guardrails"))
+
+        # Load memory store config (optional)
+        memory_store = MemoryStoreConfig.from_dict(data.get("memoryStore"))
+
         config = cls(
             models=models,
             plugins=plugins,
+            agents=agents,
+            guardrails=guardrails,
+            memory_store=memory_store,
             admin_mode=admin_mode,
             _config_path=config_path,
         )
@@ -292,13 +713,22 @@ class AppConfig:
         )
         if plugins:
             logger.info(f"Loaded {len(plugins)} plugin(s)")
+        if agents:
+            logger.info(f"Loaded {len(agents)} agent(s)")
 
         return config
 
     @classmethod
     def empty(cls) -> "AppConfig":
-        """Create empty config (no models or plugins)."""
-        return cls(models=[], plugins=[], admin_mode=False)
+        """Create empty config (no models, plugins, or agents)."""
+        return cls(
+            models=[],
+            plugins=[],
+            agents=[],
+            guardrails=GuardrailsConfig(),
+            memory_store=MemoryStoreConfig(),
+            admin_mode=False,
+        )
 
     def validate_environment(self) -> None:
         """Validate that all required environment variables are set.
@@ -397,6 +827,47 @@ class AppConfig:
                 }
             )
         return result
+
+    def get_agent_config(self, agent_id: str) -> AgentConfig | None:
+        """Get configuration for a specific agent by ID.
+
+        Args:
+            agent_id: The agent ID
+
+        Returns:
+            AgentConfig if found, None otherwise
+        """
+        for agent in self.agents:
+            if agent.id == agent_id:
+                return agent
+            # Check subagents
+            if agent_id in agent.subagents:
+                return agent.subagents[agent_id]
+        return None
+
+    def get_frontend_agents(self) -> list[dict]:
+        """Get a safe agent list for the frontend (no sensitive data).
+
+        Returns a list of agent info dicts suitable for the frontend.
+        """
+        return [agent.to_frontend_dict() for agent in self.agents]
+
+    def get_frontend_guardrails(self) -> dict:
+        """Get guardrails configuration for the frontend."""
+        return {
+            "maxSubagentDepth": self.guardrails.max_subagent_depth,
+            "maxSubagentSpawnsPerRun": self.guardrails.max_subagent_spawns_per_run,
+            "inheritBudgets": self.guardrails.inherit_budgets,
+            "debounceTriggerMs": self.guardrails.debounce_trigger_ms,
+        }
+
+    def get_frontend_memory_config(self) -> dict:
+        """Get memory configuration for the frontend."""
+        return {
+            "enabled": self.memory_store.policy.enabled,
+            "defaultBankId": self.memory_store.policy.default_bank_id,
+            "allowedTypes": self.memory_store.policy.allowed_types,
+        }
 
 
 def is_github_copilot_enabled() -> bool:

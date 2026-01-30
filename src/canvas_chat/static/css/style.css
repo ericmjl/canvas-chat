@@ -28,5 +28,9 @@
 
 /* Components: tags, search, flashcards, factcheck */
 @import url('components.css');
+
 /* Git Repository: git repo file selection modal and node tree */
 @import url('git-repo.css');
+
+/* Reflection: reflection sidepanel, analysis display */
+@import url('reflection.css');

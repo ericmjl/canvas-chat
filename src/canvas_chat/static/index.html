@@ -176,6 +176,10 @@
 
         <!-- Chat Input (floating at bottom) -->
         <div id="chat-input-container">
+            <div class="agent-status-indicator" id="agent-status-indicator" style="display: none">
+                <span class="agent-status-spinner"></span>
+                <span id="agent-status-text">Agent thinking...</span>
+            </div>
             <div class="selected-nodes-indicator" id="selected-nodes-indicator" style="display: none">
                 Responding to <span id="selected-count">0</span> node(s)
                 <button id="clear-selection-btn">✕</button>

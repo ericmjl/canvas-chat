@@ -23,6 +23,7 @@ import { NodeRegistry } from '../node-registry.js';
 import { CancellableEvent } from '../plugin-events.js';
 import { streamSSEContent } from '../sse.js';
 import { apiUrl, buildMessagesForApi, escapeHtmlText } from '../utils.js';
+import { createAgentDefinition } from '../agent/agent-types.js';
 
 // =============================================================================
 // Matrix Node Protocol
@@ -925,6 +926,21 @@ class MatrixFeature extends FeaturePlugin {
                 placeholder: 'Enter matrix context (e.g., "Compare programming languages by performance")',
             },
         ];
+    }
+
+    /**
+     * Get the AgentDefinition for this feature.
+     * Uses 'feature' engine for direct dispatch (matrix creation and cell filling).
+     * @returns {import('../agent/agent-types.js').AgentDefinition}
+     */
+    getAgentDefinition() {
+        return createAgentDefinition({
+            id: 'matrix-agent',
+            name: 'Matrix Agent',
+            engine: 'feature', // Feature handles modal and cell filling orchestration
+            systemPrompt: 'Create comparison matrices and evaluate cells.',
+            description: 'Creates cross-product evaluation matrices with AI-filled cells',
+        });
     }
 
     /**

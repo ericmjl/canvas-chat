@@ -10,6 +10,7 @@ import { FeaturePlugin } from '../feature-plugin.js';
 import { storage } from '../storage.js';
 import { readSSEStream as _readSSEStream } from '../sse.js';
 import { apiUrl as _apiUrl } from '../utils.js';
+import { createAgentDefinition } from '../agent/agent-types.js';
 
 /**
  * Static persona presets for quick selection

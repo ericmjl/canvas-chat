@@ -220,15 +220,77 @@ class Storage {
     // --- Export/Import ---
 
     /**
-     * Export session to JSON file (.canvaschat)
-     * @param {Session} session
-     * @returns {void}
+     * Resolve blob references in nodes to inline data for export
+     * @param {Array} nodes - Array of node objects
+     * @returns {Promise<Array>} - Nodes with blobs resolved to inline data
      */
-    exportSession(session) {
+    async resolveBlobsForExport(nodes) {
+        const resolvedNodes = [];
+
+        for (const node of nodes) {
+            // Clone node to avoid mutating original
+            const resolvedNode = { ...node };
+
+            // Check if node has a blob reference that needs resolution
+            if (node.blobRef) {
+                try {
+                    // Dynamically import blob store utils
+                    const blobUtils = await import('./agent/blob-store-utils.js');
+                    const { data, metadata } = await blobUtils.retrieveFileData(node.blobRef);
+
+                    if (data) {
+                        // Convert blob data to base64
+                        const base64 = await blobUtils.fileToBase64(data);
+
+                        // Determine where to put the data based on node type
+                        if (node.type === 'image') {
+                            resolvedNode.imageData = base64;
+                        } else if (node.type === 'pdf') {
+                            resolvedNode.pdfData = base64;
+                        } else {
+                            // Generic: store in content or data field
+                            resolvedNode.blobData = base64;
+                        }
+
+                        // Remove blob reference since we've inlined the data
+                        delete resolvedNode.blobRef;
+                        delete resolvedNode.blobUrl;
+
+                        console.log(`[Storage] Resolved blob ${node.blobRef} for export`);
+                    }
+                } catch (e) {
+                    console.warn(`[Storage] Failed to resolve blob ${node.blobRef}:`, e);
+                    // Keep the node as-is if blob resolution fails
+                }
+            }
+
+            resolvedNodes.push(resolvedNode);
+        }
+
+        return resolvedNodes;
+    }
+
+    /**
+     * Export session to JSON file (.canvaschat)
+     * Resolves blob references to inline data for portability.
+     * @param {Session} session
+     * @returns {Promise<void>}
+     */
+    async exportSession(session) {
+        // Show loading indicator for large sessions with blobs
+        const hasBlobs = session.nodes?.some((n) => n.blobRef);
+        if (hasBlobs) {
+            console.log('[Storage] Resolving blob references for export...');
+        }
+
+        // Resolve any blob references to inline data
+        const resolvedNodes = session.nodes ? await this.resolveBlobsForExport(session.nodes) : [];
+
         const exportData = {
             version: 1,
             exported_at: new Date().toISOString(),
             ...session,
+            nodes: resolvedNodes,
         };
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -241,10 +303,144 @@ class Storage {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+
+        if (hasBlobs) {
+            console.log('[Storage] Export complete with resolved blobs');
+        }
+    }
+
+    /**
+     * Restore inline blob data to blob store during import
+     * Large files that were inlined for export are re-uploaded to blob store
+     * @param {Array} nodes - Array of node objects
+     * @returns {Promise<Array>} - Nodes with blob store references restored
+     */
+    async restoreBlobsFromInline(nodes) {
+        const restoredNodes = [];
+
+        for (const node of nodes) {
+            // Clone node to avoid mutating original
+            const restoredNode = { ...node };
+
+            try {
+                // Dynamically import blob store utils
+                const blobUtils = await import('./agent/blob-store-utils.js');
+
+                // Check if blob store is enabled and we have inline data to restore
+                if (!blobUtils.shouldUseBlobStore(0)) {
+                    // Blob store disabled, keep inline data
+                    restoredNodes.push(restoredNode);
+                    continue;
+                }
+
+                // Handle image nodes with inline imageData
+                if (node.type === 'image' && node.imageData && !node.blobRef) {
+                    const base64Size = node.imageData.length * 0.75; // Approximate decoded size
+                    if (blobUtils.shouldUseBlobStore(base64Size)) {
+                        // Convert base64 to blob and upload
+                        const blob = await this.base64ToBlob(node.imageData);
+                        const result = await blobUtils.storeFileData(blob, {
+                            mimeType: this.getMimeTypeFromBase64(node.imageData),
+                            filename: `imported-image-${Date.now()}`,
+                            metadata: { importedAt: Date.now(), nodeId: node.id },
+                        });
+
+                        if (result) {
+                            restoredNode.blobRef = result.blobId;
+                            restoredNode.blobUrl = result.url;
+                            delete restoredNode.imageData; // Remove inline data
+                            console.log(`[Storage] Restored image to blob store: ${result.blobId}`);
+                        }
+                    }
+                }
+
+                // Handle PDF nodes with inline pdfData
+                if (node.type === 'pdf' && node.pdfData && !node.blobRef) {
+                    const base64Size = node.pdfData.length * 0.75;
+                    if (blobUtils.shouldUseBlobStore(base64Size)) {
+                        const blob = await this.base64ToBlob(node.pdfData);
+                        const result = await blobUtils.storeFileData(blob, {
+                            mimeType: 'application/pdf',
+                            filename: `imported-pdf-${Date.now()}.pdf`,
+                            metadata: { importedAt: Date.now(), nodeId: node.id },
+                        });
+
+                        if (result) {
+                            restoredNode.blobRef = result.blobId;
+                            restoredNode.blobUrl = result.url;
+                            delete restoredNode.pdfData;
+                            console.log(`[Storage] Restored PDF to blob store: ${result.blobId}`);
+                        }
+                    }
+                }
+
+                // Handle generic blobData field
+                if (node.blobData && !node.blobRef) {
+                    const base64Size = node.blobData.length * 0.75;
+                    if (blobUtils.shouldUseBlobStore(base64Size)) {
+                        const blob = await this.base64ToBlob(node.blobData);
+                        const result = await blobUtils.storeFileData(blob, {
+                            mimeType: this.getMimeTypeFromBase64(node.blobData) || 'application/octet-stream',
+                            filename: `imported-blob-${Date.now()}`,
+                            metadata: { importedAt: Date.now(), nodeId: node.id },
+                        });
+
+                        if (result) {
+                            restoredNode.blobRef = result.blobId;
+                            restoredNode.blobUrl = result.url;
+                            delete restoredNode.blobData;
+                            console.log(`[Storage] Restored blob to blob store: ${result.blobId}`);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn(`[Storage] Failed to restore blob for node ${node.id}:`, e);
+                // Keep inline data if blob store fails
+            }
+
+            restoredNodes.push(restoredNode);
+        }
+
+        return restoredNodes;
+    }
+
+    /**
+     * Convert base64 data URL to Blob
+     * @param {string} base64 - Base64 data URL (e.g., "data:image/png;base64,...")
+     * @returns {Promise<Blob>}
+     */
+    async base64ToBlob(base64) {
+        // Handle both data URLs and raw base64
+        const dataUrlMatch = base64.match(/^data:([^;]+);base64,(.+)$/);
+        let mimeType = 'application/octet-stream';
+        let base64Data = base64;
+
+        if (dataUrlMatch) {
+            mimeType = dataUrlMatch[1];
+            base64Data = dataUrlMatch[2];
+        }
+
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return new Blob([bytes], { type: mimeType });
+    }
+
+    /**
+     * Extract MIME type from base64 data URL
+     * @param {string} base64 - Base64 data URL
+     * @returns {string|null}
+     */
+    getMimeTypeFromBase64(base64) {
+        const match = base64.match(/^data:([^;]+);base64,/);
+        return match ? match[1] : null;
     }
 
     /**
      * Import session from .canvaschat file
+     * Restores large inline data (images, PDFs) to blob store if enabled.
      * @param {File} file
      * @returns {Promise<Session>}
      */
@@ -261,9 +457,21 @@ class Storage {
                         throw new Error('Invalid .canvaschat file format');
                     }
 
+                    // Check if we need to restore blobs
+                    const hasInlineBlobs = data.nodes?.some(
+                        (n) => (n.type === 'image' && n.imageData) || (n.type === 'pdf' && n.pdfData) || n.blobData
+                    );
+
+                    let processedNodes = data.nodes;
+                    if (hasInlineBlobs) {
+                        console.log('[Storage] Restoring inline data to blob store...');
+                        processedNodes = await this.restoreBlobsFromInline(data.nodes);
+                    }
+
                     // Generate new ID to avoid conflicts
                     const session = {
                         ...data,
+                        nodes: processedNodes,
                         id: crypto.randomUUID(),
                         imported_at: Date.now(),
                         updated_at: Date.now(),

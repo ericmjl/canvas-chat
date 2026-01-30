@@ -15,6 +15,7 @@ import { ImageGenerationFeature } from './plugins/image-generation.js';
 import { MatrixFeature } from './plugins/matrix.js';
 import { NoteFeature } from './plugins/note.js';
 import { PowerPointFeature } from './plugins/powerpoint-node.js';
+import { ReflectFeature } from './plugins/reflect-feature.js';
 import { ResearchFeature } from './plugins/research.js';
 import { UrlFetchFeature } from './plugins/url-fetch.js';
 import { YouTubeFeature } from './plugins/youtube.js';
@@ -201,6 +202,17 @@ class FeatureRegistry {
                 id: 'powerpoint',
                 feature: PowerPointFeature,
                 slashCommands: [], // Event-driven (drag & drop), no slash commands
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'reflect',
+                feature: ReflectFeature,
+                slashCommands: [
+                    {
+                        command: '/reflect',
+                        handler: 'handleCommand',
+                    },
+                ],
                 priority: PRIORITY.BUILTIN,
             },
         ];

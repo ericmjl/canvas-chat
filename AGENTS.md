@@ -35,6 +35,7 @@ This includes:
 - 2026-01-24: Used `--no-verify` flag with git commit after adding pre-commit hooks (tsc + jsdoc). NEVER use this - always let pre-commit hooks run. If hooks fail, fix issues and commit normally.
 - 2026-01-24: Removed TypeScript type checking from pre-commit hooks and pixi tasks. Project uses plain JavaScript with JSDoc annotations for documentation only, not strict type checking.
 - 2026-01-25: Consolidated `/code` command handling into CodeFeature plugin. All code node operations (`handleCode`, `handleNodeRunCode`, `handleNodeGenerate`, `handleNodeGenerateSubmit`, `gatherCodeGenerationContext`) have been moved from app.js to plugins/code.js. App.js now delegates to CodeFeature via canvas events (`nodeRunCode`, `nodeGenerate`, etc.).
+- 2026-01-29: Implemented reflection feature with `/reflect` command. Creates REFLECTION nodes analyzing conversation paths from leaf nodes back to branch points. Uses sub-agents for synthesis, stores reflections as separate DAG nodes, and displays results in a sidepanel with links. Key files: `reflection-utils.js` (path finding), `reflection-agent.js` (sub-agent orchestration), `plugins/reflect-feature.js` (UI), `reflection.css` (styling).
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -59,6 +60,7 @@ canvas-chat/
 │           ├── crdt-graph.js # Graph data model
 │           ├── chat.js      # LLM API integration
 │           ├── feature-*.js # Feature plugins
+│           ├── agent/       # Agent architecture (types, engine, memory, controller)
 │           └── example-plugins/ # Example plugins (test, smart-fix, poll node)
 ├── tests/                    # Test files
 ├── docs/                     # Documentation (Diataxis)
@@ -115,6 +117,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/factcheck.js`         | FactcheckFeature class | Claim verification, web search integration                   |
 | `src/canvas_chat/static/js/research.js`          | ResearchFeature class  | Deep research with Exa API                                   |
 | `src/canvas_chat/static/js/code-feature.js`      | CodeFeature class      | Self-healing code execution                                  |
+| `src/canvas_chat/static/js/plugins/reflect-feature.js` | ReflectFeature class   | Reflection analysis of conversation paths via `/reflect`    |
 | `src/canvas_chat/static/js/plugins/git-repo.js`  | GitRepoFeature class   | Git repository fetching with file selection (`/git` command) |
 | `src/canvas_chat/static/js/plugins/youtube.js`   | YouTubeFeature class   | YouTube video fetching with transcript (`/youtube` command)  |
 | `src/canvas_chat/static/js/plugins/url-fetch.js` | UrlFetchFeature class  | Generic URL fetching (`/fetch`), PDF viewer hydration + pagination (Prev/Next, ←/→) |
@@ -122,11 +125,13 @@ canvas-chat/
 
 #### Example plugins
 
-| File                                                               | Purpose                                | Edit for...                 |
-| ------------------------------------------------------------------ | -------------------------------------- | --------------------------- |
-| `src/canvas_chat/static/js/example-plugins/smart-fix-plugin.js`    | SmartFixPlugin - Enhanced self-healing | Example of extension hooks  |
-| `src/canvas_chat/static/js/example-plugins/example-test-plugin.js` | Simple test plugin                     | Plugin development examples |
-| `src/canvas_chat/static/js/example-plugins/example-poll-node.js`   | Example poll node custom node type     | Custom node type examples   |
+| File                                                               | Purpose                                | Edit for...                     |
+| ------------------------------------------------------------------ | -------------------------------------- | ------------------------------- |
+| `src/canvas_chat/static/js/example-plugins/smart-fix-plugin.js`    | SmartFixPlugin - Enhanced self-healing | Example of extension hooks      |
+| `src/canvas_chat/static/js/example-plugins/example-test-plugin.js` | Simple test plugin                     | Plugin development examples     |
+| `src/canvas_chat/static/js/example-plugins/example-poll-node.js`   | Example poll node custom node type     | Custom node type examples       |
+| `src/canvas_chat/static/js/example-plugins/example-agent-plugin.js`| Agent-backed feature with sub-agents   | Agent architecture examples     |
+| `src/canvas_chat/static/js/example-plugins/example-minimal-agent.js`| Minimal agent-backed plugin           | Simplest agent pattern          |
 
 #### Support modules
 
@@ -156,6 +161,7 @@ canvas-chat/
 | `src/canvas_chat/static/css/matrix.css`     | Matrix node styles            | Matrix table, cell styling                   |
 | `src/canvas_chat/static/css/modals.css`     | Modal styles                  | Modal dialogs, overlays, forms               |
 | `src/canvas_chat/static/css/nodes.css`      | Node-specific styles          | Node containers, content, headers            |
+| `src/canvas_chat/static/css/reflection.css` | Reflection sidepanel styles   | Reflection analysis UI, synthesis display    |
 | `src/canvas_chat/static/css/toolbar.css`    | Toolbar styles                | Top toolbar, buttons, controls               |
 
 ### Backend (Python/FastAPI)
@@ -215,6 +221,7 @@ Quick reference guide for finding the right documentation based on what you need
 | **I want to build a plugin**                              | [build-plugins.md](docs/how-to/build-plugins.md)                           | Comprehensive guide with prompt templates for all plugin types (JS-only, Python-only, paired) |
 | **I want to create a feature plugin with slash commands** | [create-feature-plugins.md](docs/how-to/create-feature-plugins.md)         | Step-by-step guide for Level 2 plugins (feature plugins)                                      |
 | **I want to create a custom node type**                   | [create-custom-node-plugins.md](docs/how-to/create-custom-node-plugins.md) | Guide for Level 1 plugins (custom node types)                                                 |
+| **I want to create a config-based agent (no code)**       | [create-yaml-agents.md](docs/how-to/create-yaml-agents.md)                 | Define agents via YAML with slash commands and tools                                          |
 | **What is the plugin architecture?**                      | [plugin-architecture.md](docs/explanation/plugin-architecture.md)          | Design decisions and rationale for the three-level plugin system                              |
 | **What APIs are available to plugins?**                   | [feature-plugin-api.md](docs/reference/feature-plugin-api.md)              | Complete API reference for FeaturePlugin base class                                           |
 | **What is AppContext and what APIs does it provide?**     | [app-context-api.md](docs/reference/app-context-api.md)                    | Dependency injection and available Canvas-Chat APIs                                           |
@@ -270,6 +277,7 @@ Quick reference guide for finding the right documentation based on what you need
 | **How does auto-zoom work?**                     | [auto-zoom.md](docs/reference/auto-zoom.md)                         | Auto-zoom for plugin node creation   |
 | **How do canvas event handlers work?**           | [canvas-event-handlers.md](docs/reference/canvas-event-handlers.md) | Event handler registration           |
 | **What is the JSDoc linting setup?**             | [jsdoc-linting.md](docs/reference/jsdoc-linting.md)                 | JSDoc validation rules               |
+| **What built-in tools are available for agents?**| [built-in-tools-api.md](docs/reference/built-in-tools-api.md)       | All built-in tools for agents        |
 
 ## Code style
 
@@ -651,6 +659,55 @@ Node types that should not open the edit content modal (and should not respond t
 - **`getActions()`** – Return only the actions you want in the action bar; omit `Actions.EDIT_CONTENT` so the Edit button is not shown.
 
 **Example:** Factcheck nodes are read-only. FactcheckNode overrides `isContentEditable()` to return `false`, overrides `getKeyboardShortcuts()` to return only `{ c: { action: 'copy', handler: 'nodeCopy' } }`, and `getActions()` returns only `[Actions.COPY]`. The app and modal-manager check `isContentEditable()` before opening the edit modal and before dispatching the E key.
+
+### Agent architecture
+
+Canvas-Chat uses a **Base Agent + Sub-Agent architecture** for complex AI workflows.
+
+**Core Principle:** The canvas is the clock. The DAG is the truth. Agents are reactors, not daemons.
+
+#### Key components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `AgentDefinition` | `js/agent/agent-types.js` | Declarative agent specification |
+| `EngineAdapter` | `js/agent/engine-adapter.js` | Engine interface for execution |
+| `RunController` | `js/agent/run-controller.js` | Orchestrates agent runs |
+| `MemoryStore` | `js/agent/memory-store.js` | Retain/recall/reflect memory |
+| `ReflectionUtils` | `js/agent/reflection-utils.js` | Path traversal, context gathering |
+| `ReflectionAgent` | `js/agent/reflection-agent.js` | Reflection sub-agent orchestration |
+
+#### New node types
+
+| Type | Purpose |
+|------|---------|
+| `NodeType.RUN` | Agent execution record with trace and plan |
+| `NodeType.ARTIFACT` | Structured output from an agent run |
+| `NodeType.REFLECTION` | Synthesis analysis of a conversation path from leaf to branch |
+
+#### New edge types
+
+| Type | Purpose |
+|------|---------|
+| `EdgeType.RUN_TRIGGER` | Connects triggering node to Run Node |
+| `EdgeType.RUN_ARTIFACT` | Connects Run Node to its artifacts |
+| `EdgeType.SUBAGENT` | Connects parent run to sub-agent run |
+| `EdgeType.RUN_REFLECTION` | Connects Run Node or path to Reflection Node |
+
+#### Event model
+
+Agent execution produces events (see `EventType` in `agent-types.js`):
+
+- `run.started`, `run.completed`, `run.failed` — Lifecycle
+- `token.delta` — LLM streaming
+- `tool.call.requested`, `tool.call.completed` — Tool use
+- `subagent.spawn.*` — Delegation
+- `artifact.created` — Output creation
+- `plan.*`, `progress.update` — Progress visibility
+
+**For detailed information**, see:
+
+- [Agent Architecture ADR](docs/explanation/agent-architecture.md) - Full design rationale
 
 ## Design standards
 

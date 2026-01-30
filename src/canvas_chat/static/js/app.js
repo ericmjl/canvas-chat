@@ -53,6 +53,10 @@ import {
 import { AppContext } from './feature-plugin.js';
 import { FeatureRegistry } from './feature-registry.js';
 import { StreamingManager } from './streaming-manager.js';
+// Agent system
+import { BaseAgent } from './agent/index.js';
+
+/* global pyodideRunner */
 
 /**
  *
@@ -72,6 +76,9 @@ class App {
 
         // Unified streaming manager for all features
         this.streamingManager = new StreamingManager();
+
+        // Base Agent for message orchestration (initialized in init() after graph/canvas)
+        this.baseAgent = null;
 
         // Legacy: Keep streamingNodes as alias for backwards compatibility during migration
         // TODO: Remove after all features migrated to StreamingManager
@@ -186,6 +193,9 @@ class App {
 
         // Load or create session
         await this.loadSession();
+
+        // Initialize Base Agent (after graph and canvas are ready)
+        this.initializeBaseAgent();
 
         // Setup graph event listeners
         this.setupGraphEventListeners();
@@ -1058,9 +1068,7 @@ class App {
                             // Don't trigger if Ctrl/Cmd is pressed (unless required by shortcut)
                             // If shortcut requires Ctrl: Ctrl must be pressed
                             // If shortcut doesn't require Ctrl: Ctrl must NOT be pressed
-                            const noAccidentalCtrl = config.ctrl
-                                ? (e.ctrlKey || e.metaKey)
-                                : !(e.ctrlKey || e.metaKey);
+                            const noAccidentalCtrl = config.ctrl ? e.ctrlKey || e.metaKey : !(e.ctrlKey || e.metaKey);
 
                             if (keyMatches && shiftMatches && ctrlMatches && noAccidentalCtrl) {
                                 // Special handling for 'r' - focus chat input instead of emitting event
@@ -1298,13 +1306,14 @@ class App {
     }
 
     /**
-     *
+     * Handle send button click or Enter key press.
+     * Orchestrated by the BaseAgent when available.
      */
     async handleSend() {
         const content = this.chatInput.value.trim();
         if (!content) return;
 
-        // Try slash commands first, with context from selected nodes OR text selection
+        // Gather context from selected nodes OR text selection
         const selectedIds = this.canvas.getSelectedNodeIds();
         let slashContext = null;
 
@@ -1331,18 +1340,54 @@ class App {
             slashContext = contextParts.join('\n\n');
         }
 
-        // Clear input immediately for slash commands (node creation is synchronous)
-        if (content.startsWith('/')) {
-            this.chatInput.value = '';
-            this.chatInput.style.height = 'auto';
+        // Clear input immediately (UI responsiveness)
+        this.chatInput.value = '';
+        this.chatInput.style.height = 'auto';
+
+        // Use BaseAgent if available
+        if (this.baseAgent) {
+            console.log('[App] Delegating to BaseAgent');
+            const result = await this.baseAgent.invoke({
+                message: content,
+                context: slashContext,
+                selectedNodeIds: selectedIds,
+            });
+
+            if (!result.success && result.error) {
+                console.error('[App] BaseAgent error:', result.error);
+                // For unknown commands, show a toast or notification
+                if (result.error.startsWith('Unknown command:')) {
+                    console.warn(result.error);
+                }
+            }
+
+            // Clear selection after successful execution
+            if (result.success) {
+                this.canvas.clearSelection();
+                this.saveSession();
+            }
+
+            return;
         }
 
+        // Fallback: Legacy handling when BaseAgent not available
+        console.warn('[App] BaseAgent not available, using legacy handling');
+        await this._handleSendLegacy(content, slashContext, selectedIds);
+    }
+
+    /**
+     * Legacy handleSend implementation.
+     * Used when BaseAgent is not initialized.
+     * @private
+     */
+    async _handleSendLegacy(content, slashContext, selectedIds) {
+        // Try slash commands first (legacy plugin routing)
         if (await this.tryHandleSlashCommand(content, slashContext)) {
             return;
         }
 
         // Get selected nodes - if none selected, create a new root node
-        let parentIds = this.canvas.getSelectedNodeIds();
+        let parentIds = selectedIds;
 
         // Create human node
         const humanNode = createNode(NodeType.HUMAN, content, {
@@ -1473,12 +1518,12 @@ class App {
 
         if (action === 'ask') {
             // Extract image to a new node, select it, and focus chat input
-            await this.extractImageToNode(nodeId, imgSrc, options);
+            await this.extractImageToNode(nodeId, imgSrc);
             this.chatInput.focus();
             this.showCanvasHint('Image extracted! Type a question about it.');
         } else if (action === 'extract') {
             // Just extract image to a new node
-            await this.extractImageToNode(nodeId, imgSrc, options);
+            await this.extractImageToNode(nodeId, imgSrc);
         }
     }
 
@@ -1817,9 +1862,8 @@ class App {
      *
      * @param {string} parentNodeId - The ID of the node containing the image
      * @param {string} imgSrc - The src of the image (data URL or external URL)
-     * @param options
      */
-    async extractImageToNode(parentNodeId, imgSrc, options = {}) {
+    async extractImageToNode(parentNodeId, imgSrc) {
         const parentNode = this.graph.getNode(parentNodeId);
         if (!parentNode) return;
 
@@ -1853,7 +1897,6 @@ class App {
                 position: this.graph.autoPosition([parentNodeId]),
                 imageData: base64Data,
                 mimeType: mimeType,
-                title: options.title || undefined,
             });
 
             this.addUserNode(imageNode);
@@ -2052,6 +2095,109 @@ class App {
         }
 
         console.log('[App] Plugin system initialized');
+    }
+
+    /**
+     * Initialize the Base Agent for message orchestration.
+     * Called after graph and canvas are ready.
+     */
+    initializeBaseAgent() {
+        if (!this.graph || !this.canvas) {
+            console.warn('[App] Cannot initialize BaseAgent - graph or canvas not ready');
+            return;
+        }
+
+        this.baseAgent = new BaseAgent({
+            graph: this.graph,
+            canvas: this.canvas,
+            chat: chat,
+            featureRegistry: this.featureRegistry,
+            nodeRegistry: NodeRegistry,
+            buildLLMRequest: this.buildLLMRequest.bind(this),
+            getModel: () => this.modelPicker.value,
+            streamingManager: this.streamingManager,
+        });
+
+        // Register all feature plugins as sub-agents
+        this.baseAgent.registerFeaturesFromRegistry(this.featureRegistry);
+
+        // Set summary generator
+        this.baseAgent.setSummaryGenerator(this.generateNodeSummary.bind(this));
+
+        // Subscribe to agent events for debugging
+        this.baseAgent.on('*', (event) => {
+            console.log('[BaseAgent] Event:', event.type, event.data);
+        });
+
+        // Fetch and register config-based agents (async, non-blocking)
+        this.loadConfigAgents();
+
+        console.log('[App] BaseAgent initialized');
+    }
+
+    /**
+     * Load agent definitions from config.yaml via the backend API.
+     * Registers agents with BaseAgent for slash command routing.
+     * @returns {Promise<void>}
+     */
+    async loadConfigAgents() {
+        try {
+            const response = await fetch('/api/config/agents');
+            if (!response.ok) {
+                console.warn('[App] Failed to load config agents:', response.status);
+                return;
+            }
+
+            const data = await response.json();
+            const agents = data.agents || [];
+
+            if (agents.length === 0) {
+                console.log('[App] No config-based agents found');
+                return;
+            }
+
+            for (const agentConfig of agents) {
+                // Skip agents without slash commands
+                if (!agentConfig.slashCommand) {
+                    console.log(`[App] Agent ${agentConfig.id} has no slash command, skipping registration`);
+                    continue;
+                }
+
+                // Check if command is already registered (feature plugins take precedence)
+                if (this.baseAgent.hasSubAgent(agentConfig.slashCommand)) {
+                    console.log(
+                        `[App] Slash command ${agentConfig.slashCommand} already registered, skipping config agent ${agentConfig.id}`
+                    );
+                    continue;
+                }
+
+                // Convert config to AgentDefinition format
+                /** @type {import('./agent/agent-types.js').AgentDefinition} */
+                const agentDef = {
+                    id: agentConfig.id,
+                    name: agentConfig.name,
+                    engine: agentConfig.engine || 'built-in',
+                    model: agentConfig.model || '',
+                    systemPrompt: agentConfig.systemPrompt || '',
+                    allowedTools: agentConfig.allowedTools || [],
+                    budgets: agentConfig.budgets || {},
+                    hitl: agentConfig.hitl || {},
+                    subagents: agentConfig.subagents || {},
+                    defaultOutputNodeType: agentConfig.defaultOutputNodeType || null,
+                    outputDisplay: agentConfig.outputDisplay || null,
+                    postCreate: agentConfig.postCreate || null,
+                };
+
+                // Register with BaseAgent
+                this.baseAgent.registerSubAgent(agentConfig.slashCommand, agentDef, agentConfig.name || agentConfig.id);
+
+                console.log(`[App] Registered config agent: ${agentConfig.id} -> ${agentConfig.slashCommand}`);
+            }
+
+            console.log(`[App] Loaded ${agents.filter((a) => a.slashCommand).length} config-based agent(s)`);
+        } catch (error) {
+            console.error('[App] Error loading config agents:', error);
+        }
     }
 
     /**
@@ -2701,6 +2847,11 @@ class App {
             .filter((e) => e.source === nodeId || e.target === nodeId)
             .map((e) => ({ ...e }));
 
+        // Delete any associated blobs (fire-and-forget, don't block deletion)
+        // Note: For undo support, we'd need to re-upload the blob on undo.
+        // For now, we prioritize cleanup over perfect undo of blob-backed nodes.
+        this._cleanupNodeBlobs(node);
+
         // Push undo action
         this.undoManager.push({
             type: 'DELETE_NODES',
@@ -2725,6 +2876,44 @@ class App {
 
         this.saveSession();
         this.updateEmptyState();
+    }
+
+    /**
+     * Cleanup blob storage for a node (fire-and-forget)
+     * @param {Object} node - Node to clean up
+     * @private
+     */
+    async _cleanupNodeBlobs(node) {
+        try {
+            // Dynamically import to avoid circular dependencies
+            const { deleteNodeBlobs } = await import('./agent/blob-store-utils.js');
+            const result = await deleteNodeBlobs(node);
+            if (result.deleted.length > 0) {
+                console.log(`[App] Cleaned up ${result.deleted.length} blob(s) for node ${node.id}`);
+            }
+        } catch (err) {
+            // Don't fail deletion if blob cleanup fails
+            console.warn('[App] Failed to cleanup node blobs:', err.message);
+        }
+    }
+
+    /**
+     * Cleanup blob storage for multiple nodes (fire-and-forget)
+     * @param {Object[]} nodes - Nodes to clean up
+     * @private
+     */
+    async _cleanupNodesBlobs(nodes) {
+        try {
+            // Dynamically import to avoid circular dependencies
+            const { deleteNodesBlobs } = await import('./agent/blob-store-utils.js');
+            const result = await deleteNodesBlobs(nodes);
+            if (result.deleted.length > 0) {
+                console.log(`[App] Cleaned up ${result.deleted.length} blob(s) for ${nodes.length} nodes`);
+            }
+        } catch (err) {
+            // Don't fail deletion if blob cleanup fails
+            console.warn('[App] Failed to cleanup nodes blobs:', err.message);
+        }
     }
 
     // Edit Title Modal methods moved to modal-manager.js
@@ -3198,6 +3387,9 @@ class App {
             }
         }
 
+        // Cleanup blobs for all selected nodes (fire-and-forget)
+        this._cleanupNodesBlobs(deletedNodes);
+
         // Push undo action
         this.undoManager.push({
             type: 'DELETE_NODES',
@@ -3484,10 +3676,15 @@ class App {
     }
 
     /**
-     *
+     * Export session, resolving any blob references to inline data
      */
-    exportSession() {
-        storage.exportSession(this.session);
+    async exportSession() {
+        try {
+            await storage.exportSession(this.session);
+        } catch (error) {
+            console.error('[App] Export failed:', error);
+            this.canvas.showToast?.(`Export failed: ${error.message}`, 'error');
+        }
     }
 
     /**
@@ -3511,7 +3708,7 @@ class App {
         let emptyState = container.querySelector('.empty-state');
 
         if (this.graph.isEmpty()) {
-            const hasConfiguredProviders = this.adminMode ? this.adminModels.length > 0 : storage.hasAnyLLMApiKey();
+            const hasApiKeys = storage.hasAnyLLMApiKey();
 
             if (!emptyState) {
                 emptyState = document.createElement('div');
@@ -3519,18 +3716,12 @@ class App {
                 container.appendChild(emptyState);
             }
 
-            if (hasConfiguredProviders) {
-                // Providers configured - show normal onboarding
+            if (hasApiKeys) {
+                // User has API keys configured - show normal onboarding
                 emptyState.innerHTML = `
                     <h2>Start a conversation</h2>
                     <p>Type a message below to begin exploring ideas on the canvas.</p>
                     <p><kbd>Cmd/Ctrl+Click</kbd> to multi-select nodes</p>
-                `;
-            } else if (this.adminMode) {
-                // Admin mode with no models configured
-                emptyState.innerHTML = `
-                    <h2>No models configured</h2>
-                    <p>Contact your administrator to enable LLM models.</p>
                 `;
             } else {
                 // No API keys - guide user to settings first
@@ -3694,6 +3885,29 @@ class App {
             toast.classList.remove('show');
             setTimeout(() => toast.remove(), 300);
         }, duration);
+    }
+
+    /**
+     * Show agent status in the bottom bar
+     * @param {string} message - Status message to display
+     */
+    showAgentStatus(message) {
+        const indicator = document.getElementById('agent-status-indicator');
+        const textEl = document.getElementById('agent-status-text');
+        if (indicator && textEl) {
+            textEl.textContent = message;
+            indicator.style.display = 'flex';
+        }
+    }
+
+    /**
+     * Hide agent status indicator
+     */
+    hideAgentStatus() {
+        const indicator = document.getElementById('agent-status-indicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
     }
 
     /**

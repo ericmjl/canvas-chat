@@ -770,6 +770,108 @@ test('Actions: all code-related actions are defined', () => {
 // });
 
 // ============================================================
+// Data-Driven Display Tests (metadata.display)
+// ============================================================
+
+test('BaseNode: reads typeLabel from metadata.display', () => {
+    const node = {
+        type: 'custom',
+        content: 'Test',
+        metadata: {
+            display: { typeLabel: 'Custom Type' },
+        },
+    };
+    const wrapped = new BaseNode(node);
+    assertEqual(wrapped.getTypeLabel(), 'Custom Type');
+});
+
+test('BaseNode: reads typeIcon from metadata.display', () => {
+    const node = {
+        type: 'custom',
+        content: 'Test',
+        metadata: {
+            display: { typeIcon: '🔮' },
+        },
+    };
+    const wrapped = new BaseNode(node);
+    assertEqual(wrapped.getTypeIcon(), '🔮');
+});
+
+test('BaseNode: reads actions from metadata.display', () => {
+    const node = {
+        type: 'custom',
+        content: 'Test',
+        metadata: {
+            display: { actions: ['reply', 'copy'] },
+        },
+    };
+    const wrapped = new BaseNode(node);
+    const actions = wrapped.getActions();
+    assertEqual(actions.length, 2);
+    assertTrue(actions.some((a) => a.id === 'reply'));
+    assertTrue(actions.some((a) => a.id === 'copy'));
+});
+
+test('BaseNode: falls back to defaults without metadata.display', () => {
+    const node = { type: 'custom', content: 'Test' };
+    const wrapped = new BaseNode(node);
+    assertEqual(wrapped.getTypeLabel(), 'custom');
+    assertEqual(wrapped.getTypeIcon(), '📄');
+    const actions = wrapped.getActions();
+    assertEqual(actions.length, 3); // reply, edit-content, copy
+});
+
+test('BaseNode: handles invalid action IDs gracefully', () => {
+    const node = {
+        type: 'custom',
+        content: 'Test',
+        metadata: {
+            display: { actions: ['reply', 'invalid-action', 'copy'] },
+        },
+    };
+    const wrapped = new BaseNode(node);
+    const actions = wrapped.getActions();
+    assertEqual(actions.length, 2); // Only valid actions
+    assertTrue(actions.some((a) => a.id === 'reply'));
+    assertTrue(actions.some((a) => a.id === 'copy'));
+});
+
+test('BaseNode: action lookup is case-insensitive', () => {
+    const node = {
+        type: 'custom',
+        content: 'Test',
+        metadata: {
+            display: { actions: ['REPLY', 'Edit_Content', 'copy'] },
+        },
+    };
+    const wrapped = new BaseNode(node);
+    const actions = wrapped.getActions();
+    assertTrue(actions.some((a) => a.id === 'reply'));
+    assertTrue(actions.some((a) => a.id === 'edit-content'));
+    assertTrue(actions.some((a) => a.id === 'copy'));
+});
+
+test('wrapNode: unknown type with metadata.display uses BaseNode with custom display', () => {
+    const node = {
+        type: 'reflection',
+        content: 'Synthesis content',
+        metadata: {
+            display: {
+                typeLabel: 'Reflection',
+                typeIcon: '🔮',
+                actions: ['reply', 'copy'],
+            },
+        },
+    };
+    const wrapped = wrapNode(node);
+    // Should use BaseNode for unknown type
+    assertTrue(wrapped instanceof BaseNode);
+    // But with custom display from metadata
+    assertEqual(wrapped.getTypeLabel(), 'Reflection');
+    assertEqual(wrapped.getTypeIcon(), '🔮');
+});
+
+// ============================================================
 // Summary
 // ============================================================
 

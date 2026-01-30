@@ -49,10 +49,12 @@ from sse_starlette.sse import EventSourceResponse
 from canvas_chat import __version__
 from canvas_chat.config import AppConfig, is_github_copilot_enabled
 from canvas_chat.file_upload_registry import FileUploadRegistry
+from canvas_chat.tool_registry import get_tool_registry
 
 # Import built-in file upload handler plugins (registers them)
 # Import built-in URL fetch handler plugins (registers them)
 from canvas_chat.plugins import (
+    blob_store_handler,  # noqa: F401
     code_handler,  # noqa: F401
     ddg_endpoints,  # noqa: F401
     git_repo_handler,  # noqa: F401
@@ -81,6 +83,7 @@ code_handler.register_endpoints(app)
 matrix_handler.register_endpoints(app)
 ddg_endpoints.register_endpoints(app)
 pptx_endpoints.register_endpoints(app)
+blob_store_handler.register_endpoints(app)
 
 # --- Configuration Management ---
 # This is initialized at module load time based on environment variables
@@ -1458,6 +1461,73 @@ async def get_config_flags() -> dict:
     return {
         "githubCopilotEnabled": is_github_copilot_enabled(),
     }
+
+
+@app.get("/api/config/agents")
+async def get_config_agents() -> dict:
+    """Get agent definitions from config for the frontend.
+
+    Returns agents defined in config.yaml with their system prompts,
+    allowed tools, and slash command triggers. The frontend can use
+    this to register config-based agents with BaseAgent.
+
+    Returns:
+        dict with "agents" key containing list of agent definitions
+    """
+    config = get_admin_config()
+    return {
+        "agents": config.get_frontend_agents(),
+    }
+
+
+@app.get("/api/tools")
+async def list_tools() -> dict:
+    """List all registered tools.
+
+    Returns tools from both built-in Python handlers and MCP servers.
+
+    Returns:
+        dict with "tools" key containing list of tool definitions
+    """
+    registry = get_tool_registry()
+    return {
+        "tools": registry.list_tools(),
+    }
+
+
+class ToolCallRequest(BaseModel):
+    """Request body for executing a tool."""
+
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.post("/api/tools/{tool_name}")
+async def execute_tool(tool_name: str, request: ToolCallRequest) -> dict:
+    """Execute a tool by name.
+
+    Args:
+        tool_name: Tool name (built-in or mcp:server/tool format)
+        request: Tool arguments
+
+    Returns:
+        Tool execution result
+
+    Raises:
+        HTTPException: If tool not found or execution fails
+    """
+    registry = get_tool_registry()
+
+    # Check if tool exists
+    tool = registry.get_tool(tool_name)
+    if not tool:
+        raise HTTPException(status_code=404, detail=f"Tool not found: {tool_name}")
+
+    try:
+        result = await registry.execute_tool(tool_name, request.arguments)
+        return result
+    except Exception as e:
+        logger.error(f"Tool execution failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class RefineQueryRequest(BaseModel):

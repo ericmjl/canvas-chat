@@ -34,6 +34,8 @@ class AppContext {
 
         // Helper methods (bound to app instance)
         this.showToast = app.showToast ? app.showToast.bind(app) : null;
+        this.showAgentStatus = app.showAgentStatus ? app.showAgentStatus.bind(app) : null;
+        this.hideAgentStatus = app.hideAgentStatus ? app.hideAgentStatus.bind(app) : null;
         this.saveSession = app.saveSession.bind(app);
         this.updateEmptyState = app.updateEmptyState.bind(app);
         this.updateCollapseButtonForNode = app.updateCollapseButtonForNode
@@ -112,6 +114,22 @@ class AppContext {
     get searchIndex() {
         return this._app.searchIndex;
     }
+
+    /**
+     * Get baseAgent instance (live reference, created during init)
+     * @returns {Object|null}
+     */
+    get baseAgent() {
+        return this._app.baseAgent || null;
+    }
+
+    /**
+     * Get runController from baseAgent (live reference)
+     * @returns {Object|null}
+     */
+    get runController() {
+        return this._app.baseAgent?.runController || null;
+    }
 }
 
 /**
@@ -167,6 +185,8 @@ class FeaturePlugin {
 
         // Helper methods (bound functions, safe to copy)
         this.showToast = context.showToast;
+        this.showAgentStatus = context.showAgentStatus;
+        this.hideAgentStatus = context.hideAgentStatus;
         this.saveSession = context.saveSession;
         this.updateEmptyState = context.updateEmptyState;
         this.updateCollapseButtonForNode = context.updateCollapseButtonForNode;
@@ -354,6 +374,35 @@ class FeaturePlugin {
         document.head.appendChild(linkElement);
 
         return linkElement;
+    }
+
+    /**
+     * Get the AgentDefinition for this feature plugin.
+     * Override in subclasses to enable agent-based command routing.
+     *
+     * When defined, the BaseAgent will route slash commands directly
+     * to this agent rather than going through FeatureRegistry.
+     *
+     * @returns {import('./agent/agent-types.js').AgentDefinition|null}
+     */
+    getAgentDefinition() {
+        return null;
+    }
+
+    /**
+     * Get access to the BaseAgent for sub-agent registration.
+     * @returns {Object|null}
+     */
+    get baseAgent() {
+        return this._context.baseAgent;
+    }
+
+    /**
+     * Get access to the RunController for agent execution.
+     * @returns {Object|null}
+     */
+    get runController() {
+        return this._context.runController;
     }
 }
 

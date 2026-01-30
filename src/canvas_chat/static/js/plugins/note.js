@@ -14,6 +14,7 @@ import { NodeRegistry } from '../node-registry.js';
 import { FeaturePlugin } from '../feature-plugin.js';
 import { createNode, NodeType } from '../graph-types.js';
 import { createEdge, EdgeType } from '../graph-types.js';
+import { createAgentDefinition } from '../agent/agent-types.js';
 
 // =============================================================================
 // Note Node Protocol
@@ -82,6 +83,21 @@ export class NoteFeature extends FeaturePlugin {
                 placeholder: 'markdown content...',
             },
         ];
+    }
+
+    /**
+     * Get the AgentDefinition for this feature.
+     * Uses 'feature' engine for direct dispatch (no RunController).
+     * @returns {import('../agent/agent-types.js').AgentDefinition}
+     */
+    getAgentDefinition() {
+        return createAgentDefinition({
+            id: 'note-agent',
+            name: 'Note Agent',
+            engine: 'feature', // Direct dispatch via handleCommand
+            systemPrompt: 'Create note nodes with markdown content.',
+            description: 'Creates note nodes from user markdown content',
+        });
     }
 
     /**

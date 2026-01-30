@@ -11,12 +11,12 @@
 
 /**
  * Valid node type values
- * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'powerpoint'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'code'|'youtube'|'git_repo'} NodeTypeValue
+ * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'powerpoint'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'code'|'youtube'|'git_repo'|'run'|'artifact'|'reflection'} NodeTypeValue
  */
 
 /**
  * Valid edge type values
- * @typedef {'reply'|'branch'|'merge'|'reference'|'search_result'|'highlight'|'matrix_cell'|'opinion'|'synthesis'|'review'|'generates'} EdgeTypeValue
+ * @typedef {'reply'|'branch'|'merge'|'reference'|'search_result'|'highlight'|'matrix_cell'|'opinion'|'synthesis'|'review'|'generates'|'run_trigger'|'run_artifact'|'subagent'|'run_reflection'} EdgeTypeValue
  */
 
 /**
@@ -169,8 +169,51 @@
  */
 
 /**
+ * Run node structure (represents an agent execution)
+ * @typedef {Object} RunNode
+ * @property {string} id - Node ID
+ * @property {string} type - Node type ('run')
+ * @property {string} content - Summary of run status/output
+ * @property {Object} position - Node position {x, y}
+ * @property {number} [width] - Node width
+ * @property {number} [height] - Node height
+ * @property {Object} [metadata] - Additional metadata
+ * @property {string[]} tags - Array of tag color keys
+ * @property {string|null} title - User-editable title
+ * @property {string|null} summary - Auto-generated summary
+ * @property {boolean} [collapsed] - Whether children are collapsed
+ * @property {string} runId - Unique run identifier
+ * @property {string} agentId - Agent definition ID
+ * @property {string} status - Run status ('pending'|'running'|'paused'|'completed'|'failed'|'cancelled')
+ * @property {number} startedAt - Unix timestamp when run started
+ * @property {number} [completedAt] - Unix timestamp when run completed
+ * @property {Object} [plan] - Current execution plan
+ * @property {Object} [metrics] - Execution metrics
+ * @property {string} [error] - Error message if failed
+ */
+
+/**
+ * Artifact node structure (output produced by an agent run)
+ * @typedef {Object} ArtifactNode
+ * @property {string} id - Node ID
+ * @property {string} type - Node type ('artifact')
+ * @property {string} content - Artifact content
+ * @property {Object} position - Node position {x, y}
+ * @property {number} [width] - Node width
+ * @property {number} [height] - Node height
+ * @property {Object} [metadata] - Additional metadata
+ * @property {string[]} tags - Array of tag color keys
+ * @property {string|null} title - User-editable title
+ * @property {string|null} summary - Auto-generated summary
+ * @property {boolean} [collapsed] - Whether children are collapsed
+ * @property {string} runId - Parent run ID
+ * @property {string} artifactType - Type of artifact ('text'|'code'|'json'|'table'|'report')
+ * @property {Object} [artifactMetadata] - Artifact-specific metadata
+ */
+
+/**
  * Union type for all node types
- * @typedef {BaseNode|MatrixNode|FlashcardNode|CellNode|RowNode|ColumnNode} Node
+ * @typedef {BaseNode|MatrixNode|FlashcardNode|CellNode|RowNode|ColumnNode|RunNode|ArtifactNode} Node
  */
 
 /**
@@ -237,6 +280,9 @@ const NodeType = {
     FACTCHECK: 'factcheck', // Fact-checking verdict node
     CSV: 'csv', // Uploaded CSV data for analysis
     CODE: 'code', // Python code for execution
+    RUN: 'run', // Agent execution run
+    ARTIFACT: 'artifact', // Agent-produced artifact
+    REFLECTION: 'reflection', // Reflection analysis of a branch/path
 };
 
 /**
@@ -264,6 +310,7 @@ const DEFAULT_NODE_SIZES = {
     [NodeType.FACTCHECK]: { width: 640, height: 480 },
     [NodeType.CSV]: { width: 640, height: 480 },
     [NodeType.CODE]: { width: 640, height: 400 },
+    [NodeType.ARTIFACT]: { width: 640, height: 480 }, // Agent artifacts
 
     // Small nodes (420x200) - User input, short content
     [NodeType.HUMAN]: { width: 420, height: 200 },
@@ -279,6 +326,12 @@ const DEFAULT_NODE_SIZES = {
 
     // Flashcard nodes - compact for Q/A display
     [NodeType.FLASHCARD]: { width: 400, height: 280 },
+
+    // Run nodes - Medium size for status/plan display
+    [NodeType.RUN]: { width: 500, height: 350 },
+
+    // Reflection nodes - Large for detailed analysis
+    [NodeType.REFLECTION]: { width: 640, height: 480 },
 };
 
 /**
@@ -297,6 +350,10 @@ const EdgeType = {
     SYNTHESIS: 'synthesis', // OPINION/REVIEW → SYNTHESIS node (committee)
     REVIEW: 'review', // OPINION → REVIEW nodes (committee)
     GENERATES: 'generates', // Source node → generated flashcards
+    RUN_TRIGGER: 'run_trigger', // Source node(s) → Run node (what triggered the run)
+    RUN_ARTIFACT: 'run_artifact', // Run node → Artifact nodes (what the run produced)
+    SUBAGENT: 'subagent', // Parent Run → Child Run (sub-agent relationship)
+    RUN_REFLECTION: 'run_reflection', // Run node → Reflection nodes (analysis of the path)
 };
 
 /**
@@ -566,10 +623,78 @@ function createEdge(sourceId, targetId, type = EdgeType.REPLY, options = {}) {
     };
 }
 
+/**
+ * Create a run node (represents an agent execution)
+ * @param {string} runId - Unique run identifier
+ * @param {string} agentId - Agent definition ID
+ * @param {string} agentName - Agent display name
+ * @param {CreateNodeOptions} [options={}] - Additional options
+ * @returns {RunNode} New run node object
+ */
+function createRunNode(runId, agentId, agentName, options = {}) {
+    return {
+        id: crypto.randomUUID(),
+        type: NodeType.RUN,
+        content: `Agent: ${agentName}\nStatus: pending`,
+        runId,
+        agentId,
+        status: 'pending',
+        startedAt: Date.now(),
+        completedAt: null,
+        plan: null,
+        metrics: {
+            tokensUsed: 0,
+            toolCallsCount: 0,
+            subagentSpawns: 0,
+            durationMs: 0,
+        },
+        error: null,
+        position: options.position || { x: 0, y: 0 },
+        width: options.width || DEFAULT_NODE_SIZES[NodeType.RUN].width,
+        height: options.height || DEFAULT_NODE_SIZES[NodeType.RUN].height,
+        created_at: Date.now(),
+        tags: [],
+        title: options.title || agentName,
+        summary: null,
+        model: null,
+        selection: null,
+        ...options,
+    };
+}
+
+/**
+ * Create an artifact node (output produced by an agent run)
+ * @param {string} runId - Parent run ID
+ * @param {string} content - Artifact content
+ * @param {string} [artifactType='text'] - Type of artifact
+ * @param {CreateNodeOptions} [options={}] - Additional options
+ * @returns {ArtifactNode} New artifact node object
+ */
+function createArtifactNode(runId, content, artifactType = 'text', options = {}) {
+    return {
+        id: crypto.randomUUID(),
+        type: NodeType.ARTIFACT,
+        content,
+        runId,
+        artifactType,
+        artifactMetadata: options.artifactMetadata || {},
+        position: options.position || { x: 0, y: 0 },
+        width: options.width || DEFAULT_NODE_SIZES[NodeType.ARTIFACT].width,
+        height: options.height || DEFAULT_NODE_SIZES[NodeType.ARTIFACT].height,
+        created_at: Date.now(),
+        tags: [],
+        title: options.title || null,
+        summary: null,
+        model: options.model || null,
+        selection: null,
+        ...options,
+    };
+}
+
 // =============================================================================
 // Exports
 // =============================================================================
 
 export {
-    DEFAULT_NODE_SIZES, EdgeType, NodeType, TAG_COLORS, createCellNode, createColumnNode, createEdge, createFlashcardNode, createMatrixNode, createNode, createRowNode, getDefaultNodeSize
+    DEFAULT_NODE_SIZES, EdgeType, NodeType, TAG_COLORS, createArtifactNode, createCellNode, createColumnNode, createEdge, createFlashcardNode, createMatrixNode, createNode, createRowNode, createRunNode, getDefaultNodeSize
 };

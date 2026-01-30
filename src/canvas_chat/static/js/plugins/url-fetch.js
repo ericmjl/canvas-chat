@@ -10,6 +10,7 @@
  */
 
 import { FeaturePlugin } from '../feature-plugin.js';
+import { createAgentDefinition } from '../agent/agent-types.js';
 import { createEdge, createNode, EdgeType, NodeType } from '../graph-types.js';
 import { apiUrl, isUrlContent } from '../utils.js';
 import {
@@ -35,6 +36,21 @@ export class UrlFetchFeature extends FeaturePlugin {
                 placeholder: 'https://...',
             },
         ];
+    }
+
+    /**
+     * Get the AgentDefinition for this feature.
+     * Uses 'feature' engine for direct dispatch.
+     * @returns {import('../agent/agent-types.js').AgentDefinition}
+     */
+    getAgentDefinition() {
+        return createAgentDefinition({
+            id: 'url-fetch-agent',
+            name: 'URL Fetch Agent',
+            engine: 'feature', // Direct dispatch via handleCommand
+            systemPrompt: 'Fetch content from URLs using backend handlers.',
+            description: 'Fetches content from URLs using Jina Reader API',
+        });
     }
 
     /**
