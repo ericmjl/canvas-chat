@@ -19,7 +19,6 @@
         "titleBar.inactiveForeground": "#e7e7e799"
     },
     "peacock.color": "#5289c1",
-    "snyk.advanced.autoSelectOrganization": true,
     "chat.tools.terminal.autoApprove": {
         "/^node tests/test_agent_types\\.js$/": {
             "approve": true,
