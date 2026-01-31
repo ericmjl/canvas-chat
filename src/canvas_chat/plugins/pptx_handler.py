@@ -352,6 +352,92 @@ def _render_pptx_to_pngs(
     return pngs, "libreoffice_png"
 
 
+def extract_metadata(file_bytes: bytes, filename: str) -> dict[str, Any]:
+    """Parse PPTX with python-pptx; return slide count, title, per-slide metadata.
+
+    Does not render images. Used for immediate metadata in streaming flow.
+    """
+    filename_lower = (filename or "").lower()
+    if filename_lower.endswith(".ppt"):
+        raise ValueError(
+            "Only .pptx files are supported (legacy .ppt is not supported)."
+        )
+    title = filename.rsplit(".", 1)[0] if "." in filename else filename
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as tmp:
+            tmp.write(file_bytes)
+            tmp_path = Path(tmp.name)
+    except Exception as e:
+        raise ValueError("Failed to write uploaded PowerPoint to a temp file.") from e
+
+    try:
+        pres = Presentation(str(tmp_path))
+    except Exception as e:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise ValueError(
+            "Failed to read PowerPoint file (is it a valid .pptx?)."
+        ) from e
+
+    try:
+        slide_count = len(pres.slides)
+        slides_meta: list[dict[str, Any]] = []
+        parts: list[str] = []
+        for idx, slide in enumerate(pres.slides):
+            slide_title = _extract_slide_title(slide)
+            slide_text = _extract_slide_text(slide)
+            slides_meta.append(
+                {
+                    "index": idx,
+                    "title": slide_title,
+                    "text_content": slide_text,
+                }
+            )
+            header = f"## Slide {idx + 1}"
+            if slide_title:
+                header += f": {slide_title}"
+            parts.append(header)
+            parts.append(slide_text or "(No text content found on this slide)")
+            parts.append("")
+        content = "\n".join(parts).strip() if parts else "(No slide content found)"
+        return {
+            "title": title,
+            "slide_count": slide_count,
+            "slides": slides_meta,
+            "content": content,
+        }
+    finally:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+def process_slide_image(png_path: Path) -> dict[str, Any]:
+    """Convert a single PNG to WebP base64 (full + thumb). Return image payload dict."""
+    try:
+        img = Image.open(png_path)
+        img = _resize_to_width(img, SLIDE_RENDER_WIDTH)
+        thumb = _resize_to_width(img.copy(), THUMB_RENDER_WIDTH)
+        image_webp = _image_to_webp_b64(img, quality=90)
+        thumb_webp = _image_to_webp_b64(thumb, quality=70)
+        return {
+            "mimeType": "image/webp",
+            "image_webp": image_webp,
+            "thumb_webp": thumb_webp,
+        }
+    except Exception as e:
+        logger.warning("WebP encode failed, falling back to PNG: %s", e)
+        return {
+            "mimeType": "image/png",
+            "image_png": _read_b64(png_path),
+            "thumb_png": _read_b64(png_path),
+        }
+
+
 class PptxFileUploadHandler(FileUploadHandlerPlugin):
     """Handler for PowerPoint (PPTX) file uploads."""
 
@@ -359,33 +445,12 @@ class PptxFileUploadHandler(FileUploadHandlerPlugin):
         # Validate file size
         self.validate_file_size(file_bytes, MAX_PPTX_SIZE, "PowerPoint")
 
-        filename_lower = (filename or "").lower()
-        if filename_lower.endswith(".ppt"):
-            raise ValueError(
-                "Only .pptx files are supported (legacy .ppt is not supported)."
-            )
+        meta = extract_metadata(file_bytes, filename)
+        title = meta["title"]
+        slide_count = meta["slide_count"]
+        content = meta["content"]
+        slides_meta = meta["slides"]
 
-        title = filename.rsplit(".", 1)[0] if "." in filename else filename
-
-        # Parse PPTX with python-pptx (for slide count, titles, text)
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as tmp:
-                tmp.write(file_bytes)
-                tmp_path = Path(tmp.name)
-        except Exception as e:
-            raise ValueError(
-                "Failed to write uploaded PowerPoint to a temp file."
-            ) from e
-
-        try:
-            pres = Presentation(str(tmp_path))
-            slide_count = len(pres.slides)
-        except Exception as e:
-            raise ValueError(
-                "Failed to read PowerPoint file (is it a valid .pptx?)."
-            ) from e
-
-        # Convert to images via LibreOffice in a dedicated temp dir
         has_libreoffice = _find_libreoffice_cmd() is not None
         safe_name = _safe_stem(filename)
         with tempfile.TemporaryDirectory(prefix="canvas-chat-pptx-") as td:
@@ -401,7 +466,6 @@ class PptxFileUploadHandler(FileUploadHandlerPlugin):
                 expected_slide_count=slide_count,
             )
 
-            # Best-effort alignment to slide count
             if slide_count and len(png_paths) != slide_count:
                 logger.warning(
                     "PPTX conversion produced %s images for %s slides (filename=%s)",
@@ -411,35 +475,11 @@ class PptxFileUploadHandler(FileUploadHandlerPlugin):
                 )
 
             slides: list[dict[str, Any]] = []
-            for idx, slide in enumerate(pres.slides):
+            for idx, slide_meta in enumerate(slides_meta):
                 slide_image: dict[str, Any] = {"mimeType": "image/webp"}
                 if idx < len(png_paths):
-                    png_path = png_paths[idx]
-                    try:
-                        img = Image.open(png_path)
-                        img = _resize_to_width(img, SLIDE_RENDER_WIDTH)
-                        thumb = _resize_to_width(img.copy(), THUMB_RENDER_WIDTH)
-
-                        image_webp = _image_to_webp_b64(img, quality=90)
-                        thumb_webp = _image_to_webp_b64(thumb, quality=70)
-                        slide_image = {
-                            "mimeType": "image/webp",
-                            "image_webp": image_webp,
-                            "thumb_webp": thumb_webp,
-                        }
-                    except Exception as e:
-                        # Fallback to PNG base64 if WebP encode fails in this
-                        # environment
-                        logger.warning("WebP encode failed, falling back to PNG: %s", e)
-                        slide_image = {
-                            "mimeType": "image/png",
-                            "image_png": _read_b64(png_path),
-                            "thumb_png": _read_b64(png_path),
-                        }
+                    slide_image = process_slide_image(png_paths[idx])
                 else:
-                    # Keep slide metadata even if an image is missing, so the UI
-                    # can still
-                    # navigate and show a clear "missing image" state.
                     logger.warning(
                         (
                             "Missing rendered image for slide %s "
@@ -451,32 +491,12 @@ class PptxFileUploadHandler(FileUploadHandlerPlugin):
                         filename,
                     )
 
-                slide_title = _extract_slide_title(slide)
-                slide_text = _extract_slide_text(slide)
-
                 slides.append(
                     {
-                        "index": idx,
-                        "title": slide_title,
-                        "text_content": slide_text,
+                        **slide_meta,
                         **slide_image,
                     }
                 )
-
-            # Build a text export for context in chat
-            parts: list[str] = []
-            for s in slides:
-                header = f"## Slide {s['index'] + 1}"
-                if s.get("title"):
-                    header += f": {s['title']}"
-                parts.append(header)
-                if s.get("text_content"):
-                    parts.append(s["text_content"])
-                else:
-                    parts.append("(No text content found on this slide)")
-                parts.append("")
-
-            content = "\n".join(parts).strip() if parts else "(No slide content found)"
 
             logger.info(
                 "Successfully processed PowerPoint: %s (%s slides)",
@@ -498,11 +518,6 @@ class PptxFileUploadHandler(FileUploadHandlerPlugin):
                     else "placeholder",
                 },
             }
-        # Ensure temp file is deleted
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except Exception:
-            pass
 
 
 # Register PowerPoint handler

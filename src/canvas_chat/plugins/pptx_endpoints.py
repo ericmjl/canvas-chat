@@ -10,13 +10,28 @@ Why this lives here (not app.py):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import tempfile
 import traceback
+from pathlib import Path
 from typing import Any
 
+from fastapi import File, UploadFile
 from pydantic import BaseModel, Field
 from slugify import slugify
+from sse_starlette.sse import EventSourceResponse
+
+from canvas_chat.plugins.pptx_handler import (
+    LIBREOFFICE_TIMEOUT_S,
+    MAX_PPTX_SIZE,
+    _find_libreoffice_cmd,
+    _render_pptx_to_pngs,
+    _safe_stem,
+    extract_metadata,
+    process_slide_image,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -550,3 +565,95 @@ Rules:
         except Exception as e:
             logger.warning(f"PPTX narrative style suggestions failed: {e}")
             return {"presets": _pptx_fallback_narrative_presets()}
+
+    # --- Progressive PPTX upload (SSE stream) ---
+
+    @app.post("/api/upload-pptx-stream")
+    async def upload_pptx_stream(file: UploadFile = File(...)):  # noqa: B008
+        """Upload a PPTX file and stream slide metadata + images via SSE."""
+        try:
+            file_bytes = await file.read()
+        except Exception as e:
+            logger.error("Failed to read uploaded PPTX: %s", e)
+            raise HTTPException(
+                status_code=400, detail="Failed to read uploaded file"
+            ) from e
+
+        filename = file.filename or "unknown.pptx"
+        if len(file_bytes) > MAX_PPTX_SIZE:
+            max_mb = MAX_PPTX_SIZE // (1024 * 1024)
+            raise HTTPException(
+                status_code=400,
+                detail=f"PowerPoint file is too large. Maximum size is {max_mb} MB",
+            )
+
+        async def generate():
+            try:
+                meta = extract_metadata(file_bytes, filename)
+                yield {
+                    "event": "metadata",
+                    "data": json.dumps(
+                        {
+                            "title": meta["title"],
+                            "slide_count": meta["slide_count"],
+                            "slides": meta["slides"],
+                            "content": meta["content"],
+                        }
+                    ),
+                }
+                yield {
+                    "event": "progress",
+                    "data": "Rendering slides…",
+                }
+
+                has_libreoffice = _find_libreoffice_cmd() is not None
+                safe_name = _safe_stem(filename)
+                slide_count = meta["slide_count"]
+                slides_meta = meta["slides"]
+
+                with tempfile.TemporaryDirectory(
+                    prefix="canvas-chat-pptx-stream-"
+                ) as td:
+                    workdir = Path(td)
+                    pptx_path = workdir / f"{safe_name}.pptx"
+                    pptx_path.write_bytes(file_bytes)
+                    render_dir = workdir / "rendered"
+
+                    png_paths, rendering_mode = await asyncio.to_thread(
+                        _render_pptx_to_pngs,
+                        pptx_path,
+                        out_dir=render_dir,
+                        timeout_s=LIBREOFFICE_TIMEOUT_S,
+                        expected_slide_count=slide_count,
+                    )
+
+                    for idx, slide_meta in enumerate(slides_meta):
+                        slide_data = dict(slide_meta)
+                        if idx < len(png_paths):
+                            img_payload = await asyncio.to_thread(
+                                process_slide_image, png_paths[idx]
+                            )
+                            slide_data.update(img_payload)
+                        else:
+                            slide_data["mimeType"] = "image/webp"
+                        yield {
+                            "event": "slide",
+                            "data": json.dumps(slide_data),
+                        }
+
+                    yield {
+                        "event": "done",
+                        "data": json.dumps(
+                            {
+                                "rendering_mode": rendering_mode
+                                if has_libreoffice
+                                else "placeholder",
+                            }
+                        ),
+                    }
+            except Exception as e:
+                logger.error("PPTX stream failed: %s", e)
+                logger.error(traceback.format_exc())
+                yield {"event": "error", "data": str(e)}
+
+        return EventSourceResponse(generate())
