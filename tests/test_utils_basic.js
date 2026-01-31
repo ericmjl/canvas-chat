@@ -4,17 +4,17 @@
  */
 
 import {
-    test,
     assertEqual,
-    assertTrue,
     assertFalse,
     assertNull,
+    assertTrue,
+    escapeHtmlText,
     extractUrlFromReferenceNode,
     formatMatrixAsText,
     formatUserError,
-    escapeHtmlText,
-    truncateText,
-    isUrlContent
+    isUrlContent,
+    test,
+    truncateText
 } from './test_setup.js';
 
 // ============================================================
@@ -242,8 +242,8 @@ test('truncate: returns original if shorter than max', () => {
 });
 
 test('truncate: truncates and adds ellipsis', () => {
-    // truncateText uses slice(0, maxLength - 1) + '…', so maxLength=8 gives 7 chars + ellipsis
-    assertEqual(truncateText('hello world', 8), 'hello w…');
+    // truncateText uses slice(0, maxLength - 3) + '...', so maxLength=8 gives 5 chars + ellipsis
+    assertEqual(truncateText('hello world', 8), 'hello...');
 });
 
 test('truncate: handles exact length', () => {

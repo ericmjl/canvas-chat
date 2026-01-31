@@ -161,7 +161,7 @@ class PowerPointNode extends BaseNode {
         const slidesWithImages = slides.filter((s) => getSlideImage(s).imageData).length;
 
         if (processing.state === 'converting' && (!slides || slides.length === 0)) {
-            const msg = processing.message || 'Converting slides… this may take up to a minute.';
+            const msg = processing.message || 'Converting slides... this may take up to a minute.';
             return `
                 <div class="pptx-processing">
                     <div class="pptx-processing-inner">
@@ -187,7 +187,7 @@ class PowerPointNode extends BaseNode {
         const disabled = slides.length <= 1 ? 'disabled' : '';
         const progressLine =
             processing.state === 'converting' && slideCount > 0
-                ? `<div class="pptx-processing-text pptx-progress-line">${canvas.escapeHtml(processing.message || 'Rendering images…')}${slidesWithImages > 0 ? ` (${slidesWithImages} of ${slideCount} slides ready)` : ''}</div>`
+                ? `<div class="pptx-processing-text pptx-progress-line">${canvas.escapeHtml(processing.message || 'Rendering images...')}${slidesWithImages > 0 ? ` (${slidesWithImages} of ${slideCount} slides ready)` : ''}</div>`
                 : '';
 
         return `
@@ -235,7 +235,7 @@ class PowerPointNode extends BaseNode {
         const slidesWithImages = slides.filter((s) => getSlideImage(s).thumbData).length;
 
         if (processing.state === 'converting' && (!slides || slides.length === 0)) {
-            const msg = processing.message || 'Converting slides…';
+            const msg = processing.message || 'Converting slides...';
             return `
                 <div class="pptx-drawer">
                     <div class="pptx-drawer-header">Slides</div>
@@ -262,7 +262,7 @@ class PowerPointNode extends BaseNode {
 
         const drawerProgressLine =
             processing.state === 'converting' && slideCount > 0
-                ? `<div class="pptx-drawer-progress"><span class="spinner pptx-inline-spinner"></span> ${canvas.escapeHtml(processing.message || 'Rendering images…')}${slidesWithImages > 0 ? ` (${slidesWithImages} of ${slideCount} ready)` : ''}</div>`
+                ? `<div class="pptx-drawer-progress"><span class="spinner pptx-inline-spinner"></span> ${canvas.escapeHtml(processing.message || 'Rendering images...')}${slidesWithImages > 0 ? ` (${slidesWithImages} of ${slideCount} ready)` : ''}</div>`
                 : '';
 
         const itemsHtml = slides
@@ -449,7 +449,7 @@ class PowerPointFileUploadHandler extends FileUploadHandlerPlugin {
             position: nodePosition,
             title: file.name,
             filename: file.name,
-            processing: { state: 'converting', message: `Converting ${file.name}…` },
+            processing: { state: 'converting', message: `Converting ${file.name}...` },
             currentSlideIndex: 0,
             pptxData: { slides: [], slideCount: 0 },
             outputExpanded: true,
@@ -502,7 +502,7 @@ class PowerPointFileUploadHandler extends FileUploadHandlerPlugin {
                             content,
                             title,
                             pptxData: { slides: [...slides], slideCount },
-                            processing: { state: 'converting', message: 'Rendering images…' },
+                            processing: { state: 'converting', message: 'Rendering images...' },
                             metadata: {
                                 content_type: 'powerpoint',
                                 source: 'upload',
@@ -515,7 +515,7 @@ class PowerPointFileUploadHandler extends FileUploadHandlerPlugin {
                     }
                     if (eventType === 'progress') {
                         this.graph.updateNode(pptxNode.id, {
-                            processing: { state: 'converting', message: data || 'Rendering images…' },
+                            processing: { state: 'converting', message: data || 'Rendering images...' },
                         });
                         const n = this.graph.getNode(pptxNode.id);
                         if (n) this.canvas.renderNode(n);
@@ -711,12 +711,12 @@ class PowerPointFeature extends FeaturePlugin {
                         <div class="pptx-weave-presets">
                             <div class="pptx-weave-presets-header">
                                 <label>Presets (AI-suggested)</label>
-                                <span class="pptx-weave-presets-status" id="pptx-weave-presets-status">Loading…</span>
+                                <span class="pptx-weave-presets-status" id="pptx-weave-presets-status">Loading...</span>
                             </div>
                             <div class="pptx-weave-presets-loading" id="pptx-weave-presets-loading">
                                 <div style="display: inline-flex; align-items: center; gap: 10px">
                                     <div class="spinner"></div>
-                                    <span class="pptx-weave-presets-status">Generating suggestions…</span>
+                                    <span class="pptx-weave-presets-status">Generating suggestions...</span>
                                 </div>
                                 <button id="pptx-weave-suggest-cancel-btn" class="secondary-btn">Cancel</button>
                             </div>
@@ -1309,7 +1309,7 @@ class PowerPointFeature extends FeaturePlugin {
      * @returns {void}
      */
     _resetWeaveModalUi(modal) {
-        modal.querySelector('#pptx-weave-presets-status').textContent = 'Loading…';
+        modal.querySelector('#pptx-weave-presets-status').textContent = 'Loading...';
         modal.querySelector('#pptx-weave-presets-loading').style.display = 'flex';
         modal.querySelector('#pptx-weave-presets-list').innerHTML = '';
 
