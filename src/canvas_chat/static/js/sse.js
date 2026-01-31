@@ -61,6 +61,7 @@ async function readSSEStream(response, handlers) {
 
                 const parsed = parseSSEEvent(event);
                 if (parsed.eventType === 'done') {
+                    if (handlers.onEvent) handlers.onEvent('done', parsed.data);
                     if (handlers.onDone) handlers.onDone();
                     return;
                 } else if (parsed.eventType === 'error') {
@@ -182,4 +183,4 @@ async function streamSSEContent(response, handlers) {
     }
 }
 
-export { normalizeText, readSSEStream, parseSSEEvent, streamSSEContent };
+export { normalizeText, parseSSEEvent, readSSEStream, streamSSEContent };

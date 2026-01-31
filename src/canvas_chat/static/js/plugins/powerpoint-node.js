@@ -14,6 +14,7 @@ import { FileUploadRegistry, PRIORITY } from '../file-upload-registry.js';
 import { EdgeType, NodeType, createEdge, createNode } from '../graph-types.js';
 import { Actions, BaseNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
+import { readSSEStream } from '../sse.js';
 import { apiUrl } from '../utils.js';
 
 // =============================================================================
@@ -157,8 +158,9 @@ class PowerPointNode extends BaseNode {
         const processing = this.node.processing || { state: 'idle' };
         const slides = this.node.pptxData?.slides || [];
         const slideCount = this.node.pptxData?.slideCount ?? this.node.slide_count ?? slides.length ?? 0;
+        const slidesWithImages = slides.filter((s) => getSlideImage(s).imageData).length;
 
-        if (processing.state === 'converting') {
+        if (processing.state === 'converting' && (!slides || slides.length === 0)) {
             const msg = processing.message || 'Converting slides… this may take up to a minute.';
             return `
                 <div class="pptx-processing">
@@ -183,12 +185,18 @@ class PowerPointNode extends BaseNode {
         const renderingMode = this.node.metadata?.rendering_mode;
 
         const disabled = slides.length <= 1 ? 'disabled' : '';
+        const progressLine =
+            processing.state === 'converting' && slideCount > 0
+                ? `<div class="pptx-processing-text pptx-progress-line">${canvas.escapeHtml(processing.message || 'Rendering images…')}${slidesWithImages > 0 ? ` (${slidesWithImages} of ${slideCount} slides ready)` : ''}</div>`
+                : '';
 
         return `
             <div class="pptx-node">
+                ${processing.state === 'converting' ? '<div class="pptx-processing pptx-processing-inline"><div class="spinner"></div></div>' : ''}
                 <div class="pptx-slide">
                     ${imgSrc ? `<img class="pptx-slide-image" src="${imgSrc}" alt="Slide ${current + 1}">` : '<div class="pptx-slide-missing">No slide image</div>'}
                 </div>
+                ${progressLine}
                 <div class="pptx-controls">
                     <button class="pptx-nav-btn pptx-prev" ${disabled} title="Previous slide (ArrowLeft)">◀</button>
                     <div class="pptx-counter">
@@ -222,9 +230,11 @@ class PowerPointNode extends BaseNode {
      */
     renderOutputPanel(canvas) {
         const slides = this.node.pptxData?.slides || [];
+        const slideCount = this.node.pptxData?.slideCount ?? this.node.slide_count ?? slides.length ?? 0;
         const processing = this.node.processing || { state: 'idle' };
+        const slidesWithImages = slides.filter((s) => getSlideImage(s).thumbData).length;
 
-        if (processing.state === 'converting') {
+        if (processing.state === 'converting' && (!slides || slides.length === 0)) {
             const msg = processing.message || 'Converting slides…';
             return `
                 <div class="pptx-drawer">
@@ -249,6 +259,11 @@ class PowerPointNode extends BaseNode {
         }
 
         const current = Math.max(0, Math.min(this.node.currentSlideIndex || 0, slides.length - 1));
+
+        const drawerProgressLine =
+            processing.state === 'converting' && slideCount > 0
+                ? `<div class="pptx-drawer-progress"><span class="spinner pptx-inline-spinner"></span> ${canvas.escapeHtml(processing.message || 'Rendering images…')}${slidesWithImages > 0 ? ` (${slidesWithImages} of ${slideCount} ready)` : ''}</div>`
+                : '';
 
         const itemsHtml = slides
             .map((slide, i) => {
@@ -297,6 +312,7 @@ class PowerPointNode extends BaseNode {
         return `
             <div class="pptx-drawer">
                 <div class="pptx-drawer-header">Slides</div>
+                ${drawerProgressLine}
                 <div class="pptx-slide-list">
                     ${itemsHtml}
                 </div>
@@ -447,7 +463,7 @@ class PowerPointFileUploadHandler extends FileUploadHandlerPlugin {
             const formData = new FormData();
             formData.append('file', file);
 
-            const response = await fetch(apiUrl('/api/upload-file'), {
+            const response = await fetch(apiUrl('/api/upload-pptx-stream'), {
                 method: 'POST',
                 body: formData,
             });
@@ -457,34 +473,115 @@ class PowerPointFileUploadHandler extends FileUploadHandlerPlugin {
                 throw new Error(err.detail || 'Failed to process PowerPoint');
             }
 
-            const data = await response.json();
+            let slides = [];
+            let slideCount = 0;
+            let content = '';
+            let title = file.name;
+            let renderingMode = '';
+            let uploadFailed = false;
 
-            // Update node and re-render (protocol-driven UI)
-            this.graph.updateNode(pptxNode.id, {
-                content: data.content || '',
-                title: data.title || file.name,
-                pptxData: {
-                    slides: data.slides || [],
-                    slideCount: data.slide_count || (data.slides ? data.slides.length : 0),
+            await readSSEStream(response, {
+                onEvent: (eventType, data) => {
+                    if (eventType === 'metadata') {
+                        try {
+                            const meta = JSON.parse(data || '{}');
+                            title = meta.title || file.name;
+                            slideCount = meta.slide_count ?? (meta.slides ? meta.slides.length : 0);
+                            content = meta.content || '';
+                            slides = (meta.slides || []).map((s) => ({
+                                index: s.index,
+                                title: s.title,
+                                text_content: s.text_content,
+                                mimeType: 'image/webp',
+                            }));
+                        } catch (e) {
+                            console.error('[PowerPoint] Failed to parse metadata', e);
+                            return;
+                        }
+                        this.graph.updateNode(pptxNode.id, {
+                            content,
+                            title,
+                            pptxData: { slides: [...slides], slideCount },
+                            processing: { state: 'converting', message: 'Rendering images…' },
+                            metadata: {
+                                content_type: 'powerpoint',
+                                source: 'upload',
+                                slide_count: slideCount,
+                            },
+                        });
+                        const n = this.graph.getNode(pptxNode.id);
+                        if (n) this.canvas.renderNode(n);
+                        return;
+                    }
+                    if (eventType === 'progress') {
+                        this.graph.updateNode(pptxNode.id, {
+                            processing: { state: 'converting', message: data || 'Rendering images…' },
+                        });
+                        const n = this.graph.getNode(pptxNode.id);
+                        if (n) this.canvas.renderNode(n);
+                        return;
+                    }
+                    if (eventType === 'slide') {
+                        try {
+                            const slide = JSON.parse(data || '{}');
+                            const idx = slide.index ?? slides.length;
+                            if (idx >= 0 && idx < slides.length) {
+                                slides[idx] = { ...slides[idx], ...slide };
+                            } else {
+                                slides.push(slide);
+                            }
+                        } catch (e) {
+                            console.error('[PowerPoint] Failed to parse slide', e);
+                            return;
+                        }
+                        this.graph.updateNode(pptxNode.id, {
+                            pptxData: { slides: [...slides], slideCount },
+                        });
+                        const n = this.graph.getNode(pptxNode.id);
+                        if (n) this.canvas.renderNode(n);
+                    }
+                    if (eventType === 'done') {
+                        try {
+                            const payload = data ? JSON.parse(data) : {};
+                            renderingMode = payload.rendering_mode || '';
+                        } catch (_) {}
+                        return;
+                    }
                 },
-                currentSlideIndex: 0,
-                processing: { state: 'idle' },
-                metadata: {
-                    ...(data.metadata || {}),
-                    content_type: 'powerpoint',
-                    source: 'upload',
-                    slide_count: data.slide_count || (data.slides ? data.slides.length : 0),
+                onDone: () => {
+                    this.graph.updateNode(pptxNode.id, {
+                        content,
+                        title,
+                        pptxData: { slides: [...slides], slideCount },
+                        currentSlideIndex: 0,
+                        processing: { state: 'idle' },
+                        metadata: {
+                            content_type: 'powerpoint',
+                            source: 'upload',
+                            slide_count: slideCount,
+                            rendering_mode: renderingMode,
+                        },
+                        outputExpanded: true,
+                        outputPanelHeight: 260,
+                    });
+                    const updated = this.graph.getNode(pptxNode.id);
+                    if (updated) this.canvas.renderNode(updated);
+                    this.showCanvasHint('PowerPoint loaded! Use the drawer to navigate slides.');
                 },
-                outputExpanded: true,
-                outputPanelHeight: 260,
+                onError: (err) => {
+                    uploadFailed = true;
+                    this.graph.updateNode(pptxNode.id, {
+                        processing: { state: 'error', message: err.message || 'Failed to process PowerPoint' },
+                    });
+                    const updated = this.graph.getNode(pptxNode.id);
+                    if (updated) this.canvas.renderNode(updated);
+                    this.handleError(pptxNode.id, file, err);
+                },
             });
 
-            const updated = this.graph.getNode(pptxNode.id);
-            if (updated) {
-                this.canvas.renderNode(updated);
+            if (uploadFailed) {
+                throw new Error('Failed to process PowerPoint');
             }
-
-            this.showCanvasHint('PowerPoint loaded! Use the drawer to navigate slides.');
             return pptxNode;
         } catch (err) {
             this.graph.updateNode(pptxNode.id, {
@@ -547,6 +644,9 @@ class PowerPointFeature extends FeaturePlugin {
             .pptx-processing { height: 100%; display: flex; align-items: center; justify-content: center; padding: 16px; }
             .pptx-processing-inner { display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; }
             .pptx-processing-text { font-size: 12px; color: var(--text-secondary); }
+            .pptx-processing-inline { height: auto; padding: 8px 10px; flex-direction: row; gap: 8px; }
+            .pptx-progress-line { text-align: left; padding: 0 10px 4px 10px; }
+            .pptx-drawer-progress { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); padding: 4px 0; }
 
             /* Drawer */
             .pptx-drawer { display: flex; flex-direction: column; gap: 8px; }

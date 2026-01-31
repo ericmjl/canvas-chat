@@ -9,8 +9,8 @@ describe('PowerPoint Upload and Navigation', () => {
         const mimeType =
             'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-        // Ensure the upload endpoint is actually hit
-        cy.intercept('POST', '**/api/upload-file').as('uploadFile');
+        // PPTX upload uses streaming endpoint
+        cy.intercept('POST', '**/api/upload-pptx-stream').as('uploadPptxStream');
         // Stub narrative style suggestions (modal generates these on open)
         cy.intercept('POST', '**/api/pptx/narrative-style-suggestions', {
             statusCode: 200,
@@ -81,7 +81,7 @@ describe('PowerPoint Upload and Navigation', () => {
                 return win.app.fileUploadHandler.handleFileUpload(file, { x: 200, y: 200 });
             });
         });
-        cy.wait('@uploadFile', { timeout: 30000 });
+        cy.wait('@uploadPptxStream', { timeout: 60000 });
 
         // Verify PPTX node created
         cy.get('.node.powerpoint', { timeout: 30000 }).should('exist').and('be.visible');
