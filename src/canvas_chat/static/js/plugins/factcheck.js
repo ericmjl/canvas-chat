@@ -203,27 +203,30 @@ class FactcheckFeature extends FeaturePlugin {
             <div id="factcheck-main-modal" class="modal" style="display: none">
                 <div class="modal-content modal-wide">
                     <div class="modal-header">
-                        <h2>Select Claims to Verify</h2>
+                        <h2>Review Claims to Verify</h2>
                         <button class="modal-close" id="factcheck-close">&times;</button>
                     </div>
                     <div class="modal-body">
                         <p class="factcheck-modal-subtitle" id="factcheck-modal-subtitle">
-                            Found multiple claims. Select which ones to fact-check:
+                            Review the extracted claims. Edit, remove, or add your own before verifying.
                         </p>
 
-                        <div class="factcheck-select-all-group">
-                            <label class="factcheck-checkbox-label">
-                                <input type="checkbox" id="factcheck-select-all" />
-                                <span class="checkbox-text">Select All</span>
-                            </label>
+                        <div class="factcheck-claims-list" id="factcheck-claims-list">
+                            <!-- Claim rows will be populated by JS -->
                         </div>
 
-                        <div class="factcheck-claims-list" id="factcheck-claims-list">
-                            <!-- Claim checkboxes will be populated by JS -->
+                        <div class="factcheck-add-claim">
+                            <input
+                                type="text"
+                                id="factcheck-new-claim"
+                                class="modal-text-input"
+                                placeholder="Add a claim..."
+                            />
+                            <button id="factcheck-add-claim-btn" class="secondary-btn">Add</button>
                         </div>
 
                         <div class="factcheck-selection-info">
-                            <span class="factcheck-selection-count" id="factcheck-selection-count">0 of 0 selected</span>
+                            <span class="factcheck-selection-count" id="factcheck-selection-count">0 claims ready</span>
                             <span class="factcheck-limit-warning" id="factcheck-limit-warning" style="display: none"
                                 >⚠️ Verifying many claims may take longer</span
                             >
@@ -231,7 +234,7 @@ class FactcheckFeature extends FeaturePlugin {
 
                         <div class="modal-actions">
                             <button id="factcheck-cancel-btn" class="secondary-btn">Cancel</button>
-                            <button id="factcheck-execute-btn" class="primary-btn" disabled>Verify Selected</button>
+                            <button id="factcheck-execute-btn" class="primary-btn" disabled>Verify Claims</button>
                         </div>
                     </div>
                 </div>
@@ -244,8 +247,12 @@ class FactcheckFeature extends FeaturePlugin {
         modal.querySelector('#factcheck-close').addEventListener('click', () => this.closeFactcheckModal(true));
         modal.querySelector('#factcheck-cancel-btn').addEventListener('click', () => this.closeFactcheckModal(true));
         modal.querySelector('#factcheck-execute-btn').addEventListener('click', () => this.executeFactcheckFromModal());
-        modal.querySelector('#factcheck-select-all').addEventListener('change', (e) => {
-            this.handleFactcheckSelectAll(e.target.checked);
+        modal.querySelector('#factcheck-add-claim-btn').addEventListener('click', () => this.addFactcheckClaim());
+        modal.querySelector('#factcheck-new-claim').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.addFactcheckClaim();
+            }
         });
     }
 
@@ -344,41 +351,33 @@ class FactcheckFeature extends FeaturePlugin {
             // Extract individual claims from input
             const claims = await this.extractFactcheckClaims(effectiveInput, model);
 
-            if (claims.length === 0) {
-                // No claims found - update loading node with error message
-                const errorContent =
-                    '**No verifiable claims found.**\n\nPlease provide specific factual statements to verify.';
-                this.canvas.updateNodeContent(loadingNode.id, errorContent, false);
-                this.graph.updateNode(loadingNode.id, { content: errorContent });
-                this.saveSession();
-                return;
-            }
-
-            if (claims.length > 5) {
-                // Too many claims - show modal for selection
-                // Store the loading node ID so we can reuse it after modal
-                // Get API key (may be null in admin mode, backend handles it)
-                const apiKey = chat.getApiKeyForModel(model);
-                this._factcheckData = {
-                    claims: claims,
-                    parentIds: parentIds,
-                    model: model,
-                    apiKey: apiKey,
-                    loadingNodeId: loadingNode.id,
-                };
-                this.canvas.updateNodeContent(
-                    loadingNode.id,
-                    `🔄 **Found ${claims.length} claims.** Select which to verify...`,
-                    false
-                );
-                this.showFactcheckModal(claims);
-                return;
-            }
-
-            // Proceed directly with all claims (≤5) - reuse the loading node
+            // Always confirm extracted claims before verifying
             // Get API key (may be null in admin mode, backend handles it)
             const apiKey = chat.getApiKeyForModel(model);
-            await this.executeFactcheck(claims, parentIds, model, apiKey, loadingNode.id);
+            this._factcheckData = {
+                claims: claims,
+                parentIds: parentIds,
+                model: model,
+                apiKey: apiKey,
+                loadingNodeId: loadingNode.id,
+            };
+
+            if (claims.length === 0) {
+                this.canvas.updateNodeContent(
+                    loadingNode.id,
+                    '**No claims extracted.** Add your own claims to verify.',
+                    false
+                );
+            } else {
+                this.canvas.updateNodeContent(
+                    loadingNode.id,
+                    `🔄 **Extracted ${claims.length} claim${claims.length !== 1 ? 's' : ''}.** Review before verifying.`,
+                    false
+                );
+            }
+
+            this.showFactcheckModal(claims);
+            return;
         } catch (err) {
             console.error('Factcheck error:', err);
             // Update loading node with error
@@ -390,57 +389,138 @@ class FactcheckFeature extends FeaturePlugin {
     }
 
     /**
-     * Show the factcheck claim selection modal
+     * Show the factcheck claim review modal
      * @param {string[]} claims - Array of extracted claims
      */
     showFactcheckModal(claims) {
         const modal = this.modalManager.getPluginModal('factcheck', 'main');
         const claimsList = modal.querySelector('#factcheck-claims-list');
-        const selectAll = modal.querySelector('#factcheck-select-all');
+        const newClaimInput = modal.querySelector('#factcheck-new-claim');
 
         // Clear previous claims
         claimsList.innerHTML = '';
+        newClaimInput.value = '';
 
-        // Populate claims list (first 5 pre-selected)
-        claims.forEach((claim, index) => {
-            const item = document.createElement('label');
-            item.className = 'factcheck-claim-item';
-            if (index < 5) {
-                item.classList.add('selected');
-            }
-
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = index;
-            checkbox.checked = index < 5;
-            checkbox.addEventListener('change', () => this.updateFactcheckSelection());
-
-            const textSpan = document.createElement('span');
-            textSpan.className = 'claim-text';
-            textSpan.textContent = claim;
-
-            item.appendChild(checkbox);
-            item.appendChild(textSpan);
-            claimsList.appendChild(item);
-
-            // Click on label toggles checkbox
-            item.addEventListener('click', (e) => {
-                if (e.target !== checkbox) {
-                    checkbox.checked = !checkbox.checked;
-                    checkbox.dispatchEvent(new Event('change'));
-                }
-            });
+        // Populate claim rows
+        claims.forEach((claim) => {
+            claimsList.appendChild(this.createFactcheckClaimRow(claim));
         });
 
-        // Reset select all state
-        selectAll.checked = false;
-        selectAll.indeterminate = claims.length > 5;
-
-        // Update selection state
-        this.updateFactcheckSelection();
+        this.updateFactcheckClaimSummary();
 
         // Show modal
         this.modalManager.showPluginModal('factcheck', 'main');
+    }
+
+    /**
+     * Create a claim row element for the modal
+     * @param {string} claimText - Claim text to populate
+     * @returns {HTMLDivElement}
+     */
+    createFactcheckClaimRow(claimText) {
+        const row = document.createElement('div');
+        row.className = 'factcheck-claim-row';
+
+        const input = document.createElement('textarea');
+        input.className = 'factcheck-claim-input';
+        input.rows = 2;
+        input.value = claimText;
+        input.placeholder = 'Enter a claim...';
+        input.addEventListener('input', () => this.updateFactcheckClaimSummary());
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'icon-btn factcheck-claim-remove';
+        removeBtn.setAttribute('aria-label', 'Remove claim');
+        removeBtn.setAttribute('title', 'Remove claim');
+        removeBtn.innerHTML = '&times;';
+        removeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            row.remove();
+            this.updateFactcheckClaimSummary();
+        });
+
+        row.appendChild(input);
+        row.appendChild(removeBtn);
+        return row;
+    }
+
+    /**
+     * Add a new claim row from the input field
+     */
+    addFactcheckClaim() {
+        const modal = this.modalManager.getPluginModal('factcheck', 'main');
+        const newClaimInput = modal.querySelector('#factcheck-new-claim');
+        const claimsList = modal.querySelector('#factcheck-claims-list');
+        const claimText = newClaimInput.value.trim();
+
+        if (!claimText) {
+            this.updateFactcheckClaimSummary();
+            return;
+        }
+
+        claimsList.appendChild(this.createFactcheckClaimRow(claimText));
+        newClaimInput.value = '';
+        this.updateFactcheckClaimSummary();
+    }
+
+    /**
+     * Collect valid claims from the modal inputs
+     * @returns {string[]}
+     */
+    collectFactcheckClaimsFromModal() {
+        const modal = this.modalManager.getPluginModal('factcheck', 'main');
+        const inputs = modal.querySelectorAll('.factcheck-claim-input');
+        const claims = [];
+
+        inputs.forEach((input) => {
+            const value = input.value.trim();
+            if (value) {
+                claims.push(value);
+            }
+        });
+
+        return claims;
+    }
+
+    /**
+     * Update factcheck modal UI and validation
+     */
+    updateFactcheckClaimSummary() {
+        const modal = this.modalManager.getPluginModal('factcheck', 'main');
+        const rows = modal.querySelectorAll('.factcheck-claim-row');
+        const subtitleEl = modal.querySelector('#factcheck-modal-subtitle');
+        const countEl = modal.querySelector('#factcheck-selection-count');
+        const warningEl = modal.querySelector('#factcheck-limit-warning');
+        const executeBtn = modal.querySelector('#factcheck-execute-btn');
+
+        let validCount = 0;
+        rows.forEach((row) => {
+            const input = row.querySelector('.factcheck-claim-input');
+            const isValid = Boolean(input.value.trim());
+            row.classList.toggle('empty', !isValid);
+            if (isValid) {
+                validCount += 1;
+            }
+        });
+
+        const claimLabel = validCount === 1 ? 'claim' : 'claims';
+        countEl.textContent = `${validCount} ${claimLabel} ready`;
+        countEl.classList.toggle('valid', validCount > 0);
+        countEl.classList.toggle('invalid', validCount === 0);
+
+        if (warningEl) {
+            warningEl.style.display = validCount > 5 ? 'inline' : 'none';
+        }
+
+        if (subtitleEl) {
+            subtitleEl.textContent =
+                validCount === 0
+                    ? 'No claims ready yet. Add at least one claim to verify.'
+                    : 'Review the extracted claims. Edit, remove, or add your own before verifying.';
+        }
+
+        executeBtn.disabled = validCount === 0;
     }
 
     /**
@@ -462,77 +542,16 @@ class FactcheckFeature extends FeaturePlugin {
     }
 
     /**
-     * Handle select all checkbox change
-     * @param {boolean} checked - Whether select all is checked
-     */
-    handleFactcheckSelectAll(checked) {
-        const modal = this.modalManager.getPluginModal('factcheck', 'main');
-        const checkboxes = modal.querySelectorAll('#factcheck-claims-list input[type="checkbox"]');
-        checkboxes.forEach((cb) => {
-            cb.checked = checked;
-        });
-        this.updateFactcheckSelection();
-    }
-
-    /**
-     * Update factcheck selection UI and validation
-     */
-    updateFactcheckSelection() {
-        const modal = this.modalManager.getPluginModal('factcheck', 'main');
-        const checkboxes = modal.querySelectorAll('#factcheck-claims-list input[type="checkbox"]');
-        const selectAll = modal.querySelector('#factcheck-select-all');
-        const selectedClaims = [];
-
-        checkboxes.forEach((cb) => {
-            const item = cb.closest('.factcheck-claim-item');
-            if (cb.checked) {
-                selectedClaims.push(parseInt(cb.value));
-                item.classList.add('selected');
-            } else {
-                item.classList.remove('selected');
-            }
-        });
-
-        // Update select all state and label
-        const totalCount = checkboxes.length;
-        const selectedCount = selectedClaims.length;
-        selectAll.checked = selectedCount === totalCount;
-        selectAll.indeterminate = selectedCount > 0 && selectedCount < totalCount;
-
-        // Update the label text based on state
-        const labelText = selectAll.parentElement.querySelector('.checkbox-text');
-        if (labelText) {
-            labelText.textContent = selectedCount === totalCount ? 'Deselect All' : 'Select All';
-        }
-
-        // Update count display
-        const countEl = modal.querySelector('#factcheck-selection-count');
-        const isValid = selectedCount >= 1;
-
-        countEl.textContent = `${selectedCount} of ${totalCount} selected`;
-        countEl.classList.toggle('valid', isValid);
-        countEl.classList.toggle('invalid', !isValid);
-
-        // Show/hide limit warning (informational, not blocking)
-        const warningEl = modal.querySelector('#factcheck-limit-warning');
-        if (warningEl) {
-            warningEl.style.display = selectedCount > 5 ? 'inline' : 'none';
-        }
-
-        // Enable/disable execute button (only require at least 1 selected)
-        modal.querySelector('#factcheck-execute-btn').disabled = !isValid;
-    }
-
-    /**
      * Execute factcheck from modal with selected claims
      */
     async executeFactcheckFromModal() {
         if (!this._factcheckData) return;
 
-        const modal = this.modalManager.getPluginModal('factcheck', 'main');
-        const checkboxes = modal.querySelectorAll('#factcheck-claims-list input[type="checkbox"]:checked');
-        const selectedIndices = Array.from(checkboxes).map((cb) => parseInt(cb.value));
-        const selectedClaims = selectedIndices.map((i) => this._factcheckData.claims[i]);
+        const selectedClaims = this.collectFactcheckClaimsFromModal();
+        if (selectedClaims.length === 0) {
+            this.updateFactcheckClaimSummary();
+            return;
+        }
 
         // Store data before closing modal (close nullifies _factcheckData)
         const { parentIds, model, apiKey, loadingNodeId } = this._factcheckData;

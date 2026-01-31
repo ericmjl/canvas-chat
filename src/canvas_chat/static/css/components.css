@@ -906,28 +906,6 @@
     margin-bottom: 16px;
 }
 
-.factcheck-select-all-group {
-    margin-bottom: 12px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--bg-secondary);
-}
-
-.factcheck-checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    font-size: 13px;
-    color: var(--text-primary);
-}
-
-.factcheck-checkbox-label input[type='checkbox'] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-    accent-color: var(--accent);
-}
-
 .factcheck-claims-list {
     max-height: 300px;
     overflow-y: auto;
@@ -938,50 +916,64 @@
     margin-bottom: 16px;
 }
 
-.factcheck-claim-item {
+.factcheck-claim-row {
     display: flex;
     align-items: flex-start;
     gap: 10px;
     padding: 10px 12px;
     border-radius: var(--radius-sm);
     background: var(--bg-primary);
-    cursor: pointer;
     transition: all 0.15s;
     border: 1px solid transparent;
     margin-bottom: 8px;
 }
 
-.factcheck-claim-item:last-child {
+.factcheck-claim-row:last-child {
     margin-bottom: 0;
 }
 
-.factcheck-claim-item:hover {
+.factcheck-claim-row:hover {
     border-color: var(--accent);
 }
 
-.factcheck-claim-item.selected {
-    border-color: var(--accent);
-    background: var(--selection-bg);
+.factcheck-claim-row.empty {
+    border-color: var(--danger);
+    background: var(--bg-tertiary);
 }
 
-.factcheck-claim-item.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.factcheck-claim-item input[type='checkbox'] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-    accent-color: var(--accent);
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-
-.factcheck-claim-item .claim-text {
+.factcheck-claim-input {
+    flex: 1;
+    min-height: 48px;
+    resize: vertical;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
     font-size: 13px;
+    font-family: inherit;
+    background: var(--bg-primary);
     color: var(--text-primary);
-    line-height: 1.4;
+}
+
+.factcheck-claim-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.factcheck-claim-remove {
+    flex-shrink: 0;
+    margin-top: 4px;
+}
+
+.factcheck-add-claim {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.factcheck-add-claim .modal-text-input {
+    flex: 1;
 }
 
 .factcheck-selection-info {
