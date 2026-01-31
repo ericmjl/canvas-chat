@@ -35,6 +35,7 @@ jobs:
                   record: false
                   spec: |
                       cypress/e2e/canvas_interactions.cy.js
+                      cypress/e2e/factcheck_modal.cy.js
                       cypress/e2e/help_modal.cy.js
                       cypress/e2e/keyboard_interactions.cy.js
                       cypress/e2e/new_canvas.cy.js
