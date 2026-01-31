@@ -173,7 +173,7 @@ function formatUserError(error) {
 function truncateText(text, maxLength) {
     if (!text) return '';
     if (text.length <= maxLength) return text;
-    return text.slice(0, maxLength - 1) + '…';
+    return text.slice(0, maxLength - 3) + '...';
 }
 
 /**
@@ -421,16 +421,6 @@ async function resizeImage(file, maxDimension = 2048) {
 // =============================================================================
 
 export {
-    getBasePath,
-    apiUrl,
-    isUrlContent,
-    extractUrlFromReferenceNode,
-    formatUserError,
-    truncateText,
-    escapeHtmlText,
-    buildMessagesForApi,
-    applySM2,
-    isFlashcardDue,
-    getDueFlashcards,
-    resizeImage,
+    apiUrl, applySM2, buildMessagesForApi, escapeHtmlText, extractUrlFromReferenceNode,
+    formatUserError, getBasePath, getDueFlashcards, isFlashcardDue, isUrlContent, resizeImage, truncateText
 };

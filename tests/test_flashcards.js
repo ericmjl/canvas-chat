@@ -25,7 +25,7 @@ const mockCanvas = {
     truncate: (text, maxLength) => {
         if (!text) return '';
         if (text.length <= maxLength) return text;
-        return text.slice(0, maxLength - 1) + '…';
+        return text.slice(0, maxLength - 3) + '...';
     },
     renderMarkdown: (text) => `<div>${text}</div>`,
     showCopyFeedback: () => {}

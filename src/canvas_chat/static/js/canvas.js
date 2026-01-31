@@ -236,7 +236,7 @@ class Canvas {
             const maxLength = 100;
             const displayText =
                 this.pendingSelectedText.length > maxLength
-                    ? this.pendingSelectedText.slice(0, maxLength) + '…'
+                    ? this.pendingSelectedText.slice(0, maxLength - 3) + '...'
                     : this.pendingSelectedText;
             selectionTextEl.textContent = `"${displayText}"`;
             selectionTextEl.title = this.pendingSelectedText; // Full text on hover
