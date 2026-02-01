@@ -5,11 +5,11 @@
  * Extends FeaturePlugin to integrate with the plugin architecture.
  */
 
-import { NodeType, EdgeType, createNode, createEdge } from '../graph-types.js';
-import { storage } from '../storage.js';
-import { readSSEStream, normalizeText } from '../sse.js';
-import { apiUrl } from '../utils.js';
 import { FeaturePlugin } from '../feature-plugin.js';
+import { EdgeType, NodeType, createEdge, createNode } from '../graph-types.js';
+import { normalizeText, readSSEStream } from '../sse.js';
+import { storage } from '../storage.js';
+import { apiUrl } from '../utils.js';
 
 /**
  * ResearchFeature - Handles search and research commands with Exa/DuckDuckGo.
@@ -33,6 +33,17 @@ class ResearchFeature extends FeaturePlugin {
      */
     async onLoad() {
         console.log('[ResearchFeature] Loaded');
+    }
+
+    /**
+     * Build effective blocked-domains list: server default (from config) + user additions (from Settings).
+     * Used when calling DuckDuckGo search and research so both config and UI blocklist apply.
+     * @returns {string[]}
+     */
+    getEffectiveBlockedDomains() {
+        const server = this._app?.serverBlockedDomains || [];
+        const user = storage.getBlockedDomains();
+        return [...new Set([...server, ...user])];
     }
 
     /**
@@ -132,6 +143,7 @@ class ResearchFeature extends FeaturePlugin {
                     body: JSON.stringify({
                         query: effectiveQuery,
                         max_results: 10,
+                        blocked_domains: this.getEffectiveBlockedDomains(),
                     }),
                 });
             }
@@ -354,14 +366,15 @@ class ResearchFeature extends FeaturePlugin {
                 response = await fetch(apiUrl('/api/ddg/research'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(
-                        this.buildLLMRequest({
+                    body: JSON.stringify({
+                        ...this.buildLLMRequest({
                             instructions: effectiveInstructions,
                             context: selectedContext || null,
                             max_iterations: 4,
                             max_sources: 40,
-                        })
-                    ),
+                        }),
+                        blocked_domains: this.getEffectiveBlockedDomains(),
+                    }),
                     signal: abortController.signal,
                 });
             }

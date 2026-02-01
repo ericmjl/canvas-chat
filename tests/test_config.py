@@ -135,6 +135,41 @@ def test_admin_config_load_empty_models_list(tmp_path):
 # --- AppConfig.disabled tests ---
 
 
+def test_admin_config_load_blocked_domains_default(tmp_path):
+    """Test blocked_domains defaults to grokipedia.com when not in YAML."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+models:
+  - id: "openai/gpt-4o"
+    name: "GPT-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+""")
+    config = AppConfig.load(config_file, admin_mode=False)
+    assert config.blocked_domains == ["grokipedia.com"]
+
+
+def test_admin_config_load_blocked_domains_custom(tmp_path):
+    """Test blocked_domains loaded from YAML when provided."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+models:
+  - id: "openai/gpt-4o"
+    name: "GPT-4o"
+    apiKeyEnvVar: "OPENAI_API_KEY"
+blocked_domains:
+  - grokipedia.com
+  - spam.example.com
+""")
+    config = AppConfig.load(config_file, admin_mode=False)
+    assert config.blocked_domains == ["grokipedia.com", "spam.example.com"]
+
+
+def test_admin_config_empty_has_default_blocked_domains():
+    """Test AppConfig.empty() has default blocked_domains."""
+    config = AppConfig.empty()
+    assert "grokipedia.com" in config.blocked_domains
+
+
 def test_admin_config_disabled():
     """Test creating a disabled admin config."""
     config = AppConfig.empty()

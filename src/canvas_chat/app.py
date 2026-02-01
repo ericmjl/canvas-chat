@@ -998,6 +998,7 @@ async def get_config():
     return {
         "adminMode": config.admin_mode,
         "models": config.get_frontend_models() if config.admin_mode else [],
+        "blockedDomains": config.blocked_domains,
     }
 
 

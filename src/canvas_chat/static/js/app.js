@@ -92,6 +92,7 @@ class App {
         // Admin mode state (set by loadConfig)
         this.adminMode = false;
         this.adminModels = []; // Models configured by admin (only in admin mode)
+        this.serverBlockedDomains = []; // Blocked domains from config (merged with user list for DDG)
 
         // Feature flags (set by fetchFeatureFlags)
         this.copilotEnabled = true; // Default to enabled, updated after fetch
@@ -208,6 +209,7 @@ class App {
                 const config = await response.json();
                 this.adminMode = config.adminMode || false;
                 this.adminModels = config.models || [];
+                this.serverBlockedDomains = config.blockedDomains || [];
 
                 if (this.adminMode) {
                     console.log('%c[App] Admin mode enabled', 'color: #FF9800; font-weight: bold');
@@ -221,6 +223,7 @@ class App {
             console.warn('[App] Failed to load config, using normal mode:', error);
             this.adminMode = false;
             this.adminModels = [];
+            this.serverBlockedDomains = [];
         }
     }
 
@@ -4119,6 +4122,13 @@ class App {
         // Save flashcard strictness
         const strictness = document.getElementById('flashcard-strictness').value;
         storage.setFlashcardStrictness(strictness);
+
+        // Save blocked domains (web search)
+        const blockedDomainsText = document.getElementById('blocked-domains').value.trim();
+        const blockedDomains = blockedDomainsText
+            ? blockedDomainsText.split(/\n/).map((d) => d.trim()).filter(Boolean)
+            : [];
+        storage.saveBlockedDomains(blockedDomains);
 
         // Reload models to reflect newly configured API keys
         this.loadModels();

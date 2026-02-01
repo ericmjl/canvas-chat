@@ -395,6 +395,17 @@ class ModalManager {
 
         this.updateCopilotStatus();
 
+        // Load blocked domains (user additions only; server default shown in label)
+        const blockedDomains = storage.getBlockedDomains();
+        const blockedDomainsEl = document.getElementById('blocked-domains');
+        if (blockedDomainsEl) {
+            blockedDomainsEl.value = blockedDomains.join('\n');
+        }
+        const serverDefaultEl = document.getElementById('blocked-domains-server-default');
+        if (serverDefaultEl && this.app.serverBlockedDomains?.length) {
+            serverDefaultEl.textContent = this.app.serverBlockedDomains.join(', ');
+        }
+
         // Load base URL
         document.getElementById('base-url').value = storage.getBaseUrl() || '';
 

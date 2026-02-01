@@ -1,6 +1,11 @@
-"""Tests for DDG endpoints plugin (per-iteration cap and related logic)."""
+"""Tests for DDG endpoints (per-iteration cap, domain filtering, and related logic)."""
 
-from canvas_chat.plugins.ddg_endpoints import _max_sources_per_iteration
+from unittest.mock import patch
+
+from canvas_chat.plugins.ddg_endpoints import (
+    _max_sources_per_iteration,
+    is_domain_blocked,
+)
 
 
 class TestMaxSourcesPerIteration:
@@ -36,3 +41,108 @@ class TestMaxSourcesPerIteration:
         """When max_sources is divisible by max_iterations, result is exact."""
         assert _max_sources_per_iteration(60, 4) == 15
         assert _max_sources_per_iteration(12, 3) == 5  # 12/3=4, but min is 5
+
+
+class TestIsDomainBlocked:
+    """Unit tests for is_domain_blocked.
+
+    Ensures blocked domain filtering correctly matches exact domains and
+    subdomains so untrusted sources (e.g. Grokipedia) can be excluded.
+    """
+
+    def test_exact_domain_blocked(self):
+        """Exact domain match is blocked."""
+        assert is_domain_blocked("https://grokipedia.com/page", ["grokipedia.com"])
+        assert is_domain_blocked("https://grokipedia.com", ["grokipedia.com"])
+
+    def test_subdomain_blocked(self):
+        """Subdomains of blocked domain are blocked."""
+        assert is_domain_blocked(
+            "https://www.grokipedia.com/article", ["grokipedia.com"]
+        )
+        assert is_domain_blocked("https://sub.grokipedia.com/path", ["grokipedia.com"])
+
+    def test_domain_not_blocked(self):
+        """Other domains are not blocked."""
+        assert not is_domain_blocked("https://example.com/page", ["grokipedia.com"])
+        assert not is_domain_blocked(
+            "https://wikipedia.org/wiki/Test", ["grokipedia.com"]
+        )
+
+    def test_case_insensitive(self):
+        """Domain matching is case-insensitive."""
+        assert is_domain_blocked("https://GROKIPEDIA.COM/page", ["grokipedia.com"])
+        assert is_domain_blocked("https://www.Grokipedia.COM/", ["grokipedia.com"])
+        assert is_domain_blocked("https://grokipedia.com/", ["GROKIPEDIA.COM"])
+
+    def test_empty_url_or_blocklist(self):
+        """Empty URL or empty blocklist returns False."""
+        assert not is_domain_blocked("", ["grokipedia.com"])
+        assert not is_domain_blocked("https://grokipedia.com", [])
+        assert not is_domain_blocked("", [])
+
+    def test_multiple_blocked_domains(self):
+        """Any domain in the blocklist matches."""
+        blocklist = ["grokipedia.com", "spam.example.com"]
+        assert is_domain_blocked("https://grokipedia.com/p", blocklist)
+        assert is_domain_blocked("https://spam.example.com/p", blocklist)
+        assert not is_domain_blocked("https://trusted.example.com/p", blocklist)
+
+    def test_invalid_url_returns_false(self):
+        """Invalid or malformed URL does not raise; returns False."""
+        assert not is_domain_blocked("not-a-url", ["grokipedia.com"])
+
+
+class TestDdgSearchEndpointFiltersBlockedDomains:
+    """Integration tests: /api/ddg/search filters blocked domains."""
+
+    def test_blocked_domains_excluded_from_search_results(self):
+        """Results from blocked domains are not returned by /api/ddg/search."""
+        from fastapi.testclient import TestClient
+
+        from canvas_chat.app import app
+        from canvas_chat.config import AppConfig
+
+        mock_results = [
+            {
+                "title": "Good Source",
+                "href": "https://example.com/article",
+                "body": "Snippet",
+            },
+            {
+                "title": "Grokipedia",
+                "href": "https://www.grokipedia.com/page",
+                "body": "Snippet",
+            },
+            {
+                "title": "Another Good",
+                "href": "https://reliable.org/post",
+                "body": "Snippet",
+            },
+        ]
+
+        with (
+            patch("ddgs.DDGS") as mock_ddgs_class,
+            patch("canvas_chat.app.get_admin_config") as mock_config,
+        ):
+            mock_ddgs = mock_ddgs_class.return_value.__enter__.return_value
+            mock_ddgs.text.return_value = mock_results
+            mock_config.return_value = AppConfig.empty()
+            # AppConfig.empty() uses default blocked_domains = ["grokipedia.com"]
+            assert "grokipedia.com" in mock_config.return_value.blocked_domains
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/ddg/search",
+                json={"query": "test query", "max_results": 10},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["provider"] == "duckduckgo"
+        urls = [r["url"] for r in data["results"]]
+        assert "https://www.grokipedia.com/page" not in urls
+        assert "https://example.com/article" in urls
+        assert "https://reliable.org/post" in urls
+        assert len(data["results"]) == 2
+        assert data["num_results"] == 2

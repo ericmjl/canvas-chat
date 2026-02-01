@@ -270,6 +270,24 @@
                         </div>
                     </div>
 
+                    <div class="settings-section">
+                        <h3>Blocked domains (web search)</h3>
+                        <p class="settings-note">
+                            Domains listed here are excluded from DuckDuckGo search and research results.
+                            Server default: <code id="blocked-domains-server-default">grokipedia.com</code>.
+                            Add more below, one domain per line.
+                        </p>
+                        <div class="api-key-group">
+                            <label for="blocked-domains">Additional blocked domains</label>
+                            <textarea
+                                id="blocked-domains"
+                                class="modal-text-input"
+                                rows="3"
+                                placeholder="spam.example.com&#10;untrusted-site.org"
+                            ></textarea>
+                        </div>
+                    </div>
+
                     <!-- Plugin settings sections will be injected here -->
                     <div id="plugin-settings-container"></div>
 

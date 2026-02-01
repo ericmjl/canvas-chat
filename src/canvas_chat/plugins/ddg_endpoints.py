@@ -16,6 +16,7 @@ import json
 import logging
 import traceback
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import BaseModel
@@ -32,6 +33,9 @@ class DDGSearchRequest(BaseModel):
 
     query: str
     max_results: int = 10
+    blocked_domains: list[str] | None = (
+        None  # Optional override/merge with server config
+    )
 
 
 class DDGSearchResult(BaseModel):
@@ -59,6 +63,9 @@ class DDGResearchRequest(BaseModel):
     max_sources: int = 40
     max_queries_per_iteration: int = 4
     max_results_per_query: int = 10
+    blocked_domains: list[str] | None = (
+        None  # Optional override/merge with server config
+    )
 
 
 class DDGResearchSource(BaseModel):
@@ -147,6 +154,36 @@ def _max_sources_per_iteration(max_sources: int, max_iterations: int) -> int:
     )
 
 
+def is_domain_blocked(url: str, blocked_domains: list[str]) -> bool:
+    """Check if URL's domain matches any blocked domain pattern.
+
+    Matches exact domain or subdomains (e.g. "grokipedia.com" blocks
+    "www.grokipedia.com").
+
+    Args:
+        url: Full URL to check.
+        blocked_domains: List of domain names to block (e.g. ["grokipedia.com"]).
+
+    Returns:
+        True if the URL's domain is blocked, False otherwise.
+    """
+    if not url or not blocked_domains:
+        return False
+    try:
+        domain = urlparse(url).netloc.lower()
+        if not domain:
+            return False
+        for blocked in blocked_domains:
+            blocked_lower = blocked.strip().lower()
+            if not blocked_lower:
+                continue
+            if domain == blocked_lower or domain.endswith("." + blocked_lower):
+                return True
+        return False
+    except Exception:
+        return False
+
+
 # =============================================================================
 # Endpoint registration
 # =============================================================================
@@ -172,6 +209,17 @@ def register_endpoints(app: Any) -> None:
         try:
             from ddgs import DDGS
 
+            from canvas_chat.app import get_admin_config
+
+            config = get_admin_config()
+            server_blocked = config.blocked_domains or []
+            client_blocked = request.blocked_domains or []
+            effective_blocked = list(
+                dict.fromkeys(
+                    [d.strip().lower() for d in server_blocked + client_blocked if d]
+                )
+            )
+
             with DDGS() as ddgs:
                 results = list(
                     ddgs.text(request.query, max_results=request.max_results)
@@ -179,10 +227,14 @@ def register_endpoints(app: Any) -> None:
 
             formatted_results = []
             for result in results:
+                url = result.get("href", "")
+                if is_domain_blocked(url, effective_blocked):
+                    logger.debug("Filtered blocked domain: %s", url)
+                    continue
                 formatted_results.append(
                     DDGSearchResult(
                         title=result.get("title", "Untitled"),
-                        url=result.get("href", ""),
+                        url=url,
                         snippet=result.get("body", ""),
                     )
                 )
@@ -237,11 +289,24 @@ def register_endpoints(app: Any) -> None:
                 _llm_text,
                 fetch_url_directly,
                 fetch_url_via_jina,
+                get_admin_config,
             )
 
             try:
                 from ddgs import DDGS
 
+                config = get_admin_config()
+                server_blocked = config.blocked_domains or []
+                client_blocked = request.blocked_domains or []
+                effective_blocked = list(
+                    dict.fromkeys(
+                        [
+                            d.strip().lower()
+                            for d in server_blocked + client_blocked
+                            if d
+                        ]
+                    )
+                )
                 instructions = request.instructions.strip()
                 context = (request.context or "").strip()
 
@@ -353,6 +418,12 @@ def register_endpoints(app: Any) -> None:
                                     if not url:
                                         continue
                                     if url in url_to_result or url in seen_urls:
+                                        continue
+                                    if is_domain_blocked(url, effective_blocked):
+                                        logger.debug(
+                                            "Filtered blocked domain in research: %s",
+                                            url,
+                                        )
                                         continue
 
                                     title = (r.get("title") or "").lower()

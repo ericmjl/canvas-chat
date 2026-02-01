@@ -76,6 +76,7 @@ const DB_NAME = 'canvas-chat';
 const DB_VERSION = 1;
 const SESSIONS_STORE = 'sessions';
 const COPILOT_AUTH_KEY = 'canvas-chat-copilot-auth';
+const BLOCKED_DOMAINS_KEY = 'canvas-chat-blocked-domains';
 
 /**
  *
@@ -512,6 +513,31 @@ class Storage {
     hasExaApiKey() {
         const key = this.getExaApiKey();
         return key && key.trim().length > 0;
+    }
+
+    /**
+     * Get user-configured blocked domains for web search (DuckDuckGo).
+     * Merged with server default (from /api/config) when calling DDG endpoints.
+     * @returns {string[]} - Array of domain names (e.g. ['spam.example.com'])
+     */
+    getBlockedDomains() {
+        const raw = localStorage.getItem(BLOCKED_DOMAINS_KEY);
+        if (!raw) return [];
+        try {
+            const arr = JSON.parse(raw);
+            return Array.isArray(arr) ? arr.filter((d) => typeof d === 'string' && d.trim()) : [];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Save user-configured blocked domains for web search.
+     * @param {string[]} domains - Array of domain names
+     */
+    saveBlockedDomains(domains) {
+        const list = Array.isArray(domains) ? domains.map((d) => String(d).trim()).filter(Boolean) : [];
+        localStorage.setItem(BLOCKED_DOMAINS_KEY, JSON.stringify(list));
     }
 
     /**

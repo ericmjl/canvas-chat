@@ -213,6 +213,9 @@ class AppConfig:
     models: list[ModelConfig] = field(default_factory=list)
     plugins: list[PluginConfig] = field(default_factory=list)
     admin_mode: bool = False
+    blocked_domains: list[str] = field(
+        default_factory=lambda: ["grokipedia.com"],
+    )
     _config_path: Path | None = None
 
     @classmethod
@@ -279,10 +282,16 @@ class AppConfig:
                             f"Registered Python plugin: {plugin_config.py_path.name}"
                         )
 
+        blocked_domains = data.get("blocked_domains", ["grokipedia.com"])
+        if not isinstance(blocked_domains, list):
+            blocked_domains = ["grokipedia.com"]
+        blocked_domains = [str(d).strip().lower() for d in blocked_domains if d]
+
         config = cls(
             models=models,
             plugins=plugins,
             admin_mode=admin_mode,
+            blocked_domains=blocked_domains,
             _config_path=config_path,
         )
 

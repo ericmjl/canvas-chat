@@ -130,6 +130,18 @@ plugins:
     # - path: /absolute/path/to/plugin.js
 
 # ============================================================================
+# BLOCKED DOMAINS - DuckDuckGo search / research
+# ============================================================================
+#
+# Optional. Domains listed here are excluded from DuckDuckGo search and
+# research results (e.g. untrusted or low-quality sources).
+# Default when omitted: grokipedia.com
+#
+# blocked_domains:
+#   - grokipedia.com
+#   - spam.example.com
+
+# ============================================================================
 # FIELD REFERENCE
 # ============================================================================
 #
@@ -168,6 +180,12 @@ plugins:
 #   Paths can be absolute or relative to this config file.
 #   JavaScript plugins must be ES modules that import from '/static/js/'
 #   Python plugins must extend plugin base classes (e.g., UrlFetchHandlerPlugin)
+#
+# blocked_domains (optional, array of strings):
+#   Domains to exclude from DuckDuckGo search and research results.
+#   Matching is case-insensitive; subdomains are blocked (e.g. grokipedia.com
+#   blocks www.grokipedia.com). Default when omitted: [grokipedia.com]
+#   Users can add more blocked domains in Settings (stored in browser).
 #
 # ============================================================================
 # ENVIRONMENT VARIABLES
