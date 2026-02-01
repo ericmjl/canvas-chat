@@ -404,6 +404,12 @@ test('getKeyboardShortcuts: BaseNode returns default shortcuts', () => {
     assertEqual(shortcuts['c'].handler, 'nodeCopy');
 });
 
+test('isContentEditable: BaseNode default returns true', () => {
+    const node = { type: 'note', content: 'Test' };
+    const wrapped = new BaseNode(node);
+    assertTrue(wrapped.isContentEditable(), 'BaseNode default should be content-editable');
+});
+
 test('getHiddenActionIds: filters out actions from getComputedActions', () => {
     // Create a custom protocol that hides 'edit-content'
     class TestNode extends BaseNode {

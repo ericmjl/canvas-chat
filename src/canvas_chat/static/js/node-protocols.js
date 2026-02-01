@@ -6,7 +6,7 @@
  * It enables dynamic node rendering through a factory pattern with protocol dispatch.
  */
 
-import { NodeType as _NodeType, DEFAULT_NODE_SIZES as _DEFAULT_NODE_SIZES } from './graph-types.js';
+import { DEFAULT_NODE_SIZES as _DEFAULT_NODE_SIZES, NodeType as _NodeType } from './graph-types.js';
 import { NodeRegistry } from './node-registry.js';
 
 /**
@@ -238,6 +238,15 @@ class BaseNode {
      */
     getEditModalTitle() {
         return 'Edit Content';
+    }
+
+    /**
+     * Whether this node type supports content editing (edit content modal and E key).
+     * Override to return false for read-only node types (e.g. factcheck).
+     * @returns {boolean}
+     */
+    isContentEditable() {
+        return true;
     }
 
     /**
@@ -745,34 +754,6 @@ registerBuiltin_NodeTypes();
 export {
     // Utilities
     Actions,
-    HeaderButtons,
-    wrapNode,
-    createMockNodeForType,
-    validateNodeProtocol,
-    registerBuiltin_NodeTypes,
     // Base class
-    BaseNode,
-    // Node type classes
-    // HumanNode is now exported from human-node.js plugin
-    // AINode is now exported from ai-node.js plugin
-    // NoteNode is now exported from note.js plugin
-    // SummaryNode is now exported from summary.js plugin
-    // ReferenceNode is now exported from reference.js plugin
-    // SearchNode is now exported from search-node.js plugin
-    // HighlightNode is now exported from highlight-node.js plugin
-    // FetchResultNode is now exported from fetch-result-node.js plugin
-    // ResearchNode is now exported from research-node.js plugin
-    // MatrixNode is now exported from matrix-node.js plugin
-    // CellNode is now exported from cell-node.js plugin
-    // RowNode is now exported from row-node.js plugin
-    // ColumnNode is now exported from column-node.js plugin
-    // PdfNode is now exported from pdf-node.js plugin
-    // OpinionNode is now exported from opinion-node.js plugin
-    // SynthesisNode is now exported from synthesis-node.js plugin
-    // ReviewNode is now exported from review-node.js plugin
-    // CsvNode is now exported from csv-node.js plugin
-    // ImageNode is now exported from image-node.js plugin
-    // FlashcardNode is now exported from flashcard-node.js plugin
-    // FactcheckNode is now exported from factcheck-node.js plugin
-    // CodeNode is now exported from code-node.js plugin
+    BaseNode, createMockNodeForType, HeaderButtons, registerBuiltin_NodeTypes, validateNodeProtocol, wrapNode
 };

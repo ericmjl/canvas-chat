@@ -665,6 +665,9 @@ class ModalManager {
 
         // Get protocol instance to access plugin methods
         const wrapped = wrapNode(node);
+        if (typeof wrapped.isContentEditable === 'function' && !wrapped.isContentEditable()) {
+            return; // Node type does not support content editing (e.g. factcheck)
+        }
         const editFields = wrapped.getEditFields();
 
         this.app.editingNodeId = nodeId;

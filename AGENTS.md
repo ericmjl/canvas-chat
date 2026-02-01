@@ -641,6 +641,16 @@ When a plugin pushes an action with a registered type, UndoManager delegates to 
 - Don't register handlers for core action types (DELETE_NODES, ADD_NODE, MOVE_NODES, EDIT_TITLE, TAG_CHANGE)
 - Don't modify core undo/redo logic in app.js
 
+#### Disabling editing on node types
+
+Node types that should not open the edit content modal (and should not respond to the E key) can opt out via the node protocol:
+
+- **`isContentEditable()`** – Override in your node protocol class to return `false`. BaseNode returns `true`. When false, the edit content modal is not opened and the E shortcut does nothing for that node type.
+- **`getKeyboardShortcuts()`** – Override to omit the `e` key (or return only the shortcuts you support) so E is not bound to edit for that node type.
+- **`getActions()`** – Return only the actions you want in the action bar; omit `Actions.EDIT_CONTENT` so the Edit button is not shown.
+
+**Example:** Factcheck nodes are read-only. FactcheckNode overrides `isContentEditable()` to return `false`, overrides `getKeyboardShortcuts()` to return only `{ c: { action: 'copy', handler: 'nodeCopy' } }`, and `getActions()` returns only `[Actions.COPY]`. The app and modal-manager check `isContentEditable()` before opening the edit modal and before dispatching the E key.
+
 ## Design standards
 
 - New features must be coherent with existing design patterns and visual language
