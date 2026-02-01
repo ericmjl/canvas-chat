@@ -7,13 +7,13 @@
  * - FactcheckFeature (slash command and event handling)
  */
 
-import { NodeType, EdgeType, createNode, createEdge } from '../graph-types.js';
-import { storage } from '../storage.js';
 import { chat } from '../chat.js';
-import { apiUrl } from '../utils.js';
-import { BaseNode, Actions } from '../node-protocols.js';
-import { NodeRegistry } from '../node-registry.js';
 import { FeaturePlugin } from '../feature-plugin.js';
+import { EdgeType, NodeType, createEdge, createNode } from '../graph-types.js';
+import { Actions, BaseNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+import { storage } from '../storage.js';
+import { apiUrl } from '../utils.js';
 
 // =============================================================================
 // Factcheck Node Protocol
@@ -127,6 +127,24 @@ class FactcheckNode extends BaseNode {
      */
     getActions() {
         return [Actions.COPY];
+    }
+
+    /**
+     * Factcheck nodes are read-only; do not open edit content modal or respond to E key.
+     * @returns {boolean}
+     */
+    isContentEditable() {
+        return false;
+    }
+
+    /**
+     * Only expose copy shortcut; no edit (e) or reply (r) for read-only factcheck nodes.
+     * @returns {Object.<string, Object>}
+     */
+    getKeyboardShortcuts() {
+        return {
+            c: { action: 'copy', handler: 'nodeCopy' },
+        };
     }
 
     /**

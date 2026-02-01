@@ -1066,6 +1066,11 @@ class App {
                                     return; // Let browser handle Ctrl+C
                                 }
 
+                                // Don't open edit modal for node types that are not content-editable
+                                if (config.handler === 'nodeEditContent' && typeof wrapped.isContentEditable === 'function' && !wrapped.isContentEditable()) {
+                                    return;
+                                }
+
                                 e.preventDefault();
                                 this.canvas.emit(config.handler, node.id);
                                 return;

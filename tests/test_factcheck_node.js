@@ -41,9 +41,9 @@ if (!global.indexedDB) {
 }
 
 // Now import modules
-import { assertTrue, assertEqual } from './test_helpers/assertions.js';
 import { createNode, NodeType } from '../src/canvas_chat/static/js/graph-types.js';
-import { wrapNode, Actions } from '../src/canvas_chat/static/js/node-protocols.js';
+import { Actions, wrapNode } from '../src/canvas_chat/static/js/node-protocols.js';
+import { assertEqual, assertTrue } from './test_helpers/assertions.js';
 
 async function asyncTest(description, fn) {
     try {
@@ -222,6 +222,30 @@ await asyncTest('FactcheckNode getActions returns correct actions', async () => 
     assertTrue(Array.isArray(actions), 'Actions should be an array');
     assertTrue(actions.length === 1, 'Should have exactly 1 action');
     assertEqual(actions[0], Actions.COPY, 'Should have COPY action');
+});
+
+// Test: FactcheckNode isContentEditable returns false (read-only, no edit modal / E key)
+await asyncTest('FactcheckNode isContentEditable returns false', async () => {
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
+
+    const node = createNode(NodeType.FACTCHECK, 'Content', {});
+    const wrapped = wrapNode(node);
+
+    assertEqual(wrapped.isContentEditable(), false, 'Factcheck nodes should not be content-editable');
+});
+
+// Test: FactcheckNode getKeyboardShortcuts has no edit (e), only copy (c)
+await asyncTest('FactcheckNode getKeyboardShortcuts omits edit and includes only copy', async () => {
+    await import('../src/canvas_chat/static/js/plugins/factcheck.js');
+
+    const node = createNode(NodeType.FACTCHECK, 'Content', {});
+    const wrapped = wrapNode(node);
+    const shortcuts = wrapped.getKeyboardShortcuts();
+    const keys = Object.keys(shortcuts);
+
+    assertEqual(keys.length, 1, 'Should have exactly one shortcut');
+    assertEqual(keys[0], 'c', 'Only shortcut should be c (copy)');
+    assertEqual(shortcuts['c'].handler, 'nodeCopy', 'c should map to nodeCopy');
 });
 
 // Test: FactcheckNode getContentClasses
