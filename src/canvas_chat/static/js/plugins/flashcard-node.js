@@ -5,7 +5,7 @@
  * Flashcard nodes display question/answer pairs with SRS (Spaced Repetition System)
  * status indicators showing when cards are due for review.
  */
-import { BaseNode, Actions } from '../node-protocols.js';
+import { Actions, BaseNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
 
 /**
@@ -116,9 +116,7 @@ class FlashcardNode extends BaseNode {
      */
     getKeyboardShortcuts() {
         const shortcuts = super.getKeyboardShortcuts();
-        // Remove edit shortcut (cards aren't edited via keyboard)
-        delete shortcuts['e'];
-        // Add 'f' for flip card
+        // Keep 'e' for edit; add 'f' for flip card
         shortcuts['f'] = { action: 'flip-card', handler: 'nodeFlipCard' };
         return shortcuts;
     }
@@ -168,7 +166,7 @@ class FlashcardNode extends BaseNode {
         const back = canvas.escapeHtml(fields.back || 'No answer');
 
         return `
-            <div class="flashcard-container">
+            <div class="flashcard-edit-preview flashcard-container">
                 <div class="flashcard-status new">New</div>
                 <div class="flashcard-card">
                     <div class="flashcard-front">
@@ -180,6 +178,7 @@ class FlashcardNode extends BaseNode {
                         <div class="flashcard-text">${back}</div>
                     </div>
                 </div>
+                <div class="flashcard-edit-preview-hint">Click card to flip</div>
             </div>
         `;
     }

@@ -555,10 +555,11 @@ kbd {
     border-bottom: 1px solid var(--bg-secondary);
 }
 
-#edit-content-textarea {
-    flex: 1;
+/* Shared styling for all edit content textareas (question, answer, etc.) */
+.edit-field-textarea {
     width: 100%;
-    font-family: var(--font-mono);
+    min-height: 100px;
+    font-family: inherit;
     font-size: 13px;
     line-height: 1.6;
     padding: 12px;
@@ -566,13 +567,28 @@ kbd {
     border-radius: var(--radius-sm);
     background: var(--bg-primary);
     color: var(--text-primary);
-    resize: none;
+    resize: vertical;
     outline: none;
+    box-sizing: border-box;
 }
 
-#edit-content-textarea:focus {
+.edit-field-textarea:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px var(--selection-bg);
+}
+
+/* Single-field mode: first textarea grows to fill pane */
+.edit-content-pane:not(.edit-pane-multi-field) .edit-field-textarea,
+.edit-content-pane:not(.edit-pane-multi-field) #edit-content-textarea {
+    flex: 1;
+    resize: none;
+}
+
+/* Multi-field mode (e.g. flashcard Question + Answer): both fields get equal treatment */
+.edit-pane-multi-field #edit-content-textarea {
+    flex: none;
+    min-height: 120px;
+    resize: vertical;
 }
 
 #edit-content-preview {

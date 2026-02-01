@@ -817,6 +817,13 @@ class App {
                 this.modalManager.hideEditContentModal();
             }
         });
+        // Click-to-flip flashcard in edit content preview (same UX as node)
+        document.getElementById('edit-content-preview').addEventListener('click', (e) => {
+            const wrap = e.target.closest('.flashcard-edit-preview');
+            if (wrap) {
+                wrap.classList.toggle('flashcard-flipped');
+            }
+        });
 
         // Edit title modal
         document.getElementById('edit-title-close').addEventListener('click', () => {

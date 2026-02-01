@@ -588,8 +588,20 @@
 }
 
 /* Flipped state */
-.node.flashcard-flipped .flashcard-card {
+.node.flashcard-flipped .flashcard-card,
+.flashcard-edit-preview.flashcard-flipped .flashcard-card {
     transform: rotateY(180deg);
+}
+
+/* Edit modal preview: same flip card as node, click to flip */
+.flashcard-edit-preview .flashcard-card {
+    cursor: pointer;
+}
+
+.flashcard-edit-preview-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
 }
 
 /* Flashcard Generation Modal Styles */
