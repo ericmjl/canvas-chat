@@ -5,7 +5,7 @@
  * Tests that plugins can correctly add, hide, and override actions/shortcuts.
  */
 
-import { assertEqual, assertTrue, assertFalse } from './test_helpers/assertions.js';
+import { assertEqual, assertFalse, assertTrue } from './test_helpers/assertions.js';
 
 // Mock browser globals before importing modules
 global.window = global;
@@ -114,12 +114,13 @@ test('FlashcardNode hides edit and adds flip', () => {
     assertTrue(actions.some((a) => a.id === 'review-card'));
 });
 
-test('FlashcardNode removes e shortcut and adds f for flip', () => {
+test('FlashcardNode keeps e for edit and adds f for flip', () => {
     const node = { id: 'test', type: 'flashcard', front: 'Q', back: 'A' };
     const wrapped = wrapNode(node);
     const shortcuts = wrapped.getKeyboardShortcuts();
 
-    assertFalse('e' in shortcuts);
+    assertTrue('e' in shortcuts);
+    assertEqual(shortcuts['e'].handler, 'nodeEditContent');
     assertTrue('f' in shortcuts);
     assertEqual(shortcuts['f'].handler, 'nodeFlipCard');
 });
