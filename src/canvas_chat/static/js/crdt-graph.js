@@ -11,9 +11,9 @@
  * @see ./graph-types.js for Node, Edge, and other type definitions
  */
 
-import { NodeType, TAG_COLORS } from './graph-types.js';
 import { EventEmitter } from './event-emitter.js';
-import { wouldOverlapNodes, resolveOverlaps } from './layout.js';
+import { NodeType, TAG_COLORS } from './graph-types.js';
+import { resolveOverlaps, wouldOverlapNodes } from './layout.js';
 
 // =============================================================================
 // Type Imports (JSDoc)
@@ -1054,13 +1054,17 @@ class CRDTGraph extends EventEmitter {
      * @returns {void}
      */
     removeNode(id) {
-        this.ydoc.transact(() => {
-            // Remove connected edges
-            const incoming = this.incomingEdges.get(id) || [];
-            const outgoing = this.outgoingEdges.get(id) || [];
+        // Collect incident edges and notify listeners before mutating CRDT.
+        // The yEdges observer may not reliably provide deleted content (Y.Array),
+        // so emitting here ensures the canvas removes edge DOM when a node is removed
+        // (e.g. factcheck cancel removes loading node and its edges).
+        const incoming = this.incomingEdges.get(id) || [];
+        const outgoing = this.outgoingEdges.get(id) || [];
+        const incidentEdgeIds = [...incoming, ...outgoing].map((edge) => edge.id);
 
-            for (const edge of [...incoming, ...outgoing]) {
-                this._removeEdgeById(edge.id);
+        this.ydoc.transact(() => {
+            for (const edgeId of incidentEdgeIds) {
+                this._removeEdgeById(edgeId);
             }
 
             // Remove node
@@ -1070,6 +1074,11 @@ class CRDTGraph extends EventEmitter {
         // Clear from local indexes
         this.incomingEdges.delete(id);
         this.outgoingEdges.delete(id);
+
+        // Notify subscribers so canvas removes edge DOM (emitter/subscriber pattern)
+        for (const edgeId of incidentEdgeIds) {
+            this.emit('edgeRemoved', edgeId);
+        }
 
         // Emit event for listeners (e.g., App to update empty state)
         this.emit('nodeRemoved', id);
