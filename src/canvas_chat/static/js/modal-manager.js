@@ -682,6 +682,11 @@ class ModalManager {
             modalTitle.textContent = wrapped.getEditModalTitle();
         }
 
+        const baseFieldLabel = editPane.querySelector('.pane-header');
+        if (baseFieldLabel && editFields[0]) {
+            baseFieldLabel.textContent = editFields[0].label;
+        }
+
         // Clear existing fields (except first textarea which we'll reuse)
         const existingFields = editPane.querySelectorAll('.edit-field-container');
         existingFields.forEach((field) => field.remove());
