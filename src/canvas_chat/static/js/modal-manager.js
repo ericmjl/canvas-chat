@@ -684,6 +684,13 @@ class ModalManager {
             baseFieldLabel.textContent = editFields[0].label;
         }
 
+        // Multi-field mode: style first textarea to share space with other fields
+        editPane.classList.toggle('edit-pane-multi-field', editFields.length > 1);
+        const firstTextarea = document.getElementById('edit-content-textarea');
+        if (firstTextarea) {
+            firstTextarea.classList.add('edit-field-textarea');
+        }
+
         // Clear existing fields (except first textarea which we'll reuse)
         const existingFields = editPane.querySelectorAll('.edit-field-container');
         existingFields.forEach((field) => field.remove());
@@ -704,6 +711,7 @@ class ModalManager {
 
             const textarea = document.createElement('textarea');
             textarea.id = `edit-field-${field.id}`;
+            textarea.className = 'edit-field-textarea';
             textarea.placeholder = field.placeholder;
             textarea.value = field.value;
 
@@ -762,8 +770,48 @@ class ModalManager {
             fields[fieldId] = textarea.value;
         });
 
-        // Use protocol's renderEditPreview method
-        preview.innerHTML = wrapped.renderEditPreview(fields, this.app.canvas);
+        // Flashcard: capture previous flip state and check if we already have the preview wrapper
+        const prevWrap = preview.querySelector('.flashcard-edit-preview');
+        const wasFlipped = prevWrap ? prevWrap.classList.contains('flashcard-flipped') : false;
+
+        // Build new HTML to detect if this is still a flashcard preview
+        const newHtml = wrapped.renderEditPreview(fields, this.app.canvas);
+        const isFlashcardPreview = newHtml.includes('flashcard-edit-preview');
+
+        // In-place update for flashcard: update text only so we keep the same DOM and flip animation runs smoothly
+        if (prevWrap && isFlashcardPreview) {
+            const frontEl = prevWrap.querySelector('.flashcard-front .flashcard-text');
+            const backEl = prevWrap.querySelector('.flashcard-back .flashcard-text');
+            if (frontEl) frontEl.textContent = fields.content || 'No question';
+            if (backEl) backEl.textContent = fields.back || 'No answer';
+
+            const activeEl = document.activeElement;
+            const editingAnswer = activeEl && activeEl.id === 'edit-field-back';
+            const wantFlipped = editingAnswer;
+
+            // Toggle class on the same element so the CSS transition always runs when changing sides
+            if (wantFlipped) {
+                prevWrap.classList.add('flashcard-flipped');
+            } else {
+                prevWrap.classList.remove('flashcard-flipped');
+            }
+            return;
+        }
+
+        // Non-flashcard or first paint: replace HTML
+        preview.innerHTML = newHtml;
+
+        // Flashcard first paint: set initial flip state from focused field
+        const wrap = preview.querySelector('.flashcard-edit-preview');
+        if (wrap) {
+            const activeEl = document.activeElement;
+            const editingAnswer = activeEl && activeEl.id === 'edit-field-back';
+            if (editingAnswer) {
+                wrap.classList.add('flashcard-flipped');
+            } else {
+                wrap.classList.remove('flashcard-flipped');
+            }
+        }
     }
 
     /**
