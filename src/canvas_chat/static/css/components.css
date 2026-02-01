@@ -600,12 +600,54 @@
     font-size: 14px;
 }
 
+.flashcard-generation-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+
+.flashcard-generation-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 12px;
+    align-items: start;
+}
+
+.flashcard-generation-field label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.flashcard-generation-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.flashcard-generation-note {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.flashcard-generation-textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
 .flashcard-candidates-list {
     display: flex;
     flex-direction: column;
     gap: 12px;
     max-height: 400px;
     overflow-y: auto;
+    margin-top: 12px;
 }
 
 .flashcard-candidate {
@@ -616,6 +658,7 @@
     background: var(--bg-secondary);
     border: 1px solid var(--bg-secondary);
     transition: border-color 0.15s;
+    align-items: flex-start;
 }
 
 .flashcard-candidate:hover {
@@ -635,6 +678,59 @@
     min-width: 0;
 }
 
+.flashcard-candidate-actions {
+    display: flex;
+    align-items: flex-start;
+}
+
+.flashcard-candidate-edit {
+    display: none;
+    margin-top: 8px;
+}
+
+.flashcard-candidate.is-editing .flashcard-candidate-display {
+    display: none;
+}
+
+.flashcard-candidate.is-editing .flashcard-candidate-edit {
+    display: block;
+}
+
+.flashcard-candidate.is-editing .flashcard-candidate-actions {
+    display: none;
+}
+
+.flashcard-candidate-label {
+    display: block;
+    margin: 8px 0 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.flashcard-candidate-textarea {
+    width: 100%;
+    min-height: 70px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.flashcard-candidate-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.flashcard-candidate-edit-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
 .flashcard-candidate-question {
     font-weight: 500;
     color: var(--text-primary);
@@ -645,6 +741,12 @@
     font-size: 13px;
     color: var(--text-secondary);
     line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+    .flashcard-generation-row {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Flashcard Review Modal Styles */

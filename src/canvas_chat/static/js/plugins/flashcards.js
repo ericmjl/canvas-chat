@@ -41,14 +41,42 @@ class FlashcardFeature extends FeaturePlugin {
         // Register generation modal
         const generationModalTemplate = `
             <div id="flashcard-generation-main-modal" class="modal" style="display: none">
-                <div class="modal-content">
+                <div class="modal-content modal-wide">
                     <div class="modal-header">
                         <h2>Generate Flashcards</h2>
                         <button class="modal-close" id="flashcard-generation-close">&times;</button>
                     </div>
                     <div class="modal-body">
+                        <div class="flashcard-generation-controls">
+                            <div class="flashcard-generation-row">
+                                <div class="flashcard-generation-field">
+                                    <label for="flashcard-generation-count">Number of cards</label>
+                                    <input
+                                        type="number"
+                                        id="flashcard-generation-count"
+                                        class="modal-text-input"
+                                        min="1"
+                                        max="10"
+                                        value="5"
+                                    />
+                                </div>
+                                <div class="flashcard-generation-field">
+                                    <label for="flashcard-generation-focus">Focus/angle (optional)</label>
+                                    <textarea
+                                        id="flashcard-generation-focus"
+                                        class="modal-text-input flashcard-generation-textarea"
+                                        rows="2"
+                                        placeholder="e.g., focus on definitions, timelines, trade-offs"
+                                    ></textarea>
+                                </div>
+                            </div>
+                            <div class="flashcard-generation-actions">
+                                <button class="secondary-btn" id="flashcard-generate">Generate</button>
+                                <span class="flashcard-generation-note">Grounded in the selected node</span>
+                            </div>
+                        </div>
                         <div id="flashcard-generation-status" class="flashcard-status-message">
-                            Generating flashcards...
+                            Choose options and click Generate to create flashcards.
                         </div>
                         <div id="flashcard-candidates" class="flashcard-candidates-list">
                             <!-- Candidate cards listed here -->
@@ -107,6 +135,114 @@ class FlashcardFeature extends FeaturePlugin {
     }
 
     /**
+     * Build an LLM prompt for flashcard generation.
+     * @param {Object} options
+     * @param {string} options.content - Source content to ground flashcards in
+     * @param {number} options.count - Number of flashcards to generate
+     * @param {string} options.focus - Optional focus/angle
+     * @param {Array<{front: string, back: string}>} options.existingCards - Existing cards to avoid duplicates
+     * @returns {string}
+     */
+    buildFlashcardPrompt({ content, count, focus, existingCards }) {
+        const focusLine = focus ? `Focus/angle: ${focus}` : 'Focus/angle: (none)';
+        const existingSection =
+            existingCards && existingCards.length > 0
+                ? `Avoid duplicating these existing flashcards:
+${existingCards
+    .map((card) => `- Q: ${card.front}\n  A: ${card.back}`)
+    .join('\n')}`
+                : '';
+
+        return `Based on the following content, generate exactly ${count} flashcards for spaced repetition learning.
+Each flashcard should test a key concept, fact, or relationship grounded in the content.
+
+${focusLine}
+
+Rules:
+- Ground every question and answer strictly in the provided content
+- Keep answers concise (1-2 sentences)
+- Return ONLY a JSON array with no additional text
+- Use the format: [{"front": "question", "back": "concise answer"}, ...]
+${existingSection ? `\n${existingSection}\n` : ''}
+Content:
+${content}`;
+    }
+
+    /**
+     * Parse flashcards from an LLM response.
+     * @param {string} responseText
+     * @returns {Array<{front?: string, back?: string, question?: string, answer?: string}>}
+     */
+    parseFlashcardResponse(responseText) {
+        const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) {
+            throw new Error('No JSON array found in response');
+        }
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (!Array.isArray(parsed)) {
+            throw new Error('Response was not a JSON array');
+        }
+        return parsed;
+    }
+
+    /**
+     * Normalize flashcard candidates and remove duplicates.
+     * @param {Array<{front?: string, back?: string, question?: string, answer?: string}>} cards
+     * @param {Array<{front: string, back: string}>} existingCards
+     * @returns {Array<{front: string, back: string}>}
+     */
+    normalizeFlashcardCandidates(cards, existingCards = []) {
+        const normalizeText = (value) => (typeof value === 'string' ? value.trim() : '');
+        const keyFor = (card) => `${card.front.toLowerCase()}::${card.back.toLowerCase()}`;
+        const existingKeys = new Set(existingCards.map((card) => keyFor(card)));
+
+        return cards
+            .map((card) => {
+                const front = normalizeText(card.front || card.question);
+                const back = normalizeText(card.back || card.answer);
+                return { front, back };
+            })
+            .filter((card) => card.front.length > 0 && card.back.length > 0)
+            .filter((card) => {
+                const key = keyFor(card);
+                if (existingKeys.has(key)) {
+                    return false;
+                }
+                existingKeys.add(key);
+                return true;
+            });
+    }
+
+    /**
+     * Generate flashcard candidates via the LLM.
+     * @param {string} content - Source content to ground flashcards in
+     * @param {Object} options
+     * @param {number} options.count
+     * @param {string} options.focus
+     * @param {Array<{front: string, back: string}>} options.existingCards
+     * @returns {Promise<Array<{front: string, back: string}>>}
+     */
+    async generateFlashcardCandidates(content, { count, focus, existingCards }) {
+        const model = this.modelPicker.value;
+        const prompt = this.buildFlashcardPrompt({ content, count, focus, existingCards });
+        const messages = [{ role: 'user', content: prompt }];
+
+        const response = await new Promise((resolve, reject) => {
+            chat.sendMessage(
+                messages,
+                model,
+                null,
+                (fullContent) => resolve(fullContent),
+                (err) => reject(err)
+            );
+        });
+
+        const parsed = this.parseFlashcardResponse(response);
+        const normalized = this.normalizeFlashcardCandidates(parsed, existingCards);
+        return normalized.slice(0, count);
+    }
+
+    /**
      * Handle creating flashcards from a content node.
      * Shows modal with generated flashcard candidates for user selection.
      * @param {string} nodeId - ID of the source node
@@ -118,153 +254,256 @@ class FlashcardFeature extends FeaturePlugin {
             return;
         }
 
-        const model = this.modelPicker.value;
-
         // In normal mode, check for API key. In admin mode, backend handles credentials.
         const request = this.buildLLMRequest({});
         if (!request.api_key && !request.model) {
             // No model selected (neither admin mode nor user-configured)
-            alert('Please select a model in the toolbar.');
+            this.showToast?.('Please select a model in the toolbar.', 'warning');
             return;
         }
 
         // Get modal elements
         const modal = this.modalManager.getPluginModal('flashcard', 'generation');
         const statusEl = modal.querySelector('#flashcard-generation-status');
-        const candidatesEl = modal.querySelector('#flashcard-candidates');
+        const countInput = modal.querySelector('#flashcard-generation-count');
+        const focusInput = modal.querySelector('#flashcard-generation-focus');
         const acceptBtn = modal.querySelector('#flashcard-accept-selected');
         const cancelBtn = modal.querySelector('#flashcard-cancel');
         const closeBtn = modal.querySelector('#flashcard-generation-close');
+        const generateBtn = modal.querySelector('#flashcard-generate');
+        let candidatesEl = modal.querySelector('#flashcard-candidates');
 
-        // Reset modal state
-        statusEl.textContent = 'Generating flashcards...';
-        statusEl.style.display = 'block';
-        candidatesEl.innerHTML = '';
-        acceptBtn.disabled = true;
+        const replaceElement = (element, deep = true) => {
+            const clone = element.cloneNode(deep);
+            element.parentNode.replaceChild(clone, element);
+            return clone;
+        };
 
-        // Show modal
-        this.modalManager.showPluginModal('flashcard', 'generation');
+        const newCloseBtn = replaceElement(closeBtn);
+        const newCancelBtn = replaceElement(cancelBtn);
+        const newAcceptBtn = replaceElement(acceptBtn);
+        const newGenerateBtn = replaceElement(generateBtn);
+        candidatesEl = replaceElement(candidatesEl, false);
 
-        // Close handlers
+        const generationState = {
+            cards: [],
+            isGenerating: false,
+        };
+
+        const updateGenerateLabel = () => {
+            newGenerateBtn.textContent = generationState.cards.length > 0 ? 'Generate More' : 'Generate';
+        };
+
+        const updateAcceptButton = () => {
+            const selectedCount = generationState.cards.filter((card) => card.selected).length;
+            newAcceptBtn.disabled = selectedCount === 0;
+            newAcceptBtn.textContent =
+                selectedCount > 0 ? `Accept Selected (${selectedCount})` : 'Accept Selected';
+        };
+
+        const setStatus = (message) => {
+            statusEl.textContent = message;
+            statusEl.style.display = 'block';
+        };
+
+        const clearStatusIfCards = () => {
+            if (generationState.cards.length > 0) {
+                statusEl.style.display = 'none';
+            }
+        };
+
+        const renderCandidates = () => {
+            candidatesEl.innerHTML = generationState.cards
+                .map((card, idx) => {
+                    const front = this.canvas.escapeHtml(card.front || '');
+                    const back = this.canvas.escapeHtml(card.back || '');
+                    return `
+                    <div class="flashcard-candidate" data-index="${idx}">
+                        <input type="checkbox" ${card.selected ? 'checked' : ''} data-index="${idx}">
+                        <div class="flashcard-candidate-content">
+                            <div class="flashcard-candidate-display">
+                                <div class="flashcard-candidate-question">${front}</div>
+                                <div class="flashcard-candidate-answer">${back}</div>
+                            </div>
+                            <div class="flashcard-candidate-edit">
+                                <label class="flashcard-candidate-label">Question</label>
+                                <textarea class="flashcard-candidate-textarea" data-field="front">${front}</textarea>
+                                <label class="flashcard-candidate-label">Answer</label>
+                                <textarea class="flashcard-candidate-textarea" data-field="back">${back}</textarea>
+                                <div class="flashcard-candidate-edit-actions">
+                                    <button class="secondary-btn" data-action="cancel-edit">Cancel</button>
+                                    <button class="primary-btn" data-action="save-edit">Save</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flashcard-candidate-actions">
+                            <button class="secondary-btn" data-action="edit-card">Edit</button>
+                        </div>
+                    </div>
+                `;
+                })
+                .join('');
+        };
+
+        const nodeContent = sourceNode.content || '';
+
         const closeModal = () => {
             this.modalManager.hidePluginModal('flashcard', 'generation');
         };
 
-        // Remove previous handlers to avoid duplicates
-        const newCloseBtn = closeBtn.cloneNode(true);
-        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-        const newCancelBtn = cancelBtn.cloneNode(true);
-        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-        const newAcceptBtn = acceptBtn.cloneNode(true);
-        acceptBtn.parentNode.replaceChild(newAcceptBtn, acceptBtn);
+        const readCount = () => {
+            const count = Number.parseInt(countInput.value, 10);
+            if (!Number.isFinite(count) || count < 1 || count > 10) {
+                this.showToast?.('Please enter a number between 1 and 10.', 'warning');
+                return null;
+            }
+            return count;
+        };
+
+        const handleGenerate = async () => {
+            if (generationState.isGenerating) return;
+
+            if (!nodeContent.trim()) {
+                this.showToast?.('Select a node with content before generating flashcards.', 'warning');
+                return;
+            }
+
+            const count = readCount();
+            if (!count) return;
+
+            const focus = focusInput.value.trim();
+
+            generationState.isGenerating = true;
+            newGenerateBtn.disabled = true;
+            newGenerateBtn.textContent = 'Generating...';
+            setStatus(`Generating ${count} flashcard${count === 1 ? '' : 's'}...`);
+
+            try {
+                const newCards = await this.generateFlashcardCandidates(nodeContent, {
+                    count,
+                    focus,
+                    existingCards: generationState.cards,
+                });
+
+                if (newCards.length === 0) {
+                    setStatus('No new flashcards generated. Try a different angle.');
+                    return;
+                }
+
+                generationState.cards.push(...newCards.map((card) => ({ ...card, selected: true })));
+                renderCandidates();
+                updateAcceptButton();
+                updateGenerateLabel();
+                clearStatusIfCards();
+            } catch (err) {
+                setStatus(`Error: ${err.message}`);
+                console.error('Flashcard generation error:', err);
+            } finally {
+                generationState.isGenerating = false;
+                newGenerateBtn.disabled = false;
+                updateGenerateLabel();
+            }
+        };
+
+        // Reset modal state
+        countInput.value = '5';
+        focusInput.value = '';
+        candidatesEl.innerHTML = '';
+        updateGenerateLabel();
+        updateAcceptButton();
+        setStatus('Choose options and click Generate to create flashcards.');
+
+        // Show modal
+        this.modalManager.showPluginModal('flashcard', 'generation');
 
         newCloseBtn.addEventListener('click', closeModal);
         newCancelBtn.addEventListener('click', closeModal);
+        newGenerateBtn.addEventListener('click', handleGenerate);
 
-        // Generate flashcards via LLM
-        const nodeContent = sourceNode.content || '';
-        const prompt = `Based on the following content, generate 3-5 flashcards for spaced repetition learning.
-Each flashcard should test a key concept, fact, or relationship.
-
-Return ONLY a JSON array with no additional text: [{"front": "question", "back": "concise answer"}, ...]
-
-Content:
-${nodeContent}`;
-
-        const messages = [{ role: 'user', content: prompt }];
-
-        try {
-            let fullResponse = '';
-
-            await new Promise((resolve, reject) => {
-                chat.sendMessage(
-                    messages,
-                    model,
-                    // onChunk
-                    (chunk) => {
-                        fullResponse += chunk;
-                    },
-                    // onDone
-                    () => {
-                        resolve();
-                    },
-                    // onError
-                    (err) => {
-                        reject(err);
-                    }
-                );
-            });
-
-            // Parse JSON response - extract JSON array from response
-            let flashcards;
-            try {
-                // Try to find JSON array in the response (handle markdown code blocks)
-                const jsonMatch = fullResponse.match(/\[[\s\S]*\]/);
-                if (jsonMatch) {
-                    flashcards = JSON.parse(jsonMatch[0]);
-                } else {
-                    throw new Error('No JSON array found in response');
-                }
-            } catch (parseError) {
-                statusEl.textContent = 'Error parsing flashcards. Please try again.';
-                console.error('Failed to parse flashcard JSON:', parseError, fullResponse);
-                return;
-            }
-
-            if (!Array.isArray(flashcards) || flashcards.length === 0) {
-                statusEl.textContent = 'No flashcards generated. Try with different content.';
-                return;
-            }
-
-            // Hide status and show candidates
-            statusEl.style.display = 'none';
-
-            // Render candidate cards with checkboxes
-            flashcards.forEach((card, idx) => {
-                const candidateEl = document.createElement('div');
-                candidateEl.className = 'flashcard-candidate';
-                candidateEl.innerHTML = `
-                    <input type="checkbox" id="flashcard-check-${idx}" checked data-index="${idx}">
-                    <div class="flashcard-candidate-content">
-                        <div class="flashcard-candidate-question">${this.canvas.escapeHtml(card.front || '')}</div>
-                        <div class="flashcard-candidate-answer">${this.canvas.escapeHtml(card.back || '')}</div>
-                    </div>
-                `;
-                candidatesEl.appendChild(candidateEl);
-            });
-
-            // Enable accept button and update based on checkbox state
-            newAcceptBtn.disabled = false;
-
-            const updateAcceptButton = () => {
-                const checkedCount = candidatesEl.querySelectorAll('input[type="checkbox"]:checked').length;
-                newAcceptBtn.disabled = checkedCount === 0;
-                newAcceptBtn.textContent = checkedCount > 0 ? `Accept Selected (${checkedCount})` : 'Accept Selected';
-            };
-
-            candidatesEl.addEventListener('change', updateAcceptButton);
+        candidatesEl.addEventListener('change', (event) => {
+            const checkbox = event.target.closest('input[type="checkbox"]');
+            if (!checkbox) return;
+            const idx = Number.parseInt(checkbox.dataset.index, 10);
+            if (!Number.isFinite(idx) || !generationState.cards[idx]) return;
+            generationState.cards[idx].selected = checkbox.checked;
             updateAcceptButton();
+        });
 
-            // Accept handler
-            newAcceptBtn.addEventListener('click', () => {
-                const selectedCards = [];
-                candidatesEl.querySelectorAll('input[type="checkbox"]:checked').forEach((checkbox) => {
-                    const idx = parseInt(checkbox.dataset.index, 10);
-                    if (flashcards[idx]) {
-                        selectedCards.push(flashcards[idx]);
-                    }
-                });
+        candidatesEl.addEventListener('click', (event) => {
+            const actionBtn = event.target.closest('button[data-action]');
+            if (!actionBtn) return;
 
-                if (selectedCards.length > 0) {
-                    this.acceptFlashcards(selectedCards, nodeId);
+            const candidateEl = actionBtn.closest('.flashcard-candidate');
+            if (!candidateEl) return;
+
+            const idx = Number.parseInt(candidateEl.dataset.index, 10);
+            const card = generationState.cards[idx];
+            if (!card) return;
+
+            const action = actionBtn.dataset.action;
+            if (action === 'edit-card') {
+                candidateEl.classList.add('is-editing');
+                const frontInput = candidateEl.querySelector('textarea[data-field="front"]');
+                if (frontInput) {
+                    frontInput.focus();
+                }
+                return;
+            }
+
+            if (action === 'cancel-edit') {
+                const frontInput = candidateEl.querySelector('textarea[data-field="front"]');
+                const backInput = candidateEl.querySelector('textarea[data-field="back"]');
+                if (frontInput) {
+                    frontInput.value = card.front;
+                }
+                if (backInput) {
+                    backInput.value = card.back;
+                }
+                candidateEl.classList.remove('is-editing');
+                return;
+            }
+
+            if (action === 'save-edit') {
+                const frontInput = candidateEl.querySelector('textarea[data-field="front"]');
+                const backInput = candidateEl.querySelector('textarea[data-field="back"]');
+                const updatedFront = frontInput ? frontInput.value.trim() : '';
+                const updatedBack = backInput ? backInput.value.trim() : '';
+
+                if (!updatedFront || !updatedBack) {
+                    this.showToast?.('Both question and answer are required.', 'warning');
+                    return;
                 }
 
-                closeModal();
-            });
-        } catch (err) {
-            statusEl.textContent = `Error: ${err.message}`;
-            console.error('Flashcard generation error:', err);
-        }
+                card.front = updatedFront;
+                card.back = updatedBack;
+
+                const questionEl = candidateEl.querySelector('.flashcard-candidate-question');
+                const answerEl = candidateEl.querySelector('.flashcard-candidate-answer');
+                if (questionEl) {
+                    questionEl.textContent = updatedFront;
+                }
+                if (answerEl) {
+                    answerEl.textContent = updatedBack;
+                }
+
+                candidateEl.classList.remove('is-editing');
+            }
+        });
+
+        // Accept handler
+        newAcceptBtn.addEventListener('click', () => {
+            const selectedCards = generationState.cards
+                .filter((card) => card.selected)
+                .map((card) => ({ front: card.front, back: card.back }));
+
+            if (selectedCards.length === 0) {
+                this.showToast?.('Select at least one flashcard to accept.', 'warning');
+                return;
+            }
+
+            this.acceptFlashcards(selectedCards, nodeId);
+            closeModal();
+        });
     }
 
     /**
