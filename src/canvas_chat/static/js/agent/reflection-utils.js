@@ -322,20 +322,10 @@ function gatherReflectionContext(path, graph) {
 function attachReflectionToPath(reflectionNodeId, branchNodeId, leafNodeId, graph) {
     logger.enter('attachReflectionToPath', { reflectionNodeId, branchNodeId, leafNodeId });
 
-    // Create edge from branch to reflection
-    const branchEdgeId = crypto.randomUUID();
+    // Create single edge from leaf (selected node) to reflection
+    const edgeId = crypto.randomUUID();
     graph.addEdge({
-        id: branchEdgeId,
-        source: branchNodeId,
-        target: reflectionNodeId,
-        type: EdgeType.RUN_REFLECTION,
-    });
-    logger.debug(`Created RUN_REFLECTION edge: ${branchNodeId.slice(0, 8)} → ${reflectionNodeId.slice(0, 8)}`);
-
-    // Also create edge from leaf to reflection for visibility
-    const leafEdgeId = crypto.randomUUID();
-    graph.addEdge({
-        id: leafEdgeId,
+        id: edgeId,
         source: leafNodeId,
         target: reflectionNodeId,
         type: EdgeType.RUN_REFLECTION,

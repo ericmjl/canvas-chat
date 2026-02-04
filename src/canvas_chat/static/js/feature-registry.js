@@ -17,6 +17,7 @@ import { NoteFeature } from './plugins/note.js';
 import { PowerPointFeature } from './plugins/powerpoint-node.js';
 import { ReflectFeature } from './plugins/reflect-feature.js';
 import { ResearchFeature } from './plugins/research.js';
+import { SkillFeature } from './plugins/skill-feature.js';
 import { UrlFetchFeature } from './plugins/url-fetch.js';
 import { YouTubeFeature } from './plugins/youtube.js';
 
@@ -210,6 +211,21 @@ class FeatureRegistry {
                 slashCommands: [
                     {
                         command: '/reflect',
+                        handler: 'handleCommand',
+                    },
+                ],
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'skill',
+                feature: SkillFeature,
+                slashCommands: [
+                    {
+                        command: '/skill',
+                        handler: 'handleCommand',
+                    },
+                    {
+                        command: '/skills',
                         handler: 'handleCommand',
                     },
                 ],

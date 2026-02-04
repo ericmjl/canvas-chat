@@ -23,6 +23,7 @@ import { NodeType, EdgeType, createNode } from '../graph-types.js';
 import { reflectionLogger as logger } from '../agent/debug-logger.js';
 import { createAgentDefinition } from '../agent/agent-types.js';
 import { storage } from '../storage.js';
+import { createWorkingNodeManager } from '../agent/working-node-manager.js';
 
 // =============================================================================
 // Type Definitions (JSDoc)
@@ -52,6 +53,10 @@ export class ReflectFeature extends FeaturePlugin {
 
         // runController is accessed via getter from FeaturePlugin base class
 
+        // Working node manager for progress display
+        /** @type {import('../agent/working-node-manager.js').WorkingNodeManager|null} */
+        this.workingNodeManager = null;
+
         // Track active reflections for UI
         /** @type {Map<string, ReflectionResultUI>} */
         this.activeReflections = new Map();
@@ -61,6 +66,17 @@ export class ReflectFeature extends FeaturePlugin {
         this.reflectionProgress = new Map();
 
         logger.info('[ReflectFeature] Initialized');
+    }
+
+    /**
+     * Get or create the working node manager
+     * @returns {import('../agent/working-node-manager.js').WorkingNodeManager}
+     */
+    getWorkingNodeManager() {
+        if (!this.workingNodeManager) {
+            this.workingNodeManager = createWorkingNodeManager(this.graph, this.canvas);
+        }
+        return this.workingNodeManager;
     }
 
     /**
@@ -108,6 +124,9 @@ export class ReflectFeature extends FeaturePlugin {
 
         logger.enter('ReflectFeature.handleCommand', { command, args, hasContext: !!context });
 
+        // Track the working node ID for error handling
+        let workingNodeId = null;
+
         try {
             // Get the selected node from context (passed by BaseAgent)
             const selectedNodeIds = context?.selectedNodeIds || [];
@@ -131,11 +150,33 @@ export class ReflectFeature extends FeaturePlugin {
 
             logger.info(`Starting reflection on node: ${selectedNode.id.slice(0, 8)}`);
             console.log('[ReflectFeature] Starting reflection execution...');
-            this.showToast?.('🔍 Starting reflection agent...', 'info');
 
-            // Create a progress tracker
-            const progressNodeId = crypto.randomUUID();
-            this.reflectionProgress.set(progressNodeId, { status: 'running', progress: 0 });
+            // Find the path early for position calculation and metadata
+            const path = findLeafToBranchPath(selectedNode.id, this.graph);
+
+            // Create working node FIRST showing spinner inside the node
+            const workingNodeManager = this.getWorkingNodeManager();
+            workingNodeId = workingNodeManager.createWorkingNode({
+                type: NodeType.REFLECTION,
+                title: '🔮 Reflecting...',
+                position: {
+                    x: selectedNode.position.x + 700,
+                    y: selectedNode.position.y,
+                },
+                initiator: 'user',
+                agentId: 'reflect-agent',
+                metadata: {
+                    leafNodeId: path.leafNodeId,
+                    branchNodeId: path.branchNodeId,
+                    pathNodeIds: path.nodeIds,
+                    pathLength: path.nodeIds.length,
+                },
+            });
+
+            // Create edge to the working node immediately so it's visible in the graph
+            attachReflectionToPath(workingNodeId, path.branchNodeId, path.leafNodeId, this.graph);
+
+            console.log('[ReflectFeature] Created working node:', workingNodeId);
 
             console.log('[ReflectFeature] Calling executeReflection with:', {
                 selectedNodeId: selectedNode.id,
@@ -143,11 +184,8 @@ export class ReflectFeature extends FeaturePlugin {
                 modelPickerValue: this.modelPicker?.value,
             });
 
-            // Show agent status in bottom bar
-            this.showAgentStatus?.('🔮 Starting reflection analysis...');
-
             // Execute reflection using the agentic approach
-            // Agent will use graph tools to gather context autonomously
+            // Update progress on the working node
             const reflectionResult = await executeReflection({
                 selectedNodeId: selectedNode.id,
                 graph: this.graph,
@@ -156,78 +194,54 @@ export class ReflectFeature extends FeaturePlugin {
                 onProgress: (msg) => {
                     logger.debug(`Reflection progress: ${msg}`);
                     console.log('[ReflectFeature] Progress:', msg);
-                    // Update agent status in bottom bar
-                    this.showAgentStatus?.(`🔮 ${msg}`);
-                    if (this.reflectionProgress.has(progressNodeId)) {
-                        this.reflectionProgress.get(progressNodeId).status = msg;
-                    }
+                    // Update progress on the working node
+                    workingNodeManager.updateProgress(workingNodeId, {
+                        message: msg,
+                        status: 'working',
+                    });
                 },
             });
-
-            // Hide agent status
-            this.hideAgentStatus?.();
 
             console.log('[ReflectFeature] executeReflection returned:', reflectionResult);
-            logger.info(`Reflection completed. Creating reflection node...`);
+            logger.info(`Reflection completed. Finalizing node...`);
 
-            // Find the path for metadata (now just for node creation context)
-            const path = findLeafToBranchPath(selectedNode.id, this.graph);
-
-            // Create a REFLECTION node in the graph
-            const reflectionNode = createNode(NodeType.REFLECTION, reflectionResult.synthesis, {
-                position: {
-                    x: selectedNode.position.x + 700,
-                    y: selectedNode.position.y,
+            // Finalize the working node with the result
+            workingNodeManager.finalizeNode(workingNodeId, {
+                content: reflectionResult.synthesis,
+                title: '🔮 Reflection',
+                metadata: {
+                    reflectionRunId: reflectionResult.reflectionRunId,
+                    leafNodeId: path.leafNodeId,
+                    branchNodeId: path.branchNodeId,
+                    pathNodeIds: path.nodeIds,
+                    pathLength: path.nodeIds.length,
+                    toolCalls: reflectionResult.toolCalls?.length || 0,
+                    createdAt: Date.now(),
+                    // Data-driven display
+                    display: {
+                        typeLabel: 'Reflection',
+                        typeIcon: '🔮',
+                        subtitle: `${path.nodeIds.length} nodes analyzed`,
+                        actions: ['reply', 'copy'],
+                    },
                 },
-                title: `🔮 Reflection`,
             });
 
-            // Add metadata linking to the run + display configuration
-            reflectionNode.metadata = {
-                reflectionRunId: reflectionResult.reflectionRunId,
-                leafNodeId: path.leafNodeId,
-                branchNodeId: path.branchNodeId,
-                pathNodeIds: path.nodeIds,
-                pathLength: path.nodeIds.length,
-                toolCalls: reflectionResult.toolCalls?.length || 0,
-                createdAt: Date.now(),
-                // Data-driven display - BaseNode reads this automatically
-                display: {
-                    typeLabel: 'Reflection',
-                    typeIcon: '🔮',
-                    subtitle: `${path.nodeIds.length} nodes analyzed`,
-                    actions: ['reply', 'copy'],
-                },
-            };
-
-            // Add to graph
-            this.graph.addNode(reflectionNode);
-            logger.info(`Created reflection node: ${reflectionNode.id.slice(0, 8)}`);
-
-            // Attach edges
-            attachReflectionToPath(reflectionNode.id, path.branchNodeId, path.leafNodeId, this.graph);
-
-            // Update node metadata
-            const leafNode = this.graph.getNode(path.leafNodeId);
-            const branchNode = this.graph.getNode(path.branchNodeId);
-            addReflectionToNodeMetadata(leafNode, reflectionNode.id);
-            addReflectionToNodeMetadata(branchNode, reflectionNode.id);
-            this.graph.updateNode(leafNode);
-            this.graph.updateNode(branchNode);
-
-            // Render the new reflection node
-            this.canvas.renderNode(reflectionNode);
+            // Update parent node metadata
+            const parentNode = this.graph.getNode(path.leafNodeId);
+            addReflectionToNodeMetadata(parentNode, workingNodeId);
+            this.graph.updateNode(parentNode);
 
             // Show reflection in sidepanel
             const resultUI = {
-                reflectionNodeId: reflectionNode.id,
+                reflectionNodeId: workingNodeId,
                 synthesis: reflectionResult.synthesis,
                 leafNodeId: path.leafNodeId,
                 branchNodeId: path.branchNodeId,
                 pathLength: path.nodeIds.length,
                 pathNodeIds: path.nodeIds,
             };
-            this.activeReflections.set(reflectionNode.id, resultUI);
+            this.activeReflections.set(workingNodeId, resultUI);
 
             // Emit event to show sidepanel
             if (this.canvas.onReflectionComplete) {
@@ -240,14 +254,19 @@ export class ReflectFeature extends FeaturePlugin {
             );
 
             logger.exit('ReflectFeature.handleCommand', {
-                reflectionNodeId: reflectionNode.id.slice(0, 8),
+                reflectionNodeId: workingNodeId.slice(0, 8),
                 synthesisLength: reflectionResult.synthesis.length,
             });
         } catch (error) {
-            // Hide agent status on error
-            this.hideAgentStatus?.();
             console.error('[ReflectFeature] Error in handleCommand:', error);
             logger.error(`Reflection failed: ${error.message}`);
+
+            // If we have a working node, show error on it
+            if (workingNodeId) {
+                const workingNodeManager = this.getWorkingNodeManager();
+                workingNodeManager.setError(workingNodeId, error.message);
+            }
+
             this.showToast?.(`❌ Reflection failed: ${error.message}`, 'error');
             logger.exit('ReflectFeature.handleCommand', { error: error.message });
         }

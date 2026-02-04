@@ -7,13 +7,23 @@ import { storage } from './storage.js';
 
 // FeatureRegistry will be injected at runtime (after app initialization)
 let featureRegistry = null;
+// BaseAgent will be injected at runtime (after app initialization)
+let baseAgent = null;
 
 /**
  * Set the FeatureRegistry instance (called from app.js after initialization)
  * @param {FeatureRegistry} registry - FeatureRegistry instance
  */
-export function setFeatureRegistry(registry) {
+function setFeatureRegistry(registry) {
     featureRegistry = registry;
+}
+
+/**
+ * Set the BaseAgent instance (called from app.js after initialization)
+ * @param {import('./agent/base-agent.js').BaseAgent} agent - BaseAgent instance
+ */
+function setBaseAgent(agent) {
+    baseAgent = agent;
 }
 
 // Built-in slash command definitions
@@ -34,13 +44,14 @@ const BUILTIN_SLASH_COMMANDS = [
 ];
 
 /**
- * Get all available slash commands (built-in + node plugins + feature plugins)
+ * Get all available slash commands (built-in + node plugins + feature plugins + config agents)
  * @returns {Array} Combined array of all slash commands
  */
 function getAllSlashCommands() {
     const nodePluginCommands = NodeRegistry.getSlashCommands();
     const featurePluginCommands = featureRegistry?.getSlashCommandsWithMetadata() || [];
-    return [...BUILTIN_SLASH_COMMANDS, ...nodePluginCommands, ...featurePluginCommands];
+    const configAgentCommands = baseAgent?.getSlashCommands() || [];
+    return [...BUILTIN_SLASH_COMMANDS, ...nodePluginCommands, ...featurePluginCommands, ...configAgentCommands];
 }
 
 // Export for backwards compatibility
@@ -340,4 +351,4 @@ window.SlashCommandMenu = SlashCommandMenu;
 window.SLASH_COMMANDS = getAllSlashCommands();
 window.getAllSlashCommands = getAllSlashCommands;
 
-export { getAllSlashCommands, SLASH_COMMANDS, SlashCommandMenu };
+export { getAllSlashCommands, SLASH_COMMANDS, SlashCommandMenu, setFeatureRegistry, setBaseAgent };

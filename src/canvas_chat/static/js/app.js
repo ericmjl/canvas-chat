@@ -10,7 +10,7 @@ import { FileUploadHandler } from './file-upload-handler.js';
 import { EdgeType, NodeType, TAG_COLORS, createEdge, createNode, getDefaultNodeSize } from './graph-types.js';
 import { ModalManager } from './modal-manager.js';
 import { NodeRegistry } from './node-registry.js';
-import { SlashCommandMenu, setFeatureRegistry } from './slash-command-menu.js';
+import { SlashCommandMenu, setFeatureRegistry, setBaseAgent } from './slash-command-menu.js';
 import { storage } from './storage.js';
 import { UndoManager } from './undo-manager.js';
 // CodeFeature is now in code.js (consolidated plugin)
@@ -2129,6 +2129,9 @@ class App {
             console.log('[BaseAgent] Event:', event.type, event.data);
         });
 
+        // Inject BaseAgent into slash command menu so it can show config agent commands
+        setBaseAgent(this.baseAgent);
+
         // Fetch and register config-based agents (async, non-blocking)
         this.loadConfigAgents();
 
@@ -2172,11 +2175,15 @@ class App {
                 }
 
                 // Convert config to AgentDefinition format
+                // Normalize engine name: 'built-in', 'Builtin', 'BUILTIN' -> 'builtin'
+                let engine = agentConfig.engine || 'builtin';
+                engine = engine.toLowerCase().replace(/-/g, '');
+
                 /** @type {import('./agent/agent-types.js').AgentDefinition} */
                 const agentDef = {
                     id: agentConfig.id,
                     name: agentConfig.name,
-                    engine: agentConfig.engine || 'built-in',
+                    engine: engine,
                     model: agentConfig.model || '',
                     systemPrompt: agentConfig.systemPrompt || '',
                     allowedTools: agentConfig.allowedTools || [],

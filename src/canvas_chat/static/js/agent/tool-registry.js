@@ -992,7 +992,238 @@ export function registerBuiltInTools(registry, context) {
         }
     );
 
-    toolLogger.info('Built-in tools registered (including graph tools)');
+    // =============================================================================
+    // Skill Tools - For agent access to the skills system
+    // =============================================================================
+
+    // List available skills
+    registry.registerTool(
+        {
+            id: 'skills:list',
+            name: 'List Skills',
+            description: 'List available skills, optionally filtered by tags or search query',
+            category: ToolCategory.FETCH,
+            parameters: [
+                {
+                    name: 'tags',
+                    type: 'array',
+                    description: 'Filter by tags (optional)',
+                    required: false,
+                },
+                {
+                    name: 'query',
+                    type: 'string',
+                    description: 'Search query for skill name/description (optional)',
+                    required: false,
+                },
+                {
+                    name: 'mode',
+                    type: 'string',
+                    description: 'Filter by execution mode: "instruction" or "script" (optional)',
+                    required: false,
+                },
+            ],
+        },
+        async (args) => {
+            toolLogger.debug('skills:list invoked', args);
+
+            const { getSkillRegistry } = await import('./skill-registry.js');
+            const registry = getSkillRegistry();
+
+            let skills;
+            if (args.query) {
+                skills = registry.searchSkills(args.query);
+            } else {
+                skills = registry.listSkills({
+                    tags: args.tags,
+                    mode: args.mode,
+                });
+            }
+
+            return {
+                success: true,
+                count: skills.length,
+                skills: skills.map((s) => ({
+                    id: s.id,
+                    name: s.name,
+                    description: s.description,
+                    tags: s.tags,
+                    mode: s.mode,
+                    icon: s.icon,
+                    triggers: s.triggers.map((t) => `${t.type}:${t.value}`),
+                })),
+            };
+        }
+    );
+
+    // Get skill details
+    registry.registerTool(
+        {
+            id: 'skills:get',
+            name: 'Get Skill Details',
+            description: 'Get detailed information about a specific skill',
+            category: ToolCategory.FETCH,
+            parameters: [
+                {
+                    name: 'skillId',
+                    type: 'string',
+                    description: 'ID of the skill to get details for',
+                    required: true,
+                },
+            ],
+        },
+        async (args) => {
+            toolLogger.debug('skills:get invoked', args);
+
+            const { getSkillRegistry } = await import('./skill-registry.js');
+            const registry = getSkillRegistry();
+
+            const skill = registry.getSkill(args.skillId);
+            if (!skill) {
+                return { success: false, error: `Skill not found: ${args.skillId}` };
+            }
+
+            return {
+                success: true,
+                skill: {
+                    id: skill.id,
+                    name: skill.name,
+                    description: skill.description,
+                    version: skill.version,
+                    tags: skill.tags,
+                    mode: skill.mode,
+                    icon: skill.icon,
+                    triggers: skill.triggers,
+                    permissions: skill.permissions,
+                    builtin: skill.builtin,
+                },
+            };
+        }
+    );
+
+    // Invoke a skill
+    registry.registerTool(
+        {
+            id: 'skills:invoke',
+            name: 'Invoke Skill',
+            description: 'Invoke a skill with the given parameters. Creates a SKILL_RUN node.',
+            category: ToolCategory.COMPUTE,
+            requiresApproval: true,
+            parameters: [
+                {
+                    name: 'skillId',
+                    type: 'string',
+                    description: 'ID of the skill to invoke',
+                    required: true,
+                },
+                {
+                    name: 'message',
+                    type: 'string',
+                    description: 'User message or input for the skill (for instruction mode)',
+                    required: false,
+                },
+                {
+                    name: 'parameters',
+                    type: 'object',
+                    description: 'Parameters for the skill (for script mode or parameterized skills)',
+                    required: false,
+                },
+                {
+                    name: 'contextNodeIds',
+                    type: 'array',
+                    description: 'Node IDs to include as context',
+                    required: false,
+                },
+                {
+                    name: 'parentNodeId',
+                    type: 'string',
+                    description: 'Node ID to attach the skill run result to',
+                    required: false,
+                },
+            ],
+        },
+        async (args) => {
+            toolLogger.debug('skills:invoke invoked', args);
+
+            if (!context?.skillInvocationService) {
+                // Try to get from context.app if available
+                const service = context?.app?.skillInvocationService;
+                if (!service) {
+                    return {
+                        success: false,
+                        error: 'SkillInvocationService not available. Initialize it first.',
+                    };
+                }
+                context.skillInvocationService = service;
+            }
+
+            const { createSkillInvocationRequest } = await import('./skill-types.js');
+            const request = createSkillInvocationRequest({
+                skillId: args.skillId,
+                message: args.message,
+                parameters: args.parameters,
+                contextNodeIds: args.contextNodeIds || [],
+                parentNodeId: args.parentNodeId,
+                skipApproval: true, // Already approved via tool approval
+            });
+
+            const result = await context.skillInvocationService.invoke(request);
+
+            return {
+                success: result.success,
+                runId: result.runId,
+                nodeId: result.nodeId,
+                result: result.result,
+                artifactNodeIds: result.artifactNodeIds,
+                error: result.error,
+                metrics: result.metrics,
+            };
+        }
+    );
+
+    // Match input to skill
+    registry.registerTool(
+        {
+            id: 'skills:match',
+            name: 'Match Input to Skill',
+            description: 'Find the best matching skill for a given user input',
+            category: ToolCategory.FETCH,
+            parameters: [
+                {
+                    name: 'input',
+                    type: 'string',
+                    description: 'User input to match against skill triggers',
+                    required: true,
+                },
+            ],
+        },
+        async (args) => {
+            toolLogger.debug('skills:match invoked', args);
+
+            const { getSkillRegistry } = await import('./skill-registry.js');
+            const registry = getSkillRegistry();
+
+            const match = registry.matchInput(args.input);
+            if (!match) {
+                return { success: true, matched: false, skill: null };
+            }
+
+            return {
+                success: true,
+                matched: true,
+                matchType: match.match,
+                args: match.args,
+                skill: {
+                    id: match.skill.id,
+                    name: match.skill.name,
+                    description: match.skill.description,
+                    mode: match.skill.mode,
+                },
+            };
+        }
+    );
+
+    toolLogger.info('Built-in tools registered (including graph tools and skill tools)');
 }
 
 // =============================================================================

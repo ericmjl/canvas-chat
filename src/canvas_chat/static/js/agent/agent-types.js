@@ -362,10 +362,16 @@ function createDefaultHITLPolicy(overrides = {}) {
  * @returns {AgentDefinition}
  */
 function createAgentDefinition(config) {
+    // Normalize engine name: 'built-in', 'Builtin', 'BUILTIN' -> 'builtin'
+    let engine = config.engine || 'builtin';
+    if (typeof engine === 'string') {
+        engine = engine.toLowerCase().replace(/-/g, '');
+    }
+
     return {
         id: config.id,
         name: config.name,
-        engine: config.engine || 'builtin',
+        engine: engine,
         model: config.model || null, // null = use app-level default model
         systemPrompt: config.systemPrompt,
         allowedTools: config.allowedTools || [],
