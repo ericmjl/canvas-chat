@@ -2186,38 +2186,43 @@ async def fetch_url_via_jina(url: str, client: httpx.AsyncClient) -> tuple[str, 
     return title, content
 
 
-async def fetch_url_directly(url: str, client: httpx.AsyncClient) -> tuple[str, str]:
+def _parse_html_response(response: httpx.Response) -> tuple[str, str]:
     """
-    Fetch URL content directly (fallback when Jina fails).
-
-    Returns (title, content) tuple.
-    Content is converted to markdown via html2text so we never send raw HTML
-    (and thus no embedded <style> or scripts) to the frontend.
+    Parse an HTTP response as HTML: extract title and convert body to markdown.
+    Used when the response is HTML (not PDF). Never send raw HTML to the frontend.
     """
-    response = await client.get(url, follow_redirects=True)
-
-    if response.status_code != 200:
-        raise Exception(f"Direct fetch returned {response.status_code}")
-
-    html = response.text
-
-    # Extract title from HTML before converting
     import re
 
+    html = response.text
     title = "Untitled"
     title_match = re.search(
         r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL
     )
     if title_match:
         title = re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
-
-    # Convert HTML to markdown so we never inject raw HTML/CSS into node content
     h2t = html2text.HTML2Text()
     h2t.ignore_links = False
-    h2t.body_width = 0  # do not wrap lines
+    h2t.body_width = 0
     content = h2t.handle(html)
-
     return title, content
+
+
+async def fetch_url_directly(url: str, client: httpx.AsyncClient) -> tuple[str, str]:
+    """
+    Fetch URL content directly (fallback when Jina fails).
+
+    Returns (title, content) tuple.
+    If the response is PDF, raises so the caller can return a PDF result instead.
+    """
+    response = await client.get(url, follow_redirects=True)
+    if response.status_code != 200:
+        raise Exception(f"Direct fetch returned {response.status_code}")
+
+    content_type = (response.headers.get("content-type") or "").lower()
+    if "pdf" in content_type or url.lower().endswith(".pdf"):
+        raise Exception("Response is PDF; frontend will load and extract")
+
+    return _parse_html_response(response)
 
 
 @app.post("/api/fetch-url")
@@ -2271,8 +2276,30 @@ async def fetch_url(request: FetchUrlRequest):
                     f"Jina Reader failed, falling back to direct fetch: {jina_error}"
                 )
 
-            # Fall back to direct fetch
-            title, content = await fetch_url_directly(request.url, client)
+            # Fall back to direct fetch: GET once and branch on Content-Type
+            response = await client.get(request.url, follow_redirects=True)
+            if response.status_code != 200:
+                raise Exception(f"Direct fetch returned {response.status_code}")
+
+            content_type = (response.headers.get("content-type") or "").lower()
+            if "pdf" in content_type or request.url.lower().endswith(".pdf"):
+                # Return PDF shape so frontend can load and extract (no jumbled binary)
+                filename = request.url.split("/")[-1].split("?")[0]
+                if not filename.endswith(".pdf"):
+                    filename = filename + ".pdf" if filename else "document.pdf"
+                title = filename.rsplit(".", 1)[0] if "." in filename else filename
+                return FetchUrlResult(
+                    url=request.url,
+                    title=title,
+                    content="",
+                    metadata={
+                        "content_type": "pdf",
+                        "pdf_url": request.url,
+                        "source": "url",
+                    },
+                )
+
+            title, content = _parse_html_response(response)
             logger.info(f"Successfully fetched URL directly: {title}")
             return FetchUrlResult(url=request.url, title=title, content=content)
 

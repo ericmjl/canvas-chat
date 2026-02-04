@@ -10,6 +10,7 @@ import { NodeRegistry } from '../node-registry.js';
 import { NodeType, createNode } from '../graph-types.js';
 import { FileUploadHandlerPlugin } from '../file-upload-handler-plugin.js';
 import { FileUploadRegistry, PRIORITY } from '../file-upload-registry.js';
+import { setPdfForNode } from './pdf-viewer.js';
 import { apiUrl } from '../utils.js';
 
 /**
@@ -83,11 +84,14 @@ class PdfFileUploadHandler extends FileUploadHandlerPlugin {
         this.addNodeToCanvas(pdfNode);
 
         try {
-            // Upload PDF via FormData
+            // Store PDF in IndexedDB for the viewer (keyed by node id)
+            const arrayBuffer = await file.arrayBuffer();
+            await setPdfForNode(pdfNode.id, arrayBuffer);
+
+            // Upload PDF via FormData for backend text extraction
             const formData = new FormData();
             formData.append('file', file);
 
-            // Use generic upload-file endpoint (plugin-based)
             const response = await fetch(apiUrl('/api/upload-file'), {
                 method: 'POST',
                 body: formData,
@@ -100,16 +104,22 @@ class PdfFileUploadHandler extends FileUploadHandlerPlugin {
 
             const data = await response.json();
 
-            // Update the node with the extracted content and metadata
-            // Store metadata to identify this as a PDF (unified with fetched PDFs)
-            this.updateNodeAfterProcessing(pdfNode.id, data.content, {
-                title: data.title,
-                metadata: {
-                    content_type: 'pdf',
-                    page_count: data.page_count,
-                    source: 'upload',
-                },
+            // Update node with backend-extracted content and metadata; then show PDF viewer
+            const title = data.title || file.name.replace(/\.pdf$/i, '');
+            const content = data.content || '';
+            const metadata = {
+                content_type: 'pdf',
+                pdf_source: 'upload',
+                page_count: data.page_count ?? 0,
+                source: 'upload',
+            };
+            this.graph.updateNode(pdfNode.id, {
+                content,
+                title,
+                metadata,
             });
+            this.canvas.rerenderNodeContent(pdfNode.id);
+            this.saveSession();
 
             return pdfNode;
         } catch (err) {

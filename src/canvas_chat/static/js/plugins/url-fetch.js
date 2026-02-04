@@ -110,26 +110,36 @@ export class UrlFetchFeature extends FeaturePlugin {
             }
 
             const data = await response.json();
+            const metadata = data.metadata || {};
+            const isPdf = metadata.content_type === 'pdf';
 
-            // Generic content - always use full content with title
-            // No special rendering (that's handled by /git and /youtube commands)
-            const nodeContent = `**[${data.title}](${url})**\n\n${data.content}`;
+            // PDF: backend returns pdf_url; frontend viewer + extraction (hydration) will set content
+            const nodeContent = isPdf
+                ? ''
+                : `**[${data.title}](${url})**\n\n${data.content}`;
 
-            // Update node (basic FETCH_RESULT, no special rendering)
             const updateData = {
                 content: nodeContent,
-                metadata: data.metadata || {},
-                versions: [
-                    {
-                        content: nodeContent,
-                        timestamp: Date.now(),
-                        reason: 'fetched',
-                    },
-                ],
+                title: data.title,
+                metadata,
+                versions: isPdf
+                    ? []
+                    : [
+                          {
+                              content: nodeContent,
+                              timestamp: Date.now(),
+                              reason: 'fetched',
+                          },
+                      ],
             };
 
             this.graph.updateNode(fetchNode.id, updateData);
-            this.canvas.updateNodeContent(fetchNode.id, nodeContent, false);
+
+            if (isPdf) {
+                this.canvas.rerenderNodeContent(fetchNode.id);
+            } else {
+                this.canvas.updateNodeContent(fetchNode.id, nodeContent, false);
+            }
 
             this.saveSession?.();
         } catch (err) {

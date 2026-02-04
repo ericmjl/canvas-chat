@@ -458,6 +458,7 @@ class App {
         // Create CRDTGraph with automatic persistence
         console.log('%c[App] Using CRDT Graph mode', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(session.id, session);
+        this.canvas.graph = this.graph;
         // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
         this.setupGraphEventListeners();
@@ -530,6 +531,7 @@ class App {
 
             console.log('%c[App] Creating empty CRDT Graph for shared session', 'color: #2196F3; font-weight: bold');
             this.graph = new CRDTGraph(sessionId);
+            this.canvas.graph = this.graph;
             // Note: Features are managed by FeatureRegistry, no manual cleanup needed
             await this.graph.enablePersistence();
             this.setupGraphEventListeners();
@@ -567,6 +569,7 @@ class App {
         // Create new CRDT Graph
         console.log('%c[App] Creating new session with CRDT Graph', 'color: #2196F3; font-weight: bold');
         this.graph = new CRDTGraph(sessionId);
+        this.canvas.graph = this.graph;
         // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
         this.setupGraphEventListeners();

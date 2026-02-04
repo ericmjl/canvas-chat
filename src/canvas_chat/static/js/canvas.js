@@ -6,6 +6,12 @@ import { EventEmitter } from './event-emitter.js';
 import { NodeType, getDefaultNodeSize } from './graph-types.js';
 import { highlightTextInHtml } from './highlight-utils.js';
 import { wrapNode } from './node-protocols.js';
+import {
+    extractTextFromDocument,
+    getPdfForNode,
+    loadDocument,
+    renderPageToCanvas,
+} from './plugins/pdf-viewer.js';
 import { findScrollableContainer } from './scroll-utils.js';
 import { escapeHtmlText, truncateText } from './utils.js';
 
@@ -1978,6 +1984,9 @@ class Canvas {
         // Setup node event listeners
         this.setupNodeEvents(wrapper, node);
 
+        // Hydrate PDF viewer if present (load PDF, render first page, extract text)
+        this.hydratePdfViewerIfPresent(wrapper, node);
+
         // Render output panel for nodes that support it (if they have output)
         // Check if protocol has hasOutput method and it returns true
         if (wrapped.hasOutput && typeof wrapped.hasOutput === 'function') {
@@ -1997,6 +2006,65 @@ class Canvas {
         this._notifyNodeRendered(node.id);
 
         return wrapper;
+    }
+
+    /**
+     * If the node has a PDF viewer container, load the PDF, render the first page, extract text,
+     * and update the graph/canvas. Runs async and does not block.
+     * @param {Element} wrapper - Node wrapper element
+     * @param {Object} node - Node data
+     */
+    hydratePdfViewerIfPresent(wrapper, node) {
+        const container = wrapper.querySelector('.pdf-viewer-container[data-pdf-hydrated="false"]');
+        if (!container || !this.graph) return;
+
+        const nodeId = container.getAttribute('data-node-id');
+        const pdfUrl = container.getAttribute('data-pdf-url');
+        const pdfSource = container.getAttribute('data-pdf-source');
+
+        (async () => {
+            try {
+                let source = pdfUrl || null;
+                if (pdfSource === 'upload' && nodeId) {
+                    source = await getPdfForNode(nodeId);
+                }
+                if (!source) return;
+
+                const pdfDoc = await loadDocument(source);
+                const canvasEl = container.querySelector('.pdf-viewer-canvas');
+                const loadingEl = container.querySelector('.pdf-viewer-loading');
+
+                if (canvasEl && loadingEl) {
+                    await renderPageToCanvas(pdfDoc, 1, canvasEl, 1.5);
+                    loadingEl.style.display = 'none';
+                    canvasEl.style.display = 'block';
+                }
+
+                const text = await extractTextFromDocument(pdfDoc);
+                const title = node.title || 'PDF';
+                const newContent = `**[${title}]**\n\n${text}`;
+                // Only set content if empty (e.g. URL fetch); uploads already have backend-extracted content
+                if (!(node.content || '').trim()) {
+                    this.graph.updateNode(nodeId, { content: newContent });
+                    const summaryEl = wrapper.querySelector('.node-summary .summary-text');
+                    if (summaryEl) {
+                        const plain = (newContent || '').replace(/[#*_`>\[\]()!]/g, '').trim();
+                        summaryEl.textContent = this.truncate(plain, 60);
+                    }
+                }
+                container.setAttribute('data-pdf-hydrated', 'true');
+            } catch (err) {
+                const loadingEl = container.querySelector('.pdf-viewer-loading');
+                if (loadingEl) {
+                    loadingEl.textContent = `Failed to load PDF: ${err.message}`;
+                }
+                const content = `**(PDF load failed)**\n\n${err.message}`;
+                this.graph.updateNode(nodeId, { content });
+                const summaryEl = wrapper.querySelector('.node-summary .summary-text');
+                if (summaryEl) summaryEl.textContent = this.truncate(err.message, 60);
+                container.setAttribute('data-pdf-hydrated', 'true');
+            }
+        })();
     }
 
     /**
@@ -4531,6 +4599,27 @@ class Canvas {
         this.nodeElements.clear();
         this.edgeElements.clear();
         this.selectedNodes.clear();
+    }
+
+    /**
+     * Re-render only the content area of a node (e.g. after graph.updateNode with new metadata).
+     * Used when the node type renders different content based on metadata (e.g. PDF viewer).
+     * @param {string} nodeId
+     */
+    rerenderNodeContent(nodeId) {
+        const node = this.graph?.getNode(nodeId);
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!node || !wrapper) return;
+        const contentEl = wrapper.querySelector('.node-content');
+        if (!contentEl) return;
+        const wrapped = wrapNode(node);
+        const contentHtml = wrapped.renderContent(this);
+        contentEl.innerHTML = contentHtml;
+        this.hydratePdfViewerIfPresent(wrapper, node);
+        const summaryEl = wrapper.querySelector('.node-summary .summary-text');
+        if (summaryEl && node.title) {
+            summaryEl.textContent = this.truncate(node.title, 60);
+        }
     }
 
     /**
