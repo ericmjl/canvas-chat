@@ -27,8 +27,8 @@
  * @module example-mcp-tool-plugin
  */
 
-import { FeaturePlugin, PRIORITY } from '/static/js/feature-plugin.js';
-import { FeatureRegistry } from '/static/js/feature-registry.js';
+import { FeaturePlugin } from '/static/js/feature-plugin.js';
+import { FeatureRegistry, PRIORITY } from '/static/js/feature-registry.js';
 import {
     createAgentDefinition,
     createRunRequest,
@@ -494,20 +494,69 @@ ${analysis.key_phrases?.map((p) => `- "${p}"`).join('\n') || '- None extracted'}
 // Plugin Registration
 // =============================================================================
 
-if (typeof window !== 'undefined' && window.app) {
-    const ctx = {
-        graph: window.app.graph,
-        canvas: window.app.canvas,
-        chat: window.app.chat,
-        storage: window.app.storage,
-        modalManager: window.app.modalManager,
-        undoManager: window.app.undoManager,
-        runController: window.app.runController,
+let registerFeature = null;
+
+if (typeof window !== 'undefined') {
+    let registering = false;
+    let registered = false;
+    let attempts = 0;
+    const maxAttempts = 120; // ~30s at 250ms intervals
+    registerFeature = (app) => {
+        if (registered || registering) return;
+        if (attempts >= maxAttempts) {
+            console.warn('[MCPToolFeature] Gave up registering after max attempts');
+            return;
+        }
+        const targetApp = app || window.app;
+        if (!targetApp || !targetApp.featureRegistry) {
+            attempts += 1;
+            setTimeout(() => registerFeature(window.app), 250);
+            return;
+        }
+        if (!targetApp.featureRegistry._appContext) {
+            attempts += 1;
+            setTimeout(() => registerFeature(targetApp), 250);
+            return;
+        }
+        registering = true;
+        targetApp.featureRegistry
+            .register({
+                id: 'mcp-tools',
+                feature: MCPToolFeature,
+                slashCommands: [
+                    { command: '/tools', handler: 'handleCommand' },
+                    { command: '/search-web', handler: 'handleCommand' },
+                    { command: '/analyze-text', handler: 'handleCommand' },
+                    { command: '/calculate', handler: 'handleCommand' },
+                ],
+                priority: PRIORITY.COMMUNITY,
+            })
+            .then(() => {
+                registered = true;
+                console.log('[MCPToolFeature] Registered with FeatureRegistry');
+            })
+            .catch((err) => {
+                registering = false;
+                attempts += 1;
+                console.error('[MCPToolFeature] Failed to register with FeatureRegistry:', err);
+                setTimeout(() => registerFeature(targetApp), 500);
+            });
     };
 
-    const feature = new MCPToolFeature(ctx);
-    FeatureRegistry.getInstance().registerFeature(feature, PRIORITY.COMMUNITY);
-    console.log('[MCPToolFeature] Registered with FeatureRegistry');
+    if (window.app) {
+        registerFeature(window.app);
+    }
+
+    window.addEventListener('app-plugin-system-ready', (event) => {
+        registerFeature(event.detail?.app || window.app);
+    });
+}
+
+export function registerPlugin(app) {
+    if (typeof window === 'undefined' || !registerFeature) {
+        return;
+    }
+    registerFeature(app || window.app);
 }
 
 export { MCPToolFeature, RESEARCH_AGENT, ANALYSIS_AGENT, textAnalysisTool, calculatorTool };

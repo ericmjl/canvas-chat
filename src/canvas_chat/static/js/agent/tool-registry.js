@@ -256,8 +256,9 @@ export class ToolRegistry {
 
         this.tools.set(tool.id, tool);
 
-        if (handler) {
-            this.handlers.set(tool.id, handler);
+        const resolvedHandler = handler || (typeof tool.handler === 'function' ? tool.handler : null);
+        if (resolvedHandler) {
+            this.handlers.set(tool.id, resolvedHandler);
         }
 
         toolLogger.info(`Registered tool: ${tool.id} (${tool.name})`);
@@ -489,6 +490,26 @@ export class ToolRegistry {
 
         return tools;
     }
+
+    /**
+     * Convenience wrapper for invoking a tool by id.
+     * @param {string} toolId - Tool identifier
+     * @param {Object} args - Tool arguments
+     * @param {Object} [metadata] - Optional metadata (runId, agentId)
+     * @returns {Promise<ToolResult>}
+     */
+    async invokeTool(toolId, args, metadata = {}) {
+        return this.invoke({ toolId, args, ...metadata });
+    }
+}
+
+/**
+ * Helper for defining tools (identity function for readability).
+ * @param {ToolDefinition} definition
+ * @returns {ToolDefinition}
+ */
+export function createToolDefinition(definition) {
+    return definition;
 }
 
 // =============================================================================
