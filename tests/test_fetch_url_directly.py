@@ -4,7 +4,7 @@ Ensures HTML is converted to markdown via html2text so we never send raw HTML
 or embedded <style> to the frontend. Guards against reverting to raw response.text.
 """
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -54,6 +54,8 @@ async def test_fetch_url_directly_returns_markdown_not_raw_html():
     mock_response = AsyncMock()
     mock_response.status_code = 200
     mock_response.text = SAMPLE_HTML_WITH_STYLE
+    mock_response.headers = Mock()
+    mock_response.headers.get = Mock(return_value="text/html")
 
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=mock_response)
@@ -77,6 +79,8 @@ async def test_fetch_url_directly_extracts_title():
     mock_response = AsyncMock()
     mock_response.status_code = 200
     mock_response.text = SAMPLE_HTML_MINIMAL
+    mock_response.headers = Mock()
+    mock_response.headers.get = Mock(return_value="text/html")
 
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=mock_response)
@@ -102,11 +106,28 @@ async def test_fetch_url_directly_raises_on_non_200():
 
 
 @pytest.mark.anyio
+async def test_fetch_url_directly_raises_when_response_is_pdf():
+    """Direct fetch must raise when Content-Type is PDF (caller returns PDF result)."""
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.headers = Mock()
+    mock_response.headers.get = Mock(return_value="application/pdf")
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+
+    with pytest.raises(Exception, match="Response is PDF"):
+        await fetch_url_directly("https://example.com/doc.pdf", mock_client)
+
+
+@pytest.mark.anyio
 async def test_fetch_url_directly_uses_untitled_when_no_title_tag():
     """When HTML has no <title>, title must be 'Untitled'."""
     mock_response = AsyncMock()
     mock_response.status_code = 200
     mock_response.text = "<html><body><p>No title here.</p></body></html>"
+    mock_response.headers = Mock()
+    mock_response.headers.get = Mock(return_value="text/html")
 
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=mock_response)

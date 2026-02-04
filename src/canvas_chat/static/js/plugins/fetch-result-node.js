@@ -92,6 +92,21 @@ class FetchResultNode extends BaseNode {
             `;
         }
 
+        // PDF: show viewer container when we have a PDF source (url or upload)
+        // Hydration (load PDF, render first page, extract text) runs from canvas after mount
+        const pdfUrl = metadata.pdf_url;
+        const pdfSource = metadata.pdf_source;
+        if (contentType === 'pdf' && (pdfUrl || pdfSource === 'upload')) {
+            const safeUrl = pdfUrl ? pdfUrl.replace(/"/g, '&quot;') : '';
+            return `
+                <div class="pdf-viewer-container" data-node-id="${this.node.id}" ${pdfUrl ? `data-pdf-url="${safeUrl}"` : 'data-pdf-source="upload"'} data-pdf-hydrated="false">
+                    <div class="pdf-viewer-loading">Loading PDF…</div>
+                    <canvas class="pdf-viewer-canvas" aria-label="PDF first page" style="display:none;"></canvas>
+                </div>
+            `;
+        }
+
+        // Legacy PDF nodes (no pdf_url): show extracted text as markdown
         // Default: render markdown content
         return canvas.renderMarkdown(this.node.content || '');
     }

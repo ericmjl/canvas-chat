@@ -140,6 +140,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/pyodide-runner.js`      | Python code execution (Pyodide)       | Code execution, environment setup     |
 | `src/canvas_chat/static/js/highlight-utils.js`     | Text highlighting utilities           | Text selection, excerpt extraction    |
 | `src/canvas_chat/static/js/scroll-utils.js`        | Scroll container detection            | Scroll event handling, DOM traversal  |
+| `src/canvas_chat/static/js/plugins/pdf-viewer.js`  | PDF.js viewer + text extraction       | PDF worker config, load/render/extract, IndexedDB for uploads |
 | `src/canvas_chat/static/js/event-emitter.js`       | Event emitter pattern                 | Event-driven architecture             |
 
 ### Frontend (HTML/CSS)
