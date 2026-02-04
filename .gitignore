@@ -194,3 +194,5 @@ FETCHING*.md
 cypress/screenshots/
 cypress/videos/
 cypress/downloads/
+
+.DS_Store
