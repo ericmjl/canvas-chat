@@ -4,6 +4,11 @@
  * Loaded by the PDF plugin only. Worker is configured here so app.js stays untouched.
  * Uses CDN so no need to serve node_modules; same version as package.json (pdfjs-dist).
  */
+
+/** Action bar definitions for PDF viewer pagination (used by fetch-result-node for PDF content) */
+export const PDF_PREV_PAGE = { id: 'pdf-prev-page', label: '◀ Prev', title: 'Previous page (←)' };
+export const PDF_NEXT_PAGE = { id: 'pdf-next-page', label: 'Next ▶', title: 'Next page (→)' };
+
 const PDFJS_CDN_VERSION = '5.4.624';
 const PDFJS_BASE = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_CDN_VERSION}/build`;
 
@@ -64,7 +69,7 @@ export async function extractTextFromDocument(pdfDoc) {
  * @param {number} pageNum - 1-based page number
  * @param {HTMLCanvasElement} canvas
  * @param {number} [scale=1.5]
- * @returns {Promise<void>}
+ * @returns {Promise<{ viewport: import('pdfjs-dist').PageViewport }>}
  */
 export async function renderPageToCanvas(pdfDoc, pageNum, canvas, scale = 1.5) {
     const page = await pdfDoc.getPage(pageNum);
@@ -76,6 +81,43 @@ export async function renderPageToCanvas(pdfDoc, pageNum, canvas, scale = 1.5) {
         canvasContext: ctx,
         viewport,
     }).promise;
+    return { viewport };
+}
+
+/**
+ * Render one page to canvas and add a selectable text layer overlay.
+ * @param {import('pdfjs-dist').PDFDocumentProxy} pdfDoc
+ * @param {number} pageNum - 1-based page number
+ * @param {HTMLCanvasElement} canvasEl
+ * @param {HTMLElement} textLayerEl - Container for the text layer (positioned over canvas)
+ * @param {number} [scale=1.5]
+ * @returns {Promise<void>}
+ */
+export async function renderPageWithTextLayer(pdfDoc, pageNum, canvasEl, textLayerEl, scale = 1.5) {
+    const page = await pdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale });
+    canvasEl.height = viewport.height;
+    canvasEl.width = viewport.width;
+    const ctx = canvasEl.getContext('2d');
+    await page.render({
+        canvasContext: ctx,
+        viewport,
+    }).promise;
+
+    textLayerEl.innerHTML = '';
+    textLayerEl.style.width = `${viewport.width}px`;
+    textLayerEl.style.height = `${viewport.height}px`;
+
+    const pdfjs = await getPdfJs();
+    const TextLayer = pdfjs.TextLayer;
+    if (!TextLayer) return;
+    const textContent = await page.getTextContent();
+    const textLayer = new TextLayer({
+        textContentSource: textContent,
+        container: textLayerEl,
+        viewport,
+    });
+    await textLayer.render();
 }
 
 // -----------------------------------------------------------------------------

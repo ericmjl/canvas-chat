@@ -6,12 +6,6 @@ import { EventEmitter } from './event-emitter.js';
 import { NodeType, getDefaultNodeSize } from './graph-types.js';
 import { highlightTextInHtml } from './highlight-utils.js';
 import { wrapNode } from './node-protocols.js';
-import {
-    extractTextFromDocument,
-    getPdfForNode,
-    loadDocument,
-    renderPageToCanvas,
-} from './plugins/pdf-viewer.js';
 import { findScrollableContainer } from './scroll-utils.js';
 import { escapeHtmlText, truncateText } from './utils.js';
 
@@ -1919,7 +1913,11 @@ class Canvas {
                                               ? 'generate-btn'
                                               : action.id === 'run-code'
                                                 ? 'run-code-btn'
-                                                : '';
+                                                : action.id === 'pdf-prev-page'
+                                                  ? 'pdf-prev-page-btn'
+                                                  : action.id === 'pdf-next-page'
+                                                    ? 'pdf-next-page-btn'
+                                                    : '';
                 return `<button class="node-action ${actionClass}" data-action-id="${this.escapeHtml(action.id)}" title="${this.escapeHtml(action.title)}">${this.escapeHtml(action.label)}</button>`;
             })
             .join('');
@@ -2009,62 +2007,32 @@ class Canvas {
     }
 
     /**
-     * If the node has a PDF viewer container, load the PDF, render the first page, extract text,
-     * and update the graph/canvas. Runs async and does not block.
+     * Set the PDF viewer hydrator (provided by url-fetch plugin). Called when a node has an
+     * unhydrated .pdf-viewer-container; the hydrator loads the PDF, renders the first page, and sets state.
+     * @param {((wrapper: Element, node: Object) => void)|null} fn
+     */
+    setPdfViewerHydrator(fn) {
+        this._pdfViewerHydrator = fn;
+    }
+
+    /**
+     * Get the DOM wrapper element for a node (for use by plugins, e.g. PDF pagination).
+     * @param {string} nodeId
+     * @returns {Element|null}
+     */
+    getNodeWrapper(nodeId) {
+        return this.nodeElements.get(nodeId) ?? null;
+    }
+
+    /**
+     * If the node has a PDF viewer container, delegate to the registered hydrator (url-fetch plugin).
      * @param {Element} wrapper - Node wrapper element
      * @param {Object} node - Node data
      */
     hydratePdfViewerIfPresent(wrapper, node) {
         const container = wrapper.querySelector('.pdf-viewer-container[data-pdf-hydrated="false"]');
-        if (!container || !this.graph) return;
-
-        const nodeId = container.getAttribute('data-node-id');
-        const pdfUrl = container.getAttribute('data-pdf-url');
-        const pdfSource = container.getAttribute('data-pdf-source');
-
-        (async () => {
-            try {
-                let source = pdfUrl || null;
-                if (pdfSource === 'upload' && nodeId) {
-                    source = await getPdfForNode(nodeId);
-                }
-                if (!source) return;
-
-                const pdfDoc = await loadDocument(source);
-                const canvasEl = container.querySelector('.pdf-viewer-canvas');
-                const loadingEl = container.querySelector('.pdf-viewer-loading');
-
-                if (canvasEl && loadingEl) {
-                    await renderPageToCanvas(pdfDoc, 1, canvasEl, 1.5);
-                    loadingEl.style.display = 'none';
-                    canvasEl.style.display = 'block';
-                }
-
-                const text = await extractTextFromDocument(pdfDoc);
-                const title = node.title || 'PDF';
-                const newContent = `**[${title}]**\n\n${text}`;
-                // Only set content if empty (e.g. URL fetch); uploads already have backend-extracted content
-                if (!(node.content || '').trim()) {
-                    this.graph.updateNode(nodeId, { content: newContent });
-                    const summaryEl = wrapper.querySelector('.node-summary .summary-text');
-                    if (summaryEl) {
-                        const plain = (newContent || '').replace(/[#*_`>\[\]()!]/g, '').trim();
-                        summaryEl.textContent = this.truncate(plain, 60);
-                    }
-                }
-                container.setAttribute('data-pdf-hydrated', 'true');
-            } catch (err) {
-                const loadingEl = container.querySelector('.pdf-viewer-loading');
-                if (loadingEl) {
-                    loadingEl.textContent = `Failed to load PDF: ${err.message}`;
-                }
-                const content = `**(PDF load failed)**\n\n${err.message}`;
-                this.graph.updateNode(nodeId, { content });
-                const summaryEl = wrapper.querySelector('.node-summary .summary-text');
-                if (summaryEl) summaryEl.textContent = this.truncate(err.message, 60);
-                container.setAttribute('data-pdf-hydrated', 'true');
-            }
-        })();
+        if (!container) return;
+        if (this._pdfViewerHydrator) this._pdfViewerHydrator(wrapper, node);
     }
 
     /**

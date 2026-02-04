@@ -3,18 +3,24 @@
  *
  * Handles /fetch slash command for generic URL fetching.
  * Creates basic FETCH_RESULT nodes without special rendering.
+ * For PDF URLs, owns PDF viewer hydration and pagination (Prev/Next, ←/→).
  * For enhanced UX (file selection, video embedding), use specific commands:
  * - /git for git repositories
  * - /youtube for YouTube videos
  */
 
 import { FeaturePlugin } from '../feature-plugin.js';
-import { createNode, NodeType } from '../graph-types.js';
-import { createEdge, EdgeType } from '../graph-types.js';
-import { isUrlContent, apiUrl } from '../utils.js';
+import { createEdge, createNode, EdgeType, NodeType } from '../graph-types.js';
+import { apiUrl, isUrlContent } from '../utils.js';
+import {
+    extractTextFromDocument,
+    getPdfForNode,
+    loadDocument,
+    renderPageWithTextLayer,
+} from './pdf-viewer.js';
 
 /**
- * UrlFetchFeature - Handles generic URL fetching
+ * UrlFetchFeature - Handles generic URL fetching and PDF viewer
  */
 export class UrlFetchFeature extends FeaturePlugin {
     /**
@@ -136,7 +142,7 @@ export class UrlFetchFeature extends FeaturePlugin {
             this.graph.updateNode(fetchNode.id, updateData);
 
             if (isPdf) {
-                this.canvas.rerenderNodeContent(fetchNode.id);
+                this.canvas.renderNode(this.graph.getNode(fetchNode.id));
             } else {
                 this.canvas.updateNodeContent(fetchNode.id, nodeContent, false);
             }
@@ -149,6 +155,152 @@ export class UrlFetchFeature extends FeaturePlugin {
             this.graph.updateNode(fetchNode.id, { content: errorContent });
             this.saveSession?.();
         }
+    }
+
+    /**
+     * Register PDF viewer hydrator and canvas event handlers when the plugin loads.
+     */
+    async onLoad() {
+        if (this.canvas?.setPdfViewerHydrator) {
+            this.canvas.setPdfViewerHydrator(this.hydratePdfViewer.bind(this));
+        }
+    }
+
+    /**
+     * Canvas event handlers for PDF pagination (action bar + ←/→) and resize scroll reset.
+     * @returns {Object<string, Function>}
+     */
+    getCanvasEventHandlers() {
+        return {
+            'pdf-prev-page': (nodeId) => this.handlePdfPrevPage(nodeId),
+            'pdf-next-page': (nodeId) => this.handlePdfNextPage(nodeId),
+            nodeResize: (nodeId) => this.handlePdfNodeResize(nodeId),
+        };
+    }
+
+    /**
+     * After resizing a PDF node, reset scroll to top so the page top is visible.
+     * @param {string} nodeId
+     */
+    handlePdfNodeResize(nodeId) {
+        const node = this.graph?.getNode(nodeId);
+        if (!node) return;
+        const metadata = node.metadata || {};
+        const isPdf =
+            metadata.content_type === 'pdf' && (metadata.pdf_url || metadata.pdf_source === 'upload');
+        if (!isPdf) return;
+        const wrapper = this.canvas?.getNodeWrapper?.(nodeId);
+        const contentEl = wrapper?.querySelector?.('.node-content');
+        if (contentEl?.querySelector('.pdf-viewer-container')) {
+            contentEl.scrollTop = 0;
+        }
+    }
+
+    /**
+     * Go to previous page in a PDF viewer node.
+     * @param {string} nodeId
+     */
+    handlePdfPrevPage(nodeId) {
+        const wrapper = this.canvas?.getNodeWrapper?.(nodeId);
+        const container = wrapper?.querySelector?.('.pdf-viewer-container');
+        const state = container?._pdfState;
+        if (state && state.currentPage > 1) {
+            state.showPage(state.currentPage - 1);
+        }
+    }
+
+    /**
+     * Go to next page in a PDF viewer node.
+     * @param {string} nodeId
+     */
+    handlePdfNextPage(nodeId) {
+        const wrapper = this.canvas?.getNodeWrapper?.(nodeId);
+        const container = wrapper?.querySelector?.('.pdf-viewer-container');
+        const state = container?._pdfState;
+        if (state && state.currentPage < state.numPages) {
+            state.showPage(state.currentPage + 1);
+        }
+    }
+
+    /**
+     * Hydrate a PDF viewer container: load PDF, render first page, extract text, set pagination state.
+     * Called by canvas when it finds .pdf-viewer-container[data-pdf-hydrated="false"].
+     * @param {Element} wrapper - Node wrapper element
+     * @param {Object} node - Node data
+     */
+    hydratePdfViewer(wrapper, node) {
+        const container = wrapper.querySelector?.('.pdf-viewer-container[data-pdf-hydrated="false"]');
+        if (!container || !this.graph) return;
+
+        const nodeId = container.getAttribute('data-node-id');
+        const pdfUrl = container.getAttribute('data-pdf-url');
+        const pdfSource = container.getAttribute('data-pdf-source');
+
+        (async () => {
+            try {
+                let source = pdfUrl || null;
+                if (pdfSource === 'upload' && nodeId) {
+                    source = await getPdfForNode(nodeId);
+                }
+                if (!source) return;
+
+                const pdfDoc = await loadDocument(source);
+                const numPages = pdfDoc.numPages;
+                const canvasEl = container.querySelector('.pdf-viewer-canvas');
+                const textLayerEl = container.querySelector('.pdf-viewer-text-layer');
+                const pageWrap = container.querySelector('.pdf-viewer-page');
+                const pageInfo = container.querySelector('.pdf-viewer-page-info');
+                const loadingEl = container.querySelector('.pdf-viewer-loading');
+
+                const scale = 1.5;
+                const state = { currentPage: 1, numPages };
+
+                const showPage = async (pageNum) => {
+                    if (!canvasEl || !textLayerEl) return;
+                    state.currentPage = pageNum;
+                    await renderPageWithTextLayer(pdfDoc, pageNum, canvasEl, textLayerEl, scale);
+                    if (pageInfo) pageInfo.textContent = `Page ${pageNum} of ${numPages}`;
+                };
+
+                state.showPage = showPage;
+                container._pdfState = state;
+
+                if (canvasEl && textLayerEl && pageWrap && loadingEl) {
+                    await showPage(1);
+                    loadingEl.style.display = 'none';
+                    pageWrap.style.display = 'block';
+                }
+                if (pageInfo && state.numPages <= 1) pageInfo.textContent = `Page 1 of ${state.numPages}`;
+
+                const text = await extractTextFromDocument(pdfDoc);
+                const title = node.title || 'PDF';
+                const newContent = `**[${title}]**\n\n${text}`;
+                if (!(node.content || '').trim()) {
+                    this.graph.updateNode(nodeId, { content: newContent });
+                    const summaryEl = wrapper.querySelector('.node-summary .summary-text');
+                    if (summaryEl && this.canvas?.truncate) {
+                        const plain = (newContent || '').replace(/[#*_`>\[\]()!]/g, '').trim();
+                        summaryEl.textContent = this.canvas.truncate(plain, 60);
+                    }
+                }
+                container.setAttribute('data-pdf-hydrated', 'true');
+                const contentEl = wrapper.querySelector('.node-content');
+                if (contentEl) contentEl.scrollTop = 0;
+            } catch (err) {
+                container._pdfState = null;
+                const loadingEl = container.querySelector('.pdf-viewer-loading');
+                if (loadingEl) {
+                    loadingEl.textContent = `Failed to load PDF: ${err.message}`;
+                }
+                const content = `**(PDF load failed)**\n\n${err.message}`;
+                this.graph.updateNode(nodeId, { content });
+                const summaryEl = wrapper.querySelector('.node-summary .summary-text');
+                if (summaryEl && this.canvas?.truncate) {
+                    summaryEl.textContent = this.canvas.truncate(err.message, 60);
+                }
+                container.setAttribute('data-pdf-hydrated', 'true');
+            }
+        })();
     }
 }
 
