@@ -48,6 +48,8 @@
  *   window.setAgentLogLevel('DEBUG')
  */
 
+import { getToolRegistry } from './tool-registry.js';
+
 // Base Agent - primary orchestrator
 export { BaseAgent, createBaseAgentDefinition } from './base-agent.js';
 
@@ -97,7 +99,10 @@ export {
     initializeToolRegistry,
     registerBuiltInTools,
     loadToolsFromBackend,
+    createToolDefinition,
 } from './tool-registry.js';
+
+export const toolRegistry = getToolRegistry();
 
 export {
     // Graph tools for agents

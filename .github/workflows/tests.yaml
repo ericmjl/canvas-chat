@@ -25,6 +25,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  bdd-enforcement:
+    name: BDD enforcement
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install pixi
+        uses: prefix-dev/setup-pixi@v0.9.3
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Generate features from stories
+        run: node scripts/generate_features.js
+
+      - name: Detect missing step definitions
+        run: node scripts/generate_step_stubs.js
+
+      - name: Ensure generated outputs are committed
+        run: git diff --exit-code
+
+      - name: Fetch base branch for test enforcement
+        if: github.event_name == 'pull_request'
+        run: git fetch origin ${{ github.base_ref }} --depth=1
+
+      - name: Enforce tests on code changes
+        if: github.event_name == 'pull_request'
+        run: node scripts/check_tests_present.js
+
   python-tests:
     name: Python tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest

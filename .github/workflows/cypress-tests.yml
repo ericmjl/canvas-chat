@@ -43,6 +43,7 @@ jobs:
                       cypress/e2e/note_node.cy.js
                       cypress/e2e/settings_modal.cy.js
                       cypress/e2e/undo_redo.cy.js
+                      cypress/e2e/features/**/*.feature
 
             - name: Upload screenshots on failure
               uses: actions/upload-artifact@v6

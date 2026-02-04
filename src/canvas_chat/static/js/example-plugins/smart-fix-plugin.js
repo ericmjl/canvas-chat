@@ -10,7 +10,7 @@
  * - Skip self-healing for specific error patterns
  */
 
-import { FeaturePlugin } from '../feature-plugin.js';
+import { FeaturePlugin } from '/static/js/feature-plugin.js';
 
 /**
  * SmartFixPlugin - Extension plugin for enhanced code self-healing

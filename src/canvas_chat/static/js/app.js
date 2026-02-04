@@ -105,6 +105,7 @@ class App {
 
         // Plugin system (all features managed by FeatureRegistry)
         this.featureRegistry = new FeatureRegistry();
+        this._pluginSystemStage = null;
 
         // Undo/Redo manager
         this.undoManager = new UndoManager();
@@ -126,6 +127,66 @@ class App {
         this.selectedCount = document.getElementById('selected-count');
 
         this.init();
+    }
+
+    /**
+     * Test-only hooks for deterministic Cypress assertions.
+     * Exposed only when Cypress is present.
+     */
+    setupTestHooks() {
+        if (typeof window === 'undefined' || !window.Cypress) {
+            return;
+        }
+
+        if (!window.__APP_TEST__) {
+            window.__APP_TEST__ = {};
+        }
+
+        window.__APP_TEST__.pluginSystemReady = this._pluginSystemStage;
+        window.__APP_TEST__.externalPlugins = window.__APP_TEST__.externalPlugins || {
+            loaded: [],
+            failed: [],
+        };
+        window.__APP_TEST__.errors = window.__APP_TEST__.errors || [];
+
+        if (!window.__APP_TEST__._errorHandlersAttached) {
+            window.__APP_TEST__._errorHandlersAttached = true;
+            window.addEventListener('error', (event) => {
+                window.__APP_TEST__.errors.push({
+                    message: event.message,
+                    filename: event.filename,
+                    lineno: event.lineno,
+                    colno: event.colno,
+                });
+            });
+            window.addEventListener('unhandledrejection', (event) => {
+                window.__APP_TEST__.errors.push({
+                    message: event.reason?.message || String(event.reason),
+                    filename: null,
+                    lineno: null,
+                    colno: null,
+                });
+            });
+        }
+
+        window.__APP_TEST__.graph = {
+            serialize: () => {
+                if (!this.graph) {
+                    return { nodes: [], edges: [], tags: {} };
+                }
+                return this.graph.toJSON();
+            },
+        };
+
+        window.__APP_TEST__.reset = async () => {
+            await this.createNewSession();
+        };
+
+        window.__APP_TEST__.seed = async (seedFn) => {
+            if (typeof seedFn === 'function') {
+                seedFn(this.graph);
+            }
+        };
     }
 
     /**
@@ -205,6 +266,10 @@ class App {
 
         // Show empty state if needed
         this.updateEmptyState();
+
+        // Ensure external plugins have a chance to register after full init
+        await this.loadExternalJsPlugins();
+        this.notifyPluginSystemReady('init-complete');
     }
 
     /**
@@ -472,6 +537,7 @@ class App {
         // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
         this.setupGraphEventListeners();
+        this.setupTestHooks();
 
         // Render graph
         this.canvas.renderGraph(this.graph);
@@ -545,6 +611,7 @@ class App {
             // Note: Features are managed by FeatureRegistry, no manual cleanup needed
             await this.graph.enablePersistence();
             this.setupGraphEventListeners();
+            this.setupTestHooks();
 
             // Render empty graph (will populate via sync)
             this.canvas.renderGraph(this.graph);
@@ -583,6 +650,7 @@ class App {
         // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
         this.setupGraphEventListeners();
+        this.setupTestHooks();
 
         this.canvas.clear();
 
@@ -2071,7 +2139,7 @@ class App {
         setFeatureRegistry(this.featureRegistry);
 
         // Update file input accept attribute based on registered file upload handlers
-        this.updateFileInputAcceptAttribute();
+        await this.updateFileInputAcceptAttribute();
     }
 
     /**
@@ -2086,15 +2154,89 @@ class App {
             console.log('[App] Updated file input accept attribute:', acceptAttr);
         }
 
-        // TODO (Task 4.3): Load additional plugins from config file
-        // await this.featureRegistry.loadPluginsFromConfig();
+        // Load external JS plugins from backend config (if any)
+        await this.loadExternalJsPlugins();
 
-        // Dispatch event so external plugins can register features
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('app-plugin-system-ready', { detail: { app: this } }));
-        }
+        this.notifyPluginSystemReady('file-input');
 
         console.log('[App] Plugin system initialized');
+    }
+
+    /**
+     * Load external JS plugins registered on the backend.
+     * Plugins are served from /api/plugins and loaded as ES modules.
+     */
+    async loadExternalJsPlugins() {
+        if (this._externalPluginsLoaded) {
+            return;
+        }
+
+        this._externalPluginsLoaded = true;
+        try {
+            const response = await fetch('/api/plugins');
+            if (!response.ok) {
+                console.warn('[App] Failed to load plugin list:', response.status);
+                return;
+            }
+
+            const data = await response.json();
+            const plugins = data.plugins || [];
+            for (const plugin of plugins) {
+                if (!plugin.url) continue;
+                const testHook = typeof window !== 'undefined' ? window.__APP_TEST__ : null;
+                try {
+                    const module = await import(plugin.url);
+                    if (module?.registerPlugin) {
+                        try {
+                            module.registerPlugin(this);
+                        } catch (error) {
+                            if (testHook?.externalPlugins) {
+                                testHook.externalPlugins.failed.push({
+                                    id: plugin.id || plugin.url,
+                                    url: plugin.url,
+                                    error: error?.message || String(error),
+                                });
+                            }
+                            console.error('[App] Failed to register external plugin:', plugin.url, error);
+                        }
+                    }
+                    if (testHook?.externalPlugins) {
+                        testHook.externalPlugins.loaded.push({
+                            id: plugin.id || plugin.url,
+                            url: plugin.url,
+                        });
+                    }
+                    console.log('[App] Loaded external plugin:', plugin.id || plugin.url);
+                } catch (error) {
+                    if (testHook?.externalPlugins) {
+                        testHook.externalPlugins.failed.push({
+                            id: plugin.id || plugin.url,
+                            url: plugin.url,
+                            error: error?.message || String(error),
+                        });
+                    }
+                    console.error('[App] Failed to import plugin:', plugin.url, error);
+                }
+            }
+        } catch (error) {
+            console.error('[App] Error loading external plugins:', error);
+        }
+    }
+
+    /**
+     * Dispatch plugin system ready event for external plugins.
+     * @param {string} stage
+     */
+    notifyPluginSystemReady(stage = 'init') {
+        this._pluginSystemStage = stage;
+        if (typeof window === 'undefined') {
+            return;
+        }
+        if (window.Cypress) {
+            window.__APP_TEST__ = window.__APP_TEST__ || {};
+            window.__APP_TEST__.pluginSystemReady = stage;
+        }
+        window.dispatchEvent(new CustomEvent('app-plugin-system-ready', { detail: { app: this, stage } }));
     }
 
     /**
@@ -4917,6 +5059,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const initWithYjs = () => {
         console.log('%c[App] Yjs ready, initializing app', 'color: #4CAF50');
         window.app = new App();
+        window.app.notifyPluginSystemReady?.('app-created');
     };
 
     if (window.Y) {

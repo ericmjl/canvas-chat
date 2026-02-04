@@ -10,8 +10,8 @@
  * For a more complete example, see example-agent-plugin.js
  */
 
-import { FeaturePlugin, PRIORITY } from '/static/js/feature-plugin.js';
-import { FeatureRegistry } from '/static/js/feature-registry.js';
+import { FeaturePlugin } from '/static/js/feature-plugin.js';
+import { FeatureRegistry, PRIORITY } from '/static/js/feature-registry.js';
 import { createAgentDefinition, createRunRequest, createRunContext, EventType } from '/static/js/agent/index.js';
 
 // Step 1: Define your agent
@@ -82,19 +82,64 @@ class MinimalAgentFeature extends FeaturePlugin {
 }
 
 // Register plugin
-if (typeof window !== 'undefined' && window.app) {
-    const ctx = {
-        graph: window.app.graph,
-        canvas: window.app.canvas,
-        chat: window.app.chat,
-        storage: window.app.storage,
-        modalManager: window.app.modalManager,
-        undoManager: window.app.undoManager,
-        runController: window.app.runController,
+let registerFeature = null;
+
+if (typeof window !== 'undefined') {
+    let registering = false;
+    let registered = false;
+    let attempts = 0;
+    const maxAttempts = 120; // ~30s at 250ms intervals
+    registerFeature = (app) => {
+        if (registered || registering) return;
+        if (attempts >= maxAttempts) {
+            console.warn('[MinimalAgentFeature] Gave up registering after max attempts');
+            return;
+        }
+        const targetApp = app || window.app;
+        if (!targetApp || !targetApp.featureRegistry) {
+            attempts += 1;
+            setTimeout(() => registerFeature(window.app), 250);
+            return;
+        }
+        if (!targetApp.featureRegistry._appContext) {
+            attempts += 1;
+            setTimeout(() => registerFeature(targetApp), 250);
+            return;
+        }
+        registering = true;
+        targetApp.featureRegistry
+            .register({
+                id: 'example-minimal-agent',
+                feature: MinimalAgentFeature,
+                slashCommands: [{ command: '/simple', handler: 'handleCommand' }],
+                priority: PRIORITY.COMMUNITY,
+            })
+            .then(() => {
+                registered = true;
+                console.log('[MinimalAgentFeature] Registered with FeatureRegistry');
+            })
+            .catch((err) => {
+                registering = false;
+                attempts += 1;
+                console.error('[MinimalAgentFeature] Failed to register with FeatureRegistry:', err);
+                setTimeout(() => registerFeature(targetApp), 500);
+            });
     };
 
-    const feature = new MinimalAgentFeature(ctx);
-    FeatureRegistry.getInstance().registerFeature(feature, PRIORITY.COMMUNITY);
+    if (window.app) {
+        registerFeature(window.app);
+    }
+
+    window.addEventListener('app-plugin-system-ready', (event) => {
+        registerFeature(event.detail?.app || window.app);
+    });
+}
+
+export function registerPlugin(app) {
+    if (typeof window === 'undefined' || !registerFeature) {
+        return;
+    }
+    registerFeature(app || window.app);
 }
 
 export { MinimalAgentFeature, MY_AGENT };

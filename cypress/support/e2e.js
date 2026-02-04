@@ -17,6 +17,11 @@ Cypress.Commands.add('clearIndexedDB', () => {
     });
 });
 
+// Standard selector helper for stable test IDs
+Cypress.Commands.add('getByTestId', (testId, options) => {
+    return cy.get(`[data-testid="${testId}"]`, options);
+});
+
 // Configure Ollama base URL
 Cypress.Commands.add('configureOllama', (baseUrl = 'http://localhost:11434') => {
     cy.get('#settings-btn').click();

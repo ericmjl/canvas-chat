@@ -43,11 +43,16 @@
     </head>
     <body>
         <!-- Top Toolbar -->
-        <div id="toolbar">
+        <div id="toolbar" data-testid="toolbar">
             <div class="toolbar-left">
                 <h1 class="logo">Canvas Chat</h1>
                 <div class="session-name" id="session-name">Untitled Session</div>
-                <button id="auto-title-btn" class="icon-btn auto-title-btn" title="Generate title from conversation">
+                <button
+                    id="auto-title-btn"
+                    class="icon-btn auto-title-btn"
+                    title="Generate title from conversation"
+                    data-testid="auto-title-btn"
+                >
                     ✨
                 </button>
             </div>
@@ -69,14 +74,31 @@
                         <option value="hierarchical">Hierarchical</option>
                         <option value="force">Force-Directed</option>
                     </select>
-                    <button id="auto-layout-btn" class="icon-btn" title="Apply Layout">🔀</button>
+                    <button id="auto-layout-btn" class="icon-btn" title="Apply Layout" data-testid="auto-layout-btn">
+                        🔀
+                    </button>
                 </div>
                 <div class="undo-redo-controls">
-                    <button id="undo-btn" class="icon-btn" title="Undo (Cmd/Ctrl+Z)" disabled>↶</button>
-                    <button id="redo-btn" class="icon-btn" title="Redo (Cmd/Ctrl+Shift+Z)" disabled>↷</button>
+                    <button id="undo-btn" class="icon-btn" title="Undo (Cmd/Ctrl+Z)" disabled data-testid="undo-btn">
+                        ↶
+                    </button>
+                    <button
+                        id="redo-btn"
+                        class="icon-btn"
+                        title="Redo (Cmd/Ctrl+Shift+Z)"
+                        disabled
+                        data-testid="redo-btn"
+                    >
+                        ↷
+                    </button>
                 </div>
                 <div class="multiplayer-controls">
-                    <button id="multiplayer-btn" class="icon-btn multiplayer-btn" title="Enable multiplayer sync">
+                    <button
+                        id="multiplayer-btn"
+                        class="icon-btn multiplayer-btn"
+                        title="Enable multiplayer sync"
+                        data-testid="multiplayer-btn"
+                    >
                         👥
                     </button>
                     <button
@@ -84,24 +106,34 @@
                         class="icon-btn multiplayer-leave-btn"
                         title="Leave multiplayer session"
                         style="display: none"
+                        data-testid="multiplayer-leave-btn"
                     >
                         ✕
                     </button>
                     <span id="peer-count" class="peer-count" style="display: none">0</span>
                 </div>
-                <button id="tags-btn" class="icon-btn" title="Tags">🏷️</button>
-                <button id="search-btn" class="icon-btn" title="Search nodes (Cmd/Ctrl+K)">🔍</button>
-                <button id="new-canvas-btn" class="icon-btn" title="New Canvas">📄</button>
-                <button id="sessions-btn" class="icon-btn" title="Sessions">📚</button>
-                <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
-                <button id="help-btn" class="icon-btn" title="Help (?)">❓</button>
-                <button id="export-btn" class="icon-btn" title="Export">💾</button>
-                <button id="import-btn" class="icon-btn" title="Import">📂</button>
+                <button id="tags-btn" class="icon-btn" title="Tags" data-testid="tags-btn">🏷️</button>
+                <button
+                    id="search-btn"
+                    class="icon-btn"
+                    title="Search nodes (Cmd/Ctrl+K)"
+                    data-testid="search-btn"
+                >
+                    🔍
+                </button>
+                <button id="new-canvas-btn" class="icon-btn" title="New Canvas" data-testid="new-canvas-btn">
+                    📄
+                </button>
+                <button id="sessions-btn" class="icon-btn" title="Sessions" data-testid="sessions-btn">📚</button>
+                <button id="settings-btn" class="icon-btn" title="Settings" data-testid="settings-btn">⚙️</button>
+                <button id="help-btn" class="icon-btn" title="Help (?)" data-testid="help-btn">❓</button>
+                <button id="export-btn" class="icon-btn" title="Export" data-testid="export-btn">💾</button>
+                <button id="import-btn" class="icon-btn" title="Import" data-testid="import-btn">📂</button>
             </div>
         </div>
 
         <!-- Main Canvas Area -->
-        <div id="canvas-container">
+        <div id="canvas-container" data-testid="canvas-container">
             <svg id="canvas" width="100%" height="100%">
                 <!-- Arrow marker definitions -->
                 <defs>
@@ -137,7 +169,7 @@
             <!-- Node template (cloned when creating nodes) -->
             <template id="node-template">
                 <foreignObject class="node-wrapper" width="320" height="auto">
-                    <div class="node" xmlns="http://www.w3.org/1999/xhtml">
+                    <div class="node" xmlns="http://www.w3.org/1999/xhtml" data-testid="canvas-node">
                         <div class="node-header">
                             <span class="node-type"></span>
                             <span class="node-model"></span>
@@ -159,10 +191,10 @@
         </div>
 
         <!-- Tag Drawer (Right Side) -->
-        <div id="tag-drawer" class="tag-drawer">
+        <div id="tag-drawer" class="tag-drawer" data-testid="tag-drawer">
             <div class="tag-drawer-header">
                 <h3>Tags</h3>
-                <button id="tag-drawer-close" class="icon-btn" title="Close">✕</button>
+                <button id="tag-drawer-close" class="icon-btn" title="Close" data-testid="tag-drawer-close">✕</button>
             </div>
             <div class="tag-drawer-content">
                 <div id="tag-slots" class="tag-slots">
@@ -185,7 +217,12 @@
                 <button id="clear-selection-btn">✕</button>
             </div>
             <div class="chat-input-wrapper">
-                <button id="attach-btn" class="attach-btn" title="Attach PDF or image (drag & drop also supported)">
+                <button
+                    id="attach-btn"
+                    class="attach-btn"
+                    title="Attach PDF or image (drag & drop also supported)"
+                    data-testid="attach-btn"
+                >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path
                             d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
@@ -196,8 +233,9 @@
                     id="chat-input"
                     placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
                     rows="1"
+                    data-testid="chat-input"
                 ></textarea>
-                <button id="send-btn" class="send-btn" title="Send">
+                <button id="send-btn" class="send-btn" title="Send" data-testid="send-btn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M22 2L11 13"></path>
                         <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
@@ -207,11 +245,11 @@
         </div>
 
         <!-- Settings Modal -->
-        <div id="settings-modal" class="modal" style="display: none">
+        <div id="settings-modal" class="modal" style="display: none" data-testid="settings-modal">
             <div class="modal-content">
                 <div class="modal-header">
                     <h2>Settings</h2>
-                    <button class="modal-close" id="settings-close">&times;</button>
+                    <button class="modal-close" id="settings-close" data-testid="settings-close">&times;</button>
                 </div>
                 <div class="modal-body">
                     <!-- API Keys Section (hidden in admin mode) -->
@@ -352,11 +390,11 @@
         </div>
 
         <!-- Copilot Auth Modal -->
-        <div id="copilot-auth-modal" class="modal" style="display: none">
+        <div id="copilot-auth-modal" class="modal" style="display: none" data-testid="copilot-auth-modal">
             <div class="modal-content modal-narrow">
                 <div class="modal-header">
                     <h2>GitHub Copilot Authentication</h2>
-                    <button class="modal-close" id="copilot-auth-close">&times;</button>
+                    <button class="modal-close" id="copilot-auth-close" data-testid="copilot-auth-close">&times;</button>
                 </div>
                 <div class="modal-body">
                     <p class="settings-note">Open GitHub and enter the code to link your Copilot subscription.</p>
@@ -384,11 +422,11 @@
         </div>
 
         <!-- Session Picker Modal -->
-        <div id="session-modal" class="modal" style="display: none">
+        <div id="session-modal" class="modal" style="display: none" data-testid="sessions-modal">
             <div class="modal-content">
                 <div class="modal-header">
                     <h2>Sessions</h2>
-                    <button class="modal-close" id="session-close">&times;</button>
+                    <button class="modal-close" id="session-close" data-testid="sessions-close">&times;</button>
                 </div>
                 <div class="modal-body">
                     <button id="new-session-btn" class="primary-btn">+ New Session</button>
@@ -400,7 +438,13 @@
         </div>
 
         <!-- Hidden file input for import -->
-        <input type="file" id="import-file-input" accept=".canvaschat" style="display: none" />
+        <input
+            type="file"
+            id="import-file-input"
+            accept=".canvaschat"
+            style="display: none"
+            data-testid="import-file-input"
+        />
 
         <!-- Hidden file input for PDF, image, and CSV upload -->
         <input
@@ -408,12 +452,13 @@
             id="pdf-file-input"
             accept=".pdf,application/pdf,image/*,.csv,text/csv,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation,.ppt,application/vnd.ms-powerpoint"
             style="display: none"
+            data-testid="file-upload-input"
         />
 
         <!-- Matrix Modals - Now registered by matrix.js plugin -->
 
         <!-- Search Overlay -->
-        <div id="search-overlay" class="search-overlay" style="display: none">
+        <div id="search-overlay" class="search-overlay" style="display: none" data-testid="search-overlay">
             <div class="search-container">
                 <div class="search-input-wrapper">
                     <span class="search-icon">🔍</span>
@@ -433,11 +478,11 @@
         </div>
 
         <!-- Help Modal -->
-        <div id="help-modal" class="modal" style="display: none">
+        <div id="help-modal" class="modal" style="display: none" data-testid="help-modal">
             <div class="modal-content modal-wide">
                 <div class="modal-header">
                     <h2>Help</h2>
-                    <button class="modal-close" id="help-close">&times;</button>
+                    <button class="modal-close" id="help-close" data-testid="help-close">&times;</button>
                 </div>
                 <div class="modal-body help-content">
                     <section class="help-section">

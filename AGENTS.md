@@ -36,6 +36,7 @@ This includes:
 - 2026-01-24: Removed TypeScript type checking from pre-commit hooks and pixi tasks. Project uses plain JavaScript with JSDoc annotations for documentation only, not strict type checking.
 - 2026-01-25: Consolidated `/code` command handling into CodeFeature plugin. All code node operations (`handleCode`, `handleNodeRunCode`, `handleNodeGenerate`, `handleNodeGenerateSubmit`, `gatherCodeGenerationContext`) have been moved from app.js to plugins/code.js. App.js now delegates to CodeFeature via canvas events (`nodeRunCode`, `nodeGenerate`, etc.).
 - 2026-01-29: Implemented reflection feature with `/reflect` command. Creates REFLECTION nodes analyzing conversation paths from leaf nodes back to branch points. Uses sub-agents for synthesis, stores reflections as separate DAG nodes, and displays results in a sidepanel with links. Key files: `reflection-utils.js` (path finding), `reflection-agent.js` (sub-agent orchestration), `plugins/reflect-feature.js` (UI), `reflection.css` (styling).
+- 2026-02-04: Frontend now loads external JS plugins from the backend `/api/plugins` list during app initialization (see `app.js`), in addition to server-side script injection.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -63,6 +64,10 @@ canvas-chat/
 │           ├── agent/       # Agent architecture (types, engine, memory, controller)
 │           └── example-plugins/ # Example plugins (test, smart-fix, poll node)
 ├── tests/                    # Test files
+├── specs/user-stories/       # Optional story specs (story → feature generator input)
+├── cypress/e2e/features/      # Gherkin feature specs (executable UI specs)
+├── cypress/e2e/step_definitions/ # Cypress step definitions for features
+├── scripts/                  # Test enforcement + generation scripts
 ├── docs/                     # Documentation (Diataxis)
 ├── modal_app.py              # Modal deployment config
 └── pyproject.toml            # Project config (pixi)
@@ -794,6 +799,29 @@ pixi run npx cypress run --browser electron --headless --spec cypress/e2e/matrix
 - `cypress/e2e/new_canvas.cy.js` - New canvas creation tests
 - `cypress/e2e/undo_redo.cy.js` - Global undo/redo tests
 - `cypress/e2e/url_fetch_no_ui_break.cy.js` - URL fetch: dangerous HTML does not break UI
+
+### BDD feature tests (Gherkin)
+
+For user-visible behavior, define `.feature` specs and implement step definitions so the features run in Cypress.
+
+**Workflow:**
+
+- Optional story specs: `specs/user-stories/*.story.md`
+- Generated/hand-authored features: `cypress/e2e/features/*.feature`
+- Step definitions: `cypress/e2e/step_definitions/*.ts`
+- Custom commands: `cypress/support/e2e.js` (use `cy.getByTestId`)
+
+**Generation and enforcement:**
+
+```bash
+node scripts/generate_features.js      # story -> feature (idempotent)
+node scripts/generate_step_stubs.js    # fails if any steps are missing
+node scripts/check_tests_present.js    # CI-only: ensures code changes have tests
+```
+
+**Selector rule:** Use `data-testid` for all UI selectors referenced in `.feature` steps.
+
+**Graph assertions:** Prefer `window.__APP_TEST__.graph.serialize()` for deterministic checks.
 
 ### Unit tests
 

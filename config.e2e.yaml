@@ -1,0 +1,30 @@
+models:
+    - id: 'openai/gpt-4o-mini'
+      name: 'GPT-4o Mini'
+      contextWindow: 128000
+
+plugins:
+    - path: ./src/canvas_chat/static/js/example-plugins/poll.js
+    - path: ./src/canvas_chat/static/js/example-plugins/example-poll-node.js
+    - path: ./src/canvas_chat/static/js/example-plugins/example-agent-plugin.js
+    - path: ./src/canvas_chat/static/js/example-plugins/example-minimal-agent.js
+    - path: ./src/canvas_chat/static/js/example-plugins/example-mcp-tool-plugin.js
+
+agents:
+    - id: reflection-agent
+      name: Reflection Agent
+      slashCommand: /reflect-config
+      engine: built-in
+      model: ''
+      systemPrompt: |
+        You are a reflection agent for tests.
+        Summarize the selected conversation context in 1-2 paragraphs.
+      allowedTools: []
+      budgets:
+        maxTokens: 500
+        maxToolCalls: 2
+        timeoutMs: 15000
+      hitl:
+        requireToolApproval: false
+        requireMutationApproval: false
+      defaultOutputNodeType: reflection
