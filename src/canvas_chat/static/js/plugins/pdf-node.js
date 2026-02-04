@@ -5,13 +5,13 @@
  * PDF nodes represent uploaded PDF documents that can be summarized,
  * used to create flashcards, or replied to.
  */
-import { BaseNode, Actions } from '../node-protocols.js';
-import { NodeRegistry } from '../node-registry.js';
-import { NodeType, createNode } from '../graph-types.js';
 import { FileUploadHandlerPlugin } from '../file-upload-handler-plugin.js';
 import { FileUploadRegistry, PRIORITY } from '../file-upload-registry.js';
-import { setPdfForNode } from './pdf-viewer.js';
+import { NodeType, createNode } from '../graph-types.js';
+import { Actions, BaseNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
 import { apiUrl } from '../utils.js';
+import { setPdfForNode } from './pdf-viewer.js';
 
 /**
  * PdfNode - Protocol for PDF document display
@@ -138,5 +138,5 @@ FileUploadRegistry.register({
     priority: PRIORITY.BUILTIN,
 });
 
-export { PdfNode, PdfFileUploadHandler };
+export { PdfFileUploadHandler, PdfNode };
 console.log('PDF node plugin loaded');

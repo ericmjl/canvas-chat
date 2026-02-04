@@ -2186,6 +2186,16 @@ async def fetch_url_via_jina(url: str, client: httpx.AsyncClient) -> tuple[str, 
     return title, content
 
 
+def _title_from_url(url: str) -> str:
+    """Derive a short title from a URL path (e.g. filename or last path segment)."""
+    filename = url.split("/")[-1].split("?")[0]
+    if not filename:
+        return "document"
+    if not filename.endswith(".pdf"):
+        filename = filename + ".pdf" if filename else "document.pdf"
+    return filename.rsplit(".", 1)[0] if "." in filename else filename
+
+
 def _parse_html_response(response: httpx.Response) -> tuple[str, str]:
     """
     Parse an HTTP response as HTML: extract title and convert body to markdown.
@@ -2238,14 +2248,14 @@ async def fetch_url(request: FetchUrlRequest):
     Design rationale (see docs/explanation/url-fetching.md):
     - This endpoint enables zero-config URL fetching for /note <url>
     - Separate from /api/exa/get-contents which uses Exa API (requires API key)
-    - Jina Reader provides good markdown conversion for most public web pages
-    - Direct fetch fallback ensures robustness when Jina is unavailable
-    - Git repository support enables standalone content extraction from repos
+    - Content-type detection: one GET, then branch on Content-Type (PDF vs HTML)
+    - No URL patterns for PDF; any URL that returns application/pdf is shown as viewer
+    - Git/YouTube use URL-pattern handlers (clone, transcript). Jina fallback for HTML.
     """
     logger.info(f"Fetch URL request: url='{request.url}'")
 
     try:
-        # Check URL fetch registry first
+        # URL-pattern handlers that do their own fetch (git, youtube, etc.)
         handler_config = UrlFetchRegistry.find_handler(request.url)
         if handler_config:
             try:
@@ -2263,45 +2273,47 @@ async def fetch_url(request: FetchUrlRequest):
                     f"URL fetch handler failed, falling back to regular URL fetch: "
                     f"{handler_error}"
                 )
-                # Fall through to regular URL fetching
+                # Fall through
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Try Jina Reader first
+            # One GET; decide by Content-Type (no URL patterns for PDF)
+            response = await client.get(request.url, follow_redirects=True)
+            if response.status_code != 200:
+                raise Exception(f"Fetch returned {response.status_code}")
+
+            # Use final URL after redirects for pdf_url
+            final_url = str(response.url)
+            content_type = (response.headers.get("content-type") or "").lower()
+
+            if "pdf" in content_type:
+                # Return PDF shape; frontend loads and extracts (do not read body)
+                title = _title_from_url(final_url)
+                return FetchUrlResult(
+                    url=final_url,
+                    title=title,
+                    content="",
+                    metadata={
+                        "content_type": "pdf",
+                        "pdf_url": final_url,
+                        "source": "url",
+                    },
+                )
+
+            if "html" in content_type or content_type.startswith("text/"):
+                # Parse as HTML and return markdown
+                title, content = _parse_html_response(response)
+                logger.info(f"Successfully fetched URL directly: {title}")
+                return FetchUrlResult(url=final_url, title=title, content=content)
+
+            # Other content-type: try Jina for better conversion, else use body
             try:
                 title, content = await fetch_url_via_jina(request.url, client)
                 logger.info(f"Successfully fetched URL via Jina: {title}")
                 return FetchUrlResult(url=request.url, title=title, content=content)
             except Exception as jina_error:
-                logger.warning(
-                    f"Jina Reader failed, falling back to direct fetch: {jina_error}"
-                )
-
-            # Fall back to direct fetch: GET once and branch on Content-Type
-            response = await client.get(request.url, follow_redirects=True)
-            if response.status_code != 200:
-                raise Exception(f"Direct fetch returned {response.status_code}")
-
-            content_type = (response.headers.get("content-type") or "").lower()
-            if "pdf" in content_type or request.url.lower().endswith(".pdf"):
-                # Return PDF shape so frontend can load and extract (no jumbled binary)
-                filename = request.url.split("/")[-1].split("?")[0]
-                if not filename.endswith(".pdf"):
-                    filename = filename + ".pdf" if filename else "document.pdf"
-                title = filename.rsplit(".", 1)[0] if "." in filename else filename
-                return FetchUrlResult(
-                    url=request.url,
-                    title=title,
-                    content="",
-                    metadata={
-                        "content_type": "pdf",
-                        "pdf_url": request.url,
-                        "source": "url",
-                    },
-                )
-
+                logger.warning(f"Jina Reader failed: {jina_error}")
             title, content = _parse_html_response(response)
-            logger.info(f"Successfully fetched URL directly: {title}")
-            return FetchUrlResult(url=request.url, title=title, content=content)
+            return FetchUrlResult(url=final_url, title=title, content=content)
 
     except httpx.TimeoutException:
         logger.error(f"Timeout fetching URL: {request.url}")

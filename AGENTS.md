@@ -117,7 +117,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/code-feature.js`      | CodeFeature class      | Self-healing code execution                                  |
 | `src/canvas_chat/static/js/plugins/git-repo.js`  | GitRepoFeature class   | Git repository fetching with file selection (`/git` command) |
 | `src/canvas_chat/static/js/plugins/youtube.js`   | YouTubeFeature class   | YouTube video fetching with transcript (`/youtube` command)  |
-| `src/canvas_chat/static/js/plugins/url-fetch.js` | UrlFetchFeature class  | Generic URL fetching (`/fetch` command)                      |
+| `src/canvas_chat/static/js/plugins/url-fetch.js` | UrlFetchFeature class  | Generic URL fetching (`/fetch`), PDF viewer hydration + pagination (Prev/Next, ←/→) |
 | `src/canvas_chat/static/js/plugins/powerpoint-node.js` | PowerPointFeature + PowerPointNode | PPTX upload, slide navigation drawer, per-slide captioning, slide extraction |
 
 #### Example plugins

@@ -8,6 +8,7 @@
  */
 import { Actions, BaseNode } from '../node-protocols.js';
 import { NodeRegistry } from '../node-registry.js';
+import { PDF_NEXT_PAGE, PDF_PREV_PAGE } from './pdf-viewer.js';
 
 /**
  * FetchResultNode - Protocol for fetched content display
@@ -55,10 +56,31 @@ class FetchResultNode extends BaseNode {
 
     /**
      * Get additional action buttons for this node
-     * @returns {Array<string>}
+     * PDF nodes get Prev/Next page in the action bar; all get Summarize and Flashcards.
+     * @returns {Array<{id: string, label: string, title: string}>}
      */
     getAdditionalActions() {
-        return [Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS];
+        const metadata = this.node.metadata || {};
+        const isPdf =
+            metadata.content_type === 'pdf' && (metadata.pdf_url || metadata.pdf_source === 'upload');
+        const pdfActions = isPdf ? [PDF_PREV_PAGE, PDF_NEXT_PAGE] : [];
+        return [...pdfActions, Actions.SUMMARIZE, Actions.CREATE_FLASHCARDS];
+    }
+
+    /**
+     * Keyboard shortcuts. PDF nodes get ArrowLeft/ArrowRight for prev/next page.
+     * @returns {Object.<string, {action: string, handler: string}>}
+     */
+    getKeyboardShortcuts() {
+        const base = super.getKeyboardShortcuts();
+        const metadata = this.node.metadata || {};
+        const isPdf =
+            metadata.content_type === 'pdf' && (metadata.pdf_url || metadata.pdf_source === 'upload');
+        if (isPdf) {
+            base.ArrowLeft = { action: 'pdf-prev-page', handler: 'pdf-prev-page' };
+            base.ArrowRight = { action: 'pdf-next-page', handler: 'pdf-next-page' };
+        }
+        return base;
     }
 
     /**
@@ -100,8 +122,12 @@ class FetchResultNode extends BaseNode {
             const safeUrl = pdfUrl ? pdfUrl.replace(/"/g, '&quot;') : '';
             return `
                 <div class="pdf-viewer-container" data-node-id="${this.node.id}" ${pdfUrl ? `data-pdf-url="${safeUrl}"` : 'data-pdf-source="upload"'} data-pdf-hydrated="false">
+                    <div class="pdf-viewer-page-info" aria-live="polite">Page 1 of 1</div>
                     <div class="pdf-viewer-loading">Loading PDF…</div>
-                    <canvas class="pdf-viewer-canvas" aria-label="PDF first page" style="display:none;"></canvas>
+                    <div class="pdf-viewer-page" style="display:none;">
+                        <canvas class="pdf-viewer-canvas" aria-label="PDF page"></canvas>
+                        <div class="pdf-viewer-text-layer" aria-hidden="true"></div>
+                    </div>
                 </div>
             `;
         }
