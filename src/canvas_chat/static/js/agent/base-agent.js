@@ -79,6 +79,7 @@ const logger = createComponentLogger('BaseAgent');
  * @property {string} [description] - Human-readable description
  * @property {Function} [handler] - Direct handler function (bypasses RunController)
  * @property {FeaturePlugin} [feature] - Reference to FeaturePlugin (for direct dispatch)
+ * @property {Object} [commandConfig] - Slash command metadata (e.g., prerequisites)
  */
 
 // =============================================================================
@@ -196,6 +197,7 @@ class BaseAgent {
      * @param {Object} [options] - Additional options
      * @param {Function} [options.handler] - Direct handler (bypasses RunController)
      * @param {Object} [options.feature] - Reference to FeaturePlugin
+     * @param {Object} [options.commandConfig] - Slash command metadata (e.g., requiresSelection)
      */
     registerSubAgent(command, agentDef, description = '', options = {}) {
         logger.enter('BaseAgent.registerSubAgent', { command, agentId: agentDef.id });
@@ -205,6 +207,11 @@ class BaseAgent {
             this.runController.registerAgent(agentDef);
         }
 
+        const commandConfig = { ...(options.commandConfig || {}) };
+        if (agentDef?.postCreate?.usePathContext && commandConfig.requiresSelection === undefined) {
+            commandConfig.requiresSelection = true;
+        }
+
         // Map command to agent
         this.subAgents.set(command, {
             command,
@@ -212,6 +219,7 @@ class BaseAgent {
             description: description || agentDef.description || '',
             handler: options.handler || undefined,
             feature: /** @type {FeaturePlugin|undefined} */ (options.feature) || undefined,
+            commandConfig,
         });
 
         logger.info(`Registered sub-agent for ${command}: ${agentDef.id}${options.handler ? ' (direct handler)' : ''}`);
@@ -242,6 +250,29 @@ class BaseAgent {
      */
     listSubAgents() {
         return Array.from(this.subAgents.values());
+    }
+
+    /**
+     * Get all sub-agent slash commands in the format expected by slash-command-menu.
+     * This includes config-based agents registered via registerSubAgent().
+     * @returns {Array<{command: string, description: string}>}
+     */
+    getSlashCommands() {
+        const commands = [];
+        for (const [command, registration] of this.subAgents.entries()) {
+            // Skip feature-backed sub-agents (they report their own commands)
+            if (registration.feature) {
+                continue;
+            }
+            const commandConfig = registration.commandConfig || {};
+            const { command: _ignoredCmd, description: _ignoredDesc, ...metadata } = commandConfig;
+            commands.push({
+                command: command,
+                description: registration.description || registration.agentDef?.description || '',
+                ...metadata,
+            });
+        }
+        return commands;
     }
 
     /**
@@ -307,6 +338,7 @@ class BaseAgent {
             this.registerSubAgent(command, agentDef, description, {
                 handler,
                 feature,
+                commandConfig: cmdConfig,
             });
             logger.info(
                 `Auto-registered feature ${feature.constructor.name} as sub-agent for ${command}${handler ? ' (direct)' : ''}`
@@ -427,6 +459,20 @@ class BaseAgent {
         console.log('[BaseAgent] Registered sub-agents:', Array.from(this.subAgents.keys()));
 
         if (subAgentReg) {
+            const prereqError = this._getSlashCommandPrereqError(subAgentReg, {
+                args,
+                context,
+                selectedNodeIds,
+            });
+            if (prereqError) {
+                logger.warn(`Prerequisite check failed for ${command}: ${prereqError}`);
+                return {
+                    success: false,
+                    error: prereqError,
+                    subAgentId: subAgentReg.agentId,
+                };
+            }
+
             // Check for direct handler (bypasses RunController)
             if (subAgentReg.handler) {
                 logger.info(`Delegating ${command} to direct handler: ${subAgentReg.agentId}`);
@@ -498,6 +544,37 @@ class BaseAgent {
             success: false,
             error: `Unknown command: ${command}`,
         };
+    }
+
+    /**
+     * Check slash command prerequisites from registration metadata.
+     * @private
+     * @param {SubAgentRegistration} subAgentReg
+     * @param {{args: string, context: string|null, selectedNodeIds: string[]}} input
+     * @returns {string|null} Error message if prereqs fail, otherwise null
+     */
+    _getSlashCommandPrereqError(subAgentReg, input) {
+        const commandConfig = subAgentReg.commandConfig || {};
+        const hasArgs = input.args && input.args.trim().length > 0;
+        const hasContextText = typeof input.context === 'string' && input.context.trim().length > 0;
+        const hasSelection = (input.selectedNodeIds || []).length > 0;
+        const hasContext = hasArgs || hasContextText || hasSelection;
+
+        if (commandConfig.requiresSelection && !hasSelection) {
+            return (
+                commandConfig.requiresSelectionMessage ||
+                `Please select a node before running ${subAgentReg.command}`
+            );
+        }
+
+        if (commandConfig.requiresContext && !hasContext) {
+            return (
+                commandConfig.requiresContextMessage ||
+                `Please provide text or select a node before running ${subAgentReg.command}`
+            );
+        }
+
+        return null;
     }
 
     /**

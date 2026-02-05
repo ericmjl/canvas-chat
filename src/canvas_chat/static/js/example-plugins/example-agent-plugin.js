@@ -138,8 +138,7 @@ class AnalyzerFeature extends FeaturePlugin {
     constructor(context) {
         super(context);
 
-        // Store references to core APIs
-        this.graph = context.graph;
+        // Store references to core APIs (graph is accessed via FeaturePlugin getter)
         this.canvas = context.canvas;
         this.chat = context.chat;
 

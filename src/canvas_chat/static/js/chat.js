@@ -328,6 +328,96 @@ class Chat {
     }
 
     /**
+     * Stream a completion as an async iterator of chunks.
+     * This is used by agent engines that expect an async iterable.
+     * @param {Object} options
+     * @param {string} [options.model] - Model ID
+     * @param {ChatMessage[]} options.messages - Messages to send
+     * @param {AbortSignal} [options.signal] - Abort signal
+     * @returns {AsyncGenerator<{content?: string, usage?: Object}, void, void>}
+     */
+    async *streamCompletion(options) {
+        const model = options.model || storage.getCurrentModel();
+        const messages = options.messages || [];
+        const abortController = new AbortController();
+
+        if (options.signal) {
+            if (options.signal.aborted) {
+                abortController.abort();
+            } else {
+                options.signal.addEventListener(
+                    'abort',
+                    () => {
+                        abortController.abort();
+                    },
+                    { once: true }
+                );
+            }
+        }
+
+        /** @type {Array<{content?: string, usage?: Object}>} */
+        const queue = [];
+        let done = false;
+        let error = null;
+        let wake = null;
+
+        const notify = () => {
+            if (wake) {
+                wake();
+                wake = null;
+            }
+        };
+
+        const push = (item) => {
+            queue.push(item);
+            notify();
+        };
+
+        const waitForItem = () =>
+            new Promise((resolve) => {
+                wake = resolve;
+            });
+
+        this.sendMessage(
+            messages,
+            model,
+            (chunk) => {
+                if (chunk) {
+                    push({ content: chunk });
+                }
+            },
+            () => {
+                done = true;
+                notify();
+            },
+            (err) => {
+                error = err;
+                done = true;
+                notify();
+            },
+            abortController
+        ).catch((err) => {
+            error = err;
+            done = true;
+            notify();
+        });
+
+        while (!done || queue.length > 0) {
+            if (queue.length === 0) {
+                await waitForItem();
+            }
+
+            while (queue.length > 0) {
+                yield queue.shift();
+            }
+        }
+
+        if (error) {
+            throw error;
+        }
+    }
+
+    /**
      * Summarize a branch of conversation
      * @param {Array<ChatMessage>} messages - Conversation messages
      * @param {string} model - Model ID

@@ -222,7 +222,6 @@ When analyzing content:
 class MCPToolFeature extends FeaturePlugin {
     constructor(context) {
         super(context);
-        this.graph = context.graph;
         this.canvas = context.canvas;
         this.chat = context.chat;
     }

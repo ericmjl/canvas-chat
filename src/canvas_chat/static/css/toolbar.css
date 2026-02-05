@@ -300,6 +300,26 @@
     pointer-events: none;
 }
 
+.toast-notification.toast-success {
+    background: var(--success);
+    color: #0f1f10;
+}
+
+.toast-notification.toast-warning {
+    background: var(--warning);
+    color: #1e1e1e;
+}
+
+.toast-notification.toast-error {
+    background: var(--danger);
+    color: #ffffff;
+}
+
+.toast-notification.toast-info {
+    background: var(--accent);
+    color: #ffffff;
+}
+
 .toast-notification.show {
     opacity: 1;
     transform: translateX(-50%) translateY(0);

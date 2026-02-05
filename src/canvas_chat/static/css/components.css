@@ -1115,6 +1115,13 @@
     font-style: italic;
 }
 
+/* Requires selected node hint in slash menu */
+.requires-selection {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 /* Requires CSV hint in slash menu */
 .requires-csv {
     font-size: 10px;

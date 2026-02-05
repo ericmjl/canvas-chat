@@ -274,8 +274,9 @@ class SlashCommandMenu {
 
         const isExaDisabled = cmd.requiresExa && !hasExa;
         const isContextDisabled = cmd.requiresContext && !hasContext;
+        const isSelectionDisabled = cmd.requiresSelection && !hasSelectedNodes;
         const isCsvDisabled = cmd.requiresCsv && !hasSelectedCsv;
-        return isExaDisabled || isContextDisabled || isCsvDisabled;
+        return isExaDisabled || isContextDisabled || isSelectionDisabled || isCsvDisabled;
     }
 
     /**
@@ -294,14 +295,17 @@ class SlashCommandMenu {
             .map((cmd, index) => {
                 const isExaDisabled = cmd.requiresExa && !hasExa;
                 const isContextDisabled = cmd.requiresContext && !hasContext;
+                const isSelectionDisabled = cmd.requiresSelection && !hasSelectedNodes;
                 const isCsvDisabled = cmd.requiresCsv && !hasSelectedCsv;
-                const isDisabled = isExaDisabled || isContextDisabled || isCsvDisabled;
+                const isDisabled = isExaDisabled || isContextDisabled || isSelectionDisabled || isCsvDisabled;
                 const disabledClass = isDisabled ? 'disabled' : '';
                 let disabledSuffix = '';
                 if (isExaDisabled) {
                     disabledSuffix = ' <span class="requires-exa">(requires Exa)</span>';
                 } else if (isContextDisabled) {
                     disabledSuffix = ' <span class="requires-context">(requires text or selected node)</span>';
+                } else if (isSelectionDisabled) {
+                    disabledSuffix = ' <span class="requires-selection">(requires selected node)</span>';
                 } else if (isCsvDisabled) {
                     disabledSuffix = ' <span class="requires-csv">(requires selected CSV node)</span>';
                 }

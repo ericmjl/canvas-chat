@@ -1267,6 +1267,147 @@
     background: rgba(0, 0, 0, 0.1);
 }
 
+/* Execution trace footer */
+.execution-trace {
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    padding: 8px 12px 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.execution-trace-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.execution-trace-title {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.execution-trace-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+.execution-trace-toggle {
+    border: none;
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    padding: 2px 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.execution-trace-toggle:hover {
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.execution-trace-details {
+    display: none;
+    margin-top: 8px;
+    border-top: 1px dashed rgba(0, 0, 0, 0.08);
+    padding-top: 8px;
+}
+
+.execution-trace.expanded .execution-trace-details {
+    display: block;
+}
+
+.execution-trace-section {
+    margin-bottom: 8px;
+}
+
+.execution-trace-section:last-child {
+    margin-bottom: 0;
+}
+
+.execution-trace-section-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.execution-trace-section-summary {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.execution-trace-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.execution-trace-step-icon {
+    display: inline-block;
+    width: 16px;
+    color: var(--text-muted);
+}
+
+.execution-trace-step-text {
+    color: var(--text-primary);
+}
+
+.execution-trace-timestamp {
+    margin-left: 6px;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* Working progress inside nodes */
+.working-progress {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    border: 1px dashed rgba(0, 0, 0, 0.08);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.working-progress-header {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.working-progress-tool {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.working-progress-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.working-progress-placeholder {
+    color: var(--text-muted);
+}
+
+.working-progress-timestamp {
+    margin-left: 6px;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
 /* Error node styling */
 .node.error-node {
     border-color: var(--danger);

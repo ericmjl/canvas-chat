@@ -31,7 +31,6 @@ const MY_AGENT = createAgentDefinition({
 class MinimalAgentFeature extends FeaturePlugin {
     constructor(context) {
         super(context);
-        this.graph = context.graph;
         this.canvas = context.canvas;
     }
 

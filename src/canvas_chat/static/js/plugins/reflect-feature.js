@@ -73,6 +73,8 @@ export class ReflectFeature extends FeaturePlugin {
                 command: '/reflect',
                 description: 'Analyze the path to this node and create a reflection',
                 placeholder: 'Reflecting on conversation path...',
+                requiresSelection: true,
+                requiresSelectionMessage: 'Please select a node to reflect on',
             },
         ];
     }
@@ -233,11 +235,6 @@ export class ReflectFeature extends FeaturePlugin {
             if (this.canvas.onReflectionComplete) {
                 this.canvas.onReflectionComplete(resultUI);
             }
-
-            this.showToast?.(
-                `✨ Reflection complete! Created reflection node with ${resultUI.synthesis.length} characters of analysis.`,
-                'success'
-            );
 
             logger.exit('ReflectFeature.handleCommand', {
                 reflectionNodeId: reflectionNode.id.slice(0, 8),

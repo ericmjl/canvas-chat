@@ -294,11 +294,17 @@ class RunController {
 
             logger.table('Run metrics', run.metrics);
 
+            // Attach execution trace to artifacts before retention
+            this._attachExecutionTraceToArtifacts(run);
+
             // Retain memories from run
             logger.debug('Retaining run memories...');
             await this._retainRunMemories(run);
 
             // Final run node update
+            // Attach execution trace to artifacts even on failure
+            this._attachExecutionTraceToArtifacts(run);
+
             await this._updateRunNode(runNodeId, run);
 
             logger.info(`Run ${runId} completed with status: ${run.status}`);
@@ -562,6 +568,12 @@ class RunController {
                 );
                 run.plan = event.data.plan;
                 break;
+
+            case EventType.PROGRESS_UPDATE:
+                if (event.data?.message) {
+                    run.lastProgress = event.data.message;
+                }
+                break;
         }
 
         // Always record the event
@@ -683,7 +695,7 @@ class RunController {
             }
         }
 
-        this.canvas.render();
+        // Graph updates trigger canvas re-render via observers; no direct render call here.
         logger.exit('RunController._createRunNode', { nodeId: runNode.id });
         return runNode.id;
     }
@@ -732,6 +744,10 @@ class RunController {
             }
         }
 
+        if (run.lastProgress) {
+            content += `\n**Progress:** ${run.lastProgress}\n`;
+        }
+
         if (run.metrics.tokensUsed > 0) {
             content += `\n**Tokens:** ${run.metrics.tokensUsed}`;
         }
@@ -749,7 +765,10 @@ class RunController {
             completedAt: run.completedAt,
         });
 
-        this.canvas.renderNode(nodeId);
+        const updatedNode = this.graph.getNode(nodeId);
+        if (updatedNode) {
+            this.canvas.renderNode(updatedNode);
+        }
     }
 
     /**
@@ -812,7 +831,7 @@ class RunController {
             await this._executePostCreateHooks(artifactNode.id, run, agentDef.postCreate);
         }
 
-        this.canvas.render();
+        // Graph updates trigger canvas re-render via observers; no direct render call here.
         logger.exit('RunController._createArtifactNode', { nodeId: artifactNode.id });
         return artifactNode.id;
     }
@@ -943,6 +962,135 @@ class RunController {
         }
 
         logger.exit('RunController._executePostCreateHooks');
+    }
+
+    /**
+     * Build a safe execution trace summary for display.
+     * Avoids including chain-of-thought or raw scratchpad content.
+     * @private
+     * @param {import('./agent-types.js').AgentRun} run
+     * @returns {Object}
+     */
+    _buildExecutionTrace(run) {
+        /** @type {Map<string, {toolId: string, count: number, totalDurationMs: number}>} */
+        const toolCalls = new Map();
+        /** @type {Array<{message: string, timestamp: number}>} */
+        const progress = [];
+        /** @type {Array<{agentId: string, timestamp: number, childRunId?: string}>} */
+        const subagents = [];
+        /** @type {Array<{actionType: string, timestamp: number, approved?: boolean}>} */
+        const approvals = [];
+
+        for (const event of run.events) {
+            switch (event.type) {
+                case EventType.PROGRESS_UPDATE: {
+                    const message = event.data?.message;
+                    if (message) {
+                        progress.push({ message, timestamp: event.timestamp });
+                    }
+                    break;
+                }
+                case EventType.TOOL_CALL_COMPLETED: {
+                    const toolId = event.data?.toolId || 'tool';
+                    const duration = event.data?.durationMs || 0;
+                    const entry = toolCalls.get(toolId) || { toolId, count: 0, totalDurationMs: 0 };
+                    entry.count += 1;
+                    entry.totalDurationMs += duration;
+                    toolCalls.set(toolId, entry);
+                    break;
+                }
+                case EventType.SUBAGENT_SPAWN_REQUESTED: {
+                    const agentId = event.data?.agentId;
+                    if (agentId) {
+                        subagents.push({ agentId, timestamp: event.timestamp });
+                    }
+                    break;
+                }
+                case EventType.SUBAGENT_SPAWN_COMPLETED: {
+                    const agentId = event.data?.agentId;
+                    if (agentId) {
+                        subagents.push({
+                            agentId,
+                            timestamp: event.timestamp,
+                            childRunId: event.data?.childRunId,
+                        });
+                    }
+                    break;
+                }
+                case EventType.APPROVAL_REQUESTED: {
+                    const actionType = event.data?.actionType || 'approval';
+                    approvals.push({ actionType, timestamp: event.timestamp });
+                    break;
+                }
+                case EventType.APPROVAL_RESOLVED: {
+                    const actionType = event.data?.actionType || 'approval';
+                    approvals.push({
+                        actionType,
+                        timestamp: event.timestamp,
+                        approved: event.data?.approved,
+                    });
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+
+        return {
+            status: run.status,
+            startedAt: run.startedAt,
+            completedAt: run.completedAt,
+            plan: run.plan
+                ? {
+                      summary: run.plan.summary,
+                      currentStepIndex: run.plan.currentStepIndex,
+                      steps: run.plan.steps.map((step) => ({
+                          id: step.id,
+                          description: step.description,
+                          status: step.status,
+                          result: step.result || null,
+                      })),
+                  }
+                : null,
+            progress,
+            toolCalls: Array.from(toolCalls.values()),
+            subagents,
+            approvals,
+            metrics: run.metrics,
+            error: run.error || null,
+        };
+    }
+
+    /**
+     * Attach execution trace metadata to artifact nodes produced by the run.
+     * @private
+     * @param {import('./agent-types.js').AgentRun} run
+     */
+    _attachExecutionTraceToArtifacts(run) {
+        if (!run?.artifactNodeIds?.length) {
+            return;
+        }
+
+        const trace = this._buildExecutionTrace(run);
+
+        for (const artifactNodeId of run.artifactNodeIds) {
+            const node = this.graph.getNode(artifactNodeId);
+            if (!node) continue;
+
+            const existingMetadata = node.metadata || {};
+            const existingTrace = existingMetadata.executionTrace || {};
+            const expanded = typeof existingTrace.expanded === 'boolean' ? existingTrace.expanded : false;
+
+            this.graph.updateNode(artifactNodeId, {
+                metadata: {
+                    ...existingMetadata,
+                    executionTrace: {
+                        ...trace,
+                        expanded,
+                    },
+                },
+            });
+        }
     }
 
     /**

@@ -164,6 +164,82 @@ When('I create a {string} node via the app API', (nodeType) => {
     });
 });
 
+When('I create a {string} node and store its id as {string}', (nodeType, alias) => {
+    cy.window().then((win) => {
+        const app = win.app;
+        const graph = app?.graph;
+        if (!graph) {
+            throw new Error('Graph not initialized');
+        }
+        const node = {
+            id: win.crypto.randomUUID(),
+            type: nodeType,
+            content: 'Test content',
+            position: { x: 0, y: 0 },
+            width: 420,
+            height: 200,
+            created_at: Date.now(),
+            tags: [],
+            title: null,
+            summary: null,
+            model: null,
+            selection: null,
+        };
+        graph.addNode(node);
+        cy.wrap(node.id, { log: false }).as(alias);
+    });
+});
+
+When('I select the node stored as {string}', (alias) => {
+    cy.get<string>(`@${alias}`).then((nodeId) => {
+        cy.window().then((win) => {
+            const canvas = win.app?.canvas;
+            if (!canvas) {
+                throw new Error('Canvas not initialized');
+            }
+            canvas.selectNode(nodeId);
+        });
+    });
+});
+
+When('I record the current node count as {string}', (alias) => {
+    cy.window()
+        .its('__APP_TEST__')
+        .its('graph')
+        .invoke('serialize')
+        .then((graph) => {
+            cy.wrap(graph.nodes.length, { log: false }).as(alias);
+        });
+});
+
+Then('the graph node count should be unchanged from {string}', (alias) => {
+    cy.get<number>(`@${alias}`).then((count) => {
+        cy.window()
+            .its('__APP_TEST__')
+            .its('graph')
+            .invoke('serialize')
+            .should((graph) => {
+                expect(graph.nodes.length).to.equal(count);
+            });
+    });
+});
+
+Then('the graph should have at least {int} more node than {string}', (delta, alias) => {
+    cy.get<number>(`@${alias}`).then((count) => {
+        cy.window()
+            .its('__APP_TEST__')
+            .its('graph')
+            .invoke('serialize')
+            .should((graph) => {
+                expect(graph.nodes.length).to.be.gte(count + delta);
+            });
+    });
+});
+
+Then('I should see a toast with text {string}', (message) => {
+    cy.get('.toast-notification', { timeout: 10000 }).should('be.visible').and('contain', message);
+});
+
 Then('the graph should have at least {int} nodes', (minNodes) => {
     cy.window()
         .its('__APP_TEST__')

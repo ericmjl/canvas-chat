@@ -708,7 +708,8 @@ class App {
             .on('nodeFetchSummarize', this.handleNodeFetchSummarize.bind(this))
             .on('nodeDelete', this.handleNodeDelete.bind(this))
             .on('nodeCopy', this.copyNodeContent.bind(this))
-            .on('nodeTitleEdit', (nodeId) => this.modalManager.handleNodeTitleEdit(nodeId));
+            .on('nodeTitleEdit', (nodeId) => this.modalManager.handleNodeTitleEdit(nodeId))
+            .on('nodeToggleTrace', (nodeId) => this.handleNodeToggleTrace(nodeId));
         // Streaming control events (now handled by StreamingManager via setCanvas)
         this.canvas
             .on('nodeRetry', this.handleNodeRetry.bind(this))
@@ -1408,10 +1409,7 @@ class App {
 
             if (!result.success && result.error) {
                 console.error('[App] BaseAgent error:', result.error);
-                // For unknown commands, show a toast or notification
-                if (result.error.startsWith('Unknown command:')) {
-                    console.warn(result.error);
-                }
+                this.showToast?.(result.error, 'error');
             }
 
             // Clear selection after successful execution
@@ -2454,6 +2452,30 @@ class App {
         this.canvas.clearSelection();
         this.canvas.selectNode(nodeId);
         this.chatInput.focus();
+    }
+
+    /**
+     * Toggle execution trace visibility on an agent output node.
+     * @param {string} nodeId
+     */
+    handleNodeToggleTrace(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node?.metadata?.executionTrace) {
+            return;
+        }
+
+        const currentTrace = node.metadata.executionTrace;
+        const expanded = !currentTrace.expanded;
+
+        this.graph.updateNode(nodeId, {
+            metadata: {
+                ...node.metadata,
+                executionTrace: {
+                    ...currentTrace,
+                    expanded,
+                },
+            },
+        });
     }
 
     /**
@@ -4004,7 +4026,6 @@ class App {
                 timestamp: Date.now(),
             };
         }
-
         const isType = typeof typeOrDuration === 'string';
         const type = isType ? typeOrDuration : null;
         const timeout =

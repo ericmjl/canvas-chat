@@ -481,6 +481,20 @@ Plugins can be configured in `config.yaml` with three formats:
 
 Python plugins are loaded dynamically at startup via `importlib`. JavaScript plugins are served via `/api/plugins/{name}` and injected into HTML. Python endpoint plugins (e.g. `pptx_endpoints`, `ddg_endpoints`) register routes via `register_endpoints(app)` in `app.py`.
 
+### Agent execution trace
+
+Agent runs record a safe execution trace (plan, progress updates, tool calls, approvals, subagent spawns, metrics) and attach it to output nodes as `node.metadata.executionTrace`. Canvas renders this as a footer inside the node with a toggle to expand details. The trace is built in `run-controller.js` and is **not** chain-of-thought.
+
+### Slash command prerequisites
+
+Slash commands can declare prerequisite metadata to drive UI disabling and BaseAgent preflight checks:
+
+- `requiresContext`: requires input text or selected nodes
+- `requiresSelection`: requires at least one selected node
+- `requiresCsv`: requires a selected CSV node
+
+Feature plugins provide this metadata via `getSlashCommands()`. Config-based agents automatically get `requiresSelection` when `postCreate.usePathContext` is enabled.
+
 #### When to use each level
 
 **Custom Node Types** (Level 1):
