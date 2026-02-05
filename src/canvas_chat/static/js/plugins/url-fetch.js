@@ -16,7 +16,7 @@ import {
     extractTextFromDocument,
     getPdfForNode,
     loadDocument,
-    renderPageWithTextLayer,
+    renderPageToCanvas,
 } from './pdf-viewer.js';
 
 /**
@@ -205,7 +205,9 @@ export class UrlFetchFeature extends FeaturePlugin {
         const container = wrapper?.querySelector?.('.pdf-viewer-container');
         const state = container?._pdfState;
         if (state && state.currentPage > 1) {
-            state.showPage(state.currentPage - 1);
+            const newPage = state.currentPage - 1;
+            state.showPage(newPage);
+            this.scrollOutputPanelToPage(nodeId, newPage);
         }
     }
 
@@ -218,7 +220,24 @@ export class UrlFetchFeature extends FeaturePlugin {
         const container = wrapper?.querySelector?.('.pdf-viewer-container');
         const state = container?._pdfState;
         if (state && state.currentPage < state.numPages) {
-            state.showPage(state.currentPage + 1);
+            const newPage = state.currentPage + 1;
+            state.showPage(newPage);
+            this.scrollOutputPanelToPage(nodeId, newPage);
+        }
+    }
+
+    /**
+     * Scroll the node's output panel to the given PDF page heading.
+     * @param {string} nodeId - Node ID
+     * @param {number} pageNum - 1-based page number
+     */
+    scrollOutputPanelToPage(nodeId, pageNum) {
+        const outputPanel = this.canvas?.outputPanels?.get(nodeId);
+        if (!outputPanel) return;
+        const panelBody = outputPanel.querySelector('.code-output-panel-body');
+        const heading = panelBody?.querySelector(`#pdf-page-${pageNum}`);
+        if (heading && panelBody) {
+            heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
 
@@ -247,7 +266,6 @@ export class UrlFetchFeature extends FeaturePlugin {
                 const pdfDoc = await loadDocument(source);
                 const numPages = pdfDoc.numPages;
                 const canvasEl = container.querySelector('.pdf-viewer-canvas');
-                const textLayerEl = container.querySelector('.pdf-viewer-text-layer');
                 const pageWrap = container.querySelector('.pdf-viewer-page');
                 const pageInfo = container.querySelector('.pdf-viewer-page-info');
                 const loadingEl = container.querySelector('.pdf-viewer-loading');
@@ -256,16 +274,16 @@ export class UrlFetchFeature extends FeaturePlugin {
                 const state = { currentPage: 1, numPages };
 
                 const showPage = async (pageNum) => {
-                    if (!canvasEl || !textLayerEl) return;
+                    if (!canvasEl) return;
                     state.currentPage = pageNum;
-                    await renderPageWithTextLayer(pdfDoc, pageNum, canvasEl, textLayerEl, scale);
+                    await renderPageToCanvas(pdfDoc, pageNum, canvasEl, scale);
                     if (pageInfo) pageInfo.textContent = `Page ${pageNum} of ${numPages}`;
                 };
 
                 state.showPage = showPage;
                 container._pdfState = state;
 
-                if (canvasEl && textLayerEl && pageWrap && loadingEl) {
+                if (canvasEl && pageWrap && loadingEl) {
                     await showPage(1);
                     loadingEl.style.display = 'none';
                     pageWrap.style.display = 'block';
@@ -276,7 +294,7 @@ export class UrlFetchFeature extends FeaturePlugin {
                 const title = node.title || 'PDF';
                 const newContent = `**[${title}]**\n\n${text}`;
                 if (!(node.content || '').trim()) {
-                    this.graph.updateNode(nodeId, { content: newContent });
+                    this.graph.updateNode(nodeId, { content: newContent, outputExpanded: true });
                     const summaryEl = wrapper.querySelector('.node-summary .summary-text');
                     if (summaryEl && this.canvas?.truncate) {
                         const plain = (newContent || '').replace(/[#*_`>\[\]()!]/g, '').trim();

@@ -690,7 +690,7 @@ class Canvas {
     }
 
     /**
-     * Handle text selection changes to show/hide branch tooltip
+     * Handle text selection changes to show/hide branch tooltip and PDF selection overlay
      */
     handleSelectionChange() {
         // If user is interacting with the tooltip (e.g., typing in input), don't update
@@ -714,18 +714,31 @@ class Canvas {
             return;
         }
 
-        // Check if selection is within a node's content
+        // Check if selection is within a node's content or an output panel
         const anchorNode = selection.anchorNode;
         if (!anchorNode) return;
 
-        const nodeContent = anchorNode.parentElement?.closest('.node-content');
-        if (!nodeContent) return;
+        // Selection inside PDF text layer: show highlight overlay only, no branch tooltip
+        if (anchorNode.closest?.('.pdf-viewer-text-layer')) {
+            return;
+        }
 
-        const nodeWrapper = nodeContent.closest('.node-wrapper');
-        if (!nodeWrapper) return;
+        const parentElement =
+            anchorNode.nodeType === Node.TEXT_NODE ? anchorNode.parentElement : anchorNode;
+        let nodeContent = parentElement?.closest('.node-content');
+        let nodeId = null;
 
-        // Get the node ID from the wrapper
-        const nodeId = nodeWrapper.getAttribute('data-node-id');
+        if (nodeContent) {
+            const nodeWrapper = nodeContent.closest('.node-wrapper');
+            nodeId = nodeWrapper?.getAttribute('data-node-id');
+        } else {
+            const outputPanelBody = parentElement?.closest('.code-output-panel-body');
+            if (outputPanelBody) {
+                const outputWrapper = outputPanelBody.closest('.output-panel-wrapper');
+                nodeId = outputWrapper?.getAttribute('data-node-id');
+            }
+        }
+
         if (!nodeId) return;
 
         this.activeSelectionNodeId = nodeId;
@@ -740,6 +753,7 @@ class Canvas {
 
         this.showBranchTooltip(tooltipX, tooltipY);
     }
+
 
     // --- PDF Drag & Drop Handlers ---
 
@@ -920,8 +934,18 @@ class Canvas {
      * @param e
      */
     handleMouseDown(e) {
-        // Ignore if clicking on a node
+        // Ignore if clicking on a node (direct hit on .node or its children)
         if (e.target.closest('.node')) {
+            return;
+        }
+        // Ignore if clicking on an output panel (drawer) - allow text selection/highlighting
+        if (e.target.closest('.output-panel-wrapper')) {
+            return;
+        }
+        // With pointer-events: none on foreignObject (.node-wrapper), events should
+        // go directly to the HTML content inside. This check is a fallback for any
+        // edge cases where the foreignObject is still the target.
+        if (e.target?.classList?.contains('node-wrapper')) {
             return;
         }
 
@@ -2638,13 +2662,15 @@ class Canvas {
                     };
                     this.updateEdgesForNode(node.id, currentPos);
 
-                    // Update output panel position if present (for code nodes with drawers)
+                    // Update output panel size and position (keep same width ratio as node)
                     const outputPanel = this.outputPanels.get(node.id);
                     if (outputPanel) {
-                        const panelWidth = parseFloat(outputPanel.getAttribute('width'));
+                        const panelWidthRatio = 0.9;
+                        const panelWidth = newWidth * panelWidthRatio;
                         const panelOverlap = 10;
                         const panelX = currentPos.x + (newWidth - panelWidth) / 2;
                         const panelY = currentPos.y + newHeight - panelOverlap;
+                        outputPanel.setAttribute('width', panelWidth);
                         outputPanel.setAttribute('x', panelX);
                         outputPanel.setAttribute('y', panelY);
                     }
@@ -3303,18 +3329,42 @@ class Canvas {
         // Get the text content and find the match
         const originalHtml = contentEl.dataset.originalHtml;
 
-        // Create a case-insensitive regex to find the text
-        // Escape special regex characters in the search text
-        const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const _regex = new RegExp(`(${escapedText})`, 'gi');
-
         // Replace matching text with highlighted version
-        // We need to be careful not to break HTML tags
         const highlightedHtml = this.highlightTextInHtml(originalHtml, text);
         contentEl.innerHTML = highlightedHtml;
 
         // Scroll the highlight into view within the node if needed
         const mark = contentEl.querySelector('.source-highlight');
+        if (mark) {
+            mark.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }
+
+    /**
+     * Highlight specific text within a node's output panel (e.g. PDF drawer).
+     * Used when the source text lives in the output panel, not in .node-content.
+     * @param {string} nodeId - The node whose output panel to highlight in
+     * @param {string} text - The text to highlight
+     */
+    highlightTextInOutputPanel(nodeId, text) {
+        if (!text) return;
+        const panelWrapper = this.outputPanels.get(nodeId);
+        if (!panelWrapper) return;
+
+        const panelBody = panelWrapper.querySelector('.code-output-panel-body');
+        if (!panelBody) return;
+
+        // Store original HTML if not already stored
+        if (!panelBody.dataset.originalHtml) {
+            panelBody.dataset.originalHtml = panelBody.innerHTML;
+        }
+
+        const originalHtml = panelBody.dataset.originalHtml;
+        const highlightedHtml = this.highlightTextInHtml(originalHtml, text);
+        panelBody.innerHTML = highlightedHtml;
+
+        // Scroll the highlight into view within the output panel
+        const mark = panelBody.querySelector('.source-highlight');
         if (mark) {
             mark.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
@@ -3332,16 +3382,24 @@ class Canvas {
     }
 
     /**
-     * Clear all source text highlights from nodes
+     * Clear all source text highlights from nodes and output panels
      */
     clearSourceTextHighlights() {
-        // Find all nodes with stored original HTML and restore them
+        // Restore node content areas
         const wrappers = this.nodesLayer.querySelectorAll('.node-wrapper');
         for (const wrapper of wrappers) {
             const contentEl = wrapper.querySelector('.node-content');
             if (contentEl && contentEl.dataset.originalHtml) {
                 contentEl.innerHTML = contentEl.dataset.originalHtml;
                 delete contentEl.dataset.originalHtml;
+            }
+        }
+        // Restore output panel bodies (e.g. PDF drawer)
+        for (const panelWrapper of this.outputPanels.values()) {
+            const panelBody = panelWrapper.querySelector('.code-output-panel-body');
+            if (panelBody && panelBody.dataset.originalHtml) {
+                panelBody.innerHTML = panelBody.dataset.originalHtml;
+                delete panelBody.dataset.originalHtml;
             }
         }
     }

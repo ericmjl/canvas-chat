@@ -8,8 +8,8 @@
  * highlight the source text when a highlight node is selected.
  */
 
-import { NodeType } from '../graph-types.js';
 import { FeaturePlugin } from '../feature-plugin.js';
+import { NodeType } from '../graph-types.js';
 
 /**
  * HighlightFeature class manages all highlight-related functionality.
@@ -81,7 +81,15 @@ class HighlightFeature extends FeaturePlugin {
 
         if (!excerptText) return;
 
-        // Highlight the matching text in the parent node
+        const metadata = parentNode.metadata || {};
+        // PDF nodes: source text is in the output panel (drawer), not in .node-content.
+        // Highlight in the panel and scroll to it; do not touch .node-content (would destroy PDF viewer).
+        if (metadata.content_type === 'pdf') {
+            this.canvas.highlightTextInOutputPanel(parentNode.id, excerptText);
+            return;
+        }
+
+        // Highlight the matching text in the parent node's main content
         this.canvas.highlightTextInNode(parentNode.id, excerptText);
     }
 }
