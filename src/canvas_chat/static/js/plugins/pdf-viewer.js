@@ -85,39 +85,17 @@ export async function renderPageToCanvas(pdfDoc, pageNum, canvas, scale = 1.5) {
 }
 
 /**
- * Render one page to canvas and add a selectable text layer overlay.
+ * Render one page to canvas only (no text layer).
+ * Text selection is provided via the output panel with extracted text.
  * @param {import('pdfjs-dist').PDFDocumentProxy} pdfDoc
  * @param {number} pageNum - 1-based page number
  * @param {HTMLCanvasElement} canvasEl
- * @param {HTMLElement} textLayerEl - Container for the text layer (positioned over canvas)
+ * @param _textLayerEl
  * @param {number} [scale=1.5]
  * @returns {Promise<void>}
  */
-export async function renderPageWithTextLayer(pdfDoc, pageNum, canvasEl, textLayerEl, scale = 1.5) {
-    const page = await pdfDoc.getPage(pageNum);
-    const viewport = page.getViewport({ scale });
-    canvasEl.height = viewport.height;
-    canvasEl.width = viewport.width;
-    const ctx = canvasEl.getContext('2d');
-    await page.render({
-        canvasContext: ctx,
-        viewport,
-    }).promise;
-
-    textLayerEl.innerHTML = '';
-    textLayerEl.style.width = `${viewport.width}px`;
-    textLayerEl.style.height = `${viewport.height}px`;
-
-    const pdfjs = await getPdfJs();
-    const TextLayer = pdfjs.TextLayer;
-    if (!TextLayer) return;
-    const textContent = await page.getTextContent();
-    const textLayer = new TextLayer({
-        textContentSource: textContent,
-        container: textLayerEl,
-        viewport,
-    });
-    await textLayer.render();
+export async function renderPageWithTextLayer(pdfDoc, pageNum, canvasEl, _textLayerEl, scale = 1.5) {
+    await renderPageToCanvas(pdfDoc, pageNum, canvasEl, scale);
 }
 
 // -----------------------------------------------------------------------------

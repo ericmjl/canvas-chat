@@ -126,7 +126,6 @@ class FetchResultNode extends BaseNode {
                     <div class="pdf-viewer-loading">Loading PDF…</div>
                     <div class="pdf-viewer-page" style="display:none;">
                         <canvas class="pdf-viewer-canvas" aria-label="PDF page"></canvas>
-                        <div class="pdf-viewer-text-layer" aria-hidden="true"></div>
                     </div>
                 </div>
             `;
@@ -138,34 +137,42 @@ class FetchResultNode extends BaseNode {
     }
 
     /**
-     * Check if this node has output (transcript for YouTube videos)
+     * Check if this node has output (transcript for YouTube videos, extracted text for PDFs)
      * @returns {boolean}
      */
     hasOutput() {
-        // YouTube videos always have transcripts in the output panel
-        // Support both old format (youtubeVideoId) and new format (metadata.video_id)
         const metadata = this.node.metadata || {};
+        // PDF nodes have extracted text in output panel
+        if (metadata.content_type === 'pdf' && this.node.content) {
+            return true;
+        }
+        // YouTube videos have transcripts
         return !!(this.node.youtubeVideoId || (metadata.content_type === 'youtube' && metadata.video_id));
     }
 
     /**
-     * Render the output panel content (transcript for YouTube videos)
+     * Render the output panel content (transcript for YouTube videos, extracted text for PDFs)
      * @param {Canvas} canvas
      * @returns {string}
      */
     renderOutputPanel(canvas) {
-        // Support both old format (youtubeVideoId) and new format (metadata.video_id)
         const metadata = this.node.metadata || {};
-        const videoId = this.node.youtubeVideoId || metadata.video_id;
 
+        // PDF: render extracted text with page markers (IDs for scroll targeting)
+        if (metadata.content_type === 'pdf' && this.node.content) {
+            const html = canvas.renderMarkdown(this.node.content);
+            // Markdown renders "## Page N" as <h2>Page N</h2>; add id for scroll targeting
+            return html.replace(/<h2([^>]*)>(Page (\d+))<\/h2>/gi, (match, attrs, inner, pageNum) =>
+                `<h2 id="pdf-page-${pageNum}"${attrs}>${inner}</h2>`
+            );
+        }
+
+        // YouTube: transcript
+        const videoId = this.node.youtubeVideoId || metadata.video_id;
         if (!videoId || metadata.content_type !== 'youtube') {
             return '';
         }
-
-        // For YouTube videos, content IS the transcript (no extraction needed)
         const transcript = this.node.content || '';
-
-        // Render transcript as markdown
         return canvas.renderMarkdown(transcript);
     }
 }

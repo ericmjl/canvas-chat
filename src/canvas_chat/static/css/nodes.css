@@ -5,6 +5,10 @@
 /* Nodes */
 .node-wrapper {
     overflow: visible;
+    /* Let pointer events pass through foreignObject to inner HTML content.
+       This allows PDF text selection and other HTML interactions to work
+       since elementFromPoint() doesn't penetrate foreignObject boundaries. */
+    pointer-events: none;
 }
 
 .node {
@@ -21,6 +25,8 @@
         transform 0.1s;
     cursor: pointer;
     overflow: visible;
+    /* Re-enable pointer events for the inner HTML content */
+    pointer-events: auto;
 }
 
 .node:hover {
@@ -184,6 +190,24 @@
 
 /* When there's only one highlight, it gets both rounded ends */
 .node-content .source-highlight:only-of-type {
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+/* Same highlight styling in output panel (e.g. PDF drawer) */
+.code-output-panel-body .source-highlight:first-of-type {
+    padding-left: 4px;
+    border-top-left-radius: 3px;
+    border-bottom-left-radius: 3px;
+}
+
+.code-output-panel-body .source-highlight:last-of-type {
+    padding-right: 4px;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+
+.code-output-panel-body .source-highlight:only-of-type {
     padding: 2px 4px;
     border-radius: 3px;
 }
@@ -1764,34 +1788,8 @@
 }
 
 .pdf-viewer-canvas {
-    max-width: 100%;
-    height: auto;
     display: block;
     vertical-align: top;
-}
-
-/* Text layer overlay for selectable text (PDF.js creates spans inside) */
-.pdf-viewer-text-layer {
-    position: absolute;
-    left: 0;
-    top: 0;
-    z-index: 1;
-    overflow: hidden;
-    pointer-events: auto;
-    user-select: text;
-    -webkit-user-select: text;
-    line-height: 1;
-}
-
-.pdf-viewer-text-layer span {
-    color: transparent;
-    position: absolute;
-    white-space: pre;
-    cursor: text;
-    transform-origin: 0 0;
-    user-select: text;
-    -webkit-user-select: text;
-    pointer-events: auto;
 }
 
 /* Collapsed state - just show the footer tab */
