@@ -284,6 +284,7 @@ class AgentConfig:
     subagents: dict[str, "AgentConfig"] = field(default_factory=dict)
     default_output_node_type: str | None = None  # Default node type for outputs
     output_display: OutputDisplayConfig | None = None  # Data-driven display config
+    output_mode: str | None = None  # Output rendering mode (run_artifact or single_node)
     post_create: PostCreateConfig | None = None  # Post-creation hooks
     slash_command: str | None = None  # Slash command trigger (e.g., "/reflect")
 
@@ -323,6 +324,7 @@ class AgentConfig:
             subagents=subagents,
             default_output_node_type=data.get("defaultOutputNodeType"),
             output_display=OutputDisplayConfig.from_dict(data.get("outputDisplay")),
+            output_mode=data.get("outputMode"),
             post_create=PostCreateConfig.from_dict(data.get("postCreate")),
             slash_command=data.get("slashCommand"),
         )
@@ -351,6 +353,7 @@ class AgentConfig:
             },
             "defaultOutputNodeType": self.default_output_node_type,
             "outputDisplay": self.output_display.to_dict() if self.output_display else None,
+            "outputMode": self.output_mode,
             "postCreate": self.post_create.to_dict() if self.post_create else None,
             "slashCommand": self.slash_command,
         }

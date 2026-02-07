@@ -827,6 +827,15 @@ class Storage {
     static MODEL_ID_PATTERN = /^[a-z0-9_-]+\/[a-z0-9._-]+$/i;
 
     /**
+     * Provider-specific base URL fallbacks (when no base URL is configured).
+     */
+    static PROVIDER_BASE_URL_FALLBACKS = {
+        xai: 'http://localhost:4000',
+        grok: 'http://localhost:4000',
+        vllm: 'http://localhost:8000/v1',
+    };
+
+    /**
      * Get user-defined custom models from localStorage
      * @returns {Array<{id: string, name: string, provider: string, context_window: number, base_url: string|null}>}
      */
@@ -903,7 +912,17 @@ class Storage {
         }
 
         // Fall back to global base URL
-        return this.getBaseUrl();
+        const globalBaseUrl = this.getBaseUrl();
+        if (globalBaseUrl) {
+            return globalBaseUrl;
+        }
+
+        // Provider-specific fallback (e.g., LiteLLM proxy, local vLLM)
+        if (!modelId) {
+            return null;
+        }
+        const provider = modelId.split('/')[0]?.toLowerCase() || '';
+        return Storage.PROVIDER_BASE_URL_FALLBACKS[provider] || null;
     }
 }
 

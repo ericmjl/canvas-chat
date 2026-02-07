@@ -330,6 +330,7 @@ agents:
           1. Summarizes the key direction/theme
           2. Notes what was learned or decided
           3. Highlights interesting patterns or insights
+      engine: agentic
       allowedTools:
           - graph:findPathToRoot
           - graph:getNodeContent
@@ -339,6 +340,7 @@ agents:
           maxToolCalls: 10
           timeoutMs: 30000
       defaultOutputNodeType: reflection
+      outputMode: single_node
       outputDisplay:
           typeLabel: Reflection
           typeIcon: 🔮
@@ -346,6 +348,10 @@ agents:
               - reply
               - copy
 ```
+
+Tip: set `outputMode: single_node` to render a single working node that streams and finalizes into the output, instead of creating a separate RUN node and artifact node.
+
+Note: use `engine: agentic` for agents that need to call graph tools. The built-in engine streams a single response and does not execute tool calls.
 
 ### Supervisor with Sub-Agents
 

@@ -14,6 +14,7 @@ import { EventType, RunStatusType, createAgentRun, createEvent, createRunContext
 import { EngineRegistry } from './engine-adapter.js';
 import { MemoryStoreRegistry, MemoryTypeEnum } from './memory-store.js';
 import { controllerLogger as logger, eventLogger } from './debug-logger.js';
+import { createWorkingNodeManager } from './working-node-manager.js';
 
 // =============================================================================
 // Type Definitions (JSDoc)
@@ -90,6 +91,7 @@ class RunController {
         logger.debug('Initializing registries...');
         this.engineRegistry = new EngineRegistry();
         this.memoryRegistry = new MemoryStoreRegistry();
+        this.workingNodeManager = null;
 
         // Event listeners
         /** @type {Map<string, Set<Function>>} */
@@ -229,10 +231,23 @@ class RunController {
         const hostContext = this._buildHostContext(runId, agentDef, depth);
         logger.trace('Host context built successfully');
 
-        // Create run node in graph
-        logger.debug('Creating run node in graph...');
-        const runNodeId = await this._createRunNode(run, agentDef, runRequest.context);
-        logger.info(`Run node created: ${runNodeId}`);
+        const inferredOutputMode =
+            agentDef.outputMode || (agentDef.defaultOutputNodeType === 'reflection' ? 'single_node' : 'run_artifact');
+        const outputMode = this._normalizeOutputMode(inferredOutputMode);
+        const useSingleNode = outputMode === 'single_node';
+
+        let runNodeId = null;
+        let outputNodeId = null;
+
+        if (useSingleNode) {
+            logger.debug('Creating single-node output in graph...');
+            outputNodeId = await this._createWorkingOutputNode(run, agentDef, runRequest.context);
+            logger.info(`Working output node created: ${outputNodeId}`);
+        } else {
+            logger.debug('Creating run node in graph...');
+            runNodeId = await this._createRunNode(run, agentDef, runRequest.context);
+            logger.info(`Run node created: ${runNodeId}`);
+        }
 
         try {
             // Execute via engine
@@ -249,12 +264,78 @@ class RunController {
 
                 // Handle special events
                 if (event.type === EventType.ARTIFACT_CREATED) {
-                    // Materialize artifact into DAG
-                    logger.info(`Creating artifact node for run ${runId}...`);
-                    const artifactNodeId = await this._createArtifactNode(runNodeId, run, event.data, agentDef);
-                    event.data.nodeId = artifactNodeId;
-                    run.artifactNodeIds.push(artifactNodeId);
-                    logger.info(`Artifact node created: ${artifactNodeId}`);
+                    if (useSingleNode && outputNodeId) {
+                        const workingNodeManager = this._getWorkingNodeManager();
+                        const outputDisplay =
+                            event.data.outputDisplay ||
+                            agentDef.outputDisplay ||
+                            ({
+                                typeLabel: agentDef.name || 'Output',
+                            });
+                        const metadata = { display: outputDisplay };
+                        const nodeType = event.data.nodeType || agentDef.defaultOutputNodeType || 'ai';
+
+                        workingNodeManager.finalizeNode(outputNodeId, {
+                            content: event.data.content || '',
+                            title: this._buildFinalTitle(agentDef),
+                            type: nodeType,
+                            metadata,
+                        });
+
+                        event.data.nodeId = outputNodeId;
+                        if (!run.artifactNodeIds.includes(outputNodeId)) {
+                            run.artifactNodeIds.push(outputNodeId);
+                        }
+
+                        if (agentDef.postCreate) {
+                            await this._executePostCreateHooks(outputNodeId, run, agentDef.postCreate);
+                        }
+
+                        logger.info(`Single-node output finalized: ${outputNodeId}`);
+                    } else {
+                        // Materialize artifact into DAG
+                        logger.info(`Creating artifact node for run ${runId}...`);
+                        const artifactNodeId = await this._createArtifactNode(runNodeId, run, event.data, agentDef);
+                        event.data.nodeId = artifactNodeId;
+                        run.artifactNodeIds.push(artifactNodeId);
+                        logger.info(`Artifact node created: ${artifactNodeId}`);
+                    }
+                }
+
+                if (useSingleNode && outputNodeId) {
+                    const workingNodeManager = this._getWorkingNodeManager();
+                    if (event.type === EventType.TOKEN_DELTA && event.data?.content) {
+                        const node = this.graph.getNode(outputNodeId);
+                        if (node?.metadata?.status !== 'streaming') {
+                            workingNodeManager.updateProgress(outputNodeId, {
+                                status: 'streaming',
+                                message: 'Streaming response...',
+                            });
+                        }
+                        workingNodeManager.streamContent(outputNodeId, event.data.content);
+                    } else if (event.type === EventType.PROGRESS_UPDATE) {
+                        workingNodeManager.updateProgress(outputNodeId, {
+                            message: event.data?.message,
+                            progress: event.data?.percent,
+                            status: 'working',
+                        });
+                    } else if (event.type === EventType.TOOL_CALL_REQUESTED) {
+                        workingNodeManager.updateProgress(outputNodeId, {
+                            toolCall: event.data?.toolId,
+                            status: 'tool_call',
+                        });
+                    } else if (event.type === EventType.TOOL_CALL_COMPLETED) {
+                        workingNodeManager.updateProgress(outputNodeId, {
+                            message: `Completed: ${event.data?.toolId}`,
+                            status: 'working',
+                        });
+                    } else if (event.type === EventType.RUN_STATUS) {
+                        const statusMessage = event.data?.message || `Status: ${event.data?.status || run.status}`;
+                        workingNodeManager.updateProgress(outputNodeId, {
+                            message: statusMessage,
+                            status: event.data?.status === RunStatusType.PAUSED ? 'waiting' : 'working',
+                        });
+                    }
                 }
 
                 if (event.type === EventType.APPROVAL_REQUESTED) {
@@ -283,9 +364,23 @@ class RunController {
                 yield event;
 
                 // Update run node display
-                await this._updateRunNode(runNodeId, run);
+                if (runNodeId) {
+                    await this._updateRunNode(runNodeId, run);
+                }
             }
             logger.debug(`Processed ${eventCount} events for run ${runId}`);
+
+            if (
+                useSingleNode &&
+                outputNodeId &&
+                run.status !== RunStatusType.COMPLETED &&
+                !run.artifactNodeIds.includes(outputNodeId)
+            ) {
+                const workingNodeManager = this._getWorkingNodeManager();
+                const statusMessage =
+                    run.status === RunStatusType.CANCELLED ? 'Run cancelled' : `Run ${run.status}`;
+                workingNodeManager.setError(outputNodeId, statusMessage);
+            }
 
             // Calculate final metrics
             run.metrics.durationMs = Date.now() - startTime;
@@ -305,7 +400,9 @@ class RunController {
             // Attach execution trace to artifacts even on failure
             this._attachExecutionTraceToArtifacts(run);
 
-            await this._updateRunNode(runNodeId, run);
+            if (runNodeId) {
+                await this._updateRunNode(runNodeId, run);
+            }
 
             logger.info(`Run ${runId} completed with status: ${run.status}`);
             logger.exit('RunController.startRun', { success: true, runId, status: run.status });
@@ -321,7 +418,14 @@ class RunController {
                 error: run.error,
             });
 
-            await this._updateRunNode(runNodeId, run);
+            if (useSingleNode && outputNodeId) {
+                const workingNodeManager = this._getWorkingNodeManager();
+                workingNodeManager.setError(outputNodeId, run.error);
+            }
+
+            if (runNodeId) {
+                await this._updateRunNode(runNodeId, run);
+            }
             logger.exit('RunController.startRun', { success: false, runId, error: run.error });
         } finally {
             this.activeRuns.delete(runId);
@@ -437,6 +541,8 @@ class RunController {
         const self = this;
 
         const context = {
+            graph: self.graph,
+            chat: self.chat,
             // LLM interface
             llm: {
                 stream: (options) => {
@@ -639,6 +745,130 @@ class RunController {
                 5 * 60 * 1000
             ); // 5 minute timeout
         });
+    }
+
+    /**
+     * Get or create a working node manager instance.
+     * @private
+     * @returns {import('./working-node-manager.js').WorkingNodeManager}
+     */
+    _getWorkingNodeManager() {
+        if (!this.workingNodeManager) {
+            this.workingNodeManager = createWorkingNodeManager(this.graph, this.canvas);
+        }
+        return this.workingNodeManager;
+    }
+
+    /**
+     * Normalize output mode to a supported value.
+     * @private
+     * @param {string | null | undefined} outputMode
+     * @returns {'run_artifact'|'single_node'}
+     */
+    _normalizeOutputMode(outputMode) {
+        const mode = (outputMode || '').toString().toLowerCase();
+        if (mode === 'single' || mode === 'single_node' || mode === 'working_node') {
+            return 'single_node';
+        }
+        return 'run_artifact';
+    }
+
+    /**
+     * Build a working title for output nodes.
+     * @private
+     * @param {import('./agent-types.js').AgentDefinition} agentDef
+     * @returns {string}
+     */
+    _buildWorkingTitle(agentDef) {
+        const label = agentDef.outputDisplay?.typeLabel || agentDef.name || 'Output';
+        const icon = agentDef.outputDisplay?.typeIcon || '⏳';
+        return `${icon} ${label}...`;
+    }
+
+    /**
+     * Build a final title for output nodes.
+     * @private
+     * @param {import('./agent-types.js').AgentDefinition} agentDef
+     * @returns {string|null}
+     */
+    _buildFinalTitle(agentDef) {
+        if (agentDef.id === 'base-agent') {
+            return null;
+        }
+        const label = agentDef.outputDisplay?.typeLabel || agentDef.name || 'Result';
+        const icon = agentDef.outputDisplay?.typeIcon || '';
+        return icon ? `${icon} ${label}` : label;
+    }
+
+    /**
+     * Create a working output node (single-node mode).
+     * @private
+     * @param {import('./agent-types.js').AgentRun} run
+     * @param {import('./agent-types.js').AgentDefinition} agentDef
+     * @param {import('./agent-types.js').RunContext} context
+     * @returns {Promise<string>}
+     */
+    async _createWorkingOutputNode(run, agentDef, context) {
+        logger.enter('RunController._createWorkingOutputNode', { runId: run.id, agentId: agentDef.id });
+
+        const { createEdge, EdgeType } = await import('../graph-types.js');
+        const workingNodeManager = this._getWorkingNodeManager();
+
+        let position = { x: 100, y: 100 };
+        if (context.sourceNodeIds?.length > 0) {
+            const sourceNode = this.graph.getNode(context.sourceNodeIds[0]);
+            if (sourceNode) {
+                position = {
+                    x: sourceNode.position.x + sourceNode.width + 50,
+                    y: sourceNode.position.y,
+                };
+            }
+        }
+
+        const nodeType = agentDef.defaultOutputNodeType || 'ai';
+        const nodeId = workingNodeManager.createWorkingNode({
+            type: nodeType,
+            title: this._buildWorkingTitle(agentDef),
+            position,
+            initiator: 'base_agent',
+            agentId: agentDef.id,
+            metadata: {
+                runId: run.id,
+                agentId: agentDef.id,
+                outputMode: 'single_node',
+                sourceNodeIds: context.sourceNodeIds || [],
+            },
+        });
+
+        const node = this.graph.getNode(nodeId);
+        if (node) {
+            node.runId = run.id;
+            node.agentId = agentDef.id;
+            this.graph.updateNode(node.id, {
+                runId: node.runId,
+                agentId: node.agentId,
+            });
+        }
+
+        const sourceIds = context.sourceNodeIds || [];
+        for (const sourceId of sourceIds) {
+            const edge = createEdge(sourceId, nodeId, EdgeType.RUN_TRIGGER);
+            this.graph.addEdge(edge);
+        }
+
+        if (context.parentRunId) {
+            const nodes = this.graph.getNodes();
+            const parentRunNode = nodes.find((n) => n.runId === context.parentRunId);
+            if (parentRunNode) {
+                const edge = createEdge(parentRunNode.id, nodeId, EdgeType.SUBAGENT);
+                this.graph.addEdge(edge);
+            } else {
+                logger.warn(`Parent run node not found for parentRunId: ${context.parentRunId}`);
+            }
+        }
+
+        logger.exit('RunController._createWorkingOutputNode', { nodeId });
+        return nodeId;
     }
 
     /**
@@ -956,7 +1186,7 @@ class RunController {
                     }
                 }
 
-                this.graph.updateNode(node);
+                this.graph.updateNode(node.id, { metadata: node.metadata });
                 logger.debug(`PostCreate metadata updated on: ${targetId.slice(0, 8)}`);
             }
         }

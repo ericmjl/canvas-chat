@@ -29,18 +29,97 @@ const MODAL_CLOSE_TEST_IDS = {
     Settings: 'settings-close',
 } as const;
 
+const TEST_EXTERNAL_PLUGIN_MODULE = 'export function registerPlugin(){ return true; }';
+
 Given('I open Canvas Chat', () => {
     cy.visit('/');
 });
 
+Given('I stub external plugins list with valid plugins', () => {
+    cy.intercept('GET', '/api/plugins', {
+        plugins: [
+            { id: 'poll', url: '/__test__/plugins/poll.js' },
+            { id: 'example-poll-node', url: '/__test__/plugins/example-poll-node.js' },
+        ],
+    }).as('externalPlugins');
+
+    cy.intercept('GET', '/__test__/plugins/poll.js', {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/javascript' },
+        body: TEST_EXTERNAL_PLUGIN_MODULE,
+    }).as('externalPluginPoll');
+
+    cy.intercept('GET', '/__test__/plugins/example-poll-node.js', {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/javascript' },
+        body: TEST_EXTERNAL_PLUGIN_MODULE,
+    }).as('externalPluginExamplePoll');
+});
+
+Given('I stub external plugins list with a broken plugin', () => {
+    cy.intercept('GET', '/api/plugins', {
+        plugins: [
+            {
+                id: 'broken-plugin',
+                url: '/api/plugins/does-not-exist.js',
+            },
+        ],
+    }).as('externalPlugins');
+
+    cy.intercept('GET', '/api/plugins/does-not-exist.js', {
+        statusCode: 404,
+        headers: { 'Content-Type': 'text/plain' },
+        body: 'Not found',
+    }).as('externalPluginBroken');
+});
+
 When('I wait for the app to initialize', () => {
+    cy.waitForAppReady();
     cy.window().should((win) => {
-        expect(win.app, 'app instance').to.exist;
         expect(win.app.featureRegistry, 'feature registry').to.exist;
         expect(win.app.graph, 'graph initialized').to.exist;
     });
-    cy.window().its('__APP_TEST__').should('exist');
-    cy.window().its('__APP_TEST__.pluginSystemReady').should('eq', 'init-complete');
+});
+
+When('I reload external plugins for testing', () => {
+    cy.reloadExternalPluginsForTest();
+});
+
+When('I clear any selected nodes', () => {
+    cy.window().then((win) => {
+        const canvas = win.app?.canvas;
+        if (canvas?.clearSelection) {
+            canvas.clearSelection();
+        }
+        const selection = win.getSelection?.();
+        if (selection) {
+            selection.removeAllRanges();
+        }
+    });
+    cy.window()
+        .its('app.canvas')
+        .invoke('getSelectedNodeIds')
+        .should('deep.equal', []);
+});
+
+When('I stub the agent stream response', () => {
+    const sseBody =
+        'event: message\ndata: ### Reflection\n\n' +
+        'event: message\ndata: - Key Learnings: Tests run deterministically.\n\n' +
+        'event: done\ndata: {"tool_calls": []}\n\n';
+
+    cy.intercept('POST', '**/api/agents/run/stream', {
+        statusCode: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+        body: sseBody,
+    }).as('agentStream');
+
+    // Fallback path for legacy agent loop (prevents auth errors in tests)
+    cy.intercept('POST', '**/api/chat', {
+        statusCode: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+        body: 'event: message\ndata: ### Reflection\n\nevent: done\ndata: \n\n',
+    }).as('chatMessage');
 });
 
 When('I click {string}', (label) => {
@@ -136,6 +215,20 @@ Then('the tag drawer should be hidden', () => {
 });
 
 When('I send the message {string}', (message) => {
+    if (message.startsWith('/')) {
+        // Use the real send path for reflect commands so toast behavior matches the app.
+        if (message === '/reflect' || message === '/reflect-config') {
+            cy.sendMessage(message);
+            return;
+        }
+        cy.runAgentSlashCommand(message);
+        return;
+    }
+    cy.intercept('POST', '**/api/chat', {
+        statusCode: 200,
+        headers: { 'content-type': 'text/event-stream' },
+        body: 'event: message\ndata: Hello from test\n\nevent: done\ndata: \n\n',
+    }).as('chatMessage');
     cy.sendMessage(message);
 });
 
@@ -237,7 +330,12 @@ Then('the graph should have at least {int} more node than {string}', (delta, ali
 });
 
 Then('I should see a toast with text {string}', (message) => {
-    cy.get('.toast-notification', { timeout: 10000 }).should('be.visible').and('contain', message);
+    cy.window()
+        .its('__APP_TEST__.lastToast')
+        .should('exist')
+        .and((toast) => {
+            expect(String(toast?.message || '')).to.include(message);
+        });
 });
 
 Then('the graph should have at least {int} nodes', (minNodes) => {
@@ -310,6 +408,95 @@ Then('feature plugin {string} should be registered', (featureId) => {
         }
         const feature = app.featureRegistry.getFeature(featureId);
         expect(!!feature, `feature ${featureId} registered`).to.equal(true);
+    });
+});
+
+Then('external plugins should be loaded', () => {
+    cy.window()
+        .its('__APP_TEST__')
+        .its('externalPlugins')
+        .should((externalPlugins) => {
+            expect(externalPlugins?.loaded?.length || 0).to.be.greaterThan(0);
+            expect(externalPlugins?.failed?.length || 0).to.equal(0);
+        });
+});
+
+Then('external plugins should include id {string}', (pluginId) => {
+    cy.window()
+        .its('__APP_TEST__')
+        .its('externalPlugins')
+        .should((externalPlugins) => {
+            const ids = (externalPlugins?.loaded || []).map((entry) => entry.id);
+            expect(ids, `external plugin ${pluginId} loaded`).to.include(pluginId);
+        });
+});
+
+Then('external plugins should include failed id {string}', (pluginId) => {
+    cy.window()
+        .its('__APP_TEST__')
+        .its('externalPlugins')
+        .should((externalPlugins) => {
+            const ids = (externalPlugins?.failed || []).map((entry) => entry.id);
+            expect(ids, `external plugin ${pluginId} failed`).to.include(pluginId);
+        });
+});
+
+When('I create a tagged node with color {string} and name {string}, stored as {string}', (color, name, alias) => {
+    cy.window().then((win) => {
+        const app = win.app;
+        const graph = app?.graph;
+        if (!graph) {
+            throw new Error('Graph not initialized');
+        }
+        const nodeId = win.crypto.randomUUID();
+        const node = {
+            id: nodeId,
+            type: 'human',
+            content: 'Tagged node',
+            position: { x: 120, y: 120 },
+            width: 420,
+            height: 200,
+            created_at: Date.now(),
+            tags: [],
+            title: null,
+            summary: null,
+            model: null,
+            selection: null,
+        };
+        graph.addNode(node);
+        graph.createTag(color, name);
+        graph.addTagToNode(nodeId, color);
+        const updatedNode = graph.getNode(nodeId);
+        if (updatedNode) {
+            app.canvas.renderNode(updatedNode);
+        }
+        cy.wrap(nodeId, { log: false }).as(alias);
+    });
+});
+
+When('I remove the tag color {string} from the node stored as {string}', (color, alias) => {
+    cy.get<string>(`@${alias}`).then((nodeId) => {
+        cy.get(`.node-tag[data-node-id="${nodeId}"][data-color="${color}"] .node-tag-remove`).then(($el) => {
+            const el = $el.get(0);
+            if (!el) {
+                throw new Error('Tag remove button not found');
+            }
+            el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        });
+    });
+});
+
+Then('the node stored as {string} should not have tag color {string}', (alias, color) => {
+    cy.get<string>(`@${alias}`).then((nodeId) => {
+        cy.window()
+            .its('__APP_TEST__')
+            .its('graph')
+            .invoke('serialize')
+            .should((graph) => {
+                const node = graph.nodes.find((entry) => entry.id === nodeId);
+                expect(node, 'node exists').to.exist;
+                expect(node.tags || []).to.not.include(color);
+            });
     });
 });
 

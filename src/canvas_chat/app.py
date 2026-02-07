@@ -47,6 +47,7 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from canvas_chat import __version__
+from canvas_chat.agents_sdk import run_agents_sdk, run_agents_sdk_stream
 from canvas_chat.config import AppConfig, is_github_copilot_enabled
 from canvas_chat.file_upload_registry import FileUploadRegistry
 from canvas_chat.tool_registry import get_tool_registry
@@ -221,6 +222,19 @@ class ChatRequest(BaseModel):
     base_url: str | None = None
     temperature: float = 0.7
     max_tokens: int | None = None
+
+
+class AgentRunRequest(BaseModel):
+    """Request body for agent runs (OpenAI Agents SDK)."""
+
+    system_prompt: str = ""
+    user_message: str = ""
+    selected_node_ids: list[str] = Field(default_factory=list)
+    graph_snapshot: dict[str, Any] = Field(default_factory=dict)
+    model: str = "openai/gpt-4o-mini"
+    api_key: str | None = None
+    base_url: str | None = None
+    allowed_tools: list[str] = Field(default_factory=list)
 
 
 class SummarizeRequest(BaseModel):
@@ -729,6 +743,7 @@ def is_chat_model(model_id: str) -> bool:
     chat_patterns = [
         "gpt-3.5",
         "gpt-4",
+        "gpt-5",
         "gpt-oss",
         "chatgpt",
         "claude",
@@ -1314,6 +1329,72 @@ async def chat(request: ChatRequest, http_request: Request):
                 }
             else:
                 yield {"event": "error", "data": f"Error: {error_msg}"}
+
+    return EventSourceResponse(generate())
+
+
+@app.post("/api/agents/run")
+async def run_agent(request: AgentRunRequest):
+    """Run an agent using the OpenAI Agents SDK."""
+    inject_admin_credentials(request)
+
+    if "/" in request.model and not request.model.startswith("openai/"):
+        provider = request.model.split("/", 1)[0].lower()
+        if provider not in {"anthropic", "gemini", "google"} and not request.base_url:
+            return {
+                "success": False,
+                "error": (
+                    "Non-OpenAI models require an OpenAI-compatible base_url "
+                    "(e.g., LiteLLM proxy or provider-compatible endpoint)."
+                ),
+            }
+
+    try:
+        return await run_agents_sdk(
+            system_prompt=request.system_prompt,
+            user_message=request.user_message,
+            model=request.model,
+            api_key=request.api_key,
+            base_url=request.base_url,
+            selected_node_ids=request.selected_node_ids,
+            graph_snapshot=request.graph_snapshot,
+            allowed_tools=request.allowed_tools,
+        )
+    except Exception as e:
+        error_msg = str(e)
+        return {"success": False, "error": error_msg}
+
+
+@app.post("/api/agents/run/stream")
+async def run_agent_stream(request: AgentRunRequest):
+    """Stream an agent run using the OpenAI Agents SDK."""
+    inject_admin_credentials(request)
+
+    if "/" in request.model and not request.model.startswith("openai/"):
+        provider = request.model.split("/", 1)[0].lower()
+        if provider not in {"anthropic", "gemini", "google"} and not request.base_url:
+            async def reject():
+                yield {
+                    "event": "error",
+                    "data": "Non-OpenAI models require an OpenAI-compatible base_url.",
+                }
+            return EventSourceResponse(reject())
+
+    async def generate():
+        try:
+            async for event in run_agents_sdk_stream(
+                system_prompt=request.system_prompt,
+                user_message=request.user_message,
+                model=request.model,
+                api_key=request.api_key,
+                base_url=request.base_url,
+                selected_node_ids=request.selected_node_ids,
+                graph_snapshot=request.graph_snapshot,
+                allowed_tools=request.allowed_tools,
+            ):
+                yield event
+        except Exception as e:
+            yield {"event": "error", "data": str(e)}
 
     return EventSourceResponse(generate())
 

@@ -685,6 +685,10 @@ class App {
             })
             .on('nodeUpdated', (node) => {
                 this.canvas.renderNode(node);
+                const status = node?.metadata?.status;
+                if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+                    this.saveSession();
+                }
             })
             .on('tagCreated', this.handleTagCreated.bind(this));
     }
@@ -2297,19 +2301,33 @@ class App {
                 }
 
                 // Convert config to AgentDefinition format
+                // Normalize engine name: 'built-in', 'Builtin', 'BUILTIN' -> 'builtin'
+                let engine = agentConfig.engine || 'builtin';
+                engine = engine.toLowerCase().replace(/-/g, '');
+
+                const normalizedAllowedTools = (agentConfig.allowedTools || [])
+                    .map((tool) => String(tool || '').trim().replace(/,+$/, ''))
+                    .filter(Boolean);
+                if (engine === 'builtin' && normalizedAllowedTools.length > 0) {
+                    console.log(
+                        `[App] Agent ${agentConfig.id} uses tools; switching engine to agentic for tool execution`
+                    );
+                    engine = 'agentic';
+                }
                 /** @type {import('./agent/agent-types.js').AgentDefinition} */
                 const agentDef = {
                     id: agentConfig.id,
                     name: agentConfig.name,
-                    engine: agentConfig.engine || 'built-in',
+                    engine,
                     model: agentConfig.model || '',
                     systemPrompt: agentConfig.systemPrompt || '',
-                    allowedTools: agentConfig.allowedTools || [],
+                    allowedTools: normalizedAllowedTools,
                     budgets: agentConfig.budgets || {},
                     hitl: agentConfig.hitl || {},
                     subagents: agentConfig.subagents || {},
                     defaultOutputNodeType: agentConfig.defaultOutputNodeType || null,
                     outputDisplay: agentConfig.outputDisplay || null,
+                    outputMode: agentConfig.outputMode || null,
                     postCreate: agentConfig.postCreate || null,
                 };
 
@@ -4034,6 +4052,14 @@ class App {
                 : typeof duration === 'number'
                   ? duration
                   : 3000;
+
+        if (window.Cypress && window.__APP_TEST__) {
+            window.__APP_TEST__.lastToast = {
+                message,
+                type: type || 'info',
+                timestamp: Date.now(),
+            };
+        }
 
         // Create toast element
         const toast = document.createElement('div');

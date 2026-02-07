@@ -3,21 +3,37 @@ describe('Factcheck review modal', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.wait(1000);
+        cy.waitForAppReady();
+        cy.selectTestModel('openai/gpt-4o-mini');
     });
 
     it('opens review modal after claim extraction', () => {
-        const sseBody = ['data: ["Claim A", "Claim B"]', '', 'event: done', 'data: [DONE]', '', ''].join('\n');
+        const sseBody = [
+            'event: message',
+            'data: ["Claim A", "Claim B"]',
+            '',
+            'event: done',
+            'data: {"tool_calls": []}',
+            '',
+            '',
+        ].join('\n');
 
-        cy.intercept('POST', '/api/chat', {
+        cy.intercept('POST', '**/api/agents/run/stream', {
             statusCode: 200,
             headers: {
                 'content-type': 'text/event-stream',
             },
             body: sseBody,
         }).as('factcheckExtract');
+        cy.intercept('POST', '**/api/chat', {
+            statusCode: 200,
+            headers: {
+                'content-type': 'text/event-stream',
+            },
+            body: sseBody,
+        }).as('factcheckExtractChat');
 
-        cy.sendMessage('/factcheck The Eiffel Tower is 330 meters tall and located in Paris.');
+        cy.runFeatureSlashCommand('/factcheck', 'The Eiffel Tower is 330 meters tall and located in Paris.');
 
         cy.wait('@factcheckExtract');
         cy.get('#factcheck-main-modal', { timeout: 10000 }).should('be.visible');

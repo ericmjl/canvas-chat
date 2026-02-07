@@ -3,7 +3,8 @@ describe('DDG Search', { tags: '@ai' }, () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.wait(1000); // Wait for plugins to load
+        cy.waitForAppReady();
+        cy.selectTestModel('openai/gpt-4o-mini');
 
         cy.intercept('POST', '**/api/ddg/search', {
             fixture: 'ddg-search-response.json',
@@ -11,8 +12,7 @@ describe('DDG Search', { tags: '@ai' }, () => {
     });
 
     it('creates search node and reference nodes when using /search without Exa key', () => {
-        cy.get('#chat-input').type('/search test query');
-        cy.get('#send-btn').click();
+        cy.runFeatureSlashCommand('/search', 'test query');
 
         cy.wait('@ddgSearch');
 
@@ -31,8 +31,7 @@ describe('DDG Search', { tags: '@ai' }, () => {
             body: { detail: 'Server error' },
         }).as('ddgSearchError');
 
-        cy.get('#chat-input').type('/search fail query');
-        cy.get('#send-btn').click();
+        cy.runFeatureSlashCommand('/search', 'fail query');
 
         cy.wait('@ddgSearchError');
 
@@ -52,7 +51,8 @@ describe('DDG Research', { tags: '@ai' }, () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.wait(2000); // Wait for plugins and model picker to load
+        cy.waitForAppReady();
+        cy.selectTestModel('openai/gpt-4o-mini');
 
         cy.intercept('POST', '**/api/ddg/research', (req) => {
             req.reply({
@@ -64,8 +64,7 @@ describe('DDG Research', { tags: '@ai' }, () => {
     });
 
     it('creates research node and shows final report when using /research without Exa key', () => {
-        cy.get('#chat-input').type('/research test topic');
-        cy.get('#send-btn').click();
+        cy.runFeatureSlashCommand('/research', 'test topic');
 
         cy.wait('@ddgResearch');
 
@@ -82,8 +81,7 @@ describe('DDG Research', { tags: '@ai' }, () => {
             body: { detail: 'Server error' },
         }).as('ddgResearchError');
 
-        cy.get('#chat-input').type('/research fail topic');
-        cy.get('#send-btn').click();
+        cy.runFeatureSlashCommand('/research', 'fail topic');
 
         cy.wait('@ddgResearchError');
 

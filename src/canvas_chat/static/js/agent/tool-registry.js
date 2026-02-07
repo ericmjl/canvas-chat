@@ -808,7 +808,7 @@ export function registerBuiltInTools(registry, context) {
                 }
             }
 
-            context.graph.updateNode(node);
+            context.graph.updateNode(node.id, { metadata: node.metadata });
 
             return { success: true, nodeId: args.nodeId, metadata: node.metadata };
         }

@@ -8,6 +8,8 @@ Feature: Reflect Feature
   Scenario: Reflect requires a selected node
     Given I open Canvas Chat
     When I wait for the app to initialize
+    And slash command "/reflect" should be registered
+    And I clear any selected nodes
     And I record the current node count as "beforeReflect"
     And I send the message "/reflect"
     Then I should see a toast with text "Please select a node to reflect on"
@@ -16,6 +18,8 @@ Feature: Reflect Feature
   Scenario: Reflect creates a reflection node when a node is selected
     Given I open Canvas Chat
     When I wait for the app to initialize
+    And slash command "/reflect" should be registered
+    And I stub the agent stream response
     And I create a "human" node and store its id as "selectedNodeId"
     And I select the node stored as "selectedNodeId"
     And I record the current node count as "beforeReflect"

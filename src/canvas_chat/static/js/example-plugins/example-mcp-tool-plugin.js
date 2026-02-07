@@ -525,7 +525,6 @@ if (typeof window !== 'undefined') {
                 slashCommands: [
                     { command: '/tools', handler: 'handleCommand' },
                     { command: '/search-web', handler: 'handleCommand' },
-                    { command: '/analyze-text', handler: 'handleCommand' },
                     { command: '/calculate', handler: 'handleCommand' },
                 ],
                 priority: PRIORITY.COMMUNITY,

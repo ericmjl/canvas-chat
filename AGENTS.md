@@ -151,6 +151,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/highlight-utils.js`     | Text highlighting utilities           | Text selection, excerpt extraction    |
 | `src/canvas_chat/static/js/scroll-utils.js`        | Scroll container detection            | Scroll event handling, DOM traversal  |
 | `src/canvas_chat/static/js/event-emitter.js`       | Event emitter pattern                 | Event-driven architecture             |
+| `src/canvas_chat/static/js/agent/engine-adapter.js`| Agent engine adapters (builtin + agentic) | Agent execution strategy, tool-capable runs |
 
 ### Frontend (HTML/CSS)
 
@@ -173,7 +174,8 @@ canvas-chat/
 | File                                            | Purpose                            | Edit for...                                          |
 | ----------------------------------------------- | ---------------------------------- | ---------------------------------------------------- |
 | `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints, backend logic                         |
-| `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode               |
+| `src/canvas_chat/agents_sdk.py`                 | OpenAI Agents SDK runner + graph tools | Agentic execution via SDK, graph snapshot tooling |
+| `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, agent outputMode, admin mode               |
 | `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server                   |
 | `src/canvas_chat/__init__.py`                   | Package initialization             | Package metadata, version                            |
 | `src/canvas_chat/file_upload_registry.py`       | File upload handler registration   | Registering Python file upload handlers              |
@@ -484,6 +486,14 @@ Python plugins are loaded dynamically at startup via `importlib`. JavaScript plu
 ### Agent execution trace
 
 Agent runs record a safe execution trace (plan, progress updates, tool calls, approvals, subagent spawns, metrics) and attach it to output nodes as `node.metadata.executionTrace`. Canvas renders this as a footer inside the node with a toggle to expand details. The trace is built in `run-controller.js` and is **not** chain-of-thought.
+
+### Agent execution engines
+
+- The `agentic` execution path now runs via the backend OpenAI Agents SDK at `/api/agents/run`.
+- A streaming endpoint `/api/agents/run/stream` provides SSE updates when supported; non-streaming `/api/agents/run` is the fallback.
+- The frontend sends a graph snapshot; backend graph tools execute against that snapshot.
+- A legacy JSON tool-calling loop remains as a fallback if the SDK endpoint is unavailable.
+- BaseAgent regular chat now runs through the `agentic` engine (single-node output) instead of direct `/api/chat` streaming.
 
 ### Slash command prerequisites
 

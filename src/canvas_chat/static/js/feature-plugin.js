@@ -254,6 +254,28 @@ class FeaturePlugin {
     }
 
     /**
+     * Default slash command dispatcher for feature plugins.
+     * Routes /foo-bar -> handleFooBar if present.
+     * @param {string} command
+     * @param {string} args
+     * @param {Object} context
+     * @returns {Promise<void>}
+     */
+    async handleCommand(command, args, context) {
+        const normalized = command.startsWith('/') ? command.slice(1) : command;
+        const handlerName = `handle${normalized
+            .split(/[-_]/)
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join('')}`;
+        const handler = this[handlerName];
+        if (typeof handler !== 'function') {
+            throw new Error(`Handler "${handlerName}" not found for command ${command}`);
+        }
+        await handler.call(this, command, args, context);
+    }
+
+    /**
      * Return event subscriptions for this plugin.
      * Override in subclasses to subscribe to events.
      *

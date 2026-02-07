@@ -42,7 +42,7 @@ const logger = createComponentLogger('WorkingNodeManager');
  * @typedef {Object} FinalizeOptions
  * @property {string} content - Final content for the node
  * @property {Object} [metadata] - Final metadata to merge
- * @property {string} [title] - Final title (optional, keeps working title if not provided)
+ * @property {string|null} [title] - Final title (optional, keeps working title if undefined)
  * @property {string} [type] - Override final node type (rare)
  */
 
@@ -178,6 +178,17 @@ export class WorkingNodeManager {
         // Update status if provided
         if (update.status) {
             node.metadata.status = update.status;
+            if (update.status === 'streaming') {
+                node.metadata.display = {
+                    ...node.metadata.display,
+                    typeIcon: '📡',
+                };
+            } else if (update.status === 'waiting') {
+                node.metadata.display = {
+                    ...node.metadata.display,
+                    typeIcon: '⏸',
+                };
+            }
         }
 
         // Add progress message
@@ -210,7 +221,7 @@ export class WorkingNodeManager {
         }
 
         // Update the node in graph
-        this.graph.updateNode(node);
+        this.graph.updateNode(node.id, { metadata: node.metadata });
 
         // Re-render the node
         this.canvas.renderNode(node);
@@ -233,7 +244,7 @@ export class WorkingNodeManager {
         node.content = (node.content || '') + contentDelta;
 
         // Update the node
-        this.graph.updateNode(node);
+        this.graph.updateNode(node.id, { content: node.content });
 
         // Re-render (canvas should handle efficient updates)
         this.canvas.renderNode(node);
@@ -257,8 +268,8 @@ export class WorkingNodeManager {
         // Update content
         node.content = options.content;
 
-        // Update title if provided
-        if (options.title) {
+        // Update title if explicitly provided (null clears it)
+        if (options.title !== undefined) {
             node.title = options.title;
         }
 
@@ -273,6 +284,9 @@ export class WorkingNodeManager {
             ...options.metadata,
             status: 'completed',
             completedAt: Date.now(),
+            currentToolCall: null,
+            progressMessages: [],
+            progress: null,
         };
 
         // Update display for completed state
@@ -285,15 +299,25 @@ export class WorkingNodeManager {
             };
         }
 
-        // Remove working-specific fields
-        delete finalMetadata.currentToolCall;
-        delete finalMetadata.progressMessages;
-        delete finalMetadata.progress;
+        // Ensure working-specific fields are cleared explicitly
+        if (!finalMetadata.display) {
+            finalMetadata.display = {
+                typeLabel: node.title || 'Result',
+                typeIcon: '✓',
+                actions: options.metadata?.display?.actions || ['reply', 'copy'],
+                showProgress: false,
+            };
+        }
 
         node.metadata = finalMetadata;
 
         // Update in graph
-        this.graph.updateNode(node);
+        this.graph.updateNode(node.id, {
+            content: node.content,
+            title: node.title,
+            type: node.type,
+            metadata: node.metadata,
+        });
 
         // Re-render
         this.canvas.renderNode(node);
@@ -341,7 +365,10 @@ export class WorkingNodeManager {
         node.content = `**Error:** ${errorMessage}`;
 
         // Update in graph
-        this.graph.updateNode(node);
+        this.graph.updateNode(node.id, {
+            content: node.content,
+            metadata: node.metadata,
+        });
 
         // Re-render
         this.canvas.renderNode(node);
@@ -384,7 +411,7 @@ export class WorkingNodeManager {
         }
 
         // Update in graph
-        this.graph.updateNode(node);
+        this.graph.updateNode(node.id, { metadata: node.metadata });
 
         // Re-render
         this.canvas.renderNode(node);

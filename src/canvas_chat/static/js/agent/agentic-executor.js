@@ -63,36 +63,12 @@ You have access to tools for exploring the conversation graph structure. Use the
   - Parameters: \`limit\` (optional, default 5)
   - Returns: Array of reflection node summaries
 
-## How to Call Tools
+## How to Use Tools
 
-**CRITICAL:** To call tools, you MUST output a JSON code block. Natural language descriptions like "I will call..." do NOT work. You must actually output the JSON.
+Use the tool-calling interface to invoke tools directly whenever you need context.
+You may call multiple tools in sequence to gather what you need before answering.
 
-To call a tool, output a JSON block like this:
-
-\`\`\`json
-{"tool_calls": [{"name": "graph:getNodeContent", "arguments": {"nodeId": "abc123"}}]}
-\`\`\`
-
-You can call multiple tools at once:
-
-\`\`\`json
-{"tool_calls": [
-  {"name": "graph:findPathToRoot", "arguments": {"nodeId": "abc123"}},
-  {"name": "graph:getNodeContent", "arguments": {"nodeId": "abc123"}}
-]}
-\`\`\`
-
-**WRONG (will not work):**
-- "I will now call graph:getNodeContent..."
-- "Let me retrieve the content..."
-- Any description of intent without the actual JSON block
-
-**RIGHT:**
-\`\`\`json
-{"tool_calls": [{"name": "graph:getPathContent", "arguments": {"nodeIds": ["id1", "id2"]}}]}
-\`\`\`
-
-After you output tool calls, I will execute them and provide the results. Then continue your analysis.
+**Important:** Do NOT output JSON blocks or describe your intent. Just call the tools.
 
 ## Workflow
 
@@ -101,7 +77,19 @@ After you output tool calls, I will execute them and provide the results. Then c
 3. **Review results** - I'll provide tool results, then you can call more tools or proceed
 4. **Complete your task** - When you have enough context, produce your final answer (WITHOUT any tool_calls JSON)
 
-**REMINDER:** Every time you need to call a tool, output the JSON code block. Don't describe what you're going to do - just do it by outputting the JSON.
+**REMINDER:** Call tools directly via the tool-calling interface. Do not output JSON blocks.
+`;
+
+const LEGACY_TOOL_CALLS_PROMPT = `
+## Legacy Tool Calling (JSON Only)
+
+If you cannot call tools directly, output a JSON code block like this:
+
+\`\`\`json
+{"tool_calls": [{"name": "graph:getNodeContent", "arguments": {"nodeId": "abc123"}}]}
+\`\`\`
+
+Do NOT describe intent. Output ONLY the JSON block for tool calls.
 `;
 
 // =============================================================================
@@ -117,7 +105,10 @@ After you output tool calls, I will execute them and provide the results. Then c
  * @property {any} chat - Chat instance for LLM calls
  * @property {string} model - LLM model to use
  * @property {Function} [onProgress] - Progress callback
+ * @property {Function} [onToken] - Token callback for streaming updates
+ * @property {Function} [onTool] - Tool callback for tool usage updates
  * @property {number} [maxToolCalls=10] - Maximum tool call iterations
+ * @property {string[]} [allowedTools] - Optional allowlist of tool IDs
  */
 
 /**
@@ -137,7 +128,7 @@ After you output tool calls, I will execute them and provide the results. Then c
  * @param {string[]} selectedNodeIds - Selected node IDs
  * @returns {string} Context message for the agent
  */
-function buildGraphToolsContextMessage(selectedNodeIds) {
+function buildGraphToolsContextMessage(selectedNodeIds, tools = null) {
     const parts = [];
 
     parts.push(`## Available Context`);
@@ -150,17 +141,180 @@ function buildGraphToolsContextMessage(selectedNodeIds) {
     parts.push(``);
     parts.push(`## Available Tools`);
     parts.push(`You have access to graph tools to explore the conversation structure:`);
-    parts.push(`- \`graph:getNodeContent\` - Get content/metadata of a specific node`);
-    parts.push(`- \`graph:findPathToRoot\` - Find the path from a node back to a branch point`);
-    parts.push(`- \`graph:getPathContent\` - Get content from multiple nodes along a path`);
-    parts.push(`- \`graph:getRelatedNodes\` - Get parent or child nodes of a given node`);
-    parts.push(`- \`graph:checkBranchPoint\` - Check if a node is a branch point`);
-    parts.push(`- \`graph:getPreviousReflections\` - Find previous reflection nodes`);
-    parts.push(`- \`graph:findNodesByType\` - Find nodes of a specific type`);
+
+    if (Array.isArray(tools) && tools.length > 0) {
+        for (const tool of tools) {
+            parts.push(`- \`${tool.id}\` - ${tool.description}`);
+        }
+    } else {
+        parts.push(`- \`graph:getNodeContent\` - Get content/metadata of a specific node`);
+        parts.push(`- \`graph:findPathToRoot\` - Find the path from a node back to a branch point`);
+        parts.push(`- \`graph:getPathContent\` - Get content from multiple nodes along a path`);
+        parts.push(`- \`graph:getRelatedNodes\` - Get parent or child nodes of a given node`);
+        parts.push(`- \`graph:checkBranchPoint\` - Check if a node is a branch point`);
+        parts.push(`- \`graph:getPreviousReflections\` - Find previous reflection nodes`);
+        parts.push(`- \`graph:findNodesByType\` - Find nodes of a specific type`);
+    }
     parts.push(``);
     parts.push(`**Start by using these tools to gather the context you need, then complete your task.**`);
 
     return parts.join('\n');
+}
+
+// =============================================================================
+// OpenAI Agents SDK Execution
+// =============================================================================
+
+/**
+ * Execute an agentic task via the backend OpenAI Agents SDK.
+ * @param {AgenticExecutionOptions} options
+ * @returns {Promise<AgenticExecutionResult>}
+ */
+async function executeAgenticTaskWithSDK(options) {
+    const {
+        systemPrompt,
+        userMessage,
+        selectedNodeIds,
+        graph,
+        chat,
+        model,
+        onProgress,
+        onToken,
+        onTool,
+        maxToolCalls = 10,
+        allowedTools,
+    } = options;
+
+    if (!graph?.toJSON) {
+        throw new Error('Graph instance is required for agentic execution');
+    }
+    if (!chat) {
+        throw new Error('Chat instance is required for agentic execution');
+    }
+
+    let graphTools = getGraphToolDefinitions(graph);
+    if (Array.isArray(allowedTools)) {
+        const normalized = allowedTools.map((tool) => String(tool || '').trim()).filter(Boolean);
+        if (normalized.length === 0) {
+            graphTools = [];
+        } else if (!normalized.includes('*')) {
+            const allowedSet = new Set(normalized);
+            graphTools = graphTools.filter((tool) => allowedSet.has(tool.id));
+        }
+    }
+    const contextMessage = buildGraphToolsContextMessage(selectedNodeIds, graphTools);
+    const combinedUserMessage = `${contextMessage}\n\n---\n\n${userMessage}`;
+
+    if (onProgress) {
+        onProgress('Preparing context...');
+    }
+
+    let apiKey = null;
+    if (model?.startsWith('github_copilot/')) {
+        apiKey = await chat.ensureCopilotAuthFresh(model);
+    } else {
+        apiKey = chat.getApiKeyForModel(model);
+    }
+
+    const baseUrl =
+        (typeof chat.getBaseUrlForModel === 'function' ? chat.getBaseUrlForModel(model) : null) || chat.getBaseUrl();
+
+    const payload = {
+        system_prompt: systemPrompt || '',
+        user_message: combinedUserMessage || '',
+        selected_node_ids: selectedNodeIds || [],
+        graph_snapshot: graph.toJSON(),
+        model: model || '',
+        api_key: apiKey,
+        base_url: baseUrl,
+        max_tool_calls: maxToolCalls,
+        allowed_tools: allowedTools || [],
+    };
+
+    if (onProgress) {
+        onProgress('Submitting agent request...');
+    }
+
+    const streamResponse = await fetch('/api/agents/run/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+
+    if (streamResponse.ok && streamResponse.headers.get('content-type')?.includes('text/event-stream')) {
+        if (onProgress) {
+            onProgress('Streaming agent response...');
+        }
+
+        let fullContent = '';
+        const toolCalls = [];
+
+        await readSSEStream(streamResponse, {
+            onEvent: (eventType, data) => {
+                if (eventType === 'message' && data) {
+                    fullContent += data;
+                    if (onToken) onToken(data, fullContent);
+                } else if (eventType === 'progress' && data) {
+                    if (onProgress) onProgress(data);
+                } else if (eventType === 'tool' && data) {
+                    try {
+                        const toolCall = JSON.parse(data);
+                        toolCalls.push(toolCall);
+                        if (onTool) onTool(toolCall);
+                    } catch (e) {
+                        console.warn('[AgenticExecutor] Failed to parse tool event', e);
+                    }
+                } else if (eventType === 'done' && data) {
+                    try {
+                        const payload = JSON.parse(data);
+                        if (Array.isArray(payload.tool_calls)) {
+                            for (const toolCall of payload.tool_calls) {
+                                toolCalls.push(toolCall);
+                                if (onTool) onTool(toolCall);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[AgenticExecutor] Failed to parse done payload', e);
+                    }
+                }
+            },
+            onError: (err) => {
+                throw err;
+            },
+        });
+
+        return {
+            success: true,
+            content: fullContent,
+            toolCalls: toolCalls,
+        };
+    }
+
+    if (onProgress) {
+        onProgress('Awaiting agent response...');
+    }
+
+    const response = await fetch('/api/agents/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+        const errorMessage = data?.error || `Agent run failed (status ${response.status})`;
+        throw new Error(errorMessage);
+    }
+
+    if (onProgress) {
+        onProgress('Finalizing response...');
+    }
+
+    return {
+        success: true,
+        content: data.content || '',
+        toolCalls: data.tool_calls || [],
+    };
 }
 
 /**
@@ -172,8 +326,22 @@ function buildGraphToolsContextMessage(selectedNodeIds) {
  * @param {AgenticExecutionOptions} options - Execution options
  * @returns {Promise<AgenticExecutionResult>}
  */
-export async function executeAgenticTask(options) {
-    const { systemPrompt, userMessage, selectedNodeIds, graph, chat, model, onProgress, maxToolCalls = 10 } = options;
+async function executeAgenticTaskLegacy(options) {
+    const {
+        systemPrompt,
+        userMessage,
+        selectedNodeIds,
+        graph,
+        chat,
+        model,
+        onProgress,
+        maxToolCalls = 10,
+        allowedTools,
+    } = options;
+
+    const legacySystemPrompt = systemPrompt
+        ? `${systemPrompt}\n\n${LEGACY_TOOL_CALLS_PROMPT}`
+        : LEGACY_TOOL_CALLS_PROMPT;
 
     logger.enter('executeAgenticTask', {
         selectedNodeIds,
@@ -182,7 +350,16 @@ export async function executeAgenticTask(options) {
     });
 
     // Get graph tool definitions
-    const graphTools = getGraphToolDefinitions(graph);
+    let graphTools = getGraphToolDefinitions(graph);
+    if (Array.isArray(allowedTools)) {
+        const normalized = allowedTools.map((tool) => String(tool || '').trim()).filter(Boolean);
+        if (normalized.length === 0) {
+            graphTools = [];
+        } else if (!normalized.includes('*')) {
+            const allowedSet = new Set(normalized);
+            graphTools = graphTools.filter((tool) => allowedSet.has(tool.id));
+        }
+    }
     const toolMap = new Map(graphTools.map((t) => [t.id, t]));
 
     // Format tools for LLM (OpenAI format)
@@ -209,9 +386,9 @@ export async function executeAgenticTask(options) {
     }));
 
     // Build initial messages
-    const contextMessage = buildGraphToolsContextMessage(selectedNodeIds);
+    const contextMessage = buildGraphToolsContextMessage(selectedNodeIds, graphTools);
     const messages = [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: legacySystemPrompt },
         { role: 'user', content: `${contextMessage}\n\n---\n\n${userMessage}` },
     ];
 
@@ -363,6 +540,26 @@ export async function executeAgenticTask(options) {
             toolCalls: toolCallHistory,
             error: errorMessage,
         };
+    }
+}
+
+/**
+ * Execute an agentic task. Prefers the backend OpenAI Agents SDK with
+ * a legacy JSON-tool fallback if the backend is unavailable.
+ *
+ * @param {AgenticExecutionOptions} options
+ * @returns {Promise<AgenticExecutionResult>}
+ */
+export async function executeAgenticTask(options) {
+    try {
+        return await executeAgenticTaskWithSDK(options);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.warn(`Agents SDK execution failed, falling back to legacy loop: ${errorMessage}`);
+        if (typeof options.onProgress === 'function') {
+            options.onProgress('Falling back to legacy agent loop...');
+        }
+        return await executeAgenticTaskLegacy(options);
     }
 }
 

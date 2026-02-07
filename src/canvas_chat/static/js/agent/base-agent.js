@@ -94,19 +94,12 @@ function createBaseAgentDefinition() {
     return createAgentDefinition({
         id: 'base-agent',
         name: 'Base Agent',
-        engine: 'builtin',
+        engine: 'agentic',
         model: undefined, // Use app-level default model
         systemPrompt: `You are a helpful AI assistant. Respond to user messages clearly and concisely.
-When given context, use it to inform your response.
+When needed, use graph tools to retrieve the conversation path and relevant context before answering.
 Be direct and helpful.`,
-        allowedTools: [
-            'create_human_node',
-            'create_ai_node',
-            'add_edge',
-            'build_context',
-            'stream_response',
-            'spawn_subagent',
-        ],
+        allowedTools: ['*'],
         budgets: {
             maxTokens: 100000,
             maxToolCalls: 50,
@@ -120,6 +113,7 @@ Be direct and helpful.`,
             alwaysBlockTools: [],
         },
         defaultOutputNodeType: 'ai',
+        outputMode: 'single_node',
         description: 'Primary agent that orchestrates message handling and delegates slash commands to sub-agents.',
     });
 }
@@ -661,7 +655,6 @@ class BaseAgent {
 
         // Import graph-types dynamically to avoid circular deps
         const { createNode, createEdge, NodeType, EdgeType } = await import('../graph-types.js');
-        const { buildMessagesForApi } = await import('../utils.js');
 
         // Step 1: Create human node
         logger.debug('Creating human node...');
@@ -682,36 +675,55 @@ class BaseAgent {
             }
         }
 
-        // Step 3: Create AI response node (empty initially)
-        const model = this.getModel();
-        logger.debug(`Creating AI node with model: ${model}`);
-        const aiNode = createNode(NodeType.AI, '', {
-            position: /** @type {any} */ (this.graph).autoPosition([humanNode.id]),
-            model: model.split('/').pop(),
+        // Step 3: Run base agent via RunController (agentic engine)
+        const userQuery = context ? `${message}\n\nContext:\n${context}` : message;
+        const runContext = createRunContext({
+            sourceNodeIds: [humanNode.id],
+            userQuery,
         });
+        const runRequest = createRunRequest(this.agentDefinition.id, runContext, {});
 
-        /** @type {any} */ (this.graph).addNode(aiNode);
-        const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
-        /** @type {any} */ (this.graph).addEdge(aiEdge);
-        logger.info(`Created AI node: ${aiNode.id}`);
+        const artifactNodeIds = [];
+        let outputNodeId = null;
+        /** @type {string|undefined} */
+        let runId;
 
-        // Step 4: Build context and messages
-        logger.debug('Building LLM context...');
-        const graphContext = /** @type {any} */ (this.graph).resolveContext([humanNode.id]);
-        const messages = buildMessagesForApi(graphContext);
-        logger.debug(`Built ${messages.length} messages for LLM`);
+        try {
+            for await (const event of this.runController.startRun(runRequest)) {
+                runId = event.runId;
+                this._emitEvent(event);
 
-        // Step 5: Stream LLM response
-        const result = await this._streamLLMResponse(aiNode.id, messages, model);
+                if (event.type === EventType.ARTIFACT_CREATED && /** @type {any} */ (event.data)?.nodeId) {
+                    const nodeId = /** @type {any} */ (event.data).nodeId;
+                    artifactNodeIds.push(nodeId);
+                    outputNodeId = nodeId;
+                }
+            }
 
-        logger.exit('BaseAgent._handleRegularMessage', { success: result.success });
-        return {
-            success: result.success,
-            humanNodeId: humanNode.id,
-            aiNodeId: aiNode.id,
-            artifactNodeIds: [humanNode.id, aiNode.id],
-            error: result.error,
-        };
+            if (this._generateSummary && outputNodeId) {
+                await this._generateSummary(outputNodeId);
+            }
+
+            logger.exit('BaseAgent._handleRegularMessage', { success: true });
+            return {
+                success: true,
+                runId,
+                humanNodeId: humanNode.id,
+                aiNodeId: outputNodeId || undefined,
+                artifactNodeIds: [humanNode.id, ...artifactNodeIds],
+            };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logger.error('BaseAgent regular message run failed:', error);
+            logger.exit('BaseAgent._handleRegularMessage', { success: false });
+            return {
+                success: false,
+                runId,
+                humanNodeId: humanNode.id,
+                artifactNodeIds: [humanNode.id, ...artifactNodeIds],
+                error: errorMessage,
+            };
+        }
     }
 
     /**

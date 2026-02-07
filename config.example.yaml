@@ -49,7 +49,7 @@ models:
       apiKeyEnvVar: 'OPENAI_API_KEY'
       contextWindow: 200000
 
-    # Anthropic models
+    # Anthropic models (direct via API key or via LiteLLM proxy)
     - id: 'anthropic/claude-sonnet-4-20250514'
       name: 'Claude Sonnet 4'
       apiKeyEnvVar: 'ANTHROPIC_API_KEY'
@@ -60,7 +60,7 @@ models:
       apiKeyEnvVar: 'ANTHROPIC_API_KEY'
       contextWindow: 200000
 
-    # Google models
+    # Google models (direct via API key or via LiteLLM proxy)
     - id: 'gemini/gemini-1.5-pro'
       name: 'Gemini 1.5 Pro'
       apiKeyEnvVar: 'GEMINI_API_KEY'
@@ -71,6 +71,26 @@ models:
       name: 'Llama 3.1 70B (Groq)'
       apiKeyEnvVar: 'GROQ_API_KEY'
       contextWindow: 128000
+
+    # Example: LiteLLM proxy (Anthropic / Gemini / Grok)
+    # Set LITELLM_BASE_URL=http://localhost:4000 and configure provider keys in LiteLLM.
+    # - id: 'anthropic/claude-3-5-sonnet-20241022'
+    #   name: 'Claude 3.5 Sonnet (LiteLLM)'
+    #   apiKeyEnvVar: 'LITELLM_API_KEY'
+    #   endpointEnvVar: 'LITELLM_BASE_URL'
+    #   contextWindow: 200000
+    #
+    # - id: 'gemini/gemini-1.5-pro'
+    #   name: 'Gemini 1.5 Pro (LiteLLM)'
+    #   apiKeyEnvVar: 'LITELLM_API_KEY'
+    #   endpointEnvVar: 'LITELLM_BASE_URL'
+    #   contextWindow: 2000000
+    #
+    # - id: 'xai/grok-2'
+    #   name: 'Grok 2 (LiteLLM)'
+    #   apiKeyEnvVar: 'LITELLM_API_KEY'
+    #   endpointEnvVar: 'LITELLM_BASE_URL'
+    #   contextWindow: 128000
 
     # Example: Local Ollama model
     # - id: "ollama/llama3.2"
@@ -158,7 +178,7 @@ agents:
     - id: reflection-agent
       name: Reflection Agent
       slashCommand: /reflect-config  # Use different command to not conflict with built-in
-      engine: built-in
+      engine: agentic
       model: ''  # Uses default model from model picker
       systemPrompt: |
         You are analyzing a conversation thread to produce insights and summaries.
@@ -182,6 +202,7 @@ agents:
         requireToolApproval: false
         requireMutationApproval: false
       defaultOutputNodeType: reflection
+      outputMode: single_node
       # Data-driven display config - customize how output nodes appear
       outputDisplay:
         typeLabel: Reflection

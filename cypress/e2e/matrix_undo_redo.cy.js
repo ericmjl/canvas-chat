@@ -3,10 +3,11 @@ describe('Matrix Undo/Redo', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.wait(2000); // Wait for plugins to load
+        cy.waitForAppReady();
+        cy.selectTestModel('openai/gpt-4o-mini');
 
         // Mock parse-two-lists API to return deterministic 2x3 matrix
-        cy.intercept('POST', '/api/parse-two-lists', {
+        cy.intercept('POST', '**/api/parse-two-lists', {
             statusCode: 200,
             body: {
                 rows: ['Python', 'JavaScript'],
@@ -15,7 +16,7 @@ describe('Matrix Undo/Redo', () => {
         }).as('parseTwoLists');
 
         // Mock matrix/fill API to return deterministic cell content via SSE
-        cy.intercept('POST', '/api/matrix/fill', (req) => {
+        cy.intercept('POST', '**/api/matrix/fill', (req) => {
             const cellResponses = {
                 'Python-Performance': 'Excellent performance with JIT',
                 'JavaScript-Ease of Learning': 'Easy to learn for web devs',
@@ -39,8 +40,7 @@ describe('Matrix Undo/Redo', () => {
 
     it('undos and redos a single cell fill', () => {
         // Create matrix
-        cy.get('#chat-input').type('/matrix Test undo');
-        cy.get('#send-btn').click();
+        cy.runFeatureSlashCommand('/matrix', 'Test undo');
         cy.wait('@parseTwoLists');
         cy.get('#matrix-main-modal', { timeout: 10000 }).should('be.visible');
         cy.get('#matrix-create-btn').click();
@@ -71,8 +71,7 @@ describe('Matrix Undo/Redo', () => {
 
     it('undos multiple cell fills in LIFO order', () => {
         // Create matrix
-        cy.get('#chat-input').type('/matrix Test multiple');
-        cy.get('#send-btn').click();
+        cy.runFeatureSlashCommand('/matrix', 'Test multiple');
         cy.wait('@parseTwoLists');
         cy.get('#matrix-main-modal', { timeout: 10000 }).should('be.visible');
         cy.get('#matrix-create-btn').click();

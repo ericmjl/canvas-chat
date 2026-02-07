@@ -7,14 +7,22 @@
  * - FactcheckFeature (slash command and event handling)
  */
 
-import { NodeType, EdgeType, createNode, createEdge } from '../graph-types.js';
-import { storage } from '../storage.js';
-import { chat } from '../chat.js';
-import { apiUrl } from '../utils.js';
-import { BaseNode, Actions } from '../node-protocols.js';
-import { NodeRegistry } from '../node-registry.js';
 import { FeaturePlugin } from '../feature-plugin.js';
 import { createAgentDefinition } from '../agent/agent-types.js';
+import { executeAgenticTask } from '../agent/agentic-executor.js';
+import { EdgeType, NodeType, createEdge, createNode } from '../graph-types.js';
+import { Actions, BaseNode } from '../node-protocols.js';
+import { NodeRegistry } from '../node-registry.js';
+import { storage } from '../storage.js';
+import { apiUrl } from '../utils.js';
+import { chat } from '../chat.js';
+
+const FACTCHECK_ALLOWED_TOOLS = [
+    'graph:getNodeContent',
+    'graph:getPathContent',
+    'graph:getRelatedNodes',
+    'graph:findPathToRoot',
+];
 
 // =============================================================================
 // Factcheck Node Protocol
@@ -372,7 +380,7 @@ class FactcheckFeature extends FeaturePlugin {
             this.canvas.updateNodeContent(loadingNode.id, '🔄 **Extracting claims...**', true);
 
             // Extract individual claims from input
-            const claims = await this.extractFactcheckClaims(effectiveInput, model);
+            const claims = await this.extractFactcheckClaims(effectiveInput, model, parentIds);
 
             if (claims.length === 0) {
                 // No claims found - update loading node with error message
@@ -846,9 +854,13 @@ class FactcheckFeature extends FeaturePlugin {
      * Extract verifiable claims from input text using LLM
      * @param {string} input - Text containing potential claims
      * @param {string} model - LLM model to use
+     * @param {string[]} [selectedNodeIds] - Optional node IDs for context
      * @returns {Promise<string[]>} - Array of extracted claims (max 10)
      */
-    async extractFactcheckClaims(input, model) {
+    async extractFactcheckClaims(input, model, selectedNodeIds = []) {
+        if (!input && (!selectedNodeIds || selectedNodeIds.length === 0)) {
+            return [];
+        }
         const systemPrompt = `You are a fact-checking assistant. Your task is to extract discrete, verifiable factual claims from the given text.
 
 Rules:
@@ -863,32 +875,23 @@ Rules:
 9. If the input is a bulleted list, extract each bullet point as a separate claim
 10. Strip numbering/bullets and extract the actual claim text
 
-Respond with a JSON array of claim strings. Example:
+        Respond with a JSON array of claim strings. Example:
 ["The Eiffel Tower is 330 meters tall", "Paris is the capital of France"]
 
         If the input contains no factual content at all (e.g., ONLY greetings or questions with no assertions), respond with an empty array: []`;
 
+        const userMessage = input
+            ? `Input text:\n${input}`
+            : 'Use the selected nodes to extract verifiable claims.';
+
         console.log('[Factcheck] Extracting claims from:', input);
 
-        // API key is fetched internally by chat.sendMessage()
-
-        const messages = [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: input },
-        ];
-
-        // Use streaming API with onDone callback to get full response
-        const response = await new Promise((resolve, reject) => {
-            chat.sendMessage(
-                messages,
-                model,
-                null, // onChunk - not needed
-                (fullContent) => resolve(fullContent), // onDone - get full response
-                (error) => reject(error) // onError
-            );
+        const response = await this._runAgenticFactcheckTask({
+            model,
+            systemPrompt,
+            userMessage,
+            selectedNodeIds,
         });
-
-        console.log('[Factcheck] LLM response:', response);
 
         try {
             // Parse JSON from response
@@ -924,20 +927,11 @@ Guidelines:
         Respond with a JSON array of query strings. Example:
 ["Eiffel Tower height meters", "How tall is Eiffel Tower Wikipedia", "Eiffel Tower official dimensions"]`;
 
-        const messages = [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: claim },
-        ];
-
-        // Use streaming API with onDone callback to get full response
-        const response = await new Promise((resolve, reject) => {
-            chat.sendMessage(
-                messages,
-                model,
-                null,
-                (fullContent) => resolve(fullContent),
-                (error) => reject(error)
-            );
+        const response = await this._runAgenticFactcheckTask({
+            model,
+            systemPrompt,
+            userMessage: claim,
+            selectedNodeIds: [],
         });
 
         try {
@@ -1003,20 +997,11 @@ ${resultsText}`;
 
         console.log(`[Factcheck] Calling LLM to analyze verdict for claim: ${claim.substring(0, 50)}...`);
 
-        const messages = [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-        ];
-
-        // Use streaming API with onDone callback to get full response
-        const response = await new Promise((resolve, reject) => {
-            chat.sendMessage(
-                messages,
-                model,
-                null,
-                (fullContent) => resolve(fullContent),
-                (error) => reject(error)
-            );
+        const response = await this._runAgenticFactcheckTask({
+            model,
+            systemPrompt,
+            userMessage: userPrompt,
+            selectedNodeIds: [],
         });
 
         console.log(`[Factcheck] LLM response received (length: ${response.length})`);
@@ -1052,6 +1037,35 @@ ${resultsText}`;
                 sources: [],
             };
         }
+    }
+
+    /**
+     * Run a factcheck task via the agentic executor.
+     * @param {Object} options
+     * @param {string} options.model
+     * @param {string} options.systemPrompt
+     * @param {string} options.userMessage
+     * @param {string[]} options.selectedNodeIds
+     * @returns {Promise<string>}
+     */
+    async _runAgenticFactcheckTask(options) {
+        const { model, systemPrompt, userMessage, selectedNodeIds } = options;
+        const result = await executeAgenticTask({
+            systemPrompt,
+            userMessage,
+            selectedNodeIds,
+            graph: this.graph,
+            chat: this.chat,
+            model,
+            maxToolCalls: 6,
+            allowedTools: FACTCHECK_ALLOWED_TOOLS,
+        });
+
+        if (!result.success) {
+            throw new Error(result.error || 'Agentic execution failed');
+        }
+
+        return result.content || '';
     }
 }
 

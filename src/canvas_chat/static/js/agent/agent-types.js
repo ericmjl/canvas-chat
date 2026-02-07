@@ -37,6 +37,11 @@
  */
 
 /**
+ * Output rendering mode for agent runs
+ * @typedef {'run_artifact'|'single_node'} OutputMode
+ */
+
+/**
  * Edge creation specification for postCreate hooks.
  *
  * Variable references are resolved at runtime:
@@ -101,6 +106,7 @@
  * @property {HITLPolicy} [hitl] - Human-in-the-loop policy rules
  * @property {string} [defaultOutputNodeType] - Default node type for artifacts (e.g., 'ai', 'research')
  * @property {OutputDisplay} [outputDisplay] - Data-driven display config for output nodes
+ * @property {OutputMode} [outputMode] - Output rendering mode ('run_artifact' or 'single_node')
  * @property {PostCreateConfig} [postCreate] - Hooks to execute after artifact creation
  * @property {string} [description] - Human-readable description
  */
@@ -358,6 +364,7 @@ function createDefaultHITLPolicy(overrides = {}) {
  * @param {Partial<HITLPolicy>} [config.hitl] - HITL policy overrides
  * @param {string} [config.defaultOutputNodeType='ai'] - Default output node type
  * @param {OutputDisplay} [config.outputDisplay] - Data-driven display config for output nodes
+ * @param {OutputMode} [config.outputMode='run_artifact'] - Output rendering mode
  * @param {string} [config.description] - Description
  * @returns {AgentDefinition}
  */
@@ -374,6 +381,7 @@ function createAgentDefinition(config) {
         hitl: createDefaultHITLPolicy(config.hitl),
         defaultOutputNodeType: config.defaultOutputNodeType || 'ai',
         outputDisplay: config.outputDisplay || null,
+        outputMode: config.outputMode || 'run_artifact',
         description: config.description || '',
     };
 }

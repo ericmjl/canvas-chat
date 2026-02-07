@@ -264,7 +264,7 @@ class Chat {
         }
 
         const apiKey = await this.ensureCopilotAuthFresh(model);
-        const baseUrl = this.getBaseUrl();
+        const baseUrl = this.getBaseUrlForModel(model);
 
         const requestBody = {
             messages,
@@ -425,7 +425,7 @@ class Chat {
      */
     async summarize(messages, model) {
         const apiKey = await this.ensureCopilotAuthFresh(model);
-        const baseUrl = this.getBaseUrl();
+        const baseUrl = this.getBaseUrlForModel(model);
 
         try {
             const requestBody = {

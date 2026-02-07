@@ -10,9 +10,11 @@
  * - Interact only through host-provided interfaces
  */
 
-import { EventType, createEvent } from './agent-types.js';
+import { EventType, createAgentPlan, createEvent, createPlanStep } from './agent-types.js';
 import { engineLogger as logger } from './debug-logger.js';
 import { getToolRegistry } from './tool-registry.js';
+import { executeAgenticTask } from './agentic-executor.js';
+import { storage } from '../storage.js';
 
 // =============================================================================
 // Type Definitions (JSDoc)
@@ -22,6 +24,8 @@ import { getToolRegistry } from './tool-registry.js';
  * Host-provided context for engine execution
  * The host exposes only safe primitives that engines can use.
  * @typedef {Object} HostContext
+ * @property {any} graph - Graph instance for tool-backed engines
+ * @property {any} chat - Chat instance for tool-backed engines
  * @property {LLMInterface} llm - LLM streaming interface
  * @property {ToolsInterface} tools - Tool invocation interface
  * @property {SubagentInterface} subagent - Sub-agent spawning interface
@@ -478,6 +482,258 @@ class BuiltinEngineAdapter extends EngineAdapter {
 }
 
 // =============================================================================
+// Agentic Engine Adapter
+// =============================================================================
+
+/**
+ * Agentic engine adapter using the tool-using agentic executor.
+ * This enables config-based agents to call graph tools.
+ */
+class AgenticEngineAdapter extends EngineAdapter {
+    constructor() {
+        super('agentic');
+        logger.info('AgenticEngineAdapter initialized');
+    }
+
+    /**
+     * Execute an agent run using the agentic executor.
+     *
+     * @param {import('./agent-types.js').RunRequest} runRequest
+     * @param {HostContext} hostContext
+     * @param {import('./agent-types.js').AgentDefinition} agentDefinition
+     * @yields {import('./agent-types.js').AgentEvent}
+     */
+    async *run(runRequest, hostContext, agentDefinition) {
+        const runId = crypto.randomUUID();
+        logger.enter('AgenticEngineAdapter.run', { runId, agentId: agentDefinition.id });
+        logger.timeStart(`run-${runId}`);
+
+        try {
+            if (!hostContext?.graph || !hostContext?.chat) {
+                throw new Error('Agentic engine requires graph and chat interfaces');
+            }
+
+            const plan = createAgentPlan('Respond to the user', [
+                createPlanStep('Gather relevant context'),
+                createPlanStep('Use tools if needed'),
+                createPlanStep('Compose response'),
+            ]);
+            const gatherStep = plan.steps[0];
+            const toolsStep = plan.steps[1];
+            const composeStep = plan.steps[2];
+            plan.currentStepIndex = 0;
+            gatherStep.status = 'in-progress';
+
+            yield createEvent(EventType.RUN_STARTED, runId, {
+                agentId: agentDefinition.id,
+                context: runRequest.context,
+            });
+
+            yield createEvent(EventType.RUN_STATUS, runId, {
+                status: 'running',
+                message: 'Agent execution started',
+            });
+
+            yield createEvent(EventType.PLAN_CREATED, runId, { plan });
+            yield createEvent(EventType.PLAN_UPDATED, runId, { plan, stepIndex: plan.currentStepIndex });
+
+            const startTime = Date.now();
+            const model = agentDefinition.model || storage.getCurrentModel();
+            const userMessage = runRequest.context.userQuery || runRequest.parameters?.context || 'Complete the task.';
+
+            const eventQueue = [];
+            let notifyEvent = null;
+            let streamedTokens = false;
+            let toolsUsed = 0;
+            let gatherCompleted = false;
+            let composeStarted = false;
+            const enqueueEvent = (event) => {
+                eventQueue.push(event);
+                if (notifyEvent) {
+                    notifyEvent();
+                    notifyEvent = null;
+                }
+            };
+            const onProgress = (message) => {
+                if (!message) return;
+                enqueueEvent({ type: 'progress', message: String(message) });
+            };
+            const onToken = (chunk) => {
+                if (!chunk) return;
+                streamedTokens = true;
+                enqueueEvent({ type: 'token', content: String(chunk) });
+            };
+            const onTool = (toolCall) => {
+                if (!toolCall) return;
+                enqueueEvent({ type: 'tool', tool: toolCall });
+            };
+
+            let resolved = false;
+            let resolvedResult = null;
+
+            const resultPromise = executeAgenticTask({
+                systemPrompt: agentDefinition.systemPrompt || '',
+                userMessage,
+                selectedNodeIds: runRequest.context.sourceNodeIds || [],
+                graph: hostContext.graph,
+                chat: hostContext.chat,
+                model,
+                maxToolCalls: agentDefinition.budgets?.maxToolCalls || 10,
+                allowedTools: agentDefinition.allowedTools || [],
+                onProgress,
+                onToken,
+                onTool,
+            }).then((result) => {
+                resolved = true;
+                resolvedResult = result;
+                if (notifyEvent) {
+                    notifyEvent();
+                    notifyEvent = null;
+                }
+                return result;
+            });
+
+            while (!resolved) {
+                if (eventQueue.length === 0) {
+                    await new Promise((resolve) => {
+                        notifyEvent = resolve;
+                    });
+                }
+
+                while (eventQueue.length > 0) {
+                    const event = eventQueue.shift();
+                    if (!event) continue;
+                    if (event.type === 'token') {
+                        yield createEvent(EventType.TOKEN_DELTA, runId, {
+                            content: event.content,
+                        });
+                    } else if (event.type === 'progress') {
+                        yield createEvent(EventType.PROGRESS_UPDATE, runId, {
+                            message: event.message,
+                        });
+
+                        if (!gatherCompleted) {
+                            gatherCompleted = true;
+                            gatherStep.status = 'completed';
+                            gatherStep.result = event.message;
+                            toolsStep.status = 'in-progress';
+                            plan.currentStepIndex = 1;
+                            yield createEvent(EventType.PLAN_UPDATED, runId, {
+                                plan,
+                                stepIndex: 1,
+                            });
+                        }
+                    } else if (event.type === 'tool') {
+                        const toolId = event.tool?.toolId || event.tool?.name || 'tool';
+                        toolsUsed += 1;
+
+                        const toolStep = createPlanStep(`Tool: ${toolId}`);
+                        toolStep.status = 'completed';
+                        toolStep.result = toolsUsed === 1 ? 'Used tool' : `Used tool (${toolsUsed})`;
+
+                        const composeIndex = plan.steps.indexOf(composeStep);
+                        if (composeIndex === -1) {
+                            plan.steps.push(toolStep);
+                        } else {
+                            plan.steps.splice(composeIndex, 0, toolStep);
+                        }
+
+                        toolsStep.status = 'completed';
+                        toolsStep.result = `Used ${toolsUsed} tool${toolsUsed === 1 ? '' : 's'}`;
+                        if (!composeStarted) {
+                            composeStarted = true;
+                            composeStep.status = 'in-progress';
+                            plan.currentStepIndex = plan.steps.indexOf(composeStep);
+                        }
+                        plan.summary = `Respond to the user (tools used: ${toolsUsed})`;
+                        yield createEvent(EventType.PLAN_UPDATED, runId, {
+                            plan,
+                            stepIndex: plan.currentStepIndex,
+                        });
+                    }
+                }
+            }
+
+            const result = resolvedResult || (await resultPromise);
+
+            if (!result.success) {
+                yield createEvent(EventType.RUN_FAILED, runId, {
+                    error: result.error || 'Agentic execution failed',
+                });
+                logger.exit('AgenticEngineAdapter.run', { success: false, error: result.error });
+                return;
+            }
+
+            const toolCalls = Array.isArray(result.toolCalls) ? result.toolCalls : [];
+            for (const toolCall of toolCalls) {
+                yield createEvent(EventType.TOOL_CALL_COMPLETED, runId, {
+                    toolId: toolCall.toolId || toolCall.name || 'tool',
+                    durationMs: toolCall.durationMs || 0,
+                });
+            }
+
+            if (!streamedTokens && result.content) {
+                const chunkSize = 120;
+                for (let i = 0; i < result.content.length; i += chunkSize) {
+                    const chunk = result.content.slice(i, i + chunkSize);
+                    yield createEvent(EventType.TOKEN_DELTA, runId, {
+                        content: chunk,
+                    });
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+
+            if (!gatherCompleted) {
+                gatherStep.status = 'completed';
+                gatherStep.result = 'Context gathered';
+            }
+            if (toolsUsed === 0 && toolsStep.status !== 'completed') {
+                toolsStep.status = 'skipped';
+                toolsStep.result = 'No tools needed';
+            }
+            if (!composeStarted) {
+                composeStep.status = 'in-progress';
+            }
+            composeStep.status = 'completed';
+            composeStep.result = 'Response generated';
+            plan.currentStepIndex = plan.steps.indexOf(composeStep);
+            yield createEvent(EventType.PLAN_UPDATED, runId, {
+                plan,
+                stepIndex: plan.currentStepIndex,
+            });
+
+            yield createEvent(EventType.ARTIFACT_CREATED, runId, {
+                nodeId: null,
+                nodeType: agentDefinition.defaultOutputNodeType || 'ai',
+                outputDisplay: agentDefinition.outputDisplay || null,
+                content: result.content || '',
+            });
+
+            const durationMs = Date.now() - startTime;
+            yield createEvent(EventType.RUN_COMPLETED, runId, {
+                artifactNodeIds: [],
+                metrics: {
+                    tokensUsed: result.content ? result.content.length : 0,
+                    toolCallsCount: toolCalls.length,
+                    subagentSpawns: 0,
+                    durationMs: durationMs,
+                },
+            });
+
+            logger.exit('AgenticEngineAdapter.run', { success: true });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            yield createEvent(EventType.RUN_FAILED, runId, {
+                error: errorMessage,
+            });
+            logger.exit('AgenticEngineAdapter.run', { success: false, error: errorMessage });
+        } finally {
+            logger.timeEnd(`run-${runId}`);
+        }
+    }
+}
+
+// =============================================================================
 // Engine Registry
 // =============================================================================
 
@@ -493,7 +749,8 @@ class EngineRegistry {
 
         // Register built-in engine by default
         this.register(new BuiltinEngineAdapter());
-        logger.info('EngineRegistry initialized with builtin engine');
+        this.register(new AgenticEngineAdapter());
+        logger.info('EngineRegistry initialized with builtin + agentic engines');
     }
 
     /**
@@ -544,4 +801,4 @@ class EngineRegistry {
 // Exports
 // =============================================================================
 
-export { EngineAdapter, BuiltinEngineAdapter, EngineRegistry };
+export { EngineAdapter, BuiltinEngineAdapter, AgenticEngineAdapter, EngineRegistry };
