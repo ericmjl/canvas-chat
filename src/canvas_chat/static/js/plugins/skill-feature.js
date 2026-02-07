@@ -399,8 +399,8 @@ ${skill.builtin ? '*This is a built-in skill*' : `**Source:** ${skill.source}`}`
      */
     _showMessage(message) {
         // Use toast or alert based on availability
-        if (this.context.showToast) {
-            this.context.showToast(message);
+        if (this._context.showToast) {
+            this._context.showToast(message);
         } else {
             console.log('[SkillFeature]', message);
         }

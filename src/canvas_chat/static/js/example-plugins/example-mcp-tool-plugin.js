@@ -235,9 +235,9 @@ class MCPToolFeature extends FeaturePlugin {
         console.log('[MCPToolFeature] Custom tools registered');
 
         // Register agents
-        if (this.context.runController) {
-            this.context.runController.registerAgent(RESEARCH_AGENT);
-            this.context.runController.registerAgent(ANALYSIS_AGENT);
+        if (this._context.runController) {
+            this._context.runController.registerAgent(RESEARCH_AGENT);
+            this._context.runController.registerAgent(ANALYSIS_AGENT);
             console.log('[MCPToolFeature] Agents registered');
         }
 
@@ -327,7 +327,7 @@ class MCPToolFeature extends FeaturePlugin {
             return true;
         }
 
-        if (!this.context.runController) {
+        if (!this._context.runController) {
             // Fallback: invoke tool directly
             console.log('[MCPToolFeature] RunController not available, invoking tool directly');
             const result = await toolRegistry.invokeTool('web_search', { query, numResults: 5 });
@@ -359,7 +359,7 @@ class MCPToolFeature extends FeaturePlugin {
         const runRequest = createRunRequest(RESEARCH_AGENT.id, runContext, { query });
 
         try {
-            for await (const event of this.context.runController.startRun(runRequest)) {
+            for await (const event of this._context.runController.startRun(runRequest)) {
                 await this.handleAgentEvent(event);
             }
             this.canvas.showToast('Web search complete', 'success');

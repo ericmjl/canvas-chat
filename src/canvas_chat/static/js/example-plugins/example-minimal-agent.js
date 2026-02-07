@@ -36,8 +36,8 @@ class MinimalAgentFeature extends FeaturePlugin {
 
     async onLoad() {
         // Step 2: Register agent with RunController
-        if (this.context.runController) {
-            this.context.runController.registerAgent(MY_AGENT);
+        if (this._context.runController) {
+            this._context.runController.registerAgent(MY_AGENT);
             console.log('[MinimalAgentFeature] Agent registered');
         }
     }
@@ -66,7 +66,7 @@ class MinimalAgentFeature extends FeaturePlugin {
 
         // Step 4: Execute and handle events
         try {
-            for await (const event of this.context.runController.startRun(runRequest)) {
+            for await (const event of this._context.runController.startRun(runRequest)) {
                 // Handle events (optional - RunController handles node creation)
                 if (event.type === EventType.RUN_COMPLETED) {
                     console.log('[MinimalAgentFeature] Done!', event.data.metrics);

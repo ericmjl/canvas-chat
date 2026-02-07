@@ -12,17 +12,13 @@
  */
 
 import { FeaturePlugin } from '../feature-plugin.js';
-import {
-    findLeafToBranchPath,
-    gatherReflectionContext,
-    attachReflectionToPath,
-    addReflectionToNodeMetadata,
-} from '../agent/reflection-utils.js';
+import { findLeafToBranchPath, gatherReflectionContext, addReflectionToNodeMetadata } from '../agent/reflection-utils.js';
 import { executeReflection } from '../agent/reflection-agent.js';
-import { NodeType, EdgeType, createNode } from '../graph-types.js';
+import { NodeType, EdgeType, createEdge } from '../graph-types.js';
 import { reflectionLogger as logger } from '../agent/debug-logger.js';
 import { createAgentDefinition } from '../agent/agent-types.js';
 import { storage } from '../storage.js';
+import { createWorkingNodeManager } from '../agent/working-node-manager.js';
 
 // =============================================================================
 // Type Definitions (JSDoc)
@@ -59,6 +55,9 @@ export class ReflectFeature extends FeaturePlugin {
         // Track reflection progress
         /** @type {Map<string, {status: string, progress: number}>} */
         this.reflectionProgress = new Map();
+
+        /** @type {import('../agent/working-node-manager.js').WorkingNodeManager|null} */
+        this.workingNodeManager = null;
 
         logger.info('[ReflectFeature] Initialized');
     }
@@ -109,6 +108,7 @@ export class ReflectFeature extends FeaturePlugin {
         }
 
         logger.enter('ReflectFeature.handleCommand', { command, args, hasContext: !!context });
+        let workingNodeId = null;
 
         try {
             // Get the selected node from context (passed by BaseAgent)
@@ -135,18 +135,28 @@ export class ReflectFeature extends FeaturePlugin {
             console.log('[ReflectFeature] Starting reflection execution...');
             this.showToast?.('🔍 Starting reflection agent...', 'info');
 
-            // Create a progress tracker
-            const progressNodeId = crypto.randomUUID();
-            this.reflectionProgress.set(progressNodeId, { status: 'running', progress: 0 });
+            if (!this.workingNodeManager) {
+                this.workingNodeManager = createWorkingNodeManager(this.graph, this.canvas);
+            }
+
+            workingNodeId = this.workingNodeManager.createWorkingNode({
+                type: NodeType.REFLECTION,
+                title: '🔮 Reflection',
+                position: {
+                    x: selectedNode.position.x + 700,
+                    y: selectedNode.position.y,
+                },
+                initiator: 'plugin_agent',
+                agentId: 'reflect-agent',
+            });
+
+            this.reflectionProgress.set(workingNodeId, { status: 'running', progress: 0 });
 
             console.log('[ReflectFeature] Calling executeReflection with:', {
                 selectedNodeId: selectedNode.id,
                 model: this.getCurrentModel(),
                 modelPickerValue: this.modelPicker?.value,
             });
-
-            // Show agent status in bottom bar
-            this.showAgentStatus?.('🔮 Starting reflection analysis...');
 
             // Execute reflection using the agentic approach
             // Agent will use graph tools to gather context autonomously
@@ -158,16 +168,15 @@ export class ReflectFeature extends FeaturePlugin {
                 onProgress: (msg) => {
                     logger.debug(`Reflection progress: ${msg}`);
                     console.log('[ReflectFeature] Progress:', msg);
-                    // Update agent status in bottom bar
-                    this.showAgentStatus?.(`🔮 ${msg}`);
-                    if (this.reflectionProgress.has(progressNodeId)) {
-                        this.reflectionProgress.get(progressNodeId).status = msg;
+                    this.workingNodeManager?.updateProgress(workingNodeId, {
+                        message: `🔮 ${msg}`,
+                        status: 'working',
+                    });
+                    if (this.reflectionProgress.has(workingNodeId)) {
+                        this.reflectionProgress.get(workingNodeId).status = msg;
                     }
                 },
             });
-
-            // Hide agent status
-            this.hideAgentStatus?.();
 
             console.log('[ReflectFeature] executeReflection returned:', reflectionResult);
             logger.info(`Reflection completed. Creating reflection node...`);
@@ -175,50 +184,43 @@ export class ReflectFeature extends FeaturePlugin {
             // Find the path for metadata (now just for node creation context)
             const path = findLeafToBranchPath(selectedNode.id, this.graph);
 
-            // Create a REFLECTION node in the graph
-            const reflectionNode = createNode(NodeType.REFLECTION, reflectionResult.synthesis, {
-                position: {
-                    x: selectedNode.position.x + 700,
-                    y: selectedNode.position.y,
+            // Finalize the working node as a reflection node
+            this.workingNodeManager?.finalizeNode(workingNodeId, {
+                content: reflectionResult.synthesis,
+                title: '🔮 Reflection',
+                type: NodeType.REFLECTION,
+                metadata: {
+                    reflectionRunId: reflectionResult.reflectionRunId,
+                    leafNodeId: path.leafNodeId,
+                    branchNodeId: path.branchNodeId,
+                    pathNodeIds: path.nodeIds,
+                    pathLength: path.nodeIds.length,
+                    toolCalls: reflectionResult.toolCalls?.length || 0,
+                    createdAt: Date.now(),
+                    display: {
+                        typeLabel: 'Reflection',
+                        typeIcon: '🔮',
+                        subtitle: `${path.nodeIds.length} nodes analyzed`,
+                        actions: ['reply', 'copy'],
+                    },
                 },
-                title: `🔮 Reflection`,
             });
 
-            // Add metadata linking to the run + display configuration
-            reflectionNode.metadata = {
-                reflectionRunId: reflectionResult.reflectionRunId,
-                leafNodeId: path.leafNodeId,
-                branchNodeId: path.branchNodeId,
-                pathNodeIds: path.nodeIds,
-                pathLength: path.nodeIds.length,
-                toolCalls: reflectionResult.toolCalls?.length || 0,
-                createdAt: Date.now(),
-                // Data-driven display - BaseNode reads this automatically
-                display: {
-                    typeLabel: 'Reflection',
-                    typeIcon: '🔮',
-                    subtitle: `${path.nodeIds.length} nodes analyzed`,
-                    actions: ['reply', 'copy'],
-                },
-            };
-
-            // Add to graph
-            this.graph.addNode(reflectionNode);
+            const reflectionNode = this.graph.getNode(workingNodeId);
+            if (!reflectionNode) {
+                throw new Error('Failed to finalize reflection node');
+            }
             logger.info(`Created reflection node: ${reflectionNode.id.slice(0, 8)}`);
+            this.reflectionProgress.delete(workingNodeId);
 
-            // Attach edges
-            attachReflectionToPath(reflectionNode.id, path.branchNodeId, path.leafNodeId, this.graph);
+            // Attach edge only to the reflected node (no branch edge)
+            this.graph.addEdge(
+                createEdge(selectedNode.id, reflectionNode.id, EdgeType.RUN_REFLECTION)
+            );
 
-            // Update node metadata
-            const leafNode = this.graph.getNode(path.leafNodeId);
-            const branchNode = this.graph.getNode(path.branchNodeId);
-            addReflectionToNodeMetadata(leafNode, reflectionNode.id);
-            addReflectionToNodeMetadata(branchNode, reflectionNode.id);
-            this.graph.updateNode(leafNode);
-            this.graph.updateNode(branchNode);
-
-            // Render the new reflection node
-            this.canvas.renderNode(reflectionNode);
+            // Update node metadata only on the reflected node
+            addReflectionToNodeMetadata(selectedNode, reflectionNode.id);
+            this.graph.updateNode(selectedNode);
 
             // Show reflection in sidepanel
             const resultUI = {
@@ -241,10 +243,14 @@ export class ReflectFeature extends FeaturePlugin {
                 synthesisLength: reflectionResult.synthesis.length,
             });
         } catch (error) {
-            // Hide agent status on error
-            this.hideAgentStatus?.();
             console.error('[ReflectFeature] Error in handleCommand:', error);
             logger.error(`Reflection failed: ${error.message}`);
+            if (this.workingNodeManager && workingNodeId) {
+                this.workingNodeManager.setError(workingNodeId, error.message);
+            }
+            if (workingNodeId) {
+                this.reflectionProgress.delete(workingNodeId);
+            }
             this.showToast?.(`❌ Reflection failed: ${error.message}`, 'error');
             logger.exit('ReflectFeature.handleCommand', { error: error.message });
         }

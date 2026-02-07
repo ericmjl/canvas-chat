@@ -167,8 +167,6 @@ class FeaturePlugin {
         // Store context for live property access via getters
         // This ensures features always access current app state, not stale snapshots
         this._context = context;
-        // Backwards-compatible alias used by some example plugins
-        this.context = context;
 
         // Static dependencies (initialized before plugins, safe to copy)
         this.canvas = context.canvas;
