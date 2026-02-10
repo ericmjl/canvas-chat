@@ -40,6 +40,9 @@ export function getSkillRegistry() {
  * SkillRegistry - Stores and queries skill metadata
  */
 export class SkillRegistry {
+    /**
+     *
+     */
     constructor() {
         /**
          * Map of skill ID to metadata

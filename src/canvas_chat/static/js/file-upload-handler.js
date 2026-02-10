@@ -68,17 +68,29 @@ class FileUploadHandler {
     // Canvas events still use type-specific names (pdfDrop, imageDrop, csvDrop)
     // These thin wrappers delegate to the unified handleFileUpload()
 
-    /** @deprecated Use handleFileUpload() directly */
+    /**
+     * @param file
+     * @param position
+     * @deprecated Use handleFileUpload() directly
+     */
     async handlePdfDrop(file, position) {
         return this.handleFileUpload(file, position);
     }
 
-    /** @deprecated Use handleFileUpload() directly */
+    /**
+     * @param file
+     * @param position
+     * @deprecated Use handleFileUpload() directly
+     */
     async handleImageDrop(file, position) {
         return this.handleFileUpload(file, position);
     }
 
-    /** @deprecated Use handleFileUpload() directly */
+    /**
+     * @param file
+     * @param position
+     * @deprecated Use handleFileUpload() directly
+     */
     async handleCsvDrop(file, position) {
         return this.handleFileUpload(file, position);
     }

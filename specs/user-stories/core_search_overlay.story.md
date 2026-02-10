@@ -1,6 +1,7 @@
 # Search Overlay
 
 ## Scenario: Search overlay opens and closes
+
 - Given I open Canvas Chat
 - When I wait for the app to initialize
 - When I open the search overlay

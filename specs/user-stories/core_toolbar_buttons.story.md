@@ -1,6 +1,7 @@
 # Toolbar Buttons
 
 ## Scenario: Primary toolbar buttons are visible
+
 - Given I open Canvas Chat
 - When I wait for the app to initialize
 - Then I should see the "New Canvas" button

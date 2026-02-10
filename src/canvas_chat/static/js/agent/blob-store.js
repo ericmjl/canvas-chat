@@ -155,6 +155,9 @@ class IndexedDBBlobStore extends BlobStore {
         blobLogger.debug('IndexedDBBlobStore created', { dbName });
     }
 
+    /**
+     *
+     */
     get name() {
         return 'IndexedDBBlobStore';
     }
@@ -196,6 +199,11 @@ class IndexedDBBlobStore extends BlobStore {
         });
     }
 
+    /**
+     *
+     * @param data
+     * @param options
+     */
     async store(data, options) {
         const startTime = Date.now();
         await this.init();
@@ -249,6 +257,10 @@ class IndexedDBBlobStore extends BlobStore {
         });
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async retrieve(blobId) {
         await this.init();
         blobLogger.debug('Retrieving blob', { blobId });
@@ -276,11 +288,19 @@ class IndexedDBBlobStore extends BlobStore {
         });
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async getMetadata(blobId) {
         const result = await this.retrieve(blobId);
         return result?.metadata || null;
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async delete(blobId) {
         await this.init();
         blobLogger.debug('Deleting blob', { blobId });
@@ -302,11 +322,19 @@ class IndexedDBBlobStore extends BlobStore {
         });
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async exists(blobId) {
         const metadata = await this.getMetadata(blobId);
         return metadata !== null;
     }
 
+    /**
+     *
+     * @param options
+     */
     async list(options = {}) {
         await this.init();
         blobLogger.debug('Listing blobs', options);
@@ -343,6 +371,9 @@ class IndexedDBBlobStore extends BlobStore {
         });
     }
 
+    /**
+     *
+     */
     async getStats() {
         await this.init();
         const allBlobs = await this.list();
@@ -371,6 +402,11 @@ class IndexedDBBlobStore extends BlobStore {
         };
     }
 
+    /**
+     *
+     * @param blobId
+     * @param options
+     */
     async createUrl(blobId, options = {}) {
         const result = await this.retrieve(blobId);
         if (!result) {
@@ -406,10 +442,18 @@ class ServerBlobStore extends BlobStore {
         blobLogger.debug('ServerBlobStore created', { baseUrl });
     }
 
+    /**
+     *
+     */
     get name() {
         return 'ServerBlobStore';
     }
 
+    /**
+     *
+     * @param data
+     * @param options
+     */
     async store(data, options) {
         const startTime = Date.now();
         const id = options.id || crypto.randomUUID();
@@ -467,6 +511,10 @@ class ServerBlobStore extends BlobStore {
         }
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async retrieve(blobId) {
         blobLogger.debug('Retrieving blob from server', { blobId });
 
@@ -497,6 +545,10 @@ class ServerBlobStore extends BlobStore {
         }
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async getMetadata(blobId) {
         blobLogger.debug('Getting blob metadata from server', { blobId });
 
@@ -513,6 +565,10 @@ class ServerBlobStore extends BlobStore {
         }
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async delete(blobId) {
         blobLogger.debug('Deleting blob from server', { blobId });
 
@@ -533,6 +589,10 @@ class ServerBlobStore extends BlobStore {
         }
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async exists(blobId) {
         try {
             const response = await fetch(`${this.baseUrl}/${blobId}/metadata`, {
@@ -544,6 +604,10 @@ class ServerBlobStore extends BlobStore {
         }
     }
 
+    /**
+     *
+     * @param options
+     */
     async list(options = {}) {
         blobLogger.debug('Listing blobs from server', options);
 
@@ -569,6 +633,9 @@ class ServerBlobStore extends BlobStore {
         }
     }
 
+    /**
+     *
+     */
     async getStats() {
         blobLogger.debug('Getting storage stats from server');
 
@@ -584,6 +651,11 @@ class ServerBlobStore extends BlobStore {
         }
     }
 
+    /**
+     *
+     * @param blobId
+     * @param options
+     */
     async createUrl(blobId, options = {}) {
         // Server provides direct URL to blob
         const url = `${this.baseUrl}/${blobId}`;
@@ -616,6 +688,9 @@ class ServerBlobStore extends BlobStore {
  * In-memory BlobStore for testing and development
  */
 class InMemoryBlobStore extends BlobStore {
+    /**
+     *
+     */
     constructor() {
         super();
         /** @type {Map<string, {data: Blob, metadata: BlobMetadata}>} */
@@ -624,10 +699,18 @@ class InMemoryBlobStore extends BlobStore {
         blobLogger.debug('InMemoryBlobStore created');
     }
 
+    /**
+     *
+     */
     get name() {
         return 'InMemoryBlobStore';
     }
 
+    /**
+     *
+     * @param data
+     * @param options
+     */
     async store(data, options) {
         const id = options.id || crypto.randomUUID();
         let blob;
@@ -657,25 +740,45 @@ class InMemoryBlobStore extends BlobStore {
         return metadata;
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async retrieve(blobId) {
         return this.blobs.get(blobId) || null;
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async getMetadata(blobId) {
         const blob = this.blobs.get(blobId);
         return blob?.metadata || null;
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async delete(blobId) {
         const existed = this.blobs.has(blobId);
         this.blobs.delete(blobId);
         return existed;
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async exists(blobId) {
         return this.blobs.has(blobId);
     }
 
+    /**
+     *
+     * @param options
+     */
     async list(options = {}) {
         let results = Array.from(this.blobs.values()).map((v) => v.metadata);
 
@@ -691,6 +794,9 @@ class InMemoryBlobStore extends BlobStore {
         return results;
     }
 
+    /**
+     *
+     */
     async getStats() {
         const allBlobs = Array.from(this.blobs.values());
         const totalBytes = allBlobs.reduce((sum, b) => sum + b.metadata.size, 0);
@@ -703,6 +809,10 @@ class InMemoryBlobStore extends BlobStore {
         };
     }
 
+    /**
+     *
+     * @param blobId
+     */
     async createUrl(blobId) {
         const blob = this.blobs.get(blobId);
         if (!blob) throw new Error(`Blob not found: ${blobId}`);
@@ -725,6 +835,9 @@ class InMemoryBlobStore extends BlobStore {
  * Registry for BlobStore implementations
  */
 class BlobStoreRegistry {
+    /**
+     *
+     */
     constructor() {
         /** @type {Map<string, typeof BlobStore>} */
         this.stores = new Map();

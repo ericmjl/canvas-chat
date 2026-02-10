@@ -50,7 +50,6 @@ from canvas_chat import __version__
 from canvas_chat.agents_sdk import run_agents_sdk, run_agents_sdk_stream
 from canvas_chat.config import AppConfig, is_github_copilot_enabled
 from canvas_chat.file_upload_registry import FileUploadRegistry
-from canvas_chat.tool_registry import get_tool_registry
 
 # Import built-in file upload handler plugins (registers them)
 # Import built-in URL fetch handler plugins (registers them)
@@ -67,6 +66,7 @@ from canvas_chat.plugins import (
     youtube_handler,  # noqa: F401
 )
 from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE
+from canvas_chat.tool_registry import get_tool_registry
 from canvas_chat.url_fetch_registry import UrlFetchRegistry
 
 # Configure logging
@@ -1373,11 +1373,13 @@ async def run_agent_stream(request: AgentRunRequest):
     if "/" in request.model and not request.model.startswith("openai/"):
         provider = request.model.split("/", 1)[0].lower()
         if provider not in {"anthropic", "gemini", "google"} and not request.base_url:
+
             async def reject():
                 yield {
                     "event": "error",
                     "data": "Non-OpenAI models require an OpenAI-compatible base_url.",
                 }
+
             return EventSourceResponse(reject())
 
     async def generate():
@@ -1608,7 +1610,7 @@ async def execute_tool(tool_name: str, request: ToolCallRequest) -> dict:
         return result
     except Exception as e:
         logger.error(f"Tool execution failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 class RefineQueryRequest(BaseModel):

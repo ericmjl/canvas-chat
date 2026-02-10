@@ -220,12 +220,19 @@ When analyzing content:
  * MCPToolFeature - Demonstrates MCP tool integration
  */
 class MCPToolFeature extends FeaturePlugin {
+    /**
+     *
+     * @param context
+     */
     constructor(context) {
         super(context);
         this.canvas = context.canvas;
         this.chat = context.chat;
     }
 
+    /**
+     *
+     */
     async onLoad() {
         console.log('[MCPToolFeature] Loading MCP tool plugin...');
 
@@ -248,10 +255,16 @@ class MCPToolFeature extends FeaturePlugin {
         console.log('[MCPToolFeature] Plugin loaded successfully');
     }
 
+    /**
+     *
+     */
     async onUnload() {
         console.log('[MCPToolFeature] Plugin unloaded');
     }
 
+    /**
+     *
+     */
     getSlashCommands() {
         return [
             {
@@ -272,6 +285,12 @@ class MCPToolFeature extends FeaturePlugin {
         ];
     }
 
+    /**
+     *
+     * @param command
+     * @param args
+     * @param context
+     */
     async handleCommand(command, args, context) {
         const { selectedNodeIds } = context;
 
@@ -320,6 +339,8 @@ class MCPToolFeature extends FeaturePlugin {
 
     /**
      * Web search using research agent
+     * @param query
+     * @param selectedNodeIds
      */
     async handleWebSearch(query, selectedNodeIds) {
         if (!query.trim()) {
@@ -373,6 +394,8 @@ class MCPToolFeature extends FeaturePlugin {
 
     /**
      * Text analysis using analysis agent
+     * @param text
+     * @param selectedNodeIds
      */
     async handleTextAnalysis(text, selectedNodeIds) {
         // Get text from selected nodes if not provided
@@ -434,6 +457,7 @@ ${analysis.key_phrases?.map((p) => `- "${p}"`).join('\n') || '- None extracted'}
 
     /**
      * Calculate expression using calculator tool
+     * @param expression
      */
     async handleCalculate(expression) {
         if (!expression.trim()) {
@@ -470,6 +494,7 @@ ${analysis.key_phrases?.map((p) => `- "${p}"`).join('\n') || '- None extracted'}
 
     /**
      * Handle agent events
+     * @param event
      */
     async handleAgentEvent(event) {
         switch (event.type) {
@@ -550,6 +575,10 @@ if (typeof window !== 'undefined') {
     });
 }
 
+/**
+ *
+ * @param app
+ */
 export function registerPlugin(app) {
     if (typeof window === 'undefined' || !registerFeature) {
         return;

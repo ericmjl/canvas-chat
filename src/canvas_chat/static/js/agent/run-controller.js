@@ -534,6 +534,9 @@ class RunController {
 
     /**
      * Build host context for engine execution.
+     * @param runId
+     * @param agentDef
+     * @param depth
      * @private
      */
     _buildHostContext(runId, agentDef, depth) {
@@ -628,6 +631,8 @@ class RunController {
 
     /**
      * Process an event and update run state.
+     * @param run
+     * @param event
      * @private
      */
     _processEvent(run, event) {
@@ -689,6 +694,7 @@ class RunController {
 
     /**
      * Emit event to listeners.
+     * @param event
      * @private
      */
     _emitEvent(event) {
@@ -724,6 +730,8 @@ class RunController {
 
     /**
      * Wait for HITL approval.
+     * @param runId
+     * @param action
      * @private
      */
     async _waitForApproval(runId, action) {
@@ -873,6 +881,9 @@ class RunController {
 
     /**
      * Create a run node in the graph.
+     * @param run
+     * @param agentDef
+     * @param context
      * @private
      */
     async _createRunNode(run, agentDef, context) {
@@ -932,6 +943,8 @@ class RunController {
 
     /**
      * Update a run node's display.
+     * @param nodeId
+     * @param run
      * @private
      */
     async _updateRunNode(nodeId, run) {
@@ -1325,6 +1338,7 @@ class RunController {
 
     /**
      * Retain memories from a completed run.
+     * @param run
      * @private
      */
     async _retainRunMemories(run) {

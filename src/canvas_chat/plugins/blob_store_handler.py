@@ -29,7 +29,6 @@ Configure via config.yaml:
         bucket: my-bucket                   # s3-specific
 """
 
-import asyncio
 import json
 import logging
 from typing import Any
@@ -138,7 +137,9 @@ class BlobStoreHandler:
             )
         except Exception as e:
             logger.error(f"Failed to store blob: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to store blob: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to store blob: {e}"
+            ) from e
 
     async def retrieve(self, blob_id: str) -> tuple[bytes, BlobMetadataResponse]:
         """Retrieve a blob via the active backend."""
@@ -154,11 +155,13 @@ class BlobStoreHandler:
                 createdAt=metadata.created_at,
                 metadata=metadata.metadata,
             )
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Blob not found")
+        except KeyError as err:
+            raise HTTPException(status_code=404, detail="Blob not found") from err
         except Exception as e:
             logger.error(f"Failed to retrieve blob {blob_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to retrieve blob: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to retrieve blob: {e}"
+            ) from e
 
     async def get_metadata(self, blob_id: str) -> BlobMetadataResponse | None:
         """Get blob metadata via the active backend."""
@@ -178,7 +181,9 @@ class BlobStoreHandler:
             return None
         except Exception as e:
             logger.error(f"Failed to get metadata for {blob_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to get metadata: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to get metadata: {e}"
+            ) from e
 
     async def delete(self, blob_id: str) -> bool:
         """Delete a blob via the active backend."""
@@ -188,7 +193,9 @@ class BlobStoreHandler:
             return await backend.delete(blob_id)
         except Exception as e:
             logger.error(f"Failed to delete blob {blob_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to delete blob: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to delete blob: {e}"
+            ) from e
 
     async def exists(self, blob_id: str) -> bool:
         """Check if blob exists via the active backend."""
@@ -210,7 +217,9 @@ class BlobStoreHandler:
         backend = await self._get_backend()
 
         try:
-            results = await backend.list_blobs(prefix=prefix, limit=limit, offset=offset)
+            results = await backend.list_blobs(
+                prefix=prefix, limit=limit, offset=offset
+            )
             return [
                 BlobMetadataResponse(
                     id=m.id,
@@ -224,7 +233,9 @@ class BlobStoreHandler:
             ]
         except Exception as e:
             logger.error(f"Failed to list blobs: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to list blobs: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to list blobs: {e}"
+            ) from e
 
     async def get_stats(self) -> StorageStatsResponse:
         """Get storage stats via the active backend."""
@@ -240,7 +251,9 @@ class BlobStoreHandler:
             )
         except Exception as e:
             logger.error(f"Failed to get stats: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to get stats: {e}"
+            ) from e
 
     async def create_signed_url(
         self, blob_id: str, expires_in: int = 3600
@@ -268,7 +281,9 @@ class BlobStoreHandler:
         """Create a pre-signed upload URL if backend supports it."""
         backend = await self._get_backend()
 
-        result = await backend.create_upload_url(blob_id, filename, mime_type, expires_in)
+        result = await backend.create_upload_url(
+            blob_id, filename, mime_type, expires_in
+        )
         if result is None:
             return None
 
@@ -285,8 +300,8 @@ class BlobStoreHandler:
         try:
             async for chunk in backend.stream(blob_id, chunk_size):
                 yield chunk
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Blob not found")
+        except KeyError as err:
+            raise HTTPException(status_code=404, detail="Blob not found") from err
 
 
 # Singleton handler instance
@@ -294,7 +309,9 @@ _blob_handler: BlobStoreHandler | None = None
 _config: dict[str, Any] = {}
 
 
-async def initialize_blob_store(config: dict[str, Any] | None = None) -> BlobStoreHandler:
+async def initialize_blob_store(
+    config: dict[str, Any] | None = None,
+) -> BlobStoreHandler:
     """
     Initialize the blob store with configuration.
 
@@ -331,7 +348,7 @@ def register_endpoints(app: FastAPI) -> None:
 
     @app.post("/api/blobs", response_model=BlobMetadataResponse)
     async def upload_blob(
-        file: UploadFile = File(...),
+        file: UploadFile = File(...),  # noqa: B008 (FastAPI dependency injection)
         id: str | None = Form(None),
         mimeType: str | None = Form(None),
         metadata: str | None = Form(None),
@@ -344,8 +361,10 @@ def register_endpoints(app: FastAPI) -> None:
         if metadata:
             try:
                 parsed_metadata = json.loads(metadata)
-            except json.JSONDecodeError:
-                raise HTTPException(status_code=400, detail="Invalid metadata JSON")
+            except json.JSONDecodeError as err:
+                raise HTTPException(
+                    status_code=400, detail="Invalid metadata JSON"
+                ) from err
 
         return await handler.store(file, id, mimeType, parsed_metadata)
 
@@ -358,7 +377,9 @@ def register_endpoints(app: FastAPI) -> None:
         return Response(
             content=data,
             media_type=metadata.mimeType,
-            headers={"Content-Disposition": f'attachment; filename="{metadata.filename}"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="{metadata.filename}"'
+            },
         )
 
     @app.get("/api/blobs/{blob_id}/stream")
@@ -372,7 +393,9 @@ def register_endpoints(app: FastAPI) -> None:
         return StreamingResponse(
             handler.stream(blob_id),
             media_type=metadata.mimeType,
-            headers={"Content-Disposition": f'attachment; filename="{metadata.filename}"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="{metadata.filename}"'
+            },
         )
 
     @app.get("/api/blobs/{blob_id}/metadata", response_model=BlobMetadataResponse)
@@ -471,4 +494,3 @@ def register_endpoints(app: FastAPI) -> None:
         }
 
     logger.info("Blob store endpoints registered")
-

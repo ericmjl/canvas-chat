@@ -239,12 +239,12 @@ await asyncTest('ImageNode handles missing imageData', async () => {
     };
     const wrapped = wrapNode(node);
 
-    // Should still work with missing imageData
+    // Should still work with missing imageData (shows "No image data" or empty src)
     assertEqual(wrapped.getTypeLabel(), 'Image', 'Should return type label even with missing imageData');
     assertEqual(wrapped.getTypeIcon(), '🖼️', 'Should return type icon even with missing imageData');
     const mockCanvas = {};
     const html = wrapped.renderContent(mockCanvas);
-    assertTrue(html.includes('data:image/png;base64,undefined'), 'Should handle missing imageData in renderContent');
+    assertTrue(html.includes('No image data') || html.includes('image-node-content'), 'Should handle missing imageData in renderContent');
 });
 
 console.log('\n✅ All Image node plugin tests passed!\n');

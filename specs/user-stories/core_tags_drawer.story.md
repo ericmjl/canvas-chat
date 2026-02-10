@@ -1,6 +1,7 @@
 # Tag Drawer
 
 ## Scenario: Tag drawer opens and closes
+
 - Given I open Canvas Chat
 - When I wait for the app to initialize
 - When I open the tag drawer
@@ -9,6 +10,7 @@
 - Then the tag drawer should be hidden
 
 ## Scenario: Removing a tag chip clears it from the node
+
 - Given I open Canvas Chat
 - When I wait for the app to initialize
 - And I create a tagged node with color "#ffc9c9" and name "Important", stored as "taggedNode"

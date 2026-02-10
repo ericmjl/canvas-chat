@@ -187,6 +187,9 @@ class MemoryStore {
  * as regular nodes in the graph.
  */
 class InMemoryStore extends MemoryStore {
+    /**
+     *
+     */
     constructor() {
         super('in-memory');
         /** @type {Map<string, Memory[]>} */
@@ -375,6 +378,9 @@ class InMemoryStore extends MemoryStore {
  * Registry for memory store implementations.
  */
 class MemoryStoreRegistry {
+    /**
+     *
+     */
     constructor() {
         logger.info('MemoryStoreRegistry initializing...');
         /** @type {Map<string, MemoryStore>} */

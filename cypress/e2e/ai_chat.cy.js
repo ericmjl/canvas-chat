@@ -13,6 +13,7 @@ describe('AI Chat - Basic Flow', { tags: '@ai' }, () => {
         cy.clearIndexedDB();
         cy.visit('/');
         cy.waitForAppReady();
+        cy.waitForBaseAgent();
         cy.selectTestModel('openai/gpt-4o-mini');
     });
 
@@ -44,6 +45,7 @@ describe('AI Chat - Streaming Tests', { tags: '@ai' }, () => {
         cy.clearIndexedDB();
         cy.visit('/');
         cy.waitForAppReady();
+        cy.waitForBaseAgent();
         cy.selectTestModel('openai/gpt-4o-mini');
     });
 

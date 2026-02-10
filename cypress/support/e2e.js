@@ -53,14 +53,24 @@ Cypress.Commands.add('getLastHumanNode', () => {
     return cy.get('.node.human').last();
 });
 
-// Wait for app + plugin system to be fully initialized
+// Wait for app + plugin system to be fully initialized.
+// All checks in one retry block so we wait for __APP_TEST__ and pluginSystemReady
+// to appear (they are set by the app after session load) instead of failing fast.
+// Does not require baseAgent; specs that need it (e.g. chat flows) should call waitForBaseAgent() after.
 Cypress.Commands.add('waitForAppReady', () => {
-    cy.window().should((win) => {
-        expect(win.app, 'app instance').to.exist;
-        expect(win.__APP_TEST__, '__APP_TEST__').to.exist;
-        expect(win.app.baseAgent, 'base agent').to.exist;
-    });
-    cy.window().its('__APP_TEST__.pluginSystemReady', { timeout: 10000 }).should('eq', 'init-complete');
+    cy.window().should(
+        (win) => {
+            expect(win.app, 'app instance').to.exist;
+            expect(win.__APP_TEST__, 'test hook (set after session load)').to.exist;
+            expect(win.__APP_TEST__.pluginSystemReady, 'plugin system ready').to.eq('init-complete');
+        },
+        { timeout: 60000 }
+    );
+});
+
+// Wait for BaseAgent to be ready. Call after waitForAppReady() in specs that send chat messages or use runAgentSlashCommand.
+Cypress.Commands.add('waitForBaseAgent', () => {
+    cy.window().its('app.baseAgent', { timeout: 10000 }).should('exist');
 });
 
 // Seed custom models so the picker is not empty in tests

@@ -6,13 +6,19 @@ with graph tools implemented against a snapshot of the frontend DAG.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable
-
 import json
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
 
-from agents import Agent, Runner, RunContextWrapper, function_tool
-from agents import AsyncOpenAI, OpenAIResponsesModel
+from agents import (
+    Agent,
+    AsyncOpenAI,
+    OpenAIResponsesModel,
+    RunContextWrapper,
+    Runner,
+    function_tool,
+)
 
 try:
     from agents import OpenAIChatCompletionsModel
@@ -109,7 +115,9 @@ def graph_find_path_to_root(
 ) -> dict[str, Any]:
     """Find the path from a node back to a branch point or root."""
     _record_tool_call(
-        ctx, "graph:findPathToRoot", {"nodeId": nodeId, "stopAtBranchPoint": stopAtBranchPoint}
+        ctx,
+        "graph:findPathToRoot",
+        {"nodeId": nodeId, "stopAtBranchPoint": stopAtBranchPoint},
     )
     graph = ctx.context.graph
     if not graph.get_node(nodeId):
@@ -156,7 +164,9 @@ def graph_get_node_content(
     maxLength: int = 500,
 ) -> dict[str, Any]:
     """Get the content and metadata for a node."""
-    _record_tool_call(ctx, "graph:getNodeContent", {"nodeId": nodeId, "maxLength": maxLength})
+    _record_tool_call(
+        ctx, "graph:getNodeContent", {"nodeId": nodeId, "maxLength": maxLength}
+    )
     node = ctx.context.graph.get_node(nodeId)
     if not node:
         return {"success": False, "error": f"Node not found: {nodeId}"}
@@ -345,7 +355,9 @@ def graph_find_nodes_by_type(
     limit: int = 20,
 ) -> dict[str, Any]:
     """Find nodes by type."""
-    _record_tool_call(ctx, "graph:findNodesByType", {"nodeType": nodeType, "limit": limit})
+    _record_tool_call(
+        ctx, "graph:findNodesByType", {"nodeType": nodeType, "limit": limit}
+    )
     graph = ctx.context.graph
     matches = [node for node in graph.nodes if node.get("type") == nodeType]
     nodes = [
@@ -424,9 +436,7 @@ def _build_model(
             raise RuntimeError("LitellmModel unavailable in this Agents SDK version.")
         return LitellmModel(model=model_id, api_key=api_key)
 
-    raise RuntimeError(
-        "Non-OpenAI models require an OpenAI-compatible base_url."
-    )
+    raise RuntimeError("Non-OpenAI models require an OpenAI-compatible base_url.")
 
 
 def _extract_tool_calls(run_result: Any) -> list[dict[str, Any]]:

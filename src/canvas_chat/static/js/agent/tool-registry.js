@@ -231,6 +231,9 @@ export class MCPClient {
  * - Plugin-provided (from plugins)
  */
 export class ToolRegistry {
+    /**
+     *
+     */
     constructor() {
         /** @type {Map<string, ToolDefinition>} */
         this.tools = new Map();

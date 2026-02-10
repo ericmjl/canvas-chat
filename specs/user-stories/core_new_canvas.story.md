@@ -1,6 +1,7 @@
 # New Canvas
 
 ## Scenario: New canvas clears the graph
+
 - Given I open Canvas Chat
 - When I wait for the app to initialize
 - When I create a "note" node via the app API

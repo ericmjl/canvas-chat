@@ -1,6 +1,7 @@
 # External Plugins
 
 ## Scenario: External plugins listed by the backend are loaded
+
 - Given I stub external plugins list with valid plugins
 - And I open Canvas Chat
 - When I wait for the app to initialize

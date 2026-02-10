@@ -75,6 +75,7 @@ Given('I stub external plugins list with a broken plugin', () => {
 
 When('I wait for the app to initialize', () => {
     cy.waitForAppReady();
+    cy.waitForBaseAgent();
     cy.window().should((win) => {
         expect(win.app.featureRegistry, 'feature registry').to.exist;
         expect(win.app.graph, 'graph initialized').to.exist;

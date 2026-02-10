@@ -158,6 +158,10 @@ if (typeof window !== 'undefined') {
     });
 }
 
+/**
+ *
+ * @param app
+ */
 export function registerPlugin(app) {
     if (typeof window === 'undefined' || !registerFeature) {
         return;

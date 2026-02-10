@@ -38,7 +38,7 @@ We introduced a **Base Agent + Sub-Agent architecture** where:
 
 ## Architecture Diagram
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              User Input                                      │
 │                          (message or /command)                               │
@@ -246,7 +246,7 @@ Memory types:
 
 ### Graph Linking Rules
 
-```
+```text
 [Human Node] ---(RUN_TRIGGER)---> [Run Node] ---(RUN_ARTIFACT)---> [AI Node]
                                        |
                                        +---(SUBAGENT)---> [Sub-Run Node]
@@ -573,7 +573,7 @@ agentId:
 
 ### Directory Layout
 
-```
+```text
 src/canvas_chat/static/js/agent/
 ├── index.js              # Module exports
 ├── base-agent.js         # Primary orchestrator

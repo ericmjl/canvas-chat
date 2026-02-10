@@ -39,6 +39,9 @@ import { createWorkingNodeManager } from '../agent/working-node-manager.js';
 // Reflect Feature Plugin
 // =============================================================================
 
+/**
+ *
+ */
 export class ReflectFeature extends FeaturePlugin {
     /**
      * @param {AppContext} context - Application context

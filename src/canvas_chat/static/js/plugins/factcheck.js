@@ -50,6 +50,24 @@ class FactcheckNode extends BaseNode {
     }
 
     /**
+     * Factcheck nodes are read-only (no edit content modal / E key).
+     * @returns {boolean}
+     */
+    isContentEditable() {
+        return false;
+    }
+
+    /**
+     * Factcheck nodes only support copy (no edit, no reply).
+     * @returns {Object.<string, {action: string, handler: string}>}
+     */
+    getKeyboardShortcuts() {
+        return {
+            c: { action: 'copy', handler: 'nodeCopy' },
+        };
+    }
+
+    /**
      * Get summary text for the node (shown when zoomed out)
      * @param {Canvas} _canvas
      * @returns {string}

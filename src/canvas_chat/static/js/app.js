@@ -1433,6 +1433,9 @@ class App {
     /**
      * Legacy handleSend implementation.
      * Used when BaseAgent is not initialized.
+     * @param content
+     * @param slashContext
+     * @param selectedIds
      * @private
      */
     async _handleSendLegacy(content, slashContext, selectedIds) {

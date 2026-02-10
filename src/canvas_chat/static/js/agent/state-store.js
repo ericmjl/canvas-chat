@@ -237,17 +237,28 @@ class CRDTStateStore extends StateStore {
         stateLogger.debug('CRDTStateStore initialized');
     }
 
+    /**
+     *
+     */
     get name() {
         return 'CRDTStateStore';
     }
 
     // ---- Node Operations (delegated to CRDT graph) ----
 
+    /**
+     *
+     * @param nodeId
+     */
     async getNode(nodeId) {
         stateLogger.debug('getNode', { nodeId });
         return this.graph.getNode(nodeId);
     }
 
+    /**
+     *
+     * @param options
+     */
     async listNodes(options = {}) {
         stateLogger.debug('listNodes', options);
         const allNodes = this.graph.getAllNodes();
@@ -285,6 +296,10 @@ class CRDTStateStore extends StateStore {
         return result;
     }
 
+    /**
+     *
+     * @param node
+     */
     async saveNode(node) {
         stateLogger.debug('saveNode', { nodeId: node.id, type: node.type });
 
@@ -302,6 +317,10 @@ class CRDTStateStore extends StateStore {
         }
     }
 
+    /**
+     *
+     * @param nodeId
+     */
     async deleteNode(nodeId) {
         stateLogger.debug('deleteNode', { nodeId });
         const existing = this.graph.getNode(nodeId);
@@ -313,11 +332,19 @@ class CRDTStateStore extends StateStore {
 
     // ---- Edge Operations (delegated to CRDT graph) ----
 
+    /**
+     *
+     * @param edgeId
+     */
     async getEdge(edgeId) {
         stateLogger.debug('getEdge', { edgeId });
         return this.graph.getEdge(edgeId);
     }
 
+    /**
+     *
+     * @param options
+     */
     async listEdges(options = {}) {
         stateLogger.debug('listEdges', options);
         const allEdges = this.graph.getAllEdges();
@@ -345,6 +372,10 @@ class CRDTStateStore extends StateStore {
         return result;
     }
 
+    /**
+     *
+     * @param edge
+     */
     async saveEdge(edge) {
         stateLogger.debug('saveEdge', { edgeId: edge.id });
 
@@ -355,6 +386,10 @@ class CRDTStateStore extends StateStore {
         // Note: CRDT graph doesn't support edge updates
     }
 
+    /**
+     *
+     * @param edgeId
+     */
     async deleteEdge(edgeId) {
         stateLogger.debug('deleteEdge', { edgeId });
         const existing = this.graph.getEdge(edgeId);
@@ -366,6 +401,10 @@ class CRDTStateStore extends StateStore {
 
     // ---- Run Operations (stored in memory, backed by Run nodes) ----
 
+    /**
+     *
+     * @param runId
+     */
     async getRun(runId) {
         stateLogger.debug('getRun', { runId });
 
@@ -388,6 +427,10 @@ class CRDTStateStore extends StateStore {
         return null;
     }
 
+    /**
+     *
+     * @param options
+     */
     async listRuns(options = {}) {
         stateLogger.debug('listRuns', options);
 
@@ -427,6 +470,10 @@ class CRDTStateStore extends StateStore {
         return result;
     }
 
+    /**
+     *
+     * @param run
+     */
     async saveRun(run) {
         stateLogger.debug('saveRun', { runId: run.id, status: run.status });
         this.runs.set(run.id, run);
@@ -442,6 +489,10 @@ class CRDTStateStore extends StateStore {
         }
     }
 
+    /**
+     *
+     * @param runId
+     */
     async deleteRun(runId) {
         stateLogger.debug('deleteRun', { runId });
 
@@ -454,11 +505,20 @@ class CRDTStateStore extends StateStore {
 
     // ---- Event Operations ----
 
+    /**
+     *
+     * @param runId
+     */
     async getEventsForRun(runId) {
         stateLogger.debug('getEventsForRun', { runId });
         return this.events.get(runId) || [];
     }
 
+    /**
+     *
+     * @param runId
+     * @param event
+     */
     async appendEvent(runId, event) {
         stateLogger.debug('appendEvent', { runId, eventType: event.type });
 
@@ -476,6 +536,9 @@ class CRDTStateStore extends StateStore {
 
     // ---- Bulk Operations ----
 
+    /**
+     *
+     */
     async clear() {
         stateLogger.warn('Clearing all state');
         this.runs.clear();
@@ -492,6 +555,9 @@ class CRDTStateStore extends StateStore {
  * Registry for StateStore implementations
  */
 class StateStoreRegistry {
+    /**
+     *
+     */
     constructor() {
         /** @type {Map<string, typeof StateStore>} */
         this.stores = new Map();

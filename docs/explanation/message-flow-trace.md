@@ -4,7 +4,7 @@ This document traces the complete code flow when a user types text in the ChatBo
 
 ## High-Level Overview
 
-```
+```text
 User Types Message
     ↓
 ChatBox Input Event
@@ -144,7 +144,7 @@ The base agent receives user input and:
 
 **Agent-based Control Flow:**
 
-```
+```text
 Base Agent.invoke(input)
     ├─ Input contains:
     │   ├─ message: "text from user"
@@ -668,7 +668,7 @@ async streamWithAbort(nodeId, abortController, messages, model, onChunk, onDone,
 
 ### Flow Diagram
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │ User types in ChatBox input field                           │
 └────────────────────┬────────────────────────────────────────┘
@@ -827,6 +827,7 @@ Every chunk from the LLM triggers two operations:
     ```
 
 2. **Graph Update (persistent storage via CRDT)**
+
     ```javascript
     this.graph.updateNode(aiNode.id, { content: fullContent });
     ```
@@ -899,7 +900,7 @@ The base agent refactor transforms message handling from **direct orchestration*
 
 ### Old Architecture → New Architecture
 
-```
+```text
 OLD (Plugin-based):
 User Input
   ↓

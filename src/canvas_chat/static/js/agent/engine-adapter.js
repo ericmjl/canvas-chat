@@ -234,6 +234,9 @@ class EngineAdapter {
  * This is the default engine for simple agent execution.
  */
 class BuiltinEngineAdapter extends EngineAdapter {
+    /**
+     *
+     */
     constructor() {
         super('builtin');
         /** @type {Map<string, AbortController>} */
@@ -385,6 +388,9 @@ class BuiltinEngineAdapter extends EngineAdapter {
 
     /**
      * Build messages array for LLM from run context.
+     * @param runRequest
+     * @param hostContext
+     * @param agentDefinition
      * @private
      */
     async _buildMessages(runRequest, hostContext, agentDefinition) {
@@ -490,6 +496,9 @@ class BuiltinEngineAdapter extends EngineAdapter {
  * This enables config-based agents to call graph tools.
  */
 class AgenticEngineAdapter extends EngineAdapter {
+    /**
+     *
+     */
     constructor() {
         super('agentic');
         logger.info('AgenticEngineAdapter initialized');
@@ -742,6 +751,9 @@ class AgenticEngineAdapter extends EngineAdapter {
  * Allows registering and retrieving engine implementations.
  */
 class EngineRegistry {
+    /**
+     *
+     */
     constructor() {
         logger.info('EngineRegistry initializing...');
         /** @type {Map<string, EngineAdapter>} */

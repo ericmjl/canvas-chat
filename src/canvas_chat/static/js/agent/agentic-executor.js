@@ -15,6 +15,7 @@
 
 import { createComponentLogger } from './debug-logger.js';
 import { getGraphToolDefinitions } from './graph-tools.js';
+import { readSSEStream } from '../sse.js';
 
 const logger = createComponentLogger('AgenticExecutor');
 
@@ -126,6 +127,7 @@ Do NOT describe intent. Output ONLY the JSON block for tool calls.
 /**
  * Build the graph tools context message
  * @param {string[]} selectedNodeIds - Selected node IDs
+ * @param tools
  * @returns {string} Context message for the agent
  */
 function buildGraphToolsContextMessage(selectedNodeIds, tools = null) {

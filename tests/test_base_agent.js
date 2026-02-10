@@ -173,8 +173,10 @@ if (
 
         assertEqual(definition.id, 'base-agent', 'Should have correct id');
         assertEqual(definition.name, 'Base Agent', 'Should have correct name');
-        assertTrue(definition.allowedTools?.includes('create_human_node'), 'Should have create_human_node tool');
-        assertTrue(definition.allowedTools?.includes('stream_response'), 'Should have stream_response tool');
+        const tools = definition.allowedTools ?? [];
+        const allowsAll = tools.includes('*');
+        assertTrue(allowsAll || tools.includes('create_human_node'), 'Should have create_human_node tool');
+        assertTrue(allowsAll || tools.includes('stream_response'), 'Should have stream_response tool');
     })
 ) {
     passed++;

@@ -35,9 +35,10 @@ import shutil
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, AsyncIterator, BinaryIO, TypeVar
+from typing import Any, BinaryIO
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,9 @@ class BlobMetadata:
         return cls(
             id=data["id"],
             filename=data["filename"],
-            mime_type=data.get("mimeType", data.get("mime_type", "application/octet-stream")),
+            mime_type=data.get(
+                "mimeType", data.get("mime_type", "application/octet-stream")
+            ),
             size=data["size"],
             created_at=data.get("createdAt", data.get("created_at", time.time())),
             metadata=data.get("metadata", {}),
@@ -299,7 +302,9 @@ class BlobStoreBackend(ABC):
         """
         return None
 
-    async def stream(self, blob_id: str, chunk_size: int = 8192) -> AsyncIterator[bytes]:
+    async def stream(
+        self, blob_id: str, chunk_size: int = 8192
+    ) -> AsyncIterator[bytes]:
         """
         Stream blob data in chunks (optional optimization).
 
@@ -317,6 +322,7 @@ class BlobStoreBackend(ABC):
         for i in range(0, len(data), chunk_size):
             yield data[i : i + chunk_size]
 
+    @abstractmethod
     async def shutdown(self) -> None:
         """
         Cleanup when the backend is being shut down.
@@ -364,6 +370,9 @@ class LocalBlobStoreBackend(BlobStoreBackend):
 
         self._initialized = True
         logger.info(f"[LocalBlobStore] Initialized with storage_dir={self.storage_dir}")
+
+    async def shutdown(self) -> None:
+        pass
 
     def _blob_path(self, blob_id: str) -> Path:
         """Get the file path for a blob (sharded by first 2 chars)."""
@@ -512,7 +521,9 @@ class LocalBlobStoreBackend(BlobStoreBackend):
             newest_blob=newest,
         )
 
-    async def stream(self, blob_id: str, chunk_size: int = 8192) -> AsyncIterator[bytes]:
+    async def stream(
+        self, blob_id: str, chunk_size: int = 8192
+    ) -> AsyncIterator[bytes]:
         if not self._initialized:
             raise RuntimeError("Backend not initialized")
 
@@ -567,8 +578,8 @@ class S3BlobStoreBackend(BlobStoreBackend):
         try:
             import boto3
             from botocore.config import Config as BotoConfig
-        except ImportError:
-            raise ImportError("S3 backend requires boto3: pip install boto3")
+        except ImportError as err:
+            raise ImportError("S3 backend requires boto3: pip install boto3") from err
 
         self.bucket = config.get("bucket")
         if not self.bucket:
@@ -584,7 +595,12 @@ class S3BlobStoreBackend(BlobStoreBackend):
         )
 
         self._initialized = True
-        logger.info(f"[S3BlobStore] Initialized with bucket={self.bucket}, region={self.region}")
+        logger.info(
+            f"[S3BlobStore] Initialized with bucket={self.bucket}, region={self.region}"
+        )
+
+    async def shutdown(self) -> None:
+        pass
 
     def _key(self, blob_id: str) -> str:
         """Get the S3 key for a blob."""
@@ -649,23 +665,27 @@ class S3BlobStoreBackend(BlobStoreBackend):
             raise RuntimeError("Backend not initialized")
 
         try:
-            response = self.s3_client.get_object(Bucket=self.bucket, Key=self._key(blob_id))
+            response = self.s3_client.get_object(
+                Bucket=self.bucket, Key=self._key(blob_id)
+            )
             data = response["Body"].read()
             metadata = await self.get_metadata(blob_id)
             return data, metadata
-        except self.s3_client.exceptions.NoSuchKey:
-            raise KeyError(f"Blob not found: {blob_id}")
+        except self.s3_client.exceptions.NoSuchKey as err:
+            raise KeyError(f"Blob not found: {blob_id}") from err
 
     async def get_metadata(self, blob_id: str) -> BlobMetadata:
         if not self._initialized:
             raise RuntimeError("Backend not initialized")
 
         try:
-            response = self.s3_client.get_object(Bucket=self.bucket, Key=self._metadata_key(blob_id))
+            response = self.s3_client.get_object(
+                Bucket=self.bucket, Key=self._metadata_key(blob_id)
+            )
             data = json.loads(response["Body"].read())
             return BlobMetadata.from_dict(data)
-        except self.s3_client.exceptions.NoSuchKey:
-            raise KeyError(f"Blob not found: {blob_id}")
+        except self.s3_client.exceptions.NoSuchKey as err:
+            raise KeyError(f"Blob not found: {blob_id}") from err
 
     async def delete(self, blob_id: str) -> bool:
         if not self._initialized:
@@ -673,7 +693,9 @@ class S3BlobStoreBackend(BlobStoreBackend):
 
         try:
             self.s3_client.delete_object(Bucket=self.bucket, Key=self._key(blob_id))
-            self.s3_client.delete_object(Bucket=self.bucket, Key=self._metadata_key(blob_id))
+            self.s3_client.delete_object(
+                Bucket=self.bucket, Key=self._metadata_key(blob_id)
+            )
             logger.debug(f"[S3BlobStore] Deleted blob {blob_id}")
             return True
         except Exception:
@@ -710,7 +732,9 @@ class S3BlobStoreBackend(BlobStoreBackend):
                 if not obj["Key"].endswith(".json"):
                     continue
                 try:
-                    response = self.s3_client.get_object(Bucket=self.bucket, Key=obj["Key"])
+                    response = self.s3_client.get_object(
+                        Bucket=self.bucket, Key=obj["Key"]
+                    )
                     data = json.loads(response["Body"].read())
                     results.append(BlobMetadata.from_dict(data))
                 except Exception:
@@ -853,7 +877,9 @@ class BlobStoreRegistry:
         return instance._active_backend
 
     @classmethod
-    async def set_active(cls, backend_type: str, config: dict[str, Any]) -> BlobStoreBackend:
+    async def set_active(
+        cls, backend_type: str, config: dict[str, Any]
+    ) -> BlobStoreBackend:
         """
         Set the active backend.
 
@@ -869,7 +895,9 @@ class BlobStoreRegistry:
         backend_class = instance._backends.get(backend_type)
         if not backend_class:
             available = ", ".join(instance._backends.keys())
-            raise ValueError(f"Unknown blob store backend: {backend_type}. Available: {available}")
+            raise ValueError(
+                f"Unknown blob store backend: {backend_type}. Available: {available}"
+            )
 
         backend = backend_class()
         await backend.initialize(config)

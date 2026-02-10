@@ -2,11 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-    CucumberExpression,
-    ParameterTypeRegistry,
-    defineDefaultParameterTypes,
-} from '@cucumber/cucumber-expressions';
+import { CucumberExpression, ParameterTypeRegistry } from '@cucumber/cucumber-expressions';
 
 const STEP_DIR = path.resolve('cypress/e2e/step_definitions');
 const FEATURE_GLOB_ROOT = path.resolve('cypress/e2e');
@@ -60,7 +56,9 @@ function extractStepsFromFeatures(featureFiles) {
 
 function parseStepDefinitions(stepFiles) {
     const definitions = [];
-    const stepPattern = /(Given|When|Then|And|But|defineStep)\s*\(\s*([^,]+),/g;
+    // First argument may be a regex /.../flags or quoted string (can contain commas)
+    const stepPattern =
+        /(Given|When|Then|And|But|defineStep)\s*\(\s*(\/(?:[^/\\]|\\.)*\/[gimsuy]*|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)\s*,/g;
 
     for (const file of stepFiles) {
         const content = fs.readFileSync(file, 'utf8');
@@ -145,7 +143,6 @@ function main() {
     const definitions = parseStepDefinitions(stepFiles);
 
     const registry = new ParameterTypeRegistry();
-    defineDefaultParameterTypes(registry);
 
     const missingSteps = [];
 

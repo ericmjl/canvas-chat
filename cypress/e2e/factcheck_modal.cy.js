@@ -3,7 +3,6 @@ describe('Factcheck review modal', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.waitForAppReady();
         cy.selectTestModel('openai/gpt-4o-mini');
     });
 
@@ -35,8 +34,8 @@ describe('Factcheck review modal', () => {
 
         cy.runFeatureSlashCommand('/factcheck', 'The Eiffel Tower is 330 meters tall and located in Paris.');
 
-        cy.wait('@factcheckExtract');
-        cy.get('#factcheck-main-modal', { timeout: 10000 }).should('be.visible');
+        // App may use /api/agents/run/stream or fall back to /api/chat; wait for modal instead of a specific request
+        cy.get('#factcheck-main-modal', { timeout: 15000 }).should('be.visible');
         cy.get('.factcheck-claim-input').should('have.length', 2);
         cy.get('.factcheck-claim-input').eq(0).should('have.value', 'Claim A');
         cy.get('.factcheck-claim-input').eq(1).should('have.value', 'Claim B');

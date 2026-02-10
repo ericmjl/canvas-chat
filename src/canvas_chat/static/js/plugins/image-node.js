@@ -18,6 +18,9 @@ import { resizeImage } from '../utils.js';
 
 // Lazy import blob store utils to avoid circular dependencies
 let blobStoreUtils = null;
+/**
+ *
+ */
 async function getBlobStoreUtils() {
     if (!blobStoreUtils) {
         try {

@@ -28,12 +28,22 @@ const MY_AGENT = createAgentDefinition({
     },
 });
 
+/**
+ *
+ */
 class MinimalAgentFeature extends FeaturePlugin {
+    /**
+     *
+     * @param context
+     */
     constructor(context) {
         super(context);
         this.canvas = context.canvas;
     }
 
+    /**
+     *
+     */
     async onLoad() {
         // Step 2: Register agent with RunController
         if (this._context.runController) {
@@ -42,6 +52,9 @@ class MinimalAgentFeature extends FeaturePlugin {
         }
     }
 
+    /**
+     *
+     */
     getSlashCommands() {
         return [
             {
@@ -52,6 +65,12 @@ class MinimalAgentFeature extends FeaturePlugin {
         ];
     }
 
+    /**
+     *
+     * @param command
+     * @param args
+     * @param context
+     */
     async handleCommand(command, args, context) {
         if (command !== '/simple') return false;
 
@@ -134,6 +153,10 @@ if (typeof window !== 'undefined') {
     });
 }
 
+/**
+ *
+ * @param app
+ */
 export function registerPlugin(app) {
     if (typeof window === 'undefined' || !registerFeature) {
         return;
