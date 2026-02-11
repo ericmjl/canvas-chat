@@ -17,6 +17,20 @@ import {
 } from '../web-grounding.js';
 
 /**
+ * Format web search results as a markdown "Sources used" section for appending to node content.
+ * @param {Array<{title: string, url: string, snippet?: string}>} results
+ * @returns {string}
+ */
+function formatSourcesSection(results) {
+    if (!results || results.length === 0) return '';
+    const lines = ['\n\n---\n\n## Sources used (web grounding)', ''];
+    results.forEach((r, i) => {
+        lines.push(`${i + 1}. [${r.title}](${r.url})`);
+    });
+    return lines.join('\n');
+}
+
+/**
  * Static persona presets for quick selection
  */
 const PERSONA_PRESETS = [
@@ -659,9 +673,22 @@ ${question}`;
         // Add the question as the final user message
         messages.push({ role: 'user', content: question });
 
+        // Position committee in viewport: use viewport center when nothing selected, else near selection
+        const HUMAN_NODE_WIDTH = 420;
+        let humanPosition;
+        if (selectedIds.length > 0) {
+            humanPosition = this.graph.autoPosition(selectedIds);
+        } else {
+            const vc = this.canvas.getViewportCenter();
+            humanPosition = {
+                x: vc.x - HUMAN_NODE_WIDTH / 2,
+                y: vc.y - 220,
+            };
+        }
+
         // Create human node for the question (do this first so user sees layout immediately)
         const humanNode = createNode(NodeType.HUMAN, `/committee ${question}`, {
-            position: this.graph.autoPosition(selectedIds),
+            position: humanPosition,
         });
         this.graph.addNode(humanNode);
         this.canvas.renderNode(humanNode);
@@ -726,8 +753,8 @@ ${question}`;
         this.saveSession();
         this.updateEmptyState();
 
-        // Pan to see the committee
-        this.canvas.centerOnAnimated(basePos.x, basePos.y + verticalOffset, 300);
+        // Store web search results so we can append sources to opinions and synthesis later
+        let webSearchResults = [];
 
         // Store state for tracking active committee
         this._activeCommittee = {
@@ -775,6 +802,20 @@ ${question}`;
                     this.showToast('Web search complete. Grounding opinions with results.');
                 }
                 messagesToUse = appendWebContextToMessages(messages, searchResults);
+                webSearchResults = searchResults;
+
+                // Surface citations in the question node only (no extra REFERENCE nodes to avoid crowding)
+                if (searchResults.length > 0) {
+                    const humanContent = this.graph.getNode(humanNode.id)?.content || '';
+                    const sourcesBlock =
+                        `\n\n---\n\n## Web search sources (${searchResults.length})\n\n` +
+                        searchResults.map((r, i) => `${i + 1}. [${r.title}](${r.url})`).join('\n');
+                    const newHumanContent =
+                        humanContent.includes('## Web search sources') ? humanContent : humanContent + sourcesBlock;
+                    this.graph.updateNode(humanNode.id, { content: newHumanContent });
+                    this.canvas.updateNodeContent(humanNode.id, newHumanContent, false);
+                    this.saveSession();
+                }
             } catch (err) {
                 console.warn('[Committee] Web grounding failed, proceeding without:', err);
                 if (this.showToast) this.showToast('Web search failed. Proceeding without web context.');
@@ -789,6 +830,14 @@ ${question}`;
             }
         }
 
+        // Zoom viewport to fit the whole committee (question + opinions + synthesis)
+        const committeeNodeIds = [
+            humanNode.id,
+            ...opinionNodes.map((n) => n.id),
+            synthesisNode.id,
+        ];
+        this.canvas.zoomToSelectionAnimated(committeeNodeIds, 0.8, 300);
+
         // Generate opinions in parallel (like matrix cell fills)
         const opinionPromises = opinionNodes.map((node, index) => {
             const member = members[index];
@@ -798,6 +847,19 @@ ${question}`;
         try {
             // Wait for all opinions to complete
             const opinions = await Promise.all(opinionPromises);
+
+            // Append sources to each opinion node when web-grounded (so references are visible)
+            if (webSearchResults.length > 0) {
+                const sourcesBlock = formatSourcesSection(webSearchResults);
+                for (const node of opinionNodes) {
+                    const current = this.graph.getNode(node.id)?.content || '';
+                    if (current && !current.includes('## Sources used (web grounding)')) {
+                        const updated = current + sourcesBlock;
+                        this.graph.updateNode(node.id, { content: updated });
+                        this.canvas.updateNodeContent(node.id, updated, false);
+                    }
+                }
+            }
 
             // If includeReview, generate reviews in parallel
             if (includeReview) {
@@ -830,6 +892,17 @@ ${question}`;
                 opinions,
                 includeReview ? reviewNodes : opinionNodes
             );
+
+            // Append sources to synthesis node when web-grounded (so references are visible)
+            if (webSearchResults.length > 0) {
+                const sourcesBlock = formatSourcesSection(webSearchResults);
+                const current = this.graph.getNode(synthesisNode.id)?.content || '';
+                if (current && !current.includes('## Sources used (web grounding)')) {
+                    const updated = current + sourcesBlock;
+                    this.graph.updateNode(synthesisNode.id, { content: updated });
+                    this.canvas.updateNodeContent(synthesisNode.id, updated, false);
+                }
+            }
 
             // Cleanup
             this._activeCommittee = null;
