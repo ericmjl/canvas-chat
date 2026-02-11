@@ -1125,6 +1125,11 @@ kbd {
     color: var(--text-primary);
 }
 
+.committee-suggestions-header .secondary-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 .committee-suggestions-container {
     border: 1px solid var(--bg-secondary);
     border-radius: var(--radius-md);
