@@ -136,6 +136,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/modal-manager.js`       | Modal lifecycle management            | Modal creation, event handling        |
 | `src/canvas_chat/static/js/file-upload-handler.js` | File upload dispatcher                | Routes uploads to registered handlers |
 | `src/canvas_chat/static/js/undo-manager.js`        | Undo/redo functionality               | Action history, undo operations       |
+| `src/canvas_chat/static/js/web-grounding.js`       | Web search grounding for LLM context  | deriveSearchQuery, runWebSearch, appendWebContextToMessages |
 | `src/canvas_chat/static/js/slash-command-menu.js`  | Slash command autocomplete UI         | Command menu behavior                 |
 | `src/canvas_chat/static/js/pyodide-runner.js`      | Python code execution (Pyodide)       | Code execution, environment setup     |
 | `src/canvas_chat/static/js/highlight-utils.js`     | Text highlighting utilities           | Text selection, excerpt extraction    |
@@ -753,6 +754,7 @@ Write unit tests for logic that does not require API calls:
 - `tests/test_app_init.js` - Integration test to verify App class initializes without errors (catches undefined method references)
 - `tests/test_utils.js` - Concurrent state management tests
 - `tests/test_utils_basic.js` - Basic utility functions (extractUrlFromReferenceNode, formatMatrixAsText, formatUserError, etc.)
+- `tests/test_web_grounding.js` - Web grounding helper (appendWebContextToMessages)
 - `tests/test_utils_messages.js` - buildMessagesForApi edge cases
 - `tests/test_layout.js` - Layout and overlap resolution functions
 - `tests/test_graph_types.js` - Node creation functions and default node sizes

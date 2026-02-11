@@ -10,6 +10,11 @@ import { FeaturePlugin } from '../feature-plugin.js';
 import { storage } from '../storage.js';
 import { readSSEStream as _readSSEStream } from '../sse.js';
 import { apiUrl as _apiUrl } from '../utils.js';
+import {
+    deriveSearchQuery,
+    runWebSearch,
+    appendWebContextToMessages,
+} from '../web-grounding.js';
 
 /**
  * Static persona presets for quick selection
@@ -138,6 +143,11 @@ class CommitteeFeature extends FeaturePlugin {
                                 <span class="checkbox-text">Include review stage</span>
                                 <span class="checkbox-hint">Each model reviews all other opinions before synthesis</span>
                             </label>
+                            <label class="committee-checkbox-label">
+                                <input type="checkbox" id="committee-ground-with-web" />
+                                <span class="checkbox-text">Ground opinions with web search</span>
+                                <span class="checkbox-hint">Run a web search from your question and give results to each committee member so answers can use current information.</span>
+                            </label>
                         </div>
 
                         <div class="modal-actions">
@@ -234,6 +244,8 @@ class CommitteeFeature extends FeaturePlugin {
 
         // Reset review checkbox
         modal.querySelector('#committee-include-review').checked = false;
+        // Reset ground-with-web checkbox
+        modal.querySelector('#committee-ground-with-web').checked = false;
 
         // Clear members list
         this.renderMembersList();
@@ -289,6 +301,8 @@ class CommitteeFeature extends FeaturePlugin {
                 </button>
             </div>
         `;
+        regenerateBtn.textContent = '↻';
+        regenerateBtn.className = 'icon-btn';
         regenerateBtn.style.display = 'none';
 
         // Handle cancel button click
@@ -359,8 +373,9 @@ ${question}`;
                         Cancelled. Add members manually or click "Regenerate suggestions" to try again.
                     </div>
                 `;
-                regenerateBtn.style.display = 'inline-block';
                 regenerateBtn.textContent = 'Regenerate';
+                regenerateBtn.className = 'secondary-btn';
+                regenerateBtn.style.display = 'inline-block';
                 return;
             }
             console.error('Failed to generate persona suggestions:', error);
@@ -369,8 +384,9 @@ ${question}`;
                     Couldn't generate suggestions. Add members manually or try again.
                 </div>
             `;
-            regenerateBtn.style.display = 'inline-block';
             regenerateBtn.textContent = 'Try Again';
+            regenerateBtn.className = 'secondary-btn';
+            regenerateBtn.style.display = 'inline-block';
         }
     }
 
@@ -614,6 +630,7 @@ ${question}`;
         const modal = this.modalManager.getPluginModal('committee', 'main');
         const chairmanModel = modal.querySelector('#committee-chairman').value;
         const includeReview = modal.querySelector('#committee-include-review').checked;
+        const groundWithWeb = modal.querySelector('#committee-ground-with-web').checked;
 
         // Close modal
         this.modalManager.hidePluginModal('committee', 'main');
@@ -642,7 +659,7 @@ ${question}`;
         // Add the question as the final user message
         messages.push({ role: 'user', content: question });
 
-        // Create human node for the question
+        // Create human node for the question (do this first so user sees layout immediately)
         const humanNode = createNode(NodeType.HUMAN, `/committee ${question}`, {
             position: this.graph.autoPosition(selectedIds),
         });
@@ -720,10 +737,62 @@ ${question}`;
             abortControllers: new Map(), // nodeId -> AbortController
         };
 
+        // Optionally ground with web search *after* UI is visible (so user sees layout immediately)
+        let messagesToUse = messages;
+        if (groundWithWeb) {
+            const firstOpinionNode = opinionNodes[0];
+            const firstLabel = firstOpinionNode
+                ? (members[0].persona
+                      ? `${members[0].persona} (${this.getModelDisplayName(members[0].model)})`
+                      : this.getModelDisplayName(members[0].model))
+                : '';
+            try {
+                if (firstOpinionNode) {
+                    this.canvas.updateNodeContent(
+                        firstOpinionNode.id,
+                        `*Running web search...*\n\n(Grounding opinions with current information.)`,
+                        true
+                    );
+                }
+                const contextString =
+                    selectedIds.length > 0
+                        ? selectedIds
+                              .map((id) => {
+                                  const node = this.graph.getNode(id);
+                                  return node && node.content ? node.content : '';
+                              })
+                              .join('\n\n')
+                        : '';
+                const modelForRefine = members[0]?.model ?? chairmanModel;
+                const query = await deriveSearchQuery(
+                    question,
+                    contextString,
+                    this.buildLLMRequest.bind(this),
+                    modelForRefine
+                );
+                const searchResults = await runWebSearch(query);
+                if (searchResults.length > 0 && this.showToast) {
+                    this.showToast('Web search complete. Grounding opinions with results.');
+                }
+                messagesToUse = appendWebContextToMessages(messages, searchResults);
+            } catch (err) {
+                console.warn('[Committee] Web grounding failed, proceeding without:', err);
+                if (this.showToast) this.showToast('Web search failed. Proceeding without web context.');
+            }
+            // Restore "Waiting for..." on first opinion node before we start streaming
+            if (firstOpinionNode) {
+                this.canvas.updateNodeContent(
+                    firstOpinionNode.id,
+                    `*Waiting for ${firstLabel}...*`,
+                    true
+                );
+            }
+        }
+
         // Generate opinions in parallel (like matrix cell fills)
         const opinionPromises = opinionNodes.map((node, index) => {
             const member = members[index];
-            return this.generateOpinion(node, member.model, messages, index, member.persona);
+            return this.generateOpinion(node, member.model, messagesToUse, index, member.persona);
         });
 
         try {
@@ -737,7 +806,7 @@ ${question}`;
                     return this.generateReview(
                         opinionNode,
                         member.model,
-                        messages,
+                        messagesToUse,
                         opinions,
                         index,
                         basePos,
@@ -757,7 +826,7 @@ ${question}`;
             await this.generateSynthesis(
                 synthesisNode,
                 chairmanModel,
-                messages,
+                messagesToUse,
                 opinions,
                 includeReview ? reviewNodes : opinionNodes
             );
