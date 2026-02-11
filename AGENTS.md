@@ -730,6 +730,7 @@ pixi run npx cypress run --browser electron --headless --spec cypress/e2e/matrix
 - `cypress/e2e/matrix_copy.cy.js` - Matrix copy-to-clipboard tests
 - `cypress/e2e/note_node.cy.js` - Note node tests
 - `cypress/e2e/settings_modal.cy.js` - Settings modal tests
+- `cypress/e2e/slash_command_menu.cy.js` - Slash command menu (open, filter, select) tests
 - `cypress/e2e/keyboard_interactions.cy.js` - Keyboard shortcut tests
 - `cypress/e2e/canvas_interactions.cy.js` - Canvas pan/zoom/select tests
 - `cypress/e2e/node_selection.cy.js` - Node selection behavior tests
