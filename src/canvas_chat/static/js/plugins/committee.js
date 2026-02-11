@@ -18,10 +18,11 @@ import {
 
 /**
  * Format web search results as a markdown "Sources used" section for appending to node content.
+ * Exported for testing.
  * @param {Array<{title: string, url: string, snippet?: string}>} results
  * @returns {string}
  */
-function formatSourcesSection(results) {
+export function formatSourcesSection(results) {
     if (!results || results.length === 0) return '';
     const lines = ['\n\n---\n\n## Sources used (web grounding)', ''];
     results.forEach((r, i) => {

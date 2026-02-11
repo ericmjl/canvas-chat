@@ -47,8 +47,8 @@ import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harn
 import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
 import { assertTrue } from './test_helpers/assertions.js';
 
-// Import CommitteeFeature class only (not the module)
-const { CommitteeFeature } = await import('../src/canvas_chat/static/js/plugins/committee.js');
+// Import CommitteeFeature and formatSourcesSection (web grounding sources block)
+const { CommitteeFeature, formatSourcesSection } = await import('../src/canvas_chat/static/js/plugins/committee.js');
 
 async function asyncTest(description, fn) {
     try {
@@ -515,6 +515,25 @@ await asyncTest('Member count validation enforces 2-5 members', async () => {
             `${testCase.description}: count=${count}, expected valid=${testCase.valid}`
         );
     }
+});
+
+// Test: formatSourcesSection (web grounding) produces correct markdown for opinion/synthesis nodes
+await asyncTest('formatSourcesSection returns empty for null/empty, formatted markdown for results', async () => {
+    assertTrue(formatSourcesSection(null) === '', 'null should return empty string');
+    assertTrue(formatSourcesSection(undefined) === '', 'undefined should return empty string');
+    assertTrue(formatSourcesSection([]) === '', 'empty array should return empty string');
+
+    const one = formatSourcesSection([{ title: 'Python Guide', url: 'https://example.com/python' }]);
+    assertTrue(one.includes('## Sources used (web grounding)'), 'should include section header');
+    assertTrue(one.includes('[Python Guide](https://example.com/python)'), 'should include numbered link');
+    assertTrue(one.includes('---'), 'should include horizontal rule');
+
+    const two = formatSourcesSection([
+        { title: 'A', url: 'https://a.com' },
+        { title: 'B', url: 'https://b.com' },
+    ]);
+    assertTrue(two.includes('1. [A](https://a.com)'), 'first result numbered 1');
+    assertTrue(two.includes('2. [B](https://b.com)'), 'second result numbered 2');
 });
 
 console.log('\n=== All Committee plugin tests passed! ===\n');
