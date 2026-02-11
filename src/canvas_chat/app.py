@@ -108,6 +108,9 @@ def get_admin_config() -> AppConfig:
         if config_path_str:
             try:
                 config_path = Path(config_path_str)
+                if not config_path.is_absolute():
+                    config_path = config_path.resolve()
+                logger.info(f"Loading config from {config_path}")
                 _app_config = AppConfig.load(config_path, admin_mode=admin_mode)
 
                 if admin_mode:
@@ -129,6 +132,7 @@ def get_admin_config() -> AppConfig:
                 logger.error(f"Failed to load config: {e}")
                 _app_config = AppConfig.empty()
         else:
+            logger.info("CANVAS_CHAT_CONFIG_PATH not set; using empty config")
             _app_config = AppConfig.empty()
     return _app_config
 

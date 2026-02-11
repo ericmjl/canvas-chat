@@ -30,7 +30,7 @@ jobs:
             - name: Run Cypress (basic tests)
               uses: cypress-io/github-action@v7
               env:
-                  CANVAS_CHAT_CONFIG_PATH: config.e2e.yaml
+                  CANVAS_CHAT_CONFIG_PATH: ${{ github.workspace }}/config.e2e.yaml
               with:
                   start: pixi run dev
                   wait-on: http://127.0.0.1:7865

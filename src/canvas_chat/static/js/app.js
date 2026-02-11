@@ -256,7 +256,7 @@ class App {
         await this.loadSession();
 
         // Initialize Base Agent (after graph and canvas are ready)
-        await this.initializeBaseAgent();
+        this.initializeBaseAgent();
 
         // Setup graph event listeners
         this.setupGraphEventListeners();
@@ -2232,9 +2232,8 @@ class App {
     /**
      * Initialize the Base Agent for message orchestration.
      * Called after graph and canvas are ready.
-     * @returns {Promise<void>}
      */
-    async initializeBaseAgent() {
+    initializeBaseAgent() {
         if (!this.graph || !this.canvas) {
             console.warn('[App] Cannot initialize BaseAgent - graph or canvas not ready');
             return;
@@ -2262,8 +2261,8 @@ class App {
             console.log('[BaseAgent] Event:', event.type, event.data);
         });
 
-        // Fetch and register config-based agents (must complete before init-complete so tests can assert)
-        await this.loadConfigAgents();
+        // Fetch and register config-based agents (async, non-blocking)
+        this.loadConfigAgents();
 
         console.log('[App] BaseAgent initialized');
     }
