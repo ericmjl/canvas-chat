@@ -21,6 +21,15 @@ export default defineConfig({
                     plugins: [createEsbuildPlugin(config)],
                 })
             );
+            // Fail fast locally: stop entire run on first spec failure (CI still runs all specs)
+            const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+            if (!isCI) {
+                on('after:spec', (spec, results) => {
+                    if (results && results.stats && results.stats.failures > 0) {
+                        process.exit(1);
+                    }
+                });
+            }
             return config;
         },
     },
