@@ -3,15 +3,17 @@ describe('Node Selection and Deletion', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
+        cy.wait(1000);
     });
 
     it('selects and deletes a node', () => {
-        // Create two note nodes
+        // Create two note nodes (wait for first so both get created)
         cy.get('#chat-input').type('/note Node 1{enter}');
+        cy.get('.node', { timeout: 10000 }).should('have.length', 1);
         cy.get('#chat-input').type('/note Node 2{enter}');
 
         // Verify both nodes exist
-        cy.get('.node').should('have.length', 2);
+        cy.get('.node', { timeout: 10000 }).should('have.length', 2);
 
         // Click first node to select it (force click in case it's off-screen)
         cy.get('.node').first().click({ force: true });

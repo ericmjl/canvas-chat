@@ -3,8 +3,8 @@
  * Demonstrates the FeaturePlugin API for testing and documentation
  */
 
-import { FeaturePlugin } from '../feature-plugin.js';
-import { NodeType, createNode } from '../graph-types.js';
+import { FeaturePlugin } from '/static/js/feature-plugin.js';
+import { NodeType, createNode } from '/static/js/graph-types.js';
 
 /**
  * SimpleTestPlugin is a minimal example feature plugin.

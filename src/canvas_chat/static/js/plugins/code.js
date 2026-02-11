@@ -13,6 +13,7 @@ import { Actions, BaseNode, HeaderButtons, wrapNode } from '../node-protocols.js
 import { NodeRegistry } from '../node-registry.js';
 import { CancellableEvent } from '../plugin-events.js';
 import { readSSEStream } from '../sse.js';
+import { createAgentDefinition } from '../agent/agent-types.js';
 
 // =============================================================================
 // Code Node Protocol
@@ -444,6 +445,21 @@ export class CodeFeature extends FeaturePlugin {
                 placeholder: 'Optional: Describe code to generate...',
             },
         ];
+    }
+
+    /**
+     * Get the AgentDefinition for this feature.
+     * Uses 'feature' engine for direct dispatch.
+     * @returns {import('../agent/agent-types.js').AgentDefinition}
+     */
+    getAgentDefinition() {
+        return createAgentDefinition({
+            id: 'code-agent',
+            name: 'Code Agent',
+            engine: 'feature', // Direct dispatch via handleCommand
+            systemPrompt: 'Create Python code nodes with optional AI-generated code.',
+            description: 'Creates Python code nodes for execution with Pyodide',
+        });
     }
 
     /**

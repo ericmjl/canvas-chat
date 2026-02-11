@@ -3,23 +3,26 @@ describe('Matrix Creation', { tags: '@ai' }, () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.wait(1000);
-        cy.configureOllama();
-        cy.get('#model-picker', { timeout: 10000 }).should('not.be.empty');
+        cy.waitForAppReady();
+        cy.selectTestModel('openai/gpt-4o-mini');
+
+        cy.intercept('POST', '**/api/parse-two-lists', {
+            statusCode: 200,
+            body: {
+                rows: ['Python', 'JavaScript'],
+                columns: ['Performance', 'Ease of Learning'],
+            },
+        }).as('parseTwoLists');
     });
 
     it('creates matrix node with /matrix command', { tags: '@ai' }, () => {
-        // Select the configured Ollama model for CI
-        cy.get('#model-picker').select('ollama_chat/gemma3n:e4b');
-
         // Send matrix creation command with context
-        cy.sendMessage('/matrix Compare programming languages');
+        cy.runFeatureSlashCommand('/matrix', 'Compare programming languages');
 
         // Wait for modal to appear
         cy.get('#matrix-main-modal', { timeout: 10000 }).should('be.visible');
 
-        // Wait for LLM to parse rows and columns (may take some time with Ollama)
-        cy.wait(15000);
+        cy.wait('@parseTwoLists');
 
         // Verify matrix creation modal has loaded rows and columns
         cy.get('#row-items').should('be.visible');
@@ -51,10 +54,9 @@ describe('Matrix Creation', { tags: '@ai' }, () => {
     });
 
     it('matrix node has edit and fill all buttons', { tags: '@ai' }, () => {
-        cy.get('#model-picker').select('ollama_chat/gemma3n:e4b');
-        cy.sendMessage('/matrix Test matrix context');
+        cy.runFeatureSlashCommand('/matrix', 'Test matrix context');
         cy.get('#matrix-main-modal', { timeout: 10000 }).should('be.visible');
-        cy.wait(15000);
+        cy.wait('@parseTwoLists');
         cy.get('#matrix-create-btn').click();
         cy.get('#matrix-main-modal').should('not.be.visible');
         cy.get('.node.matrix', { timeout: 10000 }).should('be.visible');
@@ -66,10 +68,9 @@ describe('Matrix Creation', { tags: '@ai' }, () => {
     });
 
     it('matrix node displays context and dimensions in summary', { tags: '@ai' }, () => {
-        cy.get('#model-picker').select('ollama_chat/gemma3n:e4b');
-        cy.sendMessage('/matrix Evaluate frameworks');
+        cy.runFeatureSlashCommand('/matrix', 'Evaluate frameworks');
         cy.get('#matrix-main-modal', { timeout: 10000 }).should('be.visible');
-        cy.wait(15000);
+        cy.wait('@parseTwoLists');
         cy.get('#matrix-create-btn').click();
         cy.get('#matrix-main-modal').should('not.be.visible');
         cy.get('.node.matrix', { timeout: 10000 }).should('be.visible');

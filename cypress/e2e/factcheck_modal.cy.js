@@ -3,53 +3,62 @@ describe('Factcheck review modal', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.wait(1000);
+        cy.selectTestModel('openai/gpt-4o-mini');
     });
 
     it('opens review modal after claim extraction', () => {
-        const sseBody = ['data: ["Claim A", "Claim B"]', '', 'event: done', 'data: [DONE]', '', ''].join('\n');
+        // Modal only appears when >5 claims; mock 6 so the selection modal is shown
+        const claims = ['Claim A', 'Claim B', 'Claim C', 'Claim D', 'Claim E', 'Claim F'];
+        const sseBody = [
+            'event: message',
+            `data: ${JSON.stringify(claims)}`,
+            '',
+            'event: done',
+            'data: {"tool_calls": []}',
+            '',
+            '',
+        ].join('\n');
 
-        cy.intercept('POST', '/api/chat', {
+        cy.intercept('POST', '**/api/agents/run/stream', {
             statusCode: 200,
             headers: {
                 'content-type': 'text/event-stream',
             },
             body: sseBody,
         }).as('factcheckExtract');
+        cy.intercept('POST', '**/api/chat', {
+            statusCode: 200,
+            headers: {
+                'content-type': 'text/event-stream',
+            },
+            body: sseBody,
+        }).as('factcheckExtractChat');
 
-        cy.sendMessage('/factcheck The Eiffel Tower is 330 meters tall and located in Paris.');
+        cy.runFeatureSlashCommand('/factcheck', 'The Eiffel Tower is 330 meters tall and located in Paris.');
 
-        cy.wait('@factcheckExtract');
-        cy.get('#factcheck-main-modal', { timeout: 10000 }).should('be.visible');
-        cy.get('.factcheck-claim-input').should('have.length', 2);
-        cy.get('.factcheck-claim-input').eq(0).should('have.value', 'Claim A');
-        cy.get('.factcheck-claim-input').eq(1).should('have.value', 'Claim B');
-        cy.get('#factcheck-selection-count').should('contain.text', '2 claims ready');
+        // App may use /api/agents/run/stream or fall back to /api/chat; wait for modal instead of a specific request
+        cy.get('#factcheck-main-modal', { timeout: 15000 }).should('be.visible');
+        // Modal shows checkbox list (.factcheck-claim-item with .claim-text), first 5 pre-selected
+        cy.get('.factcheck-claim-item').should('have.length', 6);
+        cy.get('.factcheck-claim-item .claim-text').eq(0).should('contain.text', 'Claim A');
+        cy.get('.factcheck-claim-item .claim-text').eq(1).should('contain.text', 'Claim B');
+        cy.get('#factcheck-selection-count').should('contain.text', '5 of 6 selected');
         cy.get('#factcheck-execute-btn').should('not.be.disabled');
 
-        // Edit a claim and ensure count stays valid
-        cy.get('.factcheck-claim-input').eq(0).clear().type('Claim A updated');
-        cy.get('.factcheck-claim-input').eq(0).should('have.value', 'Claim A updated');
-        cy.get('#factcheck-selection-count').should('contain.text', '2 claims ready');
+        // Uncheck one claim and assert count updates
+        cy.get('#factcheck-claims-list input[type="checkbox"]').eq(0).uncheck();
+        cy.get('#factcheck-selection-count').should('contain.text', '4 of 6 selected');
+        cy.get('#factcheck-execute-btn').should('not.be.disabled');
 
-        // Remove a claim
-        cy.get('.factcheck-claim-row').eq(1).find('.factcheck-claim-remove').click();
-        cy.get('.factcheck-claim-input').should('have.length', 1);
-        cy.get('#factcheck-selection-count').should('contain.text', '1 claim ready');
+        // Uncheck all but one; execute should still be enabled (≥1 required)
+        cy.get('#factcheck-claims-list input[type="checkbox"]').uncheck();
+        cy.get('#factcheck-claims-list input[type="checkbox"]').eq(0).check();
+        cy.get('#factcheck-selection-count').should('contain.text', '1 of 6 selected');
+        cy.get('#factcheck-execute-btn').should('not.be.disabled');
 
-        // Clear remaining claim to make modal invalid
-        cy.get('.factcheck-claim-input').eq(0).clear();
-        cy.get('#factcheck-selection-count').should('contain.text', '0 claims ready');
+        // Uncheck last; execute should be disabled
+        cy.get('#factcheck-claims-list input[type="checkbox"]').uncheck();
+        cy.get('#factcheck-selection-count').should('contain.text', '0 of 6 selected');
         cy.get('#factcheck-execute-btn').should('be.disabled');
-
-        // Remove empty row and add a new claim
-        cy.get('.factcheck-claim-row').eq(0).find('.factcheck-claim-remove').click();
-        cy.get('.factcheck-claim-input').should('have.length', 0);
-        cy.get('#factcheck-new-claim').type('New claim added');
-        cy.get('#factcheck-add-claim-btn').click();
-        cy.get('.factcheck-claim-input').should('have.length', 1);
-        cy.get('.factcheck-claim-input').eq(0).should('have.value', 'New claim added');
-        cy.get('#factcheck-selection-count').should('contain.text', '1 claim ready');
-        cy.get('#factcheck-execute-btn').should('not.be.disabled');
     });
 });

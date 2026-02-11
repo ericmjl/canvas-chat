@@ -47,12 +47,14 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from canvas_chat import __version__
+from canvas_chat.agents_sdk import run_agents_sdk, run_agents_sdk_stream
 from canvas_chat.config import AppConfig, is_github_copilot_enabled
 from canvas_chat.file_upload_registry import FileUploadRegistry
 
 # Import built-in file upload handler plugins (registers them)
 # Import built-in URL fetch handler plugins (registers them)
 from canvas_chat.plugins import (
+    blob_store_handler,  # noqa: F401
     code_handler,  # noqa: F401
     ddg_endpoints,  # noqa: F401
     git_repo_handler,  # noqa: F401
@@ -64,6 +66,7 @@ from canvas_chat.plugins import (
     youtube_handler,  # noqa: F401
 )
 from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE
+from canvas_chat.tool_registry import get_tool_registry
 from canvas_chat.url_fetch_registry import UrlFetchRegistry
 
 # Configure logging
@@ -81,6 +84,7 @@ code_handler.register_endpoints(app)
 matrix_handler.register_endpoints(app)
 ddg_endpoints.register_endpoints(app)
 pptx_endpoints.register_endpoints(app)
+blob_store_handler.register_endpoints(app)
 
 # --- Configuration Management ---
 # This is initialized at module load time based on environment variables
@@ -104,6 +108,9 @@ def get_admin_config() -> AppConfig:
         if config_path_str:
             try:
                 config_path = Path(config_path_str)
+                if not config_path.is_absolute():
+                    config_path = config_path.resolve()
+                logger.info(f"Loading config from {config_path}")
                 _app_config = AppConfig.load(config_path, admin_mode=admin_mode)
 
                 if admin_mode:
@@ -125,6 +132,7 @@ def get_admin_config() -> AppConfig:
                 logger.error(f"Failed to load config: {e}")
                 _app_config = AppConfig.empty()
         else:
+            logger.info("CANVAS_CHAT_CONFIG_PATH not set; using empty config")
             _app_config = AppConfig.empty()
     return _app_config
 
@@ -218,6 +226,19 @@ class ChatRequest(BaseModel):
     base_url: str | None = None
     temperature: float = 0.7
     max_tokens: int | None = None
+
+
+class AgentRunRequest(BaseModel):
+    """Request body for agent runs (OpenAI Agents SDK)."""
+
+    system_prompt: str = ""
+    user_message: str = ""
+    selected_node_ids: list[str] = Field(default_factory=list)
+    graph_snapshot: dict[str, Any] = Field(default_factory=dict)
+    model: str = "openai/gpt-4o-mini"
+    api_key: str | None = None
+    base_url: str | None = None
+    allowed_tools: list[str] = Field(default_factory=list)
 
 
 class SummarizeRequest(BaseModel):
@@ -726,6 +747,7 @@ def is_chat_model(model_id: str) -> bool:
     chat_patterns = [
         "gpt-3.5",
         "gpt-4",
+        "gpt-5",
         "gpt-oss",
         "chatgpt",
         "claude",
@@ -1315,6 +1337,74 @@ async def chat(request: ChatRequest, http_request: Request):
     return EventSourceResponse(generate())
 
 
+@app.post("/api/agents/run")
+async def run_agent(request: AgentRunRequest):
+    """Run an agent using the OpenAI Agents SDK."""
+    inject_admin_credentials(request)
+
+    if "/" in request.model and not request.model.startswith("openai/"):
+        provider = request.model.split("/", 1)[0].lower()
+        if provider not in {"anthropic", "gemini", "google"} and not request.base_url:
+            return {
+                "success": False,
+                "error": (
+                    "Non-OpenAI models require an OpenAI-compatible base_url "
+                    "(e.g., LiteLLM proxy or provider-compatible endpoint)."
+                ),
+            }
+
+    try:
+        return await run_agents_sdk(
+            system_prompt=request.system_prompt,
+            user_message=request.user_message,
+            model=request.model,
+            api_key=request.api_key,
+            base_url=request.base_url,
+            selected_node_ids=request.selected_node_ids,
+            graph_snapshot=request.graph_snapshot,
+            allowed_tools=request.allowed_tools,
+        )
+    except Exception as e:
+        error_msg = str(e)
+        return {"success": False, "error": error_msg}
+
+
+@app.post("/api/agents/run/stream")
+async def run_agent_stream(request: AgentRunRequest):
+    """Stream an agent run using the OpenAI Agents SDK."""
+    inject_admin_credentials(request)
+
+    if "/" in request.model and not request.model.startswith("openai/"):
+        provider = request.model.split("/", 1)[0].lower()
+        if provider not in {"anthropic", "gemini", "google"} and not request.base_url:
+
+            async def reject():
+                yield {
+                    "event": "error",
+                    "data": "Non-OpenAI models require an OpenAI-compatible base_url.",
+                }
+
+            return EventSourceResponse(reject())
+
+    async def generate():
+        try:
+            async for event in run_agents_sdk_stream(
+                system_prompt=request.system_prompt,
+                user_message=request.user_message,
+                model=request.model,
+                api_key=request.api_key,
+                base_url=request.base_url,
+                selected_node_ids=request.selected_node_ids,
+                graph_snapshot=request.graph_snapshot,
+                allowed_tools=request.allowed_tools,
+            ):
+                yield event
+        except Exception as e:
+            yield {"event": "error", "data": str(e)}
+
+    return EventSourceResponse(generate())
+
+
 @app.post("/api/summarize")
 async def summarize(request: SummarizeRequest):
     """
@@ -1458,6 +1548,73 @@ async def get_config_flags() -> dict:
     return {
         "githubCopilotEnabled": is_github_copilot_enabled(),
     }
+
+
+@app.get("/api/config/agents")
+async def get_config_agents() -> dict:
+    """Get agent definitions from config for the frontend.
+
+    Returns agents defined in config.yaml with their system prompts,
+    allowed tools, and slash command triggers. The frontend can use
+    this to register config-based agents with BaseAgent.
+
+    Returns:
+        dict with "agents" key containing list of agent definitions
+    """
+    config = get_admin_config()
+    return {
+        "agents": config.get_frontend_agents(),
+    }
+
+
+@app.get("/api/tools")
+async def list_tools() -> dict:
+    """List all registered tools.
+
+    Returns tools from both built-in Python handlers and MCP servers.
+
+    Returns:
+        dict with "tools" key containing list of tool definitions
+    """
+    registry = get_tool_registry()
+    return {
+        "tools": registry.list_tools(),
+    }
+
+
+class ToolCallRequest(BaseModel):
+    """Request body for executing a tool."""
+
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.post("/api/tools/{tool_name}")
+async def execute_tool(tool_name: str, request: ToolCallRequest) -> dict:
+    """Execute a tool by name.
+
+    Args:
+        tool_name: Tool name (built-in or mcp:server/tool format)
+        request: Tool arguments
+
+    Returns:
+        Tool execution result
+
+    Raises:
+        HTTPException: If tool not found or execution fails
+    """
+    registry = get_tool_registry()
+
+    # Check if tool exists
+    tool = registry.get_tool(tool_name)
+    if not tool:
+        raise HTTPException(status_code=404, detail=f"Tool not found: {tool_name}")
+
+    try:
+        result = await registry.execute_tool(tool_name, request.arguments)
+        return result
+    except Exception as e:
+        logger.error(f"Tool execution failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 class RefineQueryRequest(BaseModel):

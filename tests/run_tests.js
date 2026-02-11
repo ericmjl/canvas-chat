@@ -13,6 +13,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const testsDir = __dirname;
+const projectRoot = join(__dirname, '..');
+const loaderPath = join(projectRoot, 'scripts', 'static-import-resolver.js');
 
 /**
  * Find all test files matching test_*.js or test_*.ts pattern
@@ -38,13 +40,17 @@ async function discoverTestFiles(specificFile = null) {
 
 /**
  * Get the appropriate command and args for running a test file
- * .ts files use tsx (TypeScript runner), .js files use node
+ * .ts files use tsx (TypeScript runner), .js files use node.
+ * Node runs with a custom loader so example plugins that use /static/js/... imports resolve correctly.
  */
 function getRunCommand(filePath) {
     if (filePath.endsWith('.ts')) {
         return { cmd: 'npx', args: ['tsx', filePath] };
     }
-    return { cmd: 'node', args: [filePath] };
+    return {
+        cmd: 'node',
+        args: ['--experimental-loader', loaderPath, filePath],
+    };
 }
 
 /**

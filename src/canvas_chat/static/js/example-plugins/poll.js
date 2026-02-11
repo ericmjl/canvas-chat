@@ -14,10 +14,10 @@
  * 3. Use /poll command to generate polls from natural language
  */
 
-import { BaseNode, Actions } from '../node-protocols.js';
-import { NodeRegistry } from '../node-registry.js';
-import { FeaturePlugin } from '../feature-plugin.js';
-import { createNode } from '../graph-types.js';
+import { BaseNode, Actions } from '/static/js/node-protocols.js';
+import { NodeRegistry } from '/static/js/node-registry.js';
+import { FeaturePlugin } from '/static/js/feature-plugin.js';
+import { createNode } from '/static/js/graph-types.js';
 
 // =============================================================================
 // Poll Node Protocol
@@ -632,27 +632,36 @@ Generate 3-5 relevant options. The question should be clear and concise.`;
 // This allows the plugin to be self-contained (node protocol + feature)
 // Plugins are loaded after app.js, so we wait for the plugin system to be ready
 if (typeof window !== 'undefined') {
+    let registering = false;
+    let registered = false;
     const registerFeature = (app) => {
-        if (app && app.featureRegistry && app.featureRegistry._appContext) {
-            app.featureRegistry
-                .register({
-                    id: 'poll',
-                    feature: PollFeature,
-                    slashCommands: [
-                        {
-                            command: '/poll',
-                            handler: 'handleCommand',
-                        },
-                    ],
-                    priority: 500, // OFFICIAL priority for external plugins
-                })
-                .then(() => {
-                    console.log('[Poll Plugin] PollFeature registered successfully');
-                })
-                .catch((err) => {
-                    console.error('[Poll Plugin] Failed to register PollFeature:', err);
-                });
+        if (registered || registering) return;
+        if (!app || !app.featureRegistry) return;
+        if (!app.featureRegistry._appContext) {
+            setTimeout(() => registerFeature(app), 50);
+            return;
         }
+        registering = true;
+        app.featureRegistry
+            .register({
+                id: 'poll',
+                feature: PollFeature,
+                slashCommands: [
+                    {
+                        command: '/poll',
+                        handler: 'handleCommand',
+                    },
+                ],
+                priority: 500, // OFFICIAL priority for external plugins
+            })
+            .then(() => {
+                registered = true;
+                console.log('[Poll Plugin] PollFeature registered successfully');
+            })
+            .catch((err) => {
+                registering = false;
+                console.error('[Poll Plugin] Failed to register PollFeature:', err);
+            });
     };
 
     // Try immediate registration if app is already available

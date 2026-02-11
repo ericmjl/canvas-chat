@@ -1903,9 +1903,16 @@ class Canvas {
         const typeIcon = wrapped.getTypeIcon();
         const typeLabel = wrapped.getTypeLabel();
         const contentHtml = wrapped.renderContent(this);
+        const progressHtml = this.renderWorkingProgress(node);
         const actions = wrapped.getComputedActions();
         const headerButtons = wrapped.getHeaderButtons();
         const contentClasses = wrapped.getContentClasses();
+
+        const traceState = node?.metadata?.executionTrace;
+        const traceToggleLabel = traceState?.expanded ? '🧭 Hide steps' : '🧭 Steps';
+        const traceToggleHtml = traceState
+            ? `<button class="node-action execution-trace-toggle" title="Toggle agent steps">${this.escapeHtml(traceToggleLabel)}</button>`
+            : '';
 
         // Build action buttons HTML (may be empty for some node types like Matrix)
         const actionsHtml = actions
@@ -1963,12 +1970,15 @@ class Canvas {
 
         // Only render node-actions div if there are actions
         const actionsSection =
-            actions.length > 0
+            actions.length > 0 || traceToggleHtml
                 ? `
             <div class="node-actions">
                 ${actionsHtml}
+                ${traceToggleHtml}
             </div>`
                 : '';
+
+        const executionTraceSection = this.renderExecutionTrace(node);
 
         div.innerHTML = `
             <div class="node-summary" title="Double-click to edit title">
@@ -1985,8 +1995,9 @@ class Canvas {
                 <span class="node-model">${this.escapeHtml(node.model || '')}</span>
                 ${headerButtonsHtml}
             </div>
-            <div class="${contentClassStr}">${contentHtml}</div>
+            <div class="${contentClassStr}">${contentHtml}${progressHtml}</div>
             ${actionsSection}
+            ${executionTraceSection}
             <div class="resize-handle resize-e" data-resize="e"></div>
             <div class="resize-handle resize-s" data-resize="s"></div>
             <div class="resize-handle resize-se" data-resize="se"></div>
@@ -2057,6 +2068,219 @@ class Canvas {
         const container = wrapper.querySelector('.pdf-viewer-container[data-pdf-hydrated="false"]');
         if (!container) return;
         if (this._pdfViewerHydrator) this._pdfViewerHydrator(wrapper, node);
+    }
+
+    /**
+     * Render execution trace footer for agent-generated nodes.
+     * @param {Object} node
+     * @returns {string}
+     */
+    renderExecutionTrace(node) {
+        const trace = node?.metadata?.executionTrace;
+        if (!trace) {
+            return '';
+        }
+
+        const expanded = !!trace.expanded;
+        if (!expanded) {
+            return '';
+        }
+        const statusLabel = trace.status ? String(trace.status) : 'unknown';
+        const durationMs = trace.metrics?.durationMs || 0;
+        const toolCallsCount = trace.metrics?.toolCallsCount || trace.toolCalls?.length || 0;
+        const summaryParts = [
+            this.escapeHtml(statusLabel),
+            toolCallsCount ? `${toolCallsCount} tool${toolCallsCount === 1 ? '' : 's'}` : null,
+            durationMs ? this.formatDuration(durationMs) : null,
+        ].filter(Boolean);
+
+        const plan = trace.plan;
+        const planSummary = plan?.summary ? this.escapeHtml(plan.summary) : 'No plan recorded';
+        const planSteps = Array.isArray(plan?.steps) ? plan.steps : [];
+        const planStepsHtml = planSteps.length
+            ? planSteps
+                  .map((step) => {
+                      const status = step.status || 'pending';
+                      const icon =
+                          status === 'completed'
+                              ? '✓'
+                              : status === 'in-progress'
+                                ? '→'
+                                : status === 'failed'
+                                  ? '✕'
+                                  : status === 'skipped'
+                                    ? '⤼'
+                                    : '○';
+                      const result = step.result ? ` — ${this.escapeHtml(step.result)}` : '';
+                      return `<li><span class="execution-trace-step-icon">${icon}</span><span class="execution-trace-step-text">${this.escapeHtml(step.description || '')}${result}</span></li>`;
+                  })
+                  .join('')
+            : '';
+
+        const progressItems = Array.isArray(trace.progress) ? trace.progress : [];
+        const progressHtml = progressItems.length
+            ? progressItems
+                  .slice(-6)
+                  .map(
+                      (item) =>
+                          `<li>${this.escapeHtml(item.message || '')}<span class="execution-trace-timestamp">${this.formatTraceTime(item.timestamp)}</span></li>`
+                  )
+                  .join('')
+            : '';
+
+        const toolItems = Array.isArray(trace.toolCalls) ? trace.toolCalls : [];
+        const toolsHtml = toolItems.length
+            ? toolItems
+                  .map((item) => {
+                      const duration = item.totalDurationMs
+                          ? ` · ${this.formatDuration(item.totalDurationMs)}`
+                          : '';
+                      return `<li>${this.escapeHtml(item.toolId || 'tool')} — ${item.count || 0} call${
+                          item.count === 1 ? '' : 's'
+                      }${duration}</li>`;
+                  })
+                  .join('')
+            : '';
+
+        const approvalItems = Array.isArray(trace.approvals) ? trace.approvals : [];
+        const approvalsHtml = approvalItems.length
+            ? approvalItems
+                  .slice(-6)
+                  .map((item) => {
+                      const status =
+                          item.approved === true ? 'approved' : item.approved === false ? 'denied' : 'pending';
+                      return `<li>${this.escapeHtml(item.actionType || 'approval')} — ${status}</li>`;
+                  })
+                  .join('')
+            : '';
+
+        const subagentItems = Array.isArray(trace.subagents) ? trace.subagents : [];
+        const subagentsHtml = subagentItems.length
+            ? subagentItems
+                  .slice(-6)
+                  .map((item) => `<li>${this.escapeHtml(item.agentId || 'subagent')}</li>`)
+                  .join('')
+            : '';
+
+        const sections = [
+            planStepsHtml || planSummary
+                ? `
+                <div class="execution-trace-section">
+                    <div class="execution-trace-section-title">Plan</div>
+                    <div class="execution-trace-section-summary">${planSummary}</div>
+                    ${planStepsHtml ? `<ul class="execution-trace-list">${planStepsHtml}</ul>` : ''}
+                </div>`
+                : '',
+            progressHtml
+                ? `
+                <div class="execution-trace-section">
+                    <div class="execution-trace-section-title">Progress</div>
+                    <ul class="execution-trace-list">${progressHtml}</ul>
+                </div>`
+                : '',
+            toolsHtml
+                ? `
+                <div class="execution-trace-section">
+                    <div class="execution-trace-section-title">Tool Calls</div>
+                    <ul class="execution-trace-list">${toolsHtml}</ul>
+                </div>`
+                : '',
+            subagentsHtml
+                ? `
+                <div class="execution-trace-section">
+                    <div class="execution-trace-section-title">Sub-agents</div>
+                    <ul class="execution-trace-list">${subagentsHtml}</ul>
+                </div>`
+                : '',
+            approvalsHtml
+                ? `
+                <div class="execution-trace-section">
+                    <div class="execution-trace-section-title">Approvals</div>
+                    <ul class="execution-trace-list">${approvalsHtml}</ul>
+                </div>`
+                : '',
+        ]
+            .filter(Boolean)
+            .join('');
+
+        const detailsHtml = sections ? `<div class="execution-trace-details expanded">${sections}</div>` : '';
+
+        return `
+            <div class="execution-trace expanded">
+                <div class="execution-trace-bar">
+                    <span class="execution-trace-title">Agent Steps</span>
+                    <span class="execution-trace-meta">${summaryParts.join(' · ')}</span>
+                </div>
+                ${detailsHtml}
+            </div>
+        `;
+    }
+
+    /**
+     * Render progress details for working nodes.
+     * @param {Object} node
+     * @returns {string}
+     */
+    renderWorkingProgress(node) {
+        const showProgress = node?.metadata?.display?.showProgress;
+        if (!showProgress) {
+            return '';
+        }
+
+        const status = node?.metadata?.status || 'working';
+        const currentTool = node?.metadata?.currentToolCall;
+        const progressMessages = Array.isArray(node?.metadata?.progressMessages)
+            ? node.metadata.progressMessages
+            : [];
+
+        const messagesHtml = progressMessages.length
+            ? progressMessages
+                  .map((entry) => {
+                      const message = this.escapeHtml(entry.message || '');
+                      const timestamp = entry.timestamp ? this.formatTraceTime(entry.timestamp) : '';
+                      return `<li>${message}${timestamp ? `<span class="working-progress-timestamp">${timestamp}</span>` : ''}</li>`;
+                  })
+                  .join('')
+            : `<li class="working-progress-placeholder">Working...</li>`;
+
+        const toolHtml = currentTool
+            ? `<div class="working-progress-tool">Tool: ${this.escapeHtml(currentTool)}</div>`
+            : '';
+
+        return `
+            <div class="working-progress">
+                <div class="working-progress-header">Status: ${this.escapeHtml(status)}</div>
+                ${toolHtml}
+                <ul class="working-progress-list">${messagesHtml}</ul>
+            </div>
+        `;
+    }
+
+    /**
+     * Format a duration in ms into a short human-readable string.
+     * @param {number} durationMs
+     * @returns {string}
+     */
+    formatDuration(durationMs) {
+        if (!durationMs || durationMs <= 0) return '0s';
+        if (durationMs < 1000) return `${Math.round(durationMs)}ms`;
+        if (durationMs < 60000) return `${(durationMs / 1000).toFixed(1)}s`;
+        const minutes = Math.floor(durationMs / 60000);
+        const seconds = Math.round((durationMs % 60000) / 1000);
+        return `${minutes}m ${seconds}s`;
+    }
+
+    /**
+     * Format a trace timestamp for display.
+     * @param {number} timestamp
+     * @returns {string}
+     */
+    formatTraceTime(timestamp) {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${hours}:${minutes}`;
     }
 
     /**
@@ -2728,6 +2952,14 @@ class Canvas {
 
                 e.stopPropagation();
                 this.emit(actionId, node.id);
+            });
+        }
+
+        const traceToggle = div.querySelector('.execution-trace-toggle');
+        if (traceToggle) {
+            traceToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.emit('nodeToggleTrace', node.id);
             });
         }
 
@@ -4646,6 +4878,20 @@ class Canvas {
         if (summaryEl && node.title) {
             summaryEl.textContent = this.truncate(node.title, 60);
         }
+    }
+
+    /**
+     * Render entire graph
+     * @param graph
+     */
+    render(graph = null) {
+        // Backwards-compat shim for older callers that expect canvas.render()
+        const graphRef = graph || this.graph || window.app?.graph;
+        if (!graphRef) {
+            console.warn('[Canvas] render: graph not available');
+            return;
+        }
+        this.renderGraph(graphRef);
     }
 
     /**

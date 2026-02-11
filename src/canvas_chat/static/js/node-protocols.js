@@ -57,7 +57,14 @@ const HeaderButtons = {
 
 /**
  * Base node protocol class with default implementations
- * All node-specific classes extend this base class
+ * All node-specific classes extend this base class.
+ *
+ * Supports data-driven display via node.metadata.display:
+ * - typeLabel: Display name (e.g., 'Reflection')
+ * - typeIcon: Emoji icon (e.g., '🔮')
+ * - actions: Array of action IDs to show (e.g., ['reply', 'copy'])
+ *
+ * This allows agents to create nodes with custom display without code changes.
  */
 class BaseNode {
     /**
@@ -66,21 +73,31 @@ class BaseNode {
      */
     constructor(node) {
         this.node = node;
+        /** @type {Object|undefined} */
+        this._display = node?.metadata?.display;
     }
 
     /**
-     * Get the display label for this node type
+     * Get the display label for this node type.
+     * Reads from metadata.display.typeLabel if available.
      * @returns {string}
      */
     getTypeLabel() {
+        if (this._display?.typeLabel) {
+            return this._display.typeLabel;
+        }
         return this.node.type || 'Unknown';
     }
 
     /**
-     * Get the emoji icon for this node type
+     * Get the emoji icon for this node type.
+     * Reads from metadata.display.typeIcon if available.
      * @returns {string}
      */
     getTypeIcon() {
+        if (this._display?.typeIcon) {
+            return this._display.typeIcon;
+        }
         return '📄';
     }
 
@@ -110,11 +127,22 @@ class BaseNode {
     }
 
     /**
-     * Get action buttons for the node action bar
+     * Get action buttons for the node action bar.
+     * Reads from metadata.display.actions if available (array of action IDs).
      * Default actions for all nodes: Reply, Edit, Copy
      * @returns {Array<{id: string, label: string, title: string}>}
      */
     getActions() {
+        // Support data-driven actions from metadata
+        if (this._display?.actions && Array.isArray(this._display.actions)) {
+            return this._display.actions
+                .map((actionId) => {
+                    // Look up action by ID (case-insensitive, handle both 'reply' and 'REPLY')
+                    const normalizedId = actionId.toUpperCase().replace(/-/g, '_');
+                    return Actions[normalizedId] || null;
+                })
+                .filter(Boolean);
+        }
         return [Actions.REPLY, Actions.EDIT_CONTENT, Actions.COPY];
     }
 

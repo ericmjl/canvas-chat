@@ -3,7 +3,8 @@ describe('Code Node Creation', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.wait(1000);
+        cy.waitForAppReady();
+        cy.selectTestModel('openai/gpt-4o-mini');
     });
 
     it('creates a code node via /code command with default template', () => {
@@ -73,19 +74,8 @@ plt.show()`;
             });
         }).as('generateCode');
 
-        // Wait for app to be fully initialized
+        // Ensure app is ready and a model is selected
         cy.get('#chat-input', { timeout: 10000 }).should('be.visible');
-
-        // Wait for model picker to be ready (needed for code generation to work)
-        cy.get('#model-picker', { timeout: 10000 }).should('not.be.empty');
-
-        // Select any available model (we're mocking the response, so model doesn't matter)
-        cy.get('#model-picker').then(($select) => {
-            const firstOption = $select.find('option:not([value=""])').first();
-            if (firstOption.length > 0) {
-                cy.wrap($select).select(firstOption.val());
-            }
-        });
 
         // Send the /code command with description
         cy.get('#chat-input').clear().type('/code Generate a bivariate gaussian with covariance 0.9');
@@ -116,7 +106,8 @@ describe('Code Node Generate UI Workflow', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.wait(1000);
+        cy.waitForAppReady();
+        cy.selectTestModel('openai/gpt-4o-mini');
     });
 
     it('shows and cancels generate UI via cancel button', () => {
@@ -238,7 +229,8 @@ describe('Code Node Execution and Output Panel', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.wait(1000);
+        cy.waitForAppReady();
+        cy.selectTestModel('openai/gpt-4o-mini');
     });
 
     it('runs code and interacts with output panel (toggle, clear)', () => {
@@ -263,6 +255,26 @@ describe('Code Node Execution and Output Panel', () => {
         // Wait for modal to fully close and ensure it's not visible
         cy.get('#code-editor-modal').should('not.be.visible');
         cy.wait(1000); // Wait for any animations/transitions to complete
+
+        // Stub Pyodide runner for deterministic output
+        cy.window().then((win) => {
+            const codeFeature = win.app?.featureRegistry?.getFeature?.('code');
+            if (!codeFeature) {
+                throw new Error('CodeFeature not available');
+            }
+            codeFeature.pyodideRunner = {
+                preload: () => Promise.resolve(),
+                run: () =>
+                    Promise.resolve({
+                        stdout: 'Hello from Pyodide!',
+                        resultText: null,
+                        resultHtml: null,
+                        figures: [],
+                        error: null,
+                    }),
+                introspectDataFrames: () => Promise.resolve([]),
+            };
+        });
 
         // Click Run button - this tests nodeRunCode event routing
         // Use force: true to bypass visibility checks if modal overlay is still present

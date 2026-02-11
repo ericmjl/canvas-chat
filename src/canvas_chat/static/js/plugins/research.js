@@ -10,6 +10,7 @@ import { storage } from '../storage.js';
 import { readSSEStream, normalizeText } from '../sse.js';
 import { apiUrl } from '../utils.js';
 import { FeaturePlugin } from '../feature-plugin.js';
+import { createAgentDefinition } from '../agent/agent-types.js';
 
 /**
  * ResearchFeature - Handles search and research commands with Exa/DuckDuckGo.
@@ -33,6 +34,40 @@ class ResearchFeature extends FeaturePlugin {
      */
     async onLoad() {
         console.log('[ResearchFeature] Loaded');
+    }
+
+    /**
+     * Get slash commands for this feature.
+     * @returns {Array<Object>}
+     */
+    getSlashCommands() {
+        return [
+            {
+                command: '/search',
+                description: 'Search the web with Exa or DuckDuckGo',
+                placeholder: 'search query...',
+            },
+            {
+                command: '/research',
+                description: 'Deep research with multi-source synthesis',
+                placeholder: 'research topic...',
+            },
+        ];
+    }
+
+    /**
+     * Get the AgentDefinition for this feature.
+     * Uses 'feature' engine for direct dispatch (streaming handled internally).
+     * @returns {import('../agent/agent-types.js').AgentDefinition}
+     */
+    getAgentDefinition() {
+        return createAgentDefinition({
+            id: 'research-agent',
+            name: 'Research Agent',
+            engine: 'feature', // Feature handles its own LLM streaming
+            systemPrompt: 'Perform web searches and deep research synthesis.',
+            description: 'Handles /search and /research with Exa or DuckDuckGo',
+        });
     }
 
     /**

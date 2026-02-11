@@ -48,6 +48,9 @@
     --node-image-border: #f48fb1;
     --node-flashcard: #e8f5e9;
     --node-flashcard-border: #66bb6a;
+    --node-skill-run: #e8eaf6;
+    --node-skill-run-border: #7c4dff;
+    --node-working-pulse: rgba(124, 77, 255, 0.3);
 
     /* UI colors */
     --edge-color: #495057;
@@ -124,6 +127,9 @@
         --node-image-border: #f06292;
         --node-flashcard: #1a3d27;
         --node-flashcard-border: #43a047;
+        --node-skill-run: #2d2d55;
+        --node-skill-run-border: #9c7cff;
+        --node-working-pulse: rgba(156, 124, 255, 0.4);
 
         --edge-color: #9ca3af;
         --edge-color-light: #4b5563;

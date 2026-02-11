@@ -14,6 +14,43 @@
     z-index: 100;
 }
 
+/* Agent status indicator */
+.agent-status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, var(--selection-bg) 0%, rgba(138, 180, 248, 0.15) 100%);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--accent);
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.agent-status-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--accent);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: agent-spin 0.8s linear infinite;
+}
+
+@keyframes agent-spin {
+    to { transform: rotate(360deg); }
+}
+
+#agent-status-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .selected-nodes-indicator {
     display: flex;
     align-items: center;
