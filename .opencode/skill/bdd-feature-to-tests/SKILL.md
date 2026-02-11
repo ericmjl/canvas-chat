@@ -36,7 +36,7 @@ Translate Gherkin `.feature` files into executable Cypress tests by implementing
 ## Rules
 
 - Do not use brittle selectors (CSS classes or DOM structure).
-- Prefer `window.__APP_TEST__.graph.serialize()` for graph/state assertions.
+- Prefer `window.app.graph.toJSON()` for graph/state assertions.
 - The auto-generated missing step stubs file must never be committed.
 
 ## Files of interest

@@ -130,66 +130,6 @@ class App {
     }
 
     /**
-     * Test-only hooks for deterministic Cypress assertions.
-     * Exposed only when Cypress is present.
-     */
-    setupTestHooks() {
-        if (typeof window === 'undefined' || !window.Cypress) {
-            return;
-        }
-
-        if (!window.__APP_TEST__) {
-            window.__APP_TEST__ = {};
-        }
-
-        window.__APP_TEST__.pluginSystemReady = this._pluginSystemStage;
-        window.__APP_TEST__.externalPlugins = window.__APP_TEST__.externalPlugins || {
-            loaded: [],
-            failed: [],
-        };
-        window.__APP_TEST__.errors = window.__APP_TEST__.errors || [];
-
-        if (!window.__APP_TEST__._errorHandlersAttached) {
-            window.__APP_TEST__._errorHandlersAttached = true;
-            window.addEventListener('error', (event) => {
-                window.__APP_TEST__.errors.push({
-                    message: event.message,
-                    filename: event.filename,
-                    lineno: event.lineno,
-                    colno: event.colno,
-                });
-            });
-            window.addEventListener('unhandledrejection', (event) => {
-                window.__APP_TEST__.errors.push({
-                    message: event.reason?.message || String(event.reason),
-                    filename: null,
-                    lineno: null,
-                    colno: null,
-                });
-            });
-        }
-
-        window.__APP_TEST__.graph = {
-            serialize: () => {
-                if (!this.graph) {
-                    return { nodes: [], edges: [], tags: {} };
-                }
-                return this.graph.toJSON();
-            },
-        };
-
-        window.__APP_TEST__.reset = async () => {
-            await this.createNewSession();
-        };
-
-        window.__APP_TEST__.seed = async (seedFn) => {
-            if (typeof seedFn === 'function') {
-                seedFn(this.graph);
-            }
-        };
-    }
-
-    /**
      *
      */
     async init() {
@@ -536,7 +476,6 @@ class App {
         // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
         this.setupGraphEventListeners();
-        this.setupTestHooks();
 
         // Render graph
         this.canvas.renderGraph(this.graph);
@@ -609,7 +548,6 @@ class App {
             // Note: Features are managed by FeatureRegistry, no manual cleanup needed
             await this.graph.enablePersistence();
             this.setupGraphEventListeners();
-            this.setupTestHooks();
 
             // Render empty graph (will populate via sync)
             this.canvas.renderGraph(this.graph);
@@ -647,7 +585,6 @@ class App {
         // Note: Features are managed by FeatureRegistry, no manual cleanup needed
         await this.graph.enablePersistence();
         this.setupGraphEventListeners();
-        this.setupTestHooks();
 
         this.canvas.clear();
 
@@ -2173,38 +2110,17 @@ class App {
             const plugins = data.plugins || [];
             for (const plugin of plugins) {
                 if (!plugin.url) continue;
-                const testHook = typeof window !== 'undefined' ? window.__APP_TEST__ : null;
                 try {
                     const module = await import(plugin.url);
                     if (module?.registerPlugin) {
                         try {
                             module.registerPlugin(this);
                         } catch (error) {
-                            if (testHook?.externalPlugins) {
-                                testHook.externalPlugins.failed.push({
-                                    id: plugin.id || plugin.url,
-                                    url: plugin.url,
-                                    error: error?.message || String(error),
-                                });
-                            }
                             console.error('[App] Failed to register external plugin:', plugin.url, error);
                         }
                     }
-                    if (testHook?.externalPlugins) {
-                        testHook.externalPlugins.loaded.push({
-                            id: plugin.id || plugin.url,
-                            url: plugin.url,
-                        });
-                    }
                     console.log('[App] Loaded external plugin:', plugin.id || plugin.url);
                 } catch (error) {
-                    if (testHook?.externalPlugins) {
-                        testHook.externalPlugins.failed.push({
-                            id: plugin.id || plugin.url,
-                            url: plugin.url,
-                            error: error?.message || String(error),
-                        });
-                    }
                     console.error('[App] Failed to import plugin:', plugin.url, error);
                 }
             }
@@ -2221,10 +2137,6 @@ class App {
         this._pluginSystemStage = stage;
         if (typeof window === 'undefined') {
             return;
-        }
-        if (window.Cypress) {
-            window.__APP_TEST__ = window.__APP_TEST__ || {};
-            window.__APP_TEST__.pluginSystemReady = stage;
         }
         window.dispatchEvent(new CustomEvent('app-plugin-system-ready', { detail: { app: this, stage } }));
     }
@@ -4040,13 +3952,6 @@ class App {
             existingToast.remove();
         }
 
-        if (window.Cypress && window.__APP_TEST__) {
-            window.__APP_TEST__.lastToast = {
-                message,
-                type: typeof typeOrDuration === 'string' ? typeOrDuration : 'info',
-                timestamp: Date.now(),
-            };
-        }
         const isType = typeof typeOrDuration === 'string';
         const type = isType ? typeOrDuration : null;
         const timeout =
@@ -4055,14 +3960,6 @@ class App {
                 : typeof duration === 'number'
                   ? duration
                   : 3000;
-
-        if (window.Cypress && window.__APP_TEST__) {
-            window.__APP_TEST__.lastToast = {
-                message,
-                type: type || 'info',
-                timestamp: Date.now(),
-            };
-        }
 
         // Create toast element
         const toast = document.createElement('div');
@@ -4073,14 +3970,9 @@ class App {
         toast.textContent = message;
         document.body.appendChild(toast);
 
-        // Trigger animation (deterministic for Cypress)
-        if (window.Cypress) {
+        requestAnimationFrame(() => {
             toast.classList.add('show');
-        } else {
-            requestAnimationFrame(() => {
-                toast.classList.add('show');
-            });
-        }
+        });
 
         // Remove after duration
         setTimeout(() => {

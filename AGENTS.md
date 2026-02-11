@@ -38,7 +38,7 @@ This includes:
 - 2026-01-29: Implemented reflection feature with `/reflect` command. Creates REFLECTION nodes analyzing conversation paths from leaf nodes back to branch points. Uses sub-agents for synthesis, stores reflections as separate DAG nodes, and displays results in a sidepanel with links. Key files: `reflection-utils.js` (path finding), `reflection-agent.js` (sub-agent orchestration), `plugins/reflect-feature.js` (UI), `reflection.css` (styling).
 - 2026-02-04: Frontend now loads external JS plugins from the backend `/api/plugins` list during app initialization (see `app.js`), in addition to server-side script injection.
 - 2026-02-09: In CI (Cypress workflow), set CANVAS_CHAT_CONFIG_PATH to an absolute path (e.g. `${{ github.workspace }}/config.e2e.yaml`) so the server process loads config and plugins regardless of cwd. Backend resolves relative config paths to absolute at load time and logs "Loading config from …" or "CANVAS_CHAT_CONFIG_PATH not set" for debugging.
-- 2026-02-09: Cypress E2E: Do NOT add Cypress- or test-only logic to app.js (e.g. early `__APP_TEST__`). Prefer the same spec setup as most .cy.js files: `cy.visit('/')` and optionally `cy.wait(1000)`; use `waitForAppReady()` only when the spec needs BaseAgent (e.g. ai_chat, sendMessage) or BDD steps that use `__APP_TEST__.graph`. See "Cypress spec setup idiom" under E2E tests.
+- 2026-02-09: No Cypress- or test-only logic in app.js. E2E tests use public app state (`window.app`, `app.graph`, `app.featureRegistry`) and DOM only. Use `waitForAppReady()` when the spec needs BaseAgent or BDD steps that use the graph; it waits for `app.graph` and `app.featureRegistry`. See "Cypress spec setup idiom" under E2E tests.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -809,7 +809,7 @@ pixi run npx cypress run --browser electron --headless --spec cypress/e2e/matrix
 
 **Test pattern:** `pixi run npx cypress run --browser [chrome|electron] --headless --spec cypress/e2e/<file>.cy.js`
 
-**Cypress spec setup idiom:** Most specs (e.g. powerpoint, note_node, canvas_interactions, settings_modal, factcheck_modal) use the same `beforeEach`: `cy.clearLocalStorage()` → `cy.clearIndexedDB()` → `cy.visit('/')` → optionally `cy.wait(1000)` → then test-specific setup (e.g. `cy.selectTestModel(...)`). Do **not** use `waitForAppReady()` unless the spec needs BaseAgent (e.g. ai_chat sending messages) or BDD step definitions that rely on `__APP_TEST__`. Adding Cypress-only logic to app.js to satisfy tests is not allowed.
+**Cypress spec setup idiom:** Most specs (e.g. powerpoint, note_node, canvas_interactions, settings_modal, factcheck_modal) use the same `beforeEach`: `cy.clearLocalStorage()` → `cy.clearIndexedDB()` → `cy.visit('/')` → optionally `cy.wait(1000)` → then test-specific setup (e.g. `cy.selectTestModel(...)`). Use `waitForAppReady()` only when the spec needs BaseAgent (e.g. ai_chat sending messages) or BDD steps that use the graph; it waits for `app.graph` and `app.featureRegistry`. The app has no Cypress- or test-only code.
 
 **E2E test files:**
 
@@ -849,7 +849,7 @@ node scripts/check_tests_present.js    # CI-only: ensures code changes have test
 
 **Selector rule:** Use `data-testid` for all UI selectors referenced in `.feature` steps.
 
-**Graph assertions:** Prefer `window.__APP_TEST__.graph.serialize()` for deterministic checks. `__APP_TEST__` is set by the app after session load (only when Cypress is present); it is used by `waitForAppReady()` and BDD steps. Most .cy.js specs do not use `waitForAppReady()` and therefore do not depend on `__APP_TEST__`.
+**Graph assertions:** In BDD steps, use `window.app.graph.toJSON()` for deterministic graph checks. Most .cy.js specs do not use `waitForAppReady()` and interact with the DOM only.
 
 ### Unit tests
 
