@@ -74,9 +74,10 @@ Given('I stub external plugins list with a broken plugin', () => {
 });
 
 When('I wait for the app to initialize', () => {
-    cy.waitForAppReady();
-    cy.waitForBaseAgent();
+    // DOM-based wait (no dependency on __APP_TEST__ or pluginSystemReady)
+    cy.get('#model-picker', { timeout: 15000 }).should('exist');
     cy.window().should((win) => {
+        expect(win.app, 'app').to.exist;
         expect(win.app.featureRegistry, 'feature registry').to.exist;
         expect(win.app.graph, 'graph initialized').to.exist;
     });
