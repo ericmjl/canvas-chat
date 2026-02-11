@@ -10,7 +10,7 @@ import { FileUploadHandler } from './file-upload-handler.js';
 import { EdgeType, NodeType, TAG_COLORS, createEdge, createNode, getDefaultNodeSize } from './graph-types.js';
 import { ModalManager } from './modal-manager.js';
 import { NodeRegistry } from './node-registry.js';
-import { SlashCommandMenu, setFeatureRegistry } from './slash-command-menu.js';
+import { SlashCommandMenu, setBaseAgent, setFeatureRegistry } from './slash-command-menu.js';
 import { storage } from './storage.js';
 import { UndoManager } from './undo-manager.js';
 // CodeFeature is now in code.js (consolidated plugin)
@@ -2172,6 +2172,9 @@ class App {
         this.baseAgent.on('*', (event) => {
             console.log('[BaseAgent] Event:', event.type, event.data);
         });
+
+        // So getAllSlashCommands() includes config agents (e.g. /reflect-config)
+        setBaseAgent(this.baseAgent);
 
         // Fetch and register config-based agents (async, non-blocking)
         this.loadConfigAgents();

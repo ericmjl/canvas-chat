@@ -6,7 +6,7 @@ import { createEsbuildPlugin } from '@badeball/cypress-cucumber-preprocessor/esb
 export default defineConfig({
     e2e: {
         baseUrl: 'http://127.0.0.1:7865',
-        defaultCommandTimeout: 60000, // Allow slow app init (e.g. after clearIndexedDB) and AI tests
+        defaultCommandTimeout: 5000,
         viewportWidth: 1920, // Default viewport width (default: 1000)
         viewportHeight: 1080, // Default viewport height (default: 660)
         specPattern: ['cypress/e2e/**/*.cy.js', 'cypress/e2e/**/*.feature'],

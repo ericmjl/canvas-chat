@@ -369,7 +369,8 @@ Then('the graph should include a node of type {string}', (nodeType) => {
 });
 
 Then('slash command {string} should be registered', (command) => {
-    cy.window().should((win) => {
+    // Config agents load async (loadConfigAgents); allow time for /api/config/agents and registration
+    cy.window({ timeout: 15000 }).should((win) => {
         if (typeof win.getAllSlashCommands !== 'function') {
             throw new Error('Slash command registry not available on window');
         }

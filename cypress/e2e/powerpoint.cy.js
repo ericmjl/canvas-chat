@@ -81,7 +81,7 @@ describe('PowerPoint Upload and Navigation', () => {
                 return win.app.fileUploadHandler.handleFileUpload(file, { x: 200, y: 200 });
             });
         });
-        cy.wait('@uploadPptxStream', { timeout: 60000 });
+        cy.wait('@uploadPptxStream', { timeout: 5000 });
 
         // Verify PPTX node created
         cy.get('.node.powerpoint', { timeout: 30000 }).should('exist').and('be.visible');

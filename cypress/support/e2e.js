@@ -69,7 +69,7 @@ Cypress.Commands.add('waitForAppReady', () => {
 // Wait for BaseAgent to be ready. Call after waitForAppReady() in specs that send chat messages or use runAgentSlashCommand.
 // Uses same timeout as waitForAppReady so init() can finish (baseAgent is set after loadSession() returns).
 Cypress.Commands.add('waitForBaseAgent', () => {
-    cy.window().its('app.baseAgent', { timeout: 60000 }).should('exist');
+    cy.window().its('app.baseAgent', { timeout: 5000 }).should('exist');
 });
 
 // Seed custom models so the picker is not empty in tests
