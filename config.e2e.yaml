@@ -4,6 +4,7 @@ models:
       contextWindow: 128000
 
 plugins:
+    - path: ./src/canvas_chat/static/js/plugins/skill-feature.js
     - path: ./src/canvas_chat/static/js/example-plugins/poll.js
     - path: ./src/canvas_chat/static/js/example-plugins/example-poll-node.js
     - path: ./src/canvas_chat/static/js/example-plugins/example-agent-plugin.js
