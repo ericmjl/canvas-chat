@@ -1,15 +1,15 @@
 /**
- * Tests for auto-zoom functionality when creating nodes
+ * Tests for viewport focus when creating nodes
  *
  * Verifies that:
- * 1. addUserNode() sets _userNodeCreation flag before adding nodes
- * 2. nodeAdded handler zooms to nodes when flag is set
- * 3. Feature plugins can use addUserNode() for auto-zoom
- * 4. Normal graph operations (session load, bulk ops) don't trigger zoom
+ * 1. addUserNode() adds the node and explicitly zooms to it (no flag)
+ * 2. Direct graph.addNode() does not trigger zoom (creation does not imply focus)
+ * 3. Feature plugins use graph.addNode() and call zoom explicitly when they want focus
+ * 4. App.addUserNode (or mock equivalent) creates node and triggers zoom
  */
 
 import { JSDOM } from 'jsdom';
-import { assertTrue, assertEqual, assertFalse } from './test_helpers/assertions.js';
+import { assertTrue, assertEqual } from './test_helpers/assertions.js';
 
 // Setup global mocks FIRST
 if (!global.localStorage) {
@@ -68,7 +68,6 @@ global.SVGElement = dom.window.SVGElement;
 
 // Import modules
 const { NodeType, createNode } = await import('../src/canvas_chat/static/js/graph-types.js');
-const { FeaturePlugin } = await import('../src/canvas_chat/static/js/feature-plugin.js');
 const { PluginTestHarness } = await import('../src/canvas_chat/static/js/plugin-test-harness.js');
 
 async function asyncTest(description, fn) {
@@ -85,22 +84,21 @@ async function asyncTest(description, fn) {
     }
 }
 
-console.log('\n=== Auto-Zoom Functionality Tests ===\n');
+console.log('\n=== Viewport focus (addUserNode / explicit zoom) tests ===\n');
 
 // ============================================================
-// Mock App with addUserNode support
+// Mock App: addUserNode = add + explicit zoom (no flag)
 // ============================================================
 
 class MockAppForZoom {
     constructor() {
         this.graph = new MockGraph();
         this.canvas = new MockCanvas();
-        this._userNodeCreation = false;
     }
 
     addUserNode(node) {
-        this._userNodeCreation = true;
         this.graph.addNode(node);
+        this.canvas.zoomToSelectionAnimated([node.id], 0.8, 300);
     }
 }
 
@@ -112,7 +110,6 @@ class MockGraph {
 
     addNode(node) {
         this.nodes.set(node.id, node);
-        // Simulate nodeAdded event
         if (this.events['nodeAdded']) {
             this.events['nodeAdded'](node);
         }
@@ -132,39 +129,26 @@ class MockCanvas {
         this.zoomedNodes = [];
     }
 
-    renderNode(node) {
-        // No-op for tests
-    }
+    renderNode(_node) {}
 
-    zoomToSelectionAnimated(nodeIds, targetFill = 0.8, duration = 300) {
+    zoomToSelectionAnimated(nodeIds, _targetFill = 0.8, _duration = 300) {
         this.zoomedNodes.push(...nodeIds);
     }
 }
 
 // ============================================================
-// Tests for addUserNode flag behavior
+// addUserNode: add + explicit zoom
 // ============================================================
 
-await asyncTest('addUserNode sets _userNodeCreation flag before adding node', async () => {
+await asyncTest('addUserNode adds node and zooms to it', async () => {
     const app = new MockAppForZoom();
     const graph = app.graph;
     const canvas = app.canvas;
 
-    // Set up nodeAdded handler to zoom when flag is set
-    graph.on('nodeAdded', (node) => {
-        if (app._userNodeCreation) {
-            app._userNodeCreation = false; // Reset flag
-            canvas.zoomToSelectionAnimated([node.id]);
-        }
-    });
-
     const node = createNode(NodeType.HUMAN, 'Test message', { position: { x: 100, y: 100 } });
 
-    // Call addUserNode
     app.addUserNode(node);
 
-    // Verify flag was set and node was added
-    assertTrue(app._userNodeCreation === false, 'Flag should be reset after node added');
     assertTrue(graph.getNode(node.id) !== undefined, 'Node should be added to graph');
     assertTrue(canvas.zoomedNodes.includes(node.id), 'Canvas should have zoomed to node');
 });
@@ -174,29 +158,19 @@ await asyncTest('direct graph.addNode does not trigger zoom', async () => {
     const graph = app.graph;
     const canvas = app.canvas;
 
-    // Set up nodeAdded handler (but flag is never set for direct calls)
-    graph.on('nodeAdded', (node) => {
-        if (app._userNodeCreation) {
-            app._userNodeCreation = false;
-            canvas.zoomToSelectionAnimated([node.id]);
-        }
-    });
-
     const node = createNode(NodeType.AI, 'AI response', { position: { x: 200, y: 200 } });
 
-    // Call graph.addNode directly (simulating session load or bulk operation)
     graph.addNode(node);
 
-    // Verify flag is still false and no zoom happened
-    assertTrue(app._userNodeCreation === false, 'Flag should remain false');
+    assertTrue(graph.getNode(node.id) !== undefined, 'Node should be in graph');
     assertTrue(canvas.zoomedNodes.length === 0, 'Canvas should NOT have zoomed');
 });
 
 // ============================================================
-// Tests for FeaturePlugin graph.addNode integration (auto-zoom via wrapper)
+// FeaturePlugin graph.addNode (no wrapper; no auto-zoom)
 // ============================================================
 
-await asyncTest('FeaturePlugin.graph uses wrapped addNode', async () => {
+await asyncTest('FeaturePlugin.graph has addNode', async () => {
     const harness = new PluginTestHarness();
     const { NoteFeature } = await import('../src/canvas_chat/static/js/plugins/note.js');
 
@@ -207,12 +181,10 @@ await asyncTest('FeaturePlugin.graph uses wrapped addNode', async () => {
     });
 
     const feature = harness.getPlugin('note');
-    // FeaturePlugin no longer has addUserNode - plugins use this.graph.addNode() directly
-    // The auto-zoom is handled by a wrapper in AppContext that intercepts graph.addNode calls
     assertTrue(typeof feature.graph.addNode === 'function', 'Feature should have graph.addNode');
 });
 
-await asyncTest('FeaturePlugin.graph.addNode triggers auto-zoom (via wrapper)', async () => {
+await asyncTest('FeaturePlugin.graph.addNode adds node (focus is explicit)', async () => {
     const harness = new PluginTestHarness();
     const { NoteFeature } = await import('../src/canvas_chat/static/js/plugins/note.js');
 
@@ -227,7 +199,6 @@ await asyncTest('FeaturePlugin.graph.addNode triggers auto-zoom (via wrapper)', 
 
     const noteNode = createNode(NodeType.NOTE, 'Test note content', { position: { x: 300, y: 300 } });
 
-    // Plugins use this.graph.addNode() - the wrapper handles auto-zoom automatically
     feature.graph.addNode(noteNode);
 
     assertTrue(graph.getNode(noteNode.id) !== undefined, 'Node should be added to graph');
@@ -236,14 +207,13 @@ await asyncTest('FeaturePlugin.graph.addNode triggers auto-zoom (via wrapper)', 
 });
 
 // ============================================================
-// Tests for App.addUserNode helper
+// App.addUserNode (or mock) creates node and zooms
 // ============================================================
 
 await asyncTest('App.addUserNode creates node and triggers zoom', async () => {
     const harness = new PluginTestHarness();
     const app = harness.mockApp;
 
-    // Track zoom calls
     let zoomCalled = false;
     const originalZoomToSelection = app.canvas.zoomToSelectionAnimated;
     app.canvas.zoomToSelectionAnimated = (nodeIds) => {
@@ -253,14 +223,9 @@ await asyncTest('App.addUserNode creates node and triggers zoom', async () => {
 
     const node = createNode(NodeType.CODE, 'code here', { position: { x: 400, y: 400 } });
 
-    // Test via addUserNode if App has it, otherwise test the flag directly
-    if (typeof app.addUserNode === 'function') {
-        app.addUserNode(node);
-        assertTrue(zoomCalled, 'Zoom should be called when addUserNode is used');
-    } else {
-        // Fallback: just test the flag
-        assertTrue('_userNodeCreation' in app, 'App should have _userNodeCreation flag');
-    }
+    assertTrue(typeof app.addUserNode === 'function', 'MockApp should have addUserNode');
+    app.addUserNode(node);
+    assertTrue(zoomCalled, 'Zoom should be called when addUserNode is used');
 });
 
-console.log('\n✅ All Auto-Zoom tests passed!\n');
+console.log('\n✅ All viewport focus tests passed!\n');

@@ -197,6 +197,17 @@ class MockCanvas {
 
     /**
      *
+     * @param {string[]} _nodeIds
+     * @param {number} [_targetFill]
+     * @param {number} [_duration]
+     * @returns {void}
+     */
+    zoomToSelectionAnimated(_nodeIds, _targetFill, _duration) {
+        // Mock implementation
+    }
+
+    /**
+     *
      * @param {string} _nodeId
      * @returns {void}
      */
@@ -589,9 +600,6 @@ class MockApp {
         this.adminMode = false;
         this.adminModels = [];
 
-        // Flag for user-initiated node creation (used by addUserNode)
-        this._userNodeCreation = false;
-
         // Track method calls
         this.methodCalls = {
             showToast: [],
@@ -630,6 +638,15 @@ class MockApp {
      * @returns {void}
      */
     updateCollapseButtonForNode(_nodeId) {}
+
+    /**
+     * Add a single node and focus viewport on it (same contract as App.addUserNode).
+     * @param {Object} node - The node to add
+     */
+    addUserNode(node) {
+        this.graph.addNode(node);
+        this.canvas.zoomToSelectionAnimated([node.id], 0.8, 300);
+    }
 
     /**
      *

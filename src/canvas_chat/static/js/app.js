@@ -593,12 +593,6 @@ class App {
             .on('nodeAdded', (node) => {
                 this.canvas.renderNode(node);
                 this.updateEmptyState();
-
-                // Auto-zoom to user-created nodes (not during session load or bulk operations)
-                if (this._userNodeCreation) {
-                    this._userNodeCreation = false;
-                    this.canvas.zoomToSelectionAnimated([node.id], 0.8, 300);
-                }
             })
             .on('nodeRemoved', () => this.updateEmptyState())
             .on('edgeAdded', (edge) => {
@@ -1436,13 +1430,15 @@ class App {
     }
 
     /**
-     * Add a node with automatic zoom-to-node for user-created nodes.
-     * This should be used for user-initiated node creation (not during session load or bulk operations).
+     * Add a single user-initiated node and focus the viewport on it.
+     * Use this for "add one node and show it" flows (chat, summarize, image extract, etc.).
+     * For multiple nodes or when focus is not needed, use graph.addNode() and call
+     * canvas.zoomToSelectionAnimated(nodeIds) or canvas.panToNodeAnimated(nodeId) when you want focus.
      * @param {Object} node - The node to add
      */
     addUserNode(node) {
-        this._userNodeCreation = true;
         this.graph.addNode(node);
+        this.canvas.zoomToSelectionAnimated([node.id], 0.8, 300);
     }
 
     /**

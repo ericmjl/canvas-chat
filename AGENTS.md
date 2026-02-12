@@ -691,6 +691,14 @@ Always use in-app modals for user interactions that require confirmation or inpu
 - For confirmations, create a modal with Cancel/Confirm buttons
 - For complex input, create a modal with form fields (see committee modal as example)
 
+### Viewport focus
+
+**Viewport focus is always explicit.** Adding nodes does not move the viewport unless the caller explicitly requests focus.
+
+- **Core (single-node add + focus):** Use `app.addUserNode(node)` for the common "add one node and show it" case (chat, summarize, image extract, highlight reply, etc.). It adds the node and calls `canvas.zoomToSelectionAnimated([node.id], 0.8, 300)`.
+- **Plugins:** When a plugin adds node(s) and wants them in view, call `this.canvas.zoomToSelectionAnimated(nodeIds, 0.8, 300)` or `this.canvas.panToNodeAnimated(nodeId)` after adding. Committee, factcheck, flashcards, file-upload, powerpoint, git-repo, poll, csv-node already do this.
+- **Rule:** Creation does not imply focus. Use the focus API when you want the view to move.
+
 ## Testing
 
 **CRITICAL:** Always run unit tests after making code changes to ensure nothing is broken.
