@@ -66,6 +66,7 @@ class ResearchFeature extends FeaturePlugin {
         });
 
         this.graph.addNode(searchNode);
+        this.canvas.panToNodeAnimated(searchNode.id);
 
         // Create edges from parents only if they exist
         for (const parentId of parentIds) {
@@ -261,6 +262,7 @@ class ResearchFeature extends FeaturePlugin {
             );
 
             this.graph.addNode(researchNode);
+            this.canvas.panToNodeAnimated(researchNode.id);
 
             // Create edges from parents only if they exist
             for (const parentId of parentIds) {

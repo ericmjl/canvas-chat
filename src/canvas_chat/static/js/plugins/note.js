@@ -116,6 +116,7 @@ export class NoteFeature extends FeaturePlugin {
         });
 
         this.graph.addNode(noteNode);
+        this.canvas.panToNodeAnimated(noteNode.id);
 
         // Create edges from parents (if replying to selected nodes)
         for (const parentId of parentIds) {

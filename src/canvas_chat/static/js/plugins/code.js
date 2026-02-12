@@ -510,6 +510,7 @@ print("Hello from Pyodide!")
         });
 
         this.graph.addNode(codeNode);
+        this.canvas.panToNodeAnimated(codeNode.id);
         this.canvas.renderNode(codeNode);
 
         // Create edges from all selected nodes to code node
@@ -741,6 +742,7 @@ print("Hello from Pyodide!")
                         });
 
                         this.graph.addNode(outputNode);
+                        this.canvas.panToNodeAnimated(outputNode.id);
                         const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
                         this.graph.addEdge(edge);
                         this.canvas.renderNode(outputNode);
@@ -1069,6 +1071,7 @@ Output ONLY the corrected Python code, no explanations.`;
                             });
 
                             this.graph.addNode(outputNode);
+                            this.canvas.panToNodeAnimated(outputNode.id);
                             const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
                             this.graph.addEdge(edge);
                             this.canvas.renderNode(outputNode);

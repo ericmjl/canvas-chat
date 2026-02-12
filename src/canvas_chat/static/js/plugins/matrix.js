@@ -1236,6 +1236,7 @@ class MatrixFeature extends FeaturePlugin {
         const matrixNode = createMatrixNode(context, contextNodeIds, rowItems, colItems, { position });
 
         this.graph.addNode(matrixNode);
+        this.canvas.panToNodeAnimated(matrixNode.id);
 
         // Create edges from context nodes to matrix (only if context nodes exist)
         for (const contextNode of contextNodes) {
@@ -1892,6 +1893,7 @@ class MatrixFeature extends FeaturePlugin {
         }
 
         this.graph.addNode(sliceNode);
+        this.canvas.panToNodeAnimated(sliceNode.id);
 
         // Create edge from matrix to slice node
         const edge = createEdge(matrixId, sliceNode.id, EdgeType.MATRIX_CELL);
