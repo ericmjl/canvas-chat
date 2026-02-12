@@ -194,6 +194,7 @@ class ImageGenerationFeature extends FeaturePlugin {
         });
 
         this.graph.addNode(loadingNode);
+        this.canvas.panToNodeAnimated(loadingNode.id);
 
         // Create edge from HUMAN to IMAGE
         const edge = createEdge(humanNode.id, loadingNode.id, EdgeType.REPLY);

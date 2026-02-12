@@ -56,6 +56,7 @@ export class YouTubeFeature extends FeaturePlugin {
         });
 
         this.graph.addNode(fetchNode);
+        this.canvas.panToNodeAnimated(fetchNode.id);
         this.canvas.clearSelection();
 
         // Create edges from parents (if replying to selected nodes)

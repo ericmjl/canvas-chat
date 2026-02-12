@@ -251,6 +251,7 @@ Quick reference guide for finding the right documentation based on what you need
 | **How does URL fetching work?**                     | [url-fetching.md](docs/explanation/url-fetching.md)                     | URL content extraction design                        |
 | **How does WebRTC signaling work?**                 | [webrtc-signaling.md](docs/explanation/webrtc-signaling.md)             | WebRTC peer connection signaling                     |
 | **What is admin mode and how is it secured?**       | [admin-mode-security.md](docs/explanation/admin-mode-security.md)       | Admin mode security design                           |
+| **Why is viewport focus explicit (no pan on nodeAdded)?** | [viewport-focus.md](docs/explanation/viewport-focus.md)             | Rationale for explicit focus; do not revert to reactive pan |
 
 #### Configuration & Deployment
 
@@ -696,8 +697,10 @@ Always use in-app modals for user interactions that require confirmation or inpu
 **Viewport focus is always explicit.** Adding nodes does not move the viewport unless the caller explicitly requests focus.
 
 - **Core (single-node add + focus):** Use `app.addUserNode(node)` for the common "add one node and show it" case (chat, summarize, image extract, highlight reply, etc.). It adds the node and calls `canvas.zoomToSelectionAnimated([node.id], 0.8, 300)`.
-- **Plugins:** When a plugin adds node(s) and wants them in view, call `this.canvas.zoomToSelectionAnimated(nodeIds, 0.8, 300)` or `this.canvas.panToNodeAnimated(nodeId)` after adding. Committee, factcheck, flashcards, file-upload, powerpoint, git-repo, poll, csv-node already do this.
+- **Plugins:** When a plugin adds node(s) and wants them in view, call `this.canvas.zoomToSelectionAnimated(nodeIds, 0.8, 300)` or `this.canvas.panToNodeAnimated(nodeId)` after adding.
 - **Rule:** Creation does not imply focus. Use the focus API when you want the view to move.
+
+**Why not reactive "pan on every nodeAdded"?** Do not add pan/zoom to the `nodeAdded` handler or reintroduce a global flag. (1) Undo/redo and session load use `graph.addNode` — we must not pan there. (2) Batch creation (e.g. committee) would trigger one pan per node (N+1 pans). (3) Distinguishing "pan-worthy" adds would require a flag or batch API again, with the same downsides we removed. Full rationale: [Viewport focus (explanation)](docs/explanation/viewport-focus.md).
 
 ## Testing
 
