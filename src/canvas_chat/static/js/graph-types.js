@@ -201,6 +201,8 @@
  * @property {Position} [position] - Initial position
  * @property {number} [width] - Custom width
  * @property {number} [height] - Custom height
+ * @property {boolean} [groundWithWeb] - Whether to ground cell evaluations with web search
+ * @property {Array<{title: string, url: string, snippet?: string}>} [webSearchResults] - Cached web search results for citations
  */
 
 // =============================================================================
