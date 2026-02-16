@@ -294,6 +294,34 @@
     color: white;
 }
 
+/* Matrix web grounding sources (drawer / output panel) */
+.matrix-sources-drawer {
+    padding: 8px 12px;
+    font-size: 12px;
+}
+
+.matrix-sources-drawer-header {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.matrix-sources-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.matrix-sources-list .matrix-source-link {
+    display: block;
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.matrix-sources-list .matrix-source-link:hover {
+    text-decoration: underline;
+}
+
 /* Cell Node */
 .node.cell {
     background: var(--bg-primary);

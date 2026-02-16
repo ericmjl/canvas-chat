@@ -23,6 +23,12 @@ import { NodeRegistry } from '../node-registry.js';
 import { CancellableEvent } from '../plugin-events.js';
 import { streamSSEContent } from '../sse.js';
 import { apiUrl, buildMessagesForApi, escapeHtmlText } from '../utils.js';
+import {
+    appendWebContextToMessages,
+    deriveSearchQuery,
+    runWebSearch,
+} from '../web-grounding.js';
+import { formatSourcesSection } from './committee.js';
 
 // =============================================================================
 // Matrix Node Protocol
@@ -82,6 +88,37 @@ class MatrixNode extends BaseNode {
     }
 
     /**
+     * Whether this matrix has web-grounded sources to show in the output panel (drawer).
+     * @returns {boolean}
+     */
+    hasOutput() {
+        return !!(this.node.webSearchResults && this.node.webSearchResults.length > 0);
+    }
+
+    /**
+     * Render the Sources drawer content (same pattern as code node output panel).
+     * @param {Canvas} canvas
+     * @returns {string} HTML for the panel body
+     */
+    renderOutputPanel(canvas) {
+        const results = this.node.webSearchResults;
+        if (!results || results.length === 0) return '';
+
+        const links = results
+            .map(
+                (r, i) =>
+                    `<a href="${canvas.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" class="matrix-source-link">${i + 1}. ${canvas.escapeHtml(r.title)}</a>`
+            )
+            .join('');
+
+        return `
+            <div class="matrix-sources-drawer">
+                <div class="matrix-sources-drawer-header">Sources (${results.length})</div>
+                <div class="matrix-sources-list">${links}</div>
+            </div>`;
+    }
+
+    /**
      * Get summary text for semantic zoom (shown when zoomed out)
      * @param {Canvas} _canvas
      * @returns {string}
@@ -105,7 +142,7 @@ class MatrixNode extends BaseNode {
      * @returns {string} HTML for the content portion only
      */
     renderContent(canvas) {
-        const { context, rowItems, colItems, cells, indexColWidth } = this.node;
+        const { context, rowItems, colItems, cells, indexColWidth, webSearchResults } = this.node;
 
         // Build table HTML with optional custom index column width
         const styleAttr = indexColWidth ? ` style="--index-col-width: ${indexColWidth}"` : '';
@@ -155,6 +192,7 @@ class MatrixNode extends BaseNode {
         }
         tableHtml += '</tbody></table>';
 
+        // Sources are shown in the output panel (drawer), not inline
         // Matrix-specific content: context bar at top, table, and internal actions at bottom
         return `
             <div class="matrix-context">
@@ -220,6 +258,10 @@ class MatrixNode extends BaseNode {
                 text += ` ${content} |`;
             }
             text += '\n';
+        }
+
+        if (this.node.webSearchResults?.length > 0) {
+            text += formatSourcesSection(this.node.webSearchResults);
         }
 
         return text;
@@ -631,6 +673,14 @@ class MatrixFeature extends FeaturePlugin {
                             ⚠️ Maximum 10 items per axis. Some items have been truncated.
                         </div>
 
+                        <div class="matrix-options-group">
+                            <label class="committee-checkbox-label">
+                                <input type="checkbox" id="matrix-ground-with-web" />
+                                <span class="checkbox-text">Ground evaluations with web search</span>
+                                <span class="checkbox-hint">Run a web search from the matrix context and use results to inform each cell evaluation.</span>
+                            </label>
+                        </div>
+
                         <div class="modal-actions">
                             <button id="matrix-cancel-btn" class="secondary-btn">Cancel</button>
                             <button id="matrix-create-btn" class="primary-btn">Create Matrix</button>
@@ -672,6 +722,14 @@ class MatrixFeature extends FeaturePlugin {
                                 <ul class="axis-items" id="edit-col-items"></ul>
                                 <button class="axis-add-btn" id="edit-add-col-btn">+ Add column</button>
                             </div>
+                        </div>
+
+                        <div class="matrix-options-group">
+                            <label class="committee-checkbox-label">
+                                <input type="checkbox" id="edit-matrix-ground-with-web" />
+                                <span class="checkbox-text">Ground evaluations with web search</span>
+                                <span class="checkbox-hint">Use web search results to inform cell evaluations when filling.</span>
+                            </label>
                         </div>
 
                         <div class="modal-actions">
@@ -921,8 +979,8 @@ class MatrixFeature extends FeaturePlugin {
         return [
             {
                 command: '/matrix',
-                description: 'Create a matrix for cross-product evaluation',
-                placeholder: 'Enter matrix context (e.g., "Compare programming languages by performance")',
+                description: 'Build a comparison table: pick rows and columns, then fill cells with AI',
+                placeholder: 'e.g. Compare languages by performance and ease of learning',
             },
         ];
     }
@@ -1232,8 +1290,16 @@ class MatrixFeature extends FeaturePlugin {
             };
         }
 
+        // Read "Ground with web search" from create modal
+        const createModal = this.modalManager.getPluginModal('matrix', 'create');
+        const groundWithWebCheckbox = createModal?.querySelector('#matrix-ground-with-web');
+        const groundWithWeb = groundWithWebCheckbox ? groundWithWebCheckbox.checked : false;
+
         // Create matrix node
-        const matrixNode = createMatrixNode(context, contextNodeIds, rowItems, colItems, { position });
+        const matrixNode = createMatrixNode(context, contextNodeIds, rowItems, colItems, {
+            position,
+            groundWithWeb,
+        });
 
         this.graph.addNode(matrixNode);
         this.canvas.panToNodeAnimated(matrixNode.id);
@@ -1345,19 +1411,57 @@ class MatrixFeature extends FeaturePlugin {
             });
             this.emit('matrix:cell:prompt', promptEvent);
 
+            // Optionally add web search context for grounding (same pattern as committee)
+            let messagesForRequest = promptEvent.data.messages;
+            const nodeForWeb = this.graph.getNode(nodeId);
+            if (nodeForWeb?.groundWithWeb) {
+                let searchResults = nodeForWeb.webSearchResults;
+                if (!searchResults || searchResults.length === 0) {
+                    try {
+                        const contextString = (nodeForWeb.contextNodeIds || [])
+                            .map((id) => {
+                                const n = this.graph.getNode(id);
+                                return n && n.content ? n.content : '';
+                            })
+                            .filter(Boolean)
+                            .join('\n\n');
+                        const model = this.modelPicker?.value ?? this.getModelPicker?.()?.value;
+                        const query = await deriveSearchQuery(
+                            nodeForWeb.context || '',
+                            contextString,
+                            this.buildLLMRequest.bind(this),
+                            model
+                        );
+                        searchResults = await runWebSearch(query);
+                        const currentNode = this.graph.getNode(nodeId);
+                        this.graph.updateNode(nodeId, {
+                            webSearchResults: searchResults,
+                            outputExpanded: false,
+                            outputPanelHeight: currentNode.outputPanelHeight ?? 200,
+                        });
+                    } catch (err) {
+                        console.warn('[MatrixFeature] Web grounding failed for cell fill:', err);
+                        searchResults = [];
+                    }
+                }
+                if (searchResults.length > 0) {
+                    messagesForRequest = appendWebContextToMessages(promptEvent.data.messages, searchResults);
+                }
+            }
+
             // Build request body, using custom prompt if provided by a plugin
             let requestBody;
             if (promptEvent.data.customPrompt) {
                 requestBody = this.buildLLMRequest({
                     custom_prompt: promptEvent.data.customPrompt,
-                    messages: promptEvent.data.messages,
+                    messages: messagesForRequest,
                 });
             } else {
                 requestBody = this.buildLLMRequest({
                     row_item: rowItem,
                     col_item: colItem,
                     context: context,
-                    messages: promptEvent.data.messages,
+                    messages: messagesForRequest,
                 });
             }
 
@@ -1435,6 +1539,9 @@ class MatrixFeature extends FeaturePlugin {
             });
 
             this.saveSession();
+
+            // Re-render matrix node so Sources section appears when webSearchResults was set
+            this.canvas.renderNode(this.graph.getNode(nodeId));
 
             // Extension hook: matrix:after:fill - notify plugins that cell fill completed
             this.emit('matrix:after:fill', {
@@ -1590,6 +1697,41 @@ class MatrixFeature extends FeaturePlugin {
             return;
         }
 
+        // If groundWithWeb and no cached results, run web search once and store on node
+        if (matrixNode.groundWithWeb) {
+            const existingResults = matrixNode.webSearchResults;
+            if (!existingResults || existingResults.length === 0) {
+                try {
+                    const contextString = (matrixNode.contextNodeIds || [])
+                        .map((id) => {
+                            const n = this.graph.getNode(id);
+                            return n && n.content ? n.content : '';
+                        })
+                        .filter(Boolean)
+                        .join('\n\n');
+                    const model = this.modelPicker?.value ?? this.getModelPicker?.()?.value;
+                    const query = await deriveSearchQuery(
+                        matrixNode.context || '',
+                        contextString,
+                        this.buildLLMRequest.bind(this),
+                        model
+                    );
+                    const searchResults = await runWebSearch(query);
+                    this.graph.updateNode(nodeId, {
+                        webSearchResults: searchResults,
+                        outputExpanded: false,
+                        outputPanelHeight: matrixNode.outputPanelHeight ?? 200,
+                    });
+                    if (searchResults.length > 0 && this.showToast) {
+                        this.showToast('Web search complete. Filling cells with grounded evaluations.');
+                    }
+                } catch (err) {
+                    console.warn('[MatrixFeature] Web grounding failed, proceeding without:', err);
+                    if (this.showToast) this.showToast('Web search failed. Proceeding without web context.');
+                }
+            }
+        }
+
         // Fill all cells in parallel - each cell handles its own tracking/cleanup
         const fillPromises = emptyCells.map(({ row, col }) => {
             return this.handleMatrixCellFill(nodeId, row, col).catch((err) => {
@@ -1651,6 +1793,11 @@ class MatrixFeature extends FeaturePlugin {
         editModal.querySelector('#edit-row-count').textContent = `${this._editMatrixData.rowItems.length} items`;
         editModal.querySelector('#edit-col-count').textContent = `${this._editMatrixData.colItems.length} items`;
 
+        const groundWithWebCheckbox = editModal.querySelector('#edit-matrix-ground-with-web');
+        if (groundWithWebCheckbox) {
+            groundWithWebCheckbox.checked = Boolean(matrixNode.groundWithWeb);
+        }
+
         this.modalManager.showPluginModal('matrix', 'edit');
     }
 
@@ -1707,11 +1854,16 @@ class MatrixFeature extends FeaturePlugin {
             }
         }
 
+        const editModal = this.modalManager.getPluginModal('matrix', 'edit');
+        const groundWithWebCheckbox = editModal?.querySelector('#edit-matrix-ground-with-web');
+        const groundWithWeb = groundWithWebCheckbox ? groundWithWebCheckbox.checked : false;
+
         // Update the matrix node
         this.graph.updateNode(nodeId, {
             rowItems,
             colItems,
             cells: newCells,
+            groundWithWeb,
         });
 
         // Re-render the node

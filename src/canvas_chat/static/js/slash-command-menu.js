@@ -22,7 +22,7 @@ export function setFeatureRegistry(registry) {
 const BUILTIN_SLASH_COMMANDS = [
     { command: '/search', description: 'Search the web', placeholder: 'query' },
     { command: '/research', description: 'Deep research', placeholder: 'topic' },
-    { command: '/matrix', description: 'Create a comparison matrix', placeholder: 'context for matrix' },
+    // /matrix is provided by MatrixFeature plugin
     { command: '/committee', description: 'Consult multiple LLMs and synthesize', placeholder: 'question' },
     {
         command: '/factcheck',
