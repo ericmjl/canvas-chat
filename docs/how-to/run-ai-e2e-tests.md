@@ -129,19 +129,19 @@ The `.github/workflows/cypress-tests.yml` file has been updated with two paralle
     - Excludes AI tests with `excludeSpecPattern="**/*ai*.cy.js"`
     - Fast feedback for UI/interaction changes
 
-2. **cypress-ai**: Runs AI tests with Ollama service
-    - Uses Docker service for Ollama on port 11434
-    - Pulls `gemma3n:e4b` model on first run (cached in subsequent runs)
-    - Cache key: `ollama-gemma3n-e4b`
+2. **cypress-ai**: Runs AI tests with native Ollama
+    - Installs Ollama on the runner via official install script (no Docker)
+    - Caches `~/.ollama` so restores are runner-owned (avoids tar permission errors)
+    - Pulls `gemma3n:e4b` on cache miss; on hit, skips pull for faster runs
     - Runs only AI tests with `specPattern="cypress/e2e/**/*ai*.cy.js"`
 
 ### Model Caching
 
 Ollama model weights are cached in GitHub Actions to avoid repeated downloads (~7.5GB per run):
 
-- Cache path: `~/.ollama/models`
-- Cache key: `ollama-gemma3n-e4b`
-- Restore keys: `ollama-gemma3n-` (allows model updates)
+- Cache path: `~/.ollama` (native install; all files runner-owned)
+- Cache key: `${{ runner.os }}-ollama-gemma3n-e4b`
+- Restore keys: `${{ runner.os }}-ollama-gemma3n-` (allows model updates)
 - Cache expires: 7 days after last use (GitHub Actions default)
 
 ## Troubleshooting
