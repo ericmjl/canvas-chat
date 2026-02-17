@@ -85,6 +85,9 @@ jobs:
             - name: Install Ollama
               run: |
                   curl -fsSL https://ollama.com/install.sh | sh
+                  # Stop systemd service so we run Ollama as runner user and use ~/.ollama (cache path)
+                  sudo systemctl stop ollama || true
+                  nohup ollama serve > /tmp/ollama-serve.log 2>&1 &
                   sleep 5
 
             - name: Wait for Ollama to be healthy
