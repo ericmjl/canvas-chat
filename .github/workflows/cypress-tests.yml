@@ -51,23 +51,10 @@ jobs:
                   name: cypress-screenshots
                   path: cypress/screenshots
 
-    # Job 2: AI E2E Tests (with Ollama, slower)
+    # Job 2: AI E2E Tests (with native Ollama, slower)
     cypress-ai:
         name: AI E2E Tests (Ollama)
         runs-on: ubuntu-latest
-
-        services:
-            ollama:
-                image: ollama/ollama:latest
-                ports:
-                    - 11434:11434
-                options: >-
-                    --name ollama-service
-                    --volume /home/runner/.ollama:/root/.ollama
-                    --health-cmd "ollama list || exit 1"
-                    --health-interval 10s
-                    --health-timeout 5s
-                    --health-retries 5
 
         steps:
             - name: Checkout
@@ -85,64 +72,35 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
+            - name: Cache Ollama model weights
+              id: cache-ollama-model
+              uses: actions/cache@v5
+              with:
+                  path: ~/.ollama
+                  key: ${{ runner.os }}-ollama-gemma3n-e4b
+                  restore-keys: |
+                      ${{ runner.os }}-ollama-gemma3n-e4b
+                      ${{ runner.os }}-ollama-gemma3n-
+
+            - name: Install Ollama
+              run: |
+                  curl -fsSL https://ollama.com/install.sh | sh
+                  sleep 5
+
             - name: Wait for Ollama to be healthy
               run: |
                   timeout 300 bash -c 'until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 2; done'
                   echo "Ollama service is ready"
 
-            - name: Ensure Ollama cache directory exists
-              run: |
-                  # Ensure the directory exists and has correct permissions
-                  mkdir -p /home/runner/.ollama/models
-                  echo "Cache directory created/verified: /home/runner/.ollama/models"
-
-            - name: Cache Ollama model weights
-              id: cache-ollama-model
-              uses: actions/cache@v5
-              with:
-                  # Cache only the models subdirectory to avoid permission issues with other .ollama files
-                  # Models are stored in /root/.ollama/models inside the container
-                  # which maps to /home/runner/.ollama/models on the host via volume mount
-                  path: /home/runner/.ollama/models
-                  key: ollama-gemma3n-e4b
-                  restore-keys: |
-                      ollama-gemma3n-e4b
-                      ollama-gemma3n-
-
             - name: Check if model exists and pull if needed
               run: |
-                  # Check if model is already available in Ollama
                   MODEL_EXISTS=$(curl -s http://localhost:11434/api/tags | grep -o '"name":"gemma3n:e4b"' || echo "")
-
-                  if [ -z "$MODEL_EXISTS" ]; then
-                      if [ "${{ steps.cache-ollama-model.outputs.cache-hit }}" == "true" ]; then
-                          echo "Cache hit: Model files restored from cache"
-                          echo "Models directory size before pull: $(du -sh /home/runner/.ollama/models 2>/dev/null | cut -f1 || echo 'N/A')"
-                      else
-                          echo "Cache miss: Model not in cache (this is expected on first run or after cache expiry)"
-                      fi
-                      # Pull model (will use cached files if available, otherwise downloads)
-                      curl -sSf -X POST http://localhost:11434/api/pull -d '{"name":"gemma3n:e4b"}'
-                      echo "Model pull completed"
-
-                      # Wait for files to be written to disk
-                      sleep 3
-
-                      # Verify model is now available
-                      MODEL_EXISTS_AFTER=$(curl -s http://localhost:11434/api/tags | grep -o '"name":"gemma3n:e4b"' || echo "")
-                      if [ -z "$MODEL_EXISTS_AFTER" ]; then
-                          echo "Warning: Model pull completed but model not found in Ollama"
-                      else
-                          echo "Model verified in Ollama"
-                      fi
-
-                      # Show cache directory info for debugging (files written by container are visible on host)
-                      if [ -d "/home/runner/.ollama/models" ]; then
-                          echo "Models directory size after pull: $(du -sh /home/runner/.ollama/models | cut -f1)"
-                          echo "Cache will be saved automatically at end of job"
-                      fi
+                  if [ -n "$MODEL_EXISTS" ]; then
+                      echo "Model already available (cache hit), skipping pull"
                   else
-                      echo "Model already exists in Ollama, skipping pull"
+                      echo "Pulling gemma3n:e4b..."
+                      ollama pull gemma3n:e4b
+                      echo "Model pull completed"
                   fi
 
             - name: Run Cypress (AI tests only)
