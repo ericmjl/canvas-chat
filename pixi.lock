@@ -2145,8 +2145,8 @@ packages:
   requires_python: '>=3.9'
 - pypi: ./
   name: canvas-chat
-  version: 0.1.95
-  sha256: 548203511882a0e373ead4106cad2b5d33209eb141cd15049f527fa8f8c516fe
+  version: 0.1.96
+  sha256: e6fcb5d65746c207adff93fedaa84c3126e23a875ec4ba9557f42f9b61ae26e8
   requires_dist:
   - fastapi>=0.115.0
   - uvicorn>=0.32.0
