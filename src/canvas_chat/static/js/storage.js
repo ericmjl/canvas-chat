@@ -42,6 +42,7 @@
  * @property {string} [google] - Google (Gemini) API key
  * @property {string} [groq] - Groq API key
  * @property {string} [github] - GitHub Models API key
+ * @property {string} [openrouter] - OpenRouter API key
  * @property {string} [exa] - Exa search API key
  */
 
@@ -65,7 +66,7 @@
 
 /**
  * Provider name for API key lookup
- * @typedef {'openai'|'anthropic'|'gemini'|'google'|'groq'|'github'|'github_copilot'|'exa'|'ollama'} ProviderName
+ * @typedef {'openai'|'anthropic'|'gemini'|'google'|'groq'|'github'|'openrouter'|'github_copilot'|'exa'|'ollama'} ProviderName
  */
 
 // =============================================================================
@@ -389,6 +390,7 @@ class Storage {
             google: 'google',
             groq: 'groq',
             github: 'github',
+            openrouter: 'openrouter',
             github_copilot: 'github_copilot',
             exa: 'exa',
         };
@@ -416,7 +418,7 @@ class Storage {
      */
     hasAnyLLMApiKey() {
         const keys = this.getApiKeys();
-        const llmProviders = ['openai', 'anthropic', 'google', 'groq', 'github'];
+        const llmProviders = ['openai', 'anthropic', 'google', 'groq', 'github', 'openrouter'];
         const hasStandardKey = llmProviders.some((provider) => keys[provider] && keys[provider].trim() !== '');
         return hasStandardKey || this.hasCopilotAuth();
     }
@@ -491,6 +493,7 @@ class Storage {
         if (keys.google) configured.push('Google');
         if (keys.groq) configured.push('Groq');
         if (keys.github) configured.push('GitHub');
+        if (keys.openrouter) configured.push('OpenRouter');
         if (this.hasCopilotAuth()) configured.push('GitHub Copilot');
 
         return configured;

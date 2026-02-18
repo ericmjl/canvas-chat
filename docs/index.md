@@ -34,7 +34,7 @@ Your browser will open automatically to the local server.
 - **Fact-Checking**: Use `/factcheck <claims>` to verify claims with web search and LLM analysis
 - **Image Analysis**: Upload, paste, or drag-and-drop images for multimodal AI analysis
 - **Markdown & Math Rendering**: Full markdown support with LaTeX math rendering (KaTeX) for inline `\(...\)` and display `\[...\]` math
-- **Multiple LLM Providers**: Support for OpenAI, Anthropic, Google, Groq, GitHub Models, and local models via Ollama
+- **Multiple LLM Providers**: Support for OpenAI, Anthropic, Google, Groq, GitHub Models, OpenRouter, and local models via Ollama
 - **Extensible Plugin System**: Create custom node types and features with the three-level plugin architecture
 - **Local-First**: All data stored in your browser (IndexedDB)
 - **Export/Import**: Save sessions as `.canvaschat` files
@@ -48,6 +48,7 @@ Click the ⚙️ Settings button to add your API keys:
 - **Google AI**: Get from [aistudio.google.com](https://aistudio.google.com/)
 - **Groq**: Get from [console.groq.com](https://console.groq.com/)
 - **GitHub Models**: Get from [github.com/settings/tokens](https://github.com/settings/tokens) (requires beta access)
+- **OpenRouter**: Get from [openrouter.ai/keys](https://openrouter.ai/keys) (one key for many models)
 - **Exa** (for search/research): Get from [exa.ai](https://exa.ai/)
 
 Keys are stored locally in your browser's localStorage.

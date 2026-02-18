@@ -72,6 +72,12 @@ models:
       apiKeyEnvVar: 'GROQ_API_KEY'
       contextWindow: 128000
 
+    # OpenRouter (single key for many models: openrouter/provider/model-name)
+    # - id: 'openrouter/anthropic/claude-3.5-sonnet'
+    #   name: 'Claude 3.5 Sonnet (OpenRouter)'
+    #   apiKeyEnvVar: 'OPENROUTER_API_KEY'
+    #   contextWindow: 200000
+
     # Example: Local Ollama model
     # - id: "ollama/llama3.2"
     #   name: "Llama 3.2 (Local)"

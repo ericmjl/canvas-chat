@@ -391,6 +391,7 @@ class ModalManager {
         document.getElementById('google-key').value = keys.google || '';
         document.getElementById('groq-key').value = keys.groq || '';
         document.getElementById('github-key').value = keys.github || '';
+        document.getElementById('openrouter-key').value = keys.openrouter || '';
         document.getElementById('exa-key').value = keys.exa || '';
 
         this.updateCopilotStatus();

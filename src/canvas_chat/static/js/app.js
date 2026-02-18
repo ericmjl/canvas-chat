@@ -4107,6 +4107,7 @@ class App {
             google: document.getElementById('google-key').value.trim(),
             groq: document.getElementById('groq-key').value.trim(),
             github: document.getElementById('github-key').value.trim(),
+            openrouter: document.getElementById('openrouter-key').value.trim(),
             exa: document.getElementById('exa-key').value.trim(),
         };
 

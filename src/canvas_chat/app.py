@@ -469,6 +469,19 @@ MODEL_REGISTRY: list[dict] = [
         "provider": "GitHub",
         "context_window": 64000,
     },
+    # OpenRouter (single API key for many models: openrouter/provider/model-name)
+    {
+        "id": "openrouter/anthropic/claude-3.5-sonnet",
+        "name": "Claude 3.5 Sonnet (OpenRouter)",
+        "provider": "OpenRouter",
+        "context_window": 200000,
+    },
+    {
+        "id": "openrouter/openai/gpt-4o",
+        "name": "GPT-4o (OpenRouter)",
+        "provider": "OpenRouter",
+        "context_window": 128000,
+    },
 ]
 
 

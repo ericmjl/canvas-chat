@@ -236,6 +236,7 @@ Quick reference guide for finding the right documentation based on what you need
 | **How do I use images?**                         | [use-images.md](docs/how-to/use-images.md)                       | Adding and working with images                |
 | **How do I navigate nodes?**                     | [navigate-nodes.md](docs/how-to/navigate-nodes.md)               | Keyboard shortcuts and navigation             |
 | **How do I highlight and branch conversations?** | [highlight-and-branch.md](docs/how-to/highlight-and-branch.md)   | Creating conversation branches                |
+| **How do I add OpenRouter models?**             | [openrouter-models.md](docs/how-to/openrouter-models.md)         | Using OpenRouter with one API key for many models |
 | **What keyboard shortcuts are available?**       | [keyboard-shortcuts.md](docs/reference/keyboard-shortcuts.md)    | Complete list of keyboard shortcuts           |
 
 #### Architecture & Design
@@ -343,6 +344,16 @@ After completing a task, take a moment to review the code you've written and loo
 - Dead code or unused variables
 
 It's fine if there's nothing to refactor, but if improvements exist, address them before committing.
+
+## When implementing a new feature
+
+When you implement a new feature, before considering the work complete, think through and deliver **at most one** highest-priority item in each of these categories. Each item can be either **add** or **modify**. This compounds test coverage and documentation over time.
+
+1. **Highest-priority end-to-end test** — Identify the single most valuable E2E test (Cypress) that would protect or demonstrate the feature. Add it or update an existing E2E test. Only one.
+2. **Highest-priority unit test** (for code not touching the UI) — For non-UI work, identify the single most valuable unit test (add or modify) that would improve test coverage. Only one.
+3. **Highest-priority documentation** — Identify the single most valuable doc change (add or modify) so users or future agents can discover, use, or maintain the feature. Add a new doc or update an existing one. Only one.
+
+Prioritize impact: choose the one E2E test, one unit test (when applicable), and one doc change that give the most compounding value.
 
 ## Git workflow
 
