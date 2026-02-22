@@ -4448,15 +4448,6 @@ class App {
         this.renderTagSlots();
     }
 
-    /**
-     *
-     * @param {string} text
-     * @returns {string}
-     */
-    escapeHtml(text) {
-        return escapeHtmlText(text);
-    }
-
     // --- Search Methods ---
 
     /**
