@@ -785,13 +785,14 @@ class GitRepoHandler(UrlFetchHandlerPlugin):
         return await self.fetch_selected_files(url, default_files)
 
 
-# Register git repository handler
+# Register git repository handler.
+# Only known Git hosting domains and git@ SSH URLs trigger clone; all other URLs
+# (e.g. blog posts, docs) fall through to normal web fetch and are not cloned.
 UrlFetchRegistry.register(
     id="git-repo",
     url_patterns=[
         r"^https?://(github|gitlab|bitbucket|gitea|codeberg)\.(com|org)/[\w\-\.]+/[\w\-\.]+(?:\.git)?/?$",
         r"^git@[\w\-\.]+:[\w\-\.]+/[\w\-\.]+(?:\.git)?$",
-        r"^https?://[\w\-\.]+/([\w\-\.]+/)+[\w\-\.]+(?:\.git)?/?$",
     ],
     handler=GitRepoHandler,
     priority=PRIORITY["BUILTIN"],

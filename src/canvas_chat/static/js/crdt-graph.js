@@ -562,16 +562,17 @@ class CRDTGraph extends EventEmitter {
                 const yTags = new Y.Array();
                 yTags.push(value);
                 yNode.set('tags', yTags);
-            } else if (key === 'cells' && value) {
-                // Matrix cells - store as Y.Map
-                const yCells = new Y.Map();
-                for (const [cellKey, cellValue] of Object.entries(value)) {
-                    const yCell = new Y.Map();
-                    yCell.set('content', cellValue.content);
-                    yCell.set('filled', cellValue.filled || false);
-                    yCells.set(cellKey, yCell);
-                }
-                yNode.set('cells', yCells);
+                } else if (key === 'cells' && value) {
+                    // Matrix cells - store as Y.Map
+                    const yCells = new Y.Map();
+                    for (const [cellKey, cellValue] of Object.entries(value)) {
+                        const yCell = new Y.Map();
+                        yCell.set('content', cellValue.content);
+                        yCell.set('filled', cellValue.filled || false);
+                        yCell.set('filling', cellValue.filling || false);
+                        yCells.set(cellKey, yCell);
+                    }
+                    yNode.set('cells', yCells);
             } else if (key === 'metadata' && value && typeof value === 'object') {
                 // Metadata object - store as Y.Map to preserve nested properties
                 const yMetadata = new Y.Map();
@@ -957,6 +958,7 @@ class CRDTGraph extends EventEmitter {
                         }
                         yCell.set('content', cellValue.content);
                         yCell.set('filled', cellValue.filled || false);
+                        yCell.set('filling', cellValue.filling || false);
                     }
                 } else if (key === 'metadata' && value && typeof value === 'object') {
                     // Metadata object - store as Y.Map to preserve nested properties
@@ -1409,6 +1411,35 @@ class CRDTGraph extends EventEmitter {
     // =========================================================================
 
     /**
+     * Build synthetic context string for a matrix node (context, labels, cells, source metadata).
+     * Cell contents already contain synthesized information from the grounded pipeline,
+     * so we only include source metadata (title/URL) rather than full fetched content.
+     * @param {Object} node - Matrix node
+     * @returns {string}
+     */
+    getMatrixContextString(node) {
+        const parts = [];
+        if (node.context) parts.push(node.context);
+        const rowItems = node.rowItems || [];
+        const colItems = node.colItems || [];
+        if (rowItems.length) parts.push(`Rows: ${rowItems.join(', ')}`);
+        if (colItems.length) parts.push(`Columns: ${colItems.join(', ')}`);
+        const cells = node.cells || {};
+        const cellEntries = Object.entries(cells)
+            .filter(([, c]) => c && c.content)
+            .map(([key, c]) => `${key}: ${c.content}`);
+        if (cellEntries.length) parts.push('Cells:\n' + cellEntries.join('\n'));
+        const results = node.webSearchResults || [];
+        if (results.length > 0) {
+            const sourceLines = results.map(
+                (r, i) => `[${i + 1}] ${r.title || ''} (${r.url || ''})`
+            );
+            parts.push('Web sources:\n' + sourceLines.join('\n'));
+        }
+        return parts.join('\n\n').trim() || '';
+    }
+
+    /**
      * Resolve context for one or more nodes
      * Returns messages in chronological order, deduplicated
      * @param {string[]} nodeIds
@@ -1445,9 +1476,11 @@ class CRDTGraph extends EventEmitter {
             NodeType.GIT_REPO,
         ];
         return sorted.map((node) => {
+            const content =
+                node.type === NodeType.MATRIX ? this.getMatrixContextString(node) : node.content;
             const msg = {
                 role: userTypes.includes(node.type) ? 'user' : 'assistant',
-                content: node.content,
+                content: content || '',
                 nodeId: node.id,
             };
             if (node.imageData) {

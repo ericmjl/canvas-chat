@@ -92,8 +92,55 @@ export async function runWebSearch(query) {
 }
 
 /**
+ * Fetch full page content for a single URL via /api/fetch-url.
+ * @param {string} url - URL to fetch
+ * @returns {Promise<{title: string, content: string} | null>} Title and content, or null on failure
+ */
+export async function fetchUrlContent(url) {
+    try {
+        const response = await fetch(apiUrl('/api/fetch-url'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url }),
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        const content = data.content && typeof data.content === 'string' ? data.content.trim() : '';
+        if (!content) return null;
+        return {
+            title: data.title || '',
+            content,
+        };
+    } catch (err) {
+        console.warn('[web-grounding] fetchUrlContent failed for', url, err);
+        return null;
+    }
+}
+
+/**
+ * Enrich web search results with fetched page content (full text) for each URL.
+ * Fetches content in sequence to avoid overloading the server. On per-URL failure, keeps snippet only.
+ * @param {Array<{title: string, url: string, snippet: string}>} searchResults - Results from runWebSearch
+ * @returns {Promise<Array<{title: string, url: string, snippet: string, content?: string}>>} Same results with content added when fetch succeeds
+ */
+export async function enrichSearchResultsWithContent(searchResults) {
+    if (!searchResults || searchResults.length === 0) return searchResults;
+    const enriched = [];
+    for (const r of searchResults) {
+        const fetched = await fetchUrlContent(r.url);
+        if (fetched) {
+            enriched.push({ ...r, content: fetched.content });
+        } else {
+            enriched.push({ ...r });
+        }
+    }
+    return enriched;
+}
+
+/**
  * Append a single user message containing formatted web search results to the messages array.
- * Does not mutate the input array.
+ * Uses title/URL/snippet only. Full page content is handled by feature-specific pipelines
+ * (e.g. matrix grounded pipeline) to avoid clogging the context window.
  * @param {Array<{role: string, content: string}>} messages - Conversation messages
  * @param {Array<{title: string, url: string, snippet: string}>} searchResults - Web search results
  * @returns {Array<{role: string, content: string}>} New array with one additional user message
@@ -106,7 +153,9 @@ export function appendWebContextToMessages(messages, searchResults) {
         searchResults.forEach((r, i) => {
             lines.push(`[${i + 1}] ${r.title}`);
             lines.push(r.url);
-            if (r.snippet) lines.push(r.snippet);
+            if (r.snippet) {
+                lines.push(r.snippet);
+            }
             lines.push('');
         });
     }

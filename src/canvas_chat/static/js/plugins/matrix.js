@@ -26,6 +26,7 @@ import { apiUrl, buildMessagesForApi, escapeHtmlText } from '../utils.js';
 import {
     appendWebContextToMessages,
     deriveSearchQuery,
+    enrichSearchResultsWithContent,
     runWebSearch,
 } from '../web-grounding.js';
 import { formatSourcesSection } from './committee.js';
@@ -88,33 +89,76 @@ class MatrixNode extends BaseNode {
     }
 
     /**
-     * Whether this matrix has web-grounded sources to show in the output panel (drawer).
+     * Whether this matrix has output to show: web processing in progress or sources list.
      * @returns {boolean}
      */
     hasOutput() {
-        return !!(this.node.webSearchResults && this.node.webSearchResults.length > 0);
+        const hasProgress = this.node.webProcessingProgress != null;
+        const hasSources = !!(this.node.webSearchResults && this.node.webSearchResults.length > 0);
+        return hasProgress || hasSources;
     }
 
     /**
      * Render the Sources drawer content (same pattern as code node output panel).
+     * Shows progress (spinner + message) when web processing is running, otherwise sources list.
      * @param {Canvas} canvas
      * @returns {string} HTML for the panel body
      */
     renderOutputPanel(canvas) {
+        const progress = this.node.webProcessingProgress;
+        if (progress && progress.message) {
+            const msg = canvas.escapeHtml(progress.message);
+            const nOfM =
+                progress.total != null && progress.current != null
+                    ? ` <span class="matrix-web-progress-count">${progress.current} of ${progress.total}</span>`
+                    : '';
+            return `
+            <div class="matrix-sources-drawer matrix-web-progress">
+                <div class="matrix-web-progress-line">
+                    <span class="loading-spinner matrix-web-progress-spinner"></span>
+                    <span>${msg}${nOfM}</span>
+                </div>
+            </div>`;
+        }
+
         const results = this.node.webSearchResults;
         if (!results || results.length === 0) return '';
 
-        const links = results
-            .map(
-                (r, i) =>
-                    `<a href="${canvas.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" class="matrix-source-link">${i + 1}. ${canvas.escapeHtml(r.title)}</a>`
-            )
-            .join('');
+        const summarized = results.filter((r) => r.content?.trim());
+        const snippetOnly = results.filter((r) => !r.content?.trim());
+        const total = results.length;
+        const summarizedCount = summarized.length;
+
+        const linkHtml = (list, startIndex) =>
+            list
+                .map(
+                    (r, i) =>
+                        `<a href="${canvas.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" class="matrix-source-link">${startIndex + i + 1}. ${canvas.escapeHtml(r.title)}</a>`
+                )
+                .join('');
+
+        let body = '';
+        if (summarized.length > 0) {
+            body += `
+                <div class="matrix-sources-section">
+                    <div class="matrix-sources-drawer-header matrix-sources-section-header">Summarized (${summarized.length})</div>
+                    <div class="matrix-sources-drawer-hint">Full page fetched and used for cell evaluations.</div>
+                    <div class="matrix-sources-list">${linkHtml(summarized, 0)}</div>
+                </div>`;
+        }
+        if (snippetOnly.length > 0) {
+            body += `
+                <div class="matrix-sources-section">
+                    <div class="matrix-sources-drawer-header matrix-sources-section-header">Snippet only (${snippetOnly.length})</div>
+                    <div class="matrix-sources-drawer-hint">Could not fetch full page; only search snippet available.</div>
+                    <div class="matrix-sources-list">${linkHtml(snippetOnly, summarized.length)}</div>
+                </div>`;
+        }
 
         return `
             <div class="matrix-sources-drawer">
-                <div class="matrix-sources-drawer-header">Sources (${results.length})</div>
-                <div class="matrix-sources-list">${links}</div>
+                <div class="matrix-sources-drawer-header matrix-sources-drawer-title">Sources (${total} total${summarizedCount > 0 ? `, ${summarizedCount} summarized` : ''})</div>
+                ${body}
             </div>`;
     }
 
@@ -175,8 +219,16 @@ class MatrixNode extends BaseNode {
                 const cellKey = `${r}-${c}`;
                 const cell = cells[cellKey];
                 const isFilled = cell && cell.filled && cell.content;
+                const isFilling = cell && cell.filling && !(cell.content && cell.content.length > 0);
 
-                if (isFilled) {
+                if (isFilling) {
+                    tableHtml += `<td class="matrix-cell filling" data-row="${r}" data-col="${c}" title="Filling cell...">
+                        <div class="matrix-cell-filling">
+                            <span class="loading-spinner matrix-cell-spinner"></span>
+                            <span class="matrix-cell-filling-text">Filling...</span>
+                        </div>
+                    </td>`;
+                } else if (isFilled) {
                     tableHtml += `<td class="matrix-cell filled" data-row="${r}" data-col="${c}" title="Click to view details">
                         <div class="matrix-cell-content">${canvas.escapeHtml(cell.content)}</div>
                     </td>`;
@@ -1324,6 +1376,206 @@ class MatrixFeature extends FeaturePlugin {
         this.updateEmptyState();
     }
 
+    // --- Web Search Helpers ---
+
+    /**
+     * Update or clear web processing progress in the matrix node's output panel (drawer).
+     * Opens the drawer on first progress; subsequent calls only update panel content.
+     * @param {string} nodeId - Matrix node ID
+     * @param {{ message: string, current?: number, total?: number } | null} progress - Progress state, or null to clear
+     * @param {boolean} [openDrawer] - If true, set outputExpanded true and full render (for first show)
+     */
+    _updateWebProgress(nodeId, progress, openDrawer = false) {
+        const payload = { webProcessingProgress: progress };
+        if (openDrawer && progress) {
+            const node = this.graph.getNode(nodeId);
+            payload.outputExpanded = true;
+            payload.outputPanelHeight = node?.outputPanelHeight ?? 200;
+            this.graph.updateNode(nodeId, payload);
+            this.canvas.renderNode(this.graph.getNode(nodeId));
+            return;
+        }
+        this.graph.updateNode(nodeId, payload);
+        const updatedNode = this.graph.getNode(nodeId);
+        const panelWrapper = this.canvas.outputPanels?.get(nodeId);
+        if (panelWrapper) {
+            this.canvas.updateOutputPanelContent(nodeId, updatedNode);
+        }
+    }
+
+    /**
+     * Ensure web search results (enriched with full page content) are cached on a matrix node.
+     * If results already exist, returns them. Otherwise runs search, enriches, and stores.
+     * @param {string} nodeId - Matrix node ID
+     * @returns {Promise<Array<{title: string, url: string, snippet: string, content?: string}>>} Search results (possibly empty)
+     */
+    async _ensureWebSearchResults(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return [];
+        const existing = node.webSearchResults;
+        if (existing && existing.length > 0) return existing;
+
+        this._updateWebProgress(
+            nodeId,
+            { message: 'Fetching web sources...' },
+            true
+        );
+        try {
+            const contextString = (node.contextNodeIds || [])
+                .map((id) => {
+                    const n = this.graph.getNode(id);
+                    return n && n.content ? n.content : '';
+                })
+                .filter(Boolean)
+                .join('\n\n');
+            const model = this.modelPicker?.value ?? this.getModelPicker?.()?.value;
+            const query = await deriveSearchQuery(
+                node.context || '',
+                contextString,
+                this.buildLLMRequest.bind(this),
+                model
+            );
+            let searchResults = await runWebSearch(query);
+            searchResults = await enrichSearchResultsWithContent(searchResults);
+            const currentNode = this.graph.getNode(nodeId);
+            this.graph.updateNode(nodeId, {
+                webSearchResults: searchResults,
+                webProcessingProgress: null,
+                outputExpanded: true,
+                outputPanelHeight: currentNode.outputPanelHeight ?? 200,
+            });
+            this._updateWebProgress(nodeId, null);
+            return searchResults;
+        } catch (err) {
+            this.graph.updateNode(nodeId, { webProcessingProgress: null });
+            this._updateWebProgress(nodeId, null);
+            throw err;
+        }
+    }
+
+    // --- Grounded Cell Fill Pipeline ---
+
+    /**
+     * Make a non-streaming LLM call via /api/chat and return the collected text.
+     * @param {Array<{role: string, content: string}>} messages - Chat messages
+     * @param {AbortSignal} [abortSignal] - Optional abort signal
+     * @returns {Promise<string>} Full response text
+     */
+    async _makeLLMCall(messages, abortSignal) {
+        const requestBody = this.buildLLMRequest({ messages });
+        const fetchOptions = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+        };
+        if (abortSignal) fetchOptions.signal = abortSignal;
+        const response = await fetch(apiUrl('/api/chat'), fetchOptions);
+        if (!response.ok) throw new Error(`LLM call failed: ${response.statusText}`);
+        let result = '';
+        await streamSSEContent(response, {
+            onContent: (_chunk, fullContent) => {
+                result = fullContent;
+            },
+            onDone: () => {},
+            onError: (err) => {
+                throw new Error(err);
+            },
+        });
+        return result;
+    }
+
+    /**
+     * Run the grounded cell-fill pipeline: generate a cell-specific summarization
+     * prompt, summarize each web source in parallel, and return the summaries
+     * formatted as context for the final synthesis call.
+     *
+     * @param {string} matrixContext - Overarching matrix context (e.g. "backend development")
+     * @param {string} rowItem - Row item (e.g. "Python")
+     * @param {string} colItem - Column item (e.g. "safety")
+     * @param {Array<{title: string, url: string, content?: string}>} webResults - Enriched search results
+     * @param {AbortSignal} [abortSignal] - Optional abort signal
+     * @param {(opts: { message: string, current?: number, total?: number }) => void} [onProgress] - Progress callback for drawer UI
+     * @returns {Promise<string>} Formatted summaries to use as grounding context
+     */
+    async _runGroundedPipeline(matrixContext, rowItem, colItem, webResults, abortSignal, onProgress) {
+        const sourcesWithContent = webResults.filter((r) => r.content?.trim());
+        if (sourcesWithContent.length === 0) return '';
+
+        const total = sourcesWithContent.length;
+        if (onProgress) onProgress({ message: 'Generating cell prompt...' });
+
+        // Step 1: Generate a cell-specific summarization prompt via LLM
+        const promptGenMessages = [
+            {
+                role: 'system',
+                content:
+                    'You are a prompt engineer. Output ONLY the summarization prompt, nothing else. ' +
+                    'The prompt should instruct an AI to extract information relevant to a specific evaluation criterion from a web page.',
+            },
+            {
+                role: 'user',
+                content:
+                    `Generate a concise summarization prompt for the following evaluation:\n` +
+                    `Overall comparison: ${matrixContext}\n` +
+                    `Item being evaluated: ${rowItem}\n` +
+                    `Criterion: ${colItem}\n\n` +
+                    `The prompt will be given to an AI along with a web page's content. ` +
+                    `It should guide the AI to extract and summarize ONLY the parts relevant to evaluating "${rowItem}" on "${colItem}" in the context of "${matrixContext}".`,
+            },
+        ];
+        const summarizationPrompt = await this._makeLLMCall(promptGenMessages, abortSignal);
+
+        if (onProgress) onProgress({ message: 'Summarizing sources...', current: 0, total });
+
+        // Step 2: Summarize each source in parallel, pairing each result with its source
+        let completed = 0;
+        const summaryPromises = sourcesWithContent.map((r) => {
+            const msgs = [
+                { role: 'system', content: summarizationPrompt },
+                {
+                    role: 'user',
+                    content: `Source: ${r.title}\nURL: ${r.url}\n\n${r.content}`,
+                },
+            ];
+            return this._makeLLMCall(msgs, abortSignal)
+                .then((summary) => {
+                    completed += 1;
+                    if (onProgress) {
+                        onProgress({
+                            message: 'Summarizing sources...',
+                            current: completed,
+                            total,
+                        });
+                    }
+                    return { summary, source: r };
+                })
+                .catch((err) => {
+                    if (err.name === 'AbortError') throw err;
+                    completed += 1;
+                    if (onProgress) {
+                        onProgress({
+                            message: 'Summarizing sources...',
+                            current: completed,
+                            total,
+                        });
+                    }
+                    console.warn(`[MatrixFeature] Failed to summarize source ${r.url}:`, err);
+                    return null;
+                });
+        });
+        const results = (await Promise.all(summaryPromises)).filter(Boolean);
+        if (results.length === 0) return '';
+
+        // Format summaries for the final synthesis step
+        const lines = ['Web-grounded source summaries:', ''];
+        results.forEach(({ summary, source }, i) => {
+            lines.push(`[${i + 1}] ${source.title} (${source.url})`);
+            lines.push(summary);
+            lines.push('');
+        });
+        return lines.join('\n').trim();
+    }
+
     // --- Matrix Cell Handlers ---
 
     /**
@@ -1397,6 +1649,12 @@ class MatrixFeature extends FeaturePlugin {
             this.canvas.showStopButton(nodeId);
         }
 
+        // Show spinner in this cell immediately (covers pipeline + streaming until first content)
+        const currentCells = matrixNode.cells || {};
+        const cellsWithFilling = { ...currentCells, [cellKey]: { content: '', filled: false, filling: true } };
+        this.graph.updateNode(nodeId, { cells: cellsWithFilling });
+        this.canvas.renderNode(this.graph.getNode(nodeId));
+
         try {
             // Extension hook: matrix:cell:prompt - allow plugins to customize the prompt/request
             const promptEvent = new CancellableEvent('matrix:cell:prompt', {
@@ -1411,41 +1669,55 @@ class MatrixFeature extends FeaturePlugin {
             });
             this.emit('matrix:cell:prompt', promptEvent);
 
-            // Optionally add web search context for grounding (same pattern as committee)
+            // Optionally add web search context via grounded pipeline (map-reduce summarization)
             let messagesForRequest = promptEvent.data.messages;
             const nodeForWeb = this.graph.getNode(nodeId);
             if (nodeForWeb?.groundWithWeb) {
-                let searchResults = nodeForWeb.webSearchResults;
-                if (!searchResults || searchResults.length === 0) {
-                    try {
-                        const contextString = (nodeForWeb.contextNodeIds || [])
-                            .map((id) => {
-                                const n = this.graph.getNode(id);
-                                return n && n.content ? n.content : '';
-                            })
-                            .filter(Boolean)
-                            .join('\n\n');
-                        const model = this.modelPicker?.value ?? this.getModelPicker?.()?.value;
-                        const query = await deriveSearchQuery(
-                            nodeForWeb.context || '',
-                            contextString,
-                            this.buildLLMRequest.bind(this),
-                            model
-                        );
-                        searchResults = await runWebSearch(query);
-                        const currentNode = this.graph.getNode(nodeId);
-                        this.graph.updateNode(nodeId, {
-                            webSearchResults: searchResults,
-                            outputExpanded: false,
-                            outputPanelHeight: currentNode.outputPanelHeight ?? 200,
-                        });
-                    } catch (err) {
-                        console.warn('[MatrixFeature] Web grounding failed for cell fill:', err);
-                        searchResults = [];
-                    }
+                let searchResults = [];
+                try {
+                    searchResults = await this._ensureWebSearchResults(nodeId);
+                } catch (err) {
+                    console.warn('[MatrixFeature] Web grounding failed for cell fill:', err);
                 }
                 if (searchResults.length > 0) {
-                    messagesForRequest = appendWebContextToMessages(promptEvent.data.messages, searchResults);
+                    const hasContent = searchResults.some((r) => r.content?.trim());
+                    if (hasContent) {
+                        let progressDrawerOpened = false;
+                        const onProgress = (opts) => {
+                            this._updateWebProgress(nodeId, opts, !progressDrawerOpened);
+                            if (!progressDrawerOpened) progressDrawerOpened = true;
+                        };
+                        try {
+                            const groundedContext = await this._runGroundedPipeline(
+                                context,
+                                rowItem,
+                                colItem,
+                                searchResults,
+                                abortController?.signal,
+                                onProgress
+                            );
+                            if (groundedContext) {
+                                messagesForRequest = [
+                                    ...promptEvent.data.messages,
+                                    { role: 'user', content: groundedContext },
+                                ];
+                            }
+                        } catch (err) {
+                            if (err.name === 'AbortError') throw err;
+                            console.warn('[MatrixFeature] Grounded pipeline failed, using snippets:', err);
+                            messagesForRequest = appendWebContextToMessages(
+                                promptEvent.data.messages,
+                                searchResults
+                            );
+                        } finally {
+                            this._updateWebProgress(nodeId, null);
+                        }
+                    } else {
+                        messagesForRequest = appendWebContextToMessages(
+                            promptEvent.data.messages,
+                            searchResults
+                        );
+                    }
                 }
             }
 
@@ -1524,7 +1796,7 @@ class MatrixFeature extends FeaturePlugin {
             const currentNode = this.graph.getNode(nodeId);
             const currentCells = currentNode?.cells || {};
             const oldCell = currentCells[cellKey] ? { ...currentCells[cellKey] } : { content: null, filled: false };
-            const newCell = { content: cellContent, filled: true };
+            const newCell = { content: cellContent, filled: true, filling: false };
             const updatedCells = { ...currentCells, [cellKey]: newCell };
             this.graph.updateNode(nodeId, { cells: updatedCells });
 
@@ -1557,10 +1829,23 @@ class MatrixFeature extends FeaturePlugin {
             // Don't log abort errors as failures
             if (err.name === 'AbortError') {
                 console.log(`Cell fill aborted: (${row}, ${col})`);
+                // Clear filling state so cell shows + again
+                const currentNode = this.graph.getNode(nodeId);
+                const currentCells = currentNode?.cells || {};
+                const cleared = { ...currentCells, [cellKey]: { content: null, filled: false, filling: false } };
+                this.graph.updateNode(nodeId, { cells: cleared });
+                this.canvas.renderNode(this.graph.getNode(nodeId));
                 return;
             }
             console.error('Failed to fill matrix cell:', err);
             alert(`Failed to fill cell: ${err.message}`);
+
+            // Clear filling state so cell shows + again
+            const currentNode = this.graph.getNode(nodeId);
+            const currentCells = currentNode?.cells || {};
+            const cleared = { ...currentCells, [cellKey]: { content: null, filled: false, filling: false } };
+            this.graph.updateNode(nodeId, { cells: cleared });
+            this.canvas.renderNode(this.graph.getNode(nodeId));
 
             // Extension hook: matrix:after:fill with error
             this.emit('matrix:after:fill', {
@@ -1632,7 +1917,8 @@ class MatrixFeature extends FeaturePlugin {
 
         const wrapped = wrapNode(matrixNode);
         const cellKey = `${action.row}-${action.col}`;
-        const updatedCells = { ...matrixNode.cells, [cellKey]: { ...action.oldCell } };
+        const restored = { ...action.oldCell, filling: false };
+        const updatedCells = { ...matrixNode.cells, [cellKey]: restored };
 
         // Update graph
         this.graph.updateNode(action.nodeId, { cells: updatedCells });
@@ -1697,38 +1983,26 @@ class MatrixFeature extends FeaturePlugin {
             return;
         }
 
-        // If groundWithWeb and no cached results, run web search once and store on node
+        // Show spinners in all empty cells immediately so user sees activity
+        const currentCells = matrixNode.cells || {};
+        const cellsWithFilling = { ...currentCells };
+        for (const { row, col } of emptyCells) {
+            const cellKey = `${row}-${col}`;
+            cellsWithFilling[cellKey] = { content: '', filled: false, filling: true };
+        }
+        this.graph.updateNode(nodeId, { cells: cellsWithFilling });
+        this.canvas.renderNode(this.graph.getNode(nodeId));
+
+        // If groundWithWeb, ensure search results are cached before filling cells
         if (matrixNode.groundWithWeb) {
-            const existingResults = matrixNode.webSearchResults;
-            if (!existingResults || existingResults.length === 0) {
-                try {
-                    const contextString = (matrixNode.contextNodeIds || [])
-                        .map((id) => {
-                            const n = this.graph.getNode(id);
-                            return n && n.content ? n.content : '';
-                        })
-                        .filter(Boolean)
-                        .join('\n\n');
-                    const model = this.modelPicker?.value ?? this.getModelPicker?.()?.value;
-                    const query = await deriveSearchQuery(
-                        matrixNode.context || '',
-                        contextString,
-                        this.buildLLMRequest.bind(this),
-                        model
-                    );
-                    const searchResults = await runWebSearch(query);
-                    this.graph.updateNode(nodeId, {
-                        webSearchResults: searchResults,
-                        outputExpanded: false,
-                        outputPanelHeight: matrixNode.outputPanelHeight ?? 200,
-                    });
-                    if (searchResults.length > 0 && this.showToast) {
-                        this.showToast('Web search complete. Filling cells with grounded evaluations.');
-                    }
-                } catch (err) {
-                    console.warn('[MatrixFeature] Web grounding failed, proceeding without:', err);
-                    if (this.showToast) this.showToast('Web search failed. Proceeding without web context.');
+            try {
+                const searchResults = await this._ensureWebSearchResults(nodeId);
+                if (searchResults.length > 0 && this.showToast) {
+                    this.showToast('Web search complete. Filling cells with grounded evaluations.');
                 }
+            } catch (err) {
+                console.warn('[MatrixFeature] Web grounding failed, proceeding without:', err);
+                if (this.showToast) this.showToast('Web search failed. Proceeding without web context.');
             }
         }
 
@@ -2007,12 +2281,13 @@ class MatrixFeature extends FeaturePlugin {
             cellContents: cellContents,
         };
 
-        // Populate and show modal
-        document.getElementById('slice-title').textContent = 'Column Details';
-        document.getElementById('slice-label').textContent = 'Column:';
-        document.getElementById('slice-item').textContent = colItem;
-        document.getElementById('slice-content').textContent = displayContent.trim();
-        document.getElementById('slice-modal').style.display = 'flex';
+        // Populate and show modal (same pattern as handleMatrixRowExtract)
+        const sliceModal = this.modalManager.getPluginModal('matrix', 'slice');
+        sliceModal.querySelector('#slice-title').textContent = 'Column Details';
+        sliceModal.querySelector('#slice-label').textContent = 'Column:';
+        sliceModal.querySelector('#slice-item').textContent = colItem;
+        sliceModal.querySelector('#slice-content').textContent = displayContent.trim();
+        this.modalManager.showPluginModal('matrix', 'slice');
     }
 
     /**

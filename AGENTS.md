@@ -750,6 +750,8 @@ pixi run npx cypress run --browser electron --headless --spec cypress/e2e/matrix
 - `cypress/e2e/ai_chat.cy.js` - AI chat interaction tests
 - `cypress/e2e/matrix.cy.js` - Matrix creation and interaction tests
 - `cypress/e2e/matrix_undo_redo.cy.js` - Matrix undo/redo tests
+- `cypress/e2e/matrix_row_column_click.cy.js` - Matrix row/column header click (slice modal) tests
+- `cypress/e2e/matrix_fill_all_spinners.cy.js` - Matrix Fill All cell spinners (mocked, fast)
 - `cypress/e2e/matrix_copy.cy.js` - Matrix copy-to-clipboard tests
 - `cypress/e2e/note_node.cy.js` - Note node tests
 - `cypress/e2e/settings_modal.cy.js` - Settings modal tests
