@@ -387,7 +387,8 @@ test('getApiKeysForModels: empty array returns empty object', () => {
  */
 function createCustomModelsStorage(localStorage) {
     const STORAGE_KEY = 'canvas-chat-custom-models';
-    const MODEL_ID_PATTERN = /^[a-z0-9_-]+\/[a-z0-9._-]+$/i;
+    // Must match Storage.MODEL_ID_PATTERN: provider/model-name or openrouter/provider/model-name
+    const MODEL_ID_PATTERN = /^(?:openrouter\/[a-z0-9_-]+\/[a-z0-9._-]+|[a-z0-9_-]+\/[a-z0-9._-]+)$/i;
 
     return {
         getCustomModels() {
@@ -396,9 +397,10 @@ function createCustomModelsStorage(localStorage) {
         },
 
         saveCustomModel(model) {
-            // Validate model ID format (provider/model-name)
             if (!model.id || !MODEL_ID_PATTERN.test(model.id)) {
-                throw new Error('Model ID must be in format: provider/model-name');
+                throw new Error(
+                    'Model ID must be in format: provider/model-name (e.g. openai/gpt-4o) or openrouter/provider/model-name (e.g. openrouter/minimax/minimax-m2.5)'
+                );
             }
 
             const models = this.getCustomModels();
@@ -460,6 +462,23 @@ test('saveCustomModel: adds model with all fields', () => {
     const saved = storage.getCustomModels();
     assertEqual(saved.length, 1);
     assertEqual(saved[0].id, 'openai/gpt-4.1-mini');
+});
+
+test('saveCustomModel: accepts OpenRouter format openrouter/provider/model-name', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    const model = storage.saveCustomModel({
+        id: 'openrouter/minimax/minimax-m2.5',
+        name: 'MiniMax-M2.5',
+        base_url: 'https://openrouter.ai/',
+    });
+
+    assertEqual(model.id, 'openrouter/minimax/minimax-m2.5');
+    assertEqual(model.name, 'MiniMax-M2.5');
+    const saved = storage.getCustomModels();
+    assertEqual(saved.length, 1);
+    assertEqual(saved[0].id, 'openrouter/minimax/minimax-m2.5');
 });
 
 test('saveCustomModel: defaults name to id when not provided', () => {
@@ -532,9 +551,25 @@ test('saveCustomModel: rejects invalid model ID - missing slash', () => {
         storage.saveCustomModel({ id: 'invalid-model-no-slash' });
     } catch (e) {
         threw = true;
-        assertTrue(e.message.includes('provider/model-name'), 'Error should mention format');
+        assertTrue(
+            e.message.includes('provider/model-name') || e.message.includes('openrouter'),
+            'Error should mention format'
+        );
     }
     assertTrue(threw, 'Should throw for invalid model ID');
+});
+
+test('saveCustomModel: rejects three-segment ID when not openrouter', () => {
+    const mockStorage = new MockLocalStorage();
+    const storage = createCustomModelsStorage(mockStorage);
+
+    let threw = false;
+    try {
+        storage.saveCustomModel({ id: 'some/provider/model-name' });
+    } catch (e) {
+        threw = true;
+    }
+    assertTrue(threw, 'Should throw for three-segment ID that is not openrouter/...');
 });
 
 test('saveCustomModel: rejects empty model ID', () => {

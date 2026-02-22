@@ -616,10 +616,10 @@ class Storage {
     // --- Custom Models (localStorage) ---
 
     /**
-     * Model ID validation pattern: provider/model-name
-     * Examples: openai/gpt-4.1-mini, ollama_chat/llama3.1, my-proxy/qwen2.5-72b
+     * Model ID validation pattern: provider/model-name or openrouter/provider/model-name
+     * Examples: openai/gpt-4.1-mini, ollama_chat/llama3.1, openrouter/minimax/minimax-m2.5
      */
-    static MODEL_ID_PATTERN = /^[a-z0-9_-]+\/[a-z0-9._-]+$/i;
+    static MODEL_ID_PATTERN = /^(?:openrouter\/[a-z0-9_-]+\/[a-z0-9._-]+|[a-z0-9_-]+\/[a-z0-9._-]+)$/i;
 
     /**
      * Get user-defined custom models from localStorage
@@ -642,9 +642,11 @@ class Storage {
      * @throws {Error} - If model ID is invalid
      */
     saveCustomModel(model) {
-        // Validate model ID format (provider/model-name)
+        // Validate model ID format (provider/model-name or openrouter/provider/model-name)
         if (!model.id || !Storage.MODEL_ID_PATTERN.test(model.id)) {
-            throw new Error('Model ID must be in format: provider/model-name');
+            throw new Error(
+                'Model ID must be in format: provider/model-name (e.g. openai/gpt-4o) or openrouter/provider/model-name (e.g. openrouter/minimax/minimax-m2.5)'
+            );
         }
 
         const models = this.getCustomModels();
