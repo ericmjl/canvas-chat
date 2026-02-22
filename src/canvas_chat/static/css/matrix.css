@@ -269,6 +269,34 @@
     animation: spin 0.8s linear infinite;
 }
 
+/* Cell filling state: spinner + label from click until content arrives */
+.matrix-cell.filling {
+    cursor: wait;
+}
+
+.matrix-cell-filling {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 100%;
+    padding: 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.matrix-cell-spinner {
+    width: 20px;
+    height: 20px;
+    border-width: 2px;
+    flex-shrink: 0;
+}
+
+.matrix-cell-filling-text {
+    white-space: nowrap;
+}
+
 .matrix-actions {
     display: flex;
     gap: 4px;
@@ -298,6 +326,58 @@
 .matrix-sources-drawer {
     padding: 8px 12px;
     font-size: 12px;
+}
+
+.matrix-sources-drawer-title {
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--edge-color-light);
+}
+
+.matrix-sources-section {
+    margin-bottom: 12px;
+}
+
+.matrix-sources-section:last-child {
+    margin-bottom: 0;
+}
+
+.matrix-sources-section-header {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.matrix-sources-drawer-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+/* Progress state while fetching/summarizing (spinner + message) */
+.matrix-sources-drawer.matrix-web-progress {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+}
+
+.matrix-web-progress-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-primary);
+}
+
+.matrix-web-progress-spinner {
+    width: 20px;
+    height: 20px;
+    border-width: 2px;
+    flex-shrink: 0;
+}
+
+.matrix-web-progress-count {
+    font-weight: 600;
+    color: var(--accent);
 }
 
 .matrix-sources-drawer-header {
