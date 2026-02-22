@@ -4,6 +4,7 @@
  */
 
 import { test, assertEqual, assertTrue, assertFalse, assertNull, assertDeepEqual } from './test_setup.js';
+import { Storage } from '../src/canvas_chat/static/js/storage.js';
 
 // ============================================================
 // Mock localStorage for testing
@@ -380,6 +381,36 @@ test('getApiKeysForModels: empty array returns empty object', () => {
 // Custom Models storage tests
 // ============================================================
 
+test('Storage.MODEL_ID_PATTERN: accepts valid two-segment and OpenRouter three-segment IDs', () => {
+    const { MODEL_ID_PATTERN } = Storage;
+    const valid = [
+        'openai/gpt-4o',
+        'openai/gpt-4.1-mini',
+        'anthropic/claude-sonnet-4-20250514',
+        'ollama_chat/llama3.1',
+        'openrouter/minimax/minimax-m2.5',
+        'openrouter/google/palm-2-chat-bison',
+    ];
+    for (const id of valid) {
+        assertTrue(MODEL_ID_PATTERN.test(id), `Expected valid: ${id}`);
+    }
+});
+
+test('Storage.MODEL_ID_PATTERN: rejects invalid IDs', () => {
+    const { MODEL_ID_PATTERN } = Storage;
+    const invalid = [
+        '',
+        'no-slash',
+        'some/provider/model-name', // three segments but not openrouter
+        'openrouter/', // missing provider/model
+        '/model-only',
+        'a/b/c/d', // four segments
+    ];
+    for (const id of invalid) {
+        assertFalse(MODEL_ID_PATTERN.test(id), `Expected invalid: ${id}`);
+    }
+});
+
 /**
  * Tests for user-defined custom models storage.
  * Custom models allow users to add LiteLLM-compatible model IDs
@@ -387,8 +418,6 @@ test('getApiKeysForModels: empty array returns empty object', () => {
  */
 function createCustomModelsStorage(localStorage) {
     const STORAGE_KEY = 'canvas-chat-custom-models';
-    // Must match Storage.MODEL_ID_PATTERN: provider/model-name or openrouter/provider/model-name
-    const MODEL_ID_PATTERN = /^(?:openrouter\/[a-z0-9_-]+\/[a-z0-9._-]+|[a-z0-9_-]+\/[a-z0-9._-]+)$/i;
 
     return {
         getCustomModels() {
@@ -397,7 +426,7 @@ function createCustomModelsStorage(localStorage) {
         },
 
         saveCustomModel(model) {
-            if (!model.id || !MODEL_ID_PATTERN.test(model.id)) {
+            if (!model.id || !Storage.MODEL_ID_PATTERN.test(model.id)) {
                 throw new Error(
                     'Model ID must be in format: provider/model-name (e.g. openai/gpt-4o) or openrouter/provider/model-name (e.g. openrouter/minimax/minimax-m2.5)'
                 );
