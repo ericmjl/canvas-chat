@@ -8,6 +8,8 @@ describe('Canvas Pan and Zoom', () => {
     it('pans canvas by dragging', () => {
         // Create a node away from center
         cy.get('#chat-input').type('/note Pan me{enter}');
+        // Wait for empty-state overlay to disappear so canvas is not covered
+        cy.get('.empty-state').should('not.exist');
 
         // Get canvas container
         cy.get('#canvas').as('canvas');
@@ -28,6 +30,8 @@ describe('Canvas Pan and Zoom', () => {
     it('zooms canvas with mouse wheel', () => {
         // Create a node
         cy.get('#chat-input').type('/note Zoom me{enter}');
+        // Wait for empty-state overlay to disappear so canvas is not covered
+        cy.get('.empty-state').should('not.exist');
 
         // Get initial transform
         cy.get('#canvas').invoke('attr', 'transform').as('initialTransform');
