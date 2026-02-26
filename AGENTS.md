@@ -1379,3 +1379,31 @@ class MyFeature extends FeaturePlugin {
 ```
 
 See [Canvas Event Handlers Registration](docs/reference/canvas-event-handlers.md) for details.
+
+## Cursor Cloud specific instructions
+
+### Services overview
+
+Canvas Chat is a single-service application (FastAPI backend serving static frontend). No database, Docker, or external services are required to run.
+
+| Service | Command | Port | Notes |
+|---------|---------|------|-------|
+| Dev server | `pixi run dev` | 7865 | Auto-reloads on file changes. Never kill this process. |
+
+### Running commands
+
+All project commands go through pixi. Use `pixi run <task>` (see `pyproject.toml` `[tool.pixi.tasks]`).
+
+- **Dev server:** `pixi run dev` (serves UI at `http://127.0.0.1:7865`)
+- **Python tests:** `pixi run test`
+- **JS tests:** `pixi run test-js`
+- **JSDoc lint:** `pixi run jsdoc`
+- **Ruff lint:** `ruff check src/ tests/` (ruff is installed globally via pip, not in pixi env)
+- **ESLint:** `npx eslint src/canvas_chat/static/js/*.js`
+
+### Gotchas
+
+- **pixi not on PATH by default.** Run `export PATH="$HOME/.pixi/bin:$PATH"` before using pixi commands, or source `~/.bashrc`.
+- **ruff is not in the pixi environment.** The pre-commit config uses its own ruff via the astral-sh repo hook. For manual lint checks, use `ruff check` (installed via `pip install ruff`).
+- **npm install required for JS tests.** jsdom and cypress are npm dependencies. Run `npm install` (or `pixi run npm install`) before `pixi run test-js`.
+- **No API keys needed for basic testing.** The app is local-first with "bring your own keys." Use `/note <text>` to create note nodes without any LLM API key. LLM features require keys set in the Settings UI.
