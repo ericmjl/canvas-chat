@@ -17,10 +17,12 @@ Cypress.Commands.add('clearIndexedDB', () => {
     });
 });
 
-// Configure Ollama base URL
+// Configure Ollama base URL (opens Settings → Proxy panel, then sets base URL)
 Cypress.Commands.add('configureOllama', (baseUrl = 'http://localhost:11434') => {
     cy.get('#settings-btn').click();
     cy.get('#settings-modal').should('be.visible');
+    cy.get('.settings-sidebar-item[data-category="proxy"]').click();
+    cy.get('#settings-panel-proxy').should('have.class', 'active');
     cy.get('#base-url').clear().type(baseUrl);
     cy.get('#settings-close').click();
     cy.get('#settings-modal').should('not.be.visible');
