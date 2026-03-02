@@ -45,7 +45,7 @@ jobs:
                       cypress/e2e/undo_redo.cy.js
 
             - name: Upload screenshots on failure
-              uses: actions/upload-artifact@v6
+              uses: actions/upload-artifact@v7
               if: failure()
               with:
                   name: cypress-screenshots
@@ -115,7 +115,7 @@ jobs:
                   spec: cypress/e2e/**/*ai*.cy.js
 
             - name: Upload screenshots on failure
-              uses: actions/upload-artifact@v6
+              uses: actions/upload-artifact@v7
               if: failure()
               with:
                   name: cypress-ai-screenshots
