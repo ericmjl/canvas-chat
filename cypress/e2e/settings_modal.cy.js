@@ -56,6 +56,26 @@ describe('Settings Modal', () => {
         cy.get('#save-settings-btn').click();
     });
 
+    it('save and re-open persists base URL from Proxy panel', () => {
+        const testBaseUrl = 'https://test-proxy.example.com/v1';
+        cy.get('#settings-btn').click();
+        cy.get('#settings-modal').should('be.visible');
+
+        cy.get('.settings-sidebar-item[data-category="proxy"]').click();
+        cy.get('#settings-panel-proxy').should('have.class', 'active');
+        cy.get('#base-url').clear().type(testBaseUrl);
+        cy.get('#save-settings-btn').click();
+        cy.get('#settings-modal').should('not.be.visible');
+
+        cy.get('#settings-btn').click();
+        cy.get('.settings-sidebar-item[data-category="proxy"]').click();
+        cy.get('#base-url').should('have.value', testBaseUrl);
+
+        // Clear so other tests (e.g. AI chat) start with default
+        cy.get('#base-url').clear();
+        cy.get('#save-settings-btn').click();
+    });
+
     it('in admin mode, admin-restricted categories are hidden', () => {
         cy.intercept('GET', '**/api/config', {
             statusCode: 200,
