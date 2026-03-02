@@ -378,9 +378,39 @@ class ModalManager {
     // --- Settings Modal ---
 
     /**
-     *
+     * Set the active settings category (sidebar + panel). If the requested category is
+     * hidden (e.g. admin mode), switches to the first visible category.
+     * @param {string} [categoryId] - One of: llm, search, custom-models, proxy, features, plugins
      */
-    showSettingsModal() {
+    setSettingsCategory(categoryId) {
+        const modal = document.getElementById('settings-modal');
+        if (!modal) return;
+
+        const sidebarItems = modal.querySelectorAll('.settings-sidebar-item');
+        const panels = modal.querySelectorAll('.settings-panel');
+
+        const visibleCategories = Array.from(sidebarItems)
+            .filter((el) => !el.classList.contains('admin-hidden'))
+            .map((el) => el.dataset.category);
+
+        const target =
+            categoryId && visibleCategories.includes(categoryId)
+                ? categoryId
+                : visibleCategories[0] || 'features';
+
+        sidebarItems.forEach((el) => {
+            el.classList.toggle('active', el.dataset.category === target);
+        });
+        panels.forEach((el) => {
+            el.classList.toggle('active', el.dataset.category === target && !el.classList.contains('admin-hidden'));
+        });
+    }
+
+    /**
+     * Open the settings modal and optionally switch to a category (e.g. 'llm' for "Add API key").
+     * @param {string} [categoryId] - Category to show: llm, search, custom-models, proxy, features, plugins
+     */
+    showSettingsModal(categoryId) {
         const modal = document.getElementById('settings-modal');
         modal.style.display = 'flex';
 
@@ -404,6 +434,8 @@ class ModalManager {
 
         // Render custom models list
         this.renderCustomModelsList();
+
+        this.setSettingsCategory(categoryId);
     }
 
     /**

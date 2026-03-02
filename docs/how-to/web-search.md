@@ -17,10 +17,13 @@ If you have an Exa API key configured, searches use Exa. Otherwise, searches aut
 
 For richer search results with content extraction:
 
-1. Click the Settings button
-2. Get an API key from [Exa](https://exa.ai/)
-3. Paste it into the "Exa API Key" field
-4. Click Save
+1. Click the Settings button (gear icon)
+2. Open the **Search** category in the settings sidebar
+3. Get an API key from [Exa](https://exa.ai/)
+4. Paste it into the "Exa API key (web search)" field
+5. Click Save Settings
+
+Without an Exa key, search uses DuckDuckGo automatically.
 
 ## Basic search
 

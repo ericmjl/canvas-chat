@@ -148,7 +148,7 @@ canvas-chat/
 
 | File                                        | Purpose                       | Edit for...                                  |
 | ------------------------------------------- | ----------------------------- | -------------------------------------------- |
-| `src/canvas_chat/static/index.html`         | Main HTML, modals, templates  | New modals, toolbar buttons, HTML structure  |
+| `src/canvas_chat/static/index.html`         | Main HTML, modals, templates  | New modals, toolbar buttons, HTML structure. Settings modal: sidebar categories (LLM, Search, Custom models, Proxy, Features, Plugins) + single visible panel; all panels in DOM for `saveSettings()`.  |
 | `src/canvas_chat/static/css/style.css`      | Main stylesheet (imports all) | Main CSS entry point, CSS variables          |
 | `src/canvas_chat/static/css/base.css`       | Base styles, resets           | Global resets, base typography               |
 | `src/canvas_chat/static/css/canvas.css`     | Canvas-specific styles        | SVG canvas, pan/zoom, viewport               |
