@@ -439,18 +439,14 @@ class ModalManager {
     }
 
     /**
-     *
+     * Close the settings modal.
      */
     hideSettingsModal() {
         document.getElementById('settings-modal').style.display = 'none';
     }
 
     /**
-     * Render the custom models list in the settings modal
-     */
-
-    /**
-     *
+     * Render the custom models list in the settings modal (populates #custom-models-list).
      */
     renderCustomModelsList() {
         const container = document.getElementById('custom-models-list');
