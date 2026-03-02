@@ -1271,8 +1271,8 @@ export class GitRepoFeature extends FeaturePlugin {
     setupSettingsModalHooks() {
         // Hook into settings modal show event
         const originalShowSettings = this.modalManager.showSettingsModal.bind(this.modalManager);
-        this.modalManager.showSettingsModal = () => {
-            originalShowSettings();
+        this.modalManager.showSettingsModal = (categoryId) => {
+            originalShowSettings(categoryId);
             this.injectGitCredentialsUI();
         };
     }

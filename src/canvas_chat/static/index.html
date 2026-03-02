@@ -202,155 +202,171 @@
             </div>
         </div>
 
-        <!-- Settings Modal -->
+        <!-- Settings Modal (Marimo-style: sidebar + tabbed content) -->
         <div id="settings-modal" class="modal" style="display: none">
-            <div class="modal-content">
+            <div class="modal-content modal-content-settings">
                 <div class="modal-header">
                     <h2>Settings</h2>
                     <button class="modal-close" id="settings-close">&times;</button>
                 </div>
-                <div class="modal-body">
-                    <!-- API Keys Section (hidden in admin mode) -->
-                    <div id="settings-api-keys-section" class="settings-section">
-                        <h3>API Keys</h3>
-                        <p class="settings-note">
-                            Keys are stored locally in your browser and sent directly to providers.
-                        </p>
-
-                        <div class="api-key-group">
-                            <label for="openai-key">OpenAI API Key</label>
-                            <input type="password" id="openai-key" placeholder="sk-..." />
-                        </div>
-
-                        <div class="api-key-group">
-                            <label for="anthropic-key">Anthropic API Key</label>
-                            <input type="password" id="anthropic-key" placeholder="sk-ant-..." />
-                        </div>
-
-                        <div class="api-key-group">
-                            <label for="google-key">Google AI API Key</label>
-                            <input type="password" id="google-key" placeholder="AI..." />
-                        </div>
-
-                        <div class="api-key-group">
-                            <label for="groq-key">Groq API Key</label>
-                            <input type="password" id="groq-key" placeholder="gsk_..." />
-                        </div>
-
-                        <div class="api-key-group">
-                            <label for="github-key">GitHub Models PAT</label>
-                            <input type="password" id="github-key" placeholder="ghp_... or github_pat_..." />
-                            <small class="key-hint"
-                                >PAT with <code>models:read</code> scope.
-                                <a href="https://github.com/settings/tokens" target="_blank">Create token</a></small
-                            >
-                        </div>
-
-                        <div class="api-key-group">
-                            <label for="openrouter-key">OpenRouter API Key</label>
-                            <input type="password" id="openrouter-key" placeholder="sk-or-..." />
-                            <small class="key-hint"
-                                >Use <code>openrouter/</code> models (e.g. openrouter/anthropic/claude-3.5-sonnet).
-                                <a href="https://openrouter.ai/keys" target="_blank">Get API key</a></small
-                            >
-                        </div>
-
-                        <div class="api-key-group" id="copilot-settings-section">
-                            <label>GitHub Copilot authentication</label>
-                            <span id="copilot-auth-status" class="key-hint">Not authenticated</span>
-                            <div class="copilot-auth-actions">
-                                <button id="copilot-auth-start" class="secondary-btn">Authenticate</button>
-                                <button id="copilot-auth-refresh" class="secondary-btn">Check status</button>
-                                <button id="copilot-auth-clear" class="secondary-btn">Clear</button>
-                            </div>
-                            <small class="key-hint">
-                                Uses device flow and stores tokens in this browser. Models look like
-                                <code>github_copilot/gpt-4</code>.
-                            </small>
-                        </div>
-
-                        <div class="api-key-group">
-                            <label for="exa-key">Exa API Key (for web search)</label>
-                            <input type="password" id="exa-key" placeholder="exa-..." />
-                            <small class="key-hint"
-                                >Use <code>/search query</code> to search the web.
-                                <a href="https://dashboard.exa.ai/api-keys" target="_blank">Get API key</a></small
-                            >
-                        </div>
-                    </div>
-
-                    <!-- Plugin settings sections will be injected here -->
-                    <div id="plugin-settings-container"></div>
-
-                    <!-- LLM Proxy Section (hidden in admin mode) -->
-                    <div id="settings-proxy-section" class="settings-section">
-                        <h3>LLM Proxy</h3>
-                        <p class="settings-note">
-                            Configure a custom base URL to use your own LLM proxy (e.g., LiteLLM proxy, OpenRouter).
-                        </p>
-
-                        <div class="api-key-group">
-                            <label for="base-url">Base URL (optional)</label>
-                            <input type="text" id="base-url" placeholder="https://your-proxy.example.com/v1" />
-                            <small class="key-hint"
-                                >Leave empty to use default provider endpoints. Supports OpenAI-compatible APIs.</small
-                            >
-                        </div>
-                    </div>
-
-                    <!-- Custom Models Section (hidden in admin mode) -->
-                    <div id="settings-custom-models-section" class="settings-section">
-                        <h3>Custom Models</h3>
-                        <p class="settings-note">Add LiteLLM-compatible models for self-hosted or proxy endpoints.</p>
-
-                        <div id="custom-models-list" class="custom-models-list">
-                            <!-- Custom models will be populated here -->
-                        </div>
-
-                        <div class="custom-model-form">
+                <div class="modal-body modal-body-settings">
+                    <nav class="settings-sidebar" aria-label="Settings categories">
+                        <ul class="settings-sidebar-list">
+                            <li><button type="button" class="settings-sidebar-item active" data-category="llm" data-admin-restricted>LLM providers</button></li>
+                            <li><button type="button" class="settings-sidebar-item" data-category="search" data-admin-restricted>Search</button></li>
+                            <li><button type="button" class="settings-sidebar-item" data-category="custom-models" data-admin-restricted>Custom models</button></li>
+                            <li><button type="button" class="settings-sidebar-item" data-category="proxy" data-admin-restricted>Proxy</button></li>
+                            <li><button type="button" class="settings-sidebar-item" data-category="features">Features</button></li>
+                            <li><button type="button" class="settings-sidebar-item" data-category="plugins">Plugins</button></li>
+                        </ul>
+                        <p class="settings-sidebar-footer">Keys are stored locally in your browser.</p>
+                    </nav>
+                    <div class="settings-content">
+                        <!-- LLM providers (hidden in admin mode) -->
+                        <div id="settings-panel-llm" class="settings-panel active" data-category="llm" data-admin-restricted>
+                            <h3>LLM providers</h3>
+                            <p class="settings-note">
+                                API keys for chat and completion. Stored locally and sent directly to providers.
+                            </p>
                             <div class="api-key-group">
-                                <label for="custom-model-id">Model ID *</label>
-                                <input type="text" id="custom-model-id" placeholder="openai/gpt-4.1-mini" />
+                                <label for="openai-key">OpenAI API Key</label>
+                                <input type="password" id="openai-key" placeholder="sk-..." />
+                            </div>
+                            <div class="api-key-group">
+                                <label for="anthropic-key">Anthropic API Key</label>
+                                <input type="password" id="anthropic-key" placeholder="sk-ant-..." />
+                            </div>
+                            <div class="api-key-group">
+                                <label for="google-key">Google AI API Key</label>
+                                <input type="password" id="google-key" placeholder="AI..." />
+                            </div>
+                            <div class="api-key-group">
+                                <label for="groq-key">Groq API Key</label>
+                                <input type="password" id="groq-key" placeholder="gsk_..." />
+                            </div>
+                            <div class="api-key-group">
+                                <label for="github-key">GitHub Models PAT</label>
+                                <input type="password" id="github-key" placeholder="ghp_... or github_pat_..." />
                                 <small class="key-hint"
-                                    >Format: provider/model-name (e.g. openai/my-model, ollama_chat/llama3.1) or openrouter/provider/model-name for OpenRouter (e.g. openrouter/minimax/minimax-m2.5)</small
+                                    >PAT with <code>models:read</code> scope.
+                                    <a href="https://github.com/settings/tokens" target="_blank">Create token</a></small
                                 >
                             </div>
                             <div class="api-key-group">
-                                <label for="custom-model-name">Display Name</label>
-                                <input type="text" id="custom-model-name" placeholder="My Custom Model" />
-                                <small class="key-hint">Optional. Defaults to model ID if not specified.</small>
+                                <label for="openrouter-key">OpenRouter API Key</label>
+                                <input type="password" id="openrouter-key" placeholder="sk-or-..." />
+                                <small class="key-hint"
+                                    >Use <code>openrouter/</code> models (e.g. openrouter/anthropic/claude-3.5-sonnet).
+                                    <a href="https://openrouter.ai/keys" target="_blank">Get API key</a></small
+                                >
                             </div>
-                            <div class="custom-model-form-row">
+                            <div class="api-key-group" id="copilot-settings-section">
+                                <label>GitHub Copilot authentication</label>
+                                <span id="copilot-auth-status" class="key-hint">Not authenticated</span>
+                                <div class="copilot-auth-actions">
+                                    <button id="copilot-auth-start" class="secondary-btn">Authenticate</button>
+                                    <button id="copilot-auth-refresh" class="secondary-btn">Check status</button>
+                                    <button id="copilot-auth-clear" class="secondary-btn">Clear</button>
+                                </div>
+                                <small class="key-hint">
+                                    Uses device flow and stores tokens in this browser. Models look like
+                                    <code>github_copilot/gpt-4</code>.
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- Search (hidden in admin mode) -->
+                        <div id="settings-panel-search" class="settings-panel" data-category="search" data-admin-restricted>
+                            <h3>Search</h3>
+                            <p class="settings-note">
+                                Used for <code>/search</code> and research. If not set, DuckDuckGo is used.
+                            </p>
+                            <div class="api-key-group">
+                                <label for="exa-key">Exa API key (web search)</label>
+                                <input type="password" id="exa-key" placeholder="exa-..." />
+                                <small class="key-hint"
+                                    ><a href="https://dashboard.exa.ai/api-keys" target="_blank">Get API key</a></small
+                                >
+                            </div>
+                        </div>
+
+                        <!-- Custom models (hidden in admin mode) -->
+                        <div id="settings-panel-custom-models" class="settings-panel" data-category="custom-models" data-admin-restricted>
+                            <h3>Custom models</h3>
+                            <p class="settings-note">Add LiteLLM-compatible models for self-hosted or proxy endpoints.</p>
+                            <div id="custom-models-list" class="custom-models-list">
+                                <!-- Custom models will be populated here -->
+                            </div>
+                            <div class="custom-model-form">
                                 <div class="api-key-group">
-                                    <label for="custom-model-context">Context Window</label>
-                                    <input type="number" id="custom-model-context" placeholder="128000" min="1" />
+                                    <label for="custom-model-id">Model ID *</label>
+                                    <input type="text" id="custom-model-id" placeholder="openai/gpt-4.1-mini" />
+                                    <small class="key-hint"
+                                        >Format: provider/model-name (e.g. openai/my-model, ollama_chat/llama3.1) or openrouter/provider/model-name for OpenRouter (e.g. openrouter/minimax/minimax-m2.5)</small
+                                    >
                                 </div>
                                 <div class="api-key-group">
-                                    <label for="custom-model-baseurl">Base URL</label>
-                                    <input
-                                        type="text"
-                                        id="custom-model-baseurl"
-                                        placeholder="https://my-proxy.com/v1"
-                                    />
+                                    <label for="custom-model-name">Display Name</label>
+                                    <input type="text" id="custom-model-name" placeholder="My Custom Model" />
+                                    <small class="key-hint">Optional. Defaults to model ID if not specified.</small>
                                 </div>
+                                <div class="custom-model-form-row">
+                                    <div class="api-key-group">
+                                        <label for="custom-model-context">Context Window</label>
+                                        <input type="number" id="custom-model-context" placeholder="128000" min="1" />
+                                    </div>
+                                    <div class="api-key-group">
+                                        <label for="custom-model-baseurl">Base URL</label>
+                                        <input
+                                            type="text"
+                                            id="custom-model-baseurl"
+                                            placeholder="https://my-proxy.com/v1"
+                                        />
+                                    </div>
+                                </div>
+                                <button id="add-custom-model-btn" class="secondary-btn">+ Add Model</button>
                             </div>
-                            <button id="add-custom-model-btn" class="secondary-btn">+ Add Model</button>
+                        </div>
+
+                        <!-- Proxy (hidden in admin mode) -->
+                        <div id="settings-panel-proxy" class="settings-panel" data-category="proxy" data-admin-restricted>
+                            <h3>LLM proxy</h3>
+                            <p class="settings-note">
+                                Configure a custom base URL to use your own LLM proxy (e.g., LiteLLM proxy, OpenRouter).
+                            </p>
+                            <div class="api-key-group">
+                                <label for="base-url">Base URL (optional)</label>
+                                <input type="text" id="base-url" placeholder="https://your-proxy.example.com/v1" />
+                                <small class="key-hint"
+                                    >Leave empty to use default provider endpoints. Supports OpenAI-compatible APIs.</small
+                                >
+                            </div>
+                        </div>
+
+                        <!-- Features -->
+                        <div id="settings-panel-features" class="settings-panel" data-category="features">
+                            <h3>Features</h3>
+                            <p class="settings-note">Configure feature behavior.</p>
+                            <div class="api-key-group">
+                                <label for="flashcard-strictness">Flashcard grading strictness</label>
+                                <select id="flashcard-strictness" class="settings-select">
+                                    <option value="lenient">Lenient (gist is enough)</option>
+                                    <option value="medium" selected>Medium (key concepts required)</option>
+                                    <option value="strict">Strict (precise answer required)</option>
+                                </select>
+                                <small class="key-hint">Controls how strictly the AI grades your flashcard answers</small>
+                            </div>
+                        </div>
+
+                        <!-- Plugins -->
+                        <div id="settings-panel-plugins" class="settings-panel" data-category="plugins">
+                            <h3>Plugins</h3>
+                            <p class="settings-note">Credentials and options for installed plugins.</p>
+                            <div id="plugin-settings-container"></div>
                         </div>
                     </div>
-
-                    <h3>Flashcard Settings</h3>
-                    <p class="settings-note">Configure how flashcard answers are graded during review.</p>
-
-                    <div class="api-key-group">
-                        <label for="flashcard-strictness">Grading Strictness</label>
-                        <select id="flashcard-strictness" class="settings-select">
-                            <option value="lenient">Lenient (gist is enough)</option>
-                            <option value="medium" selected>Medium (key concepts required)</option>
-                            <option value="strict">Strict (precise answer required)</option>
-                        </select>
-                        <small class="key-hint">Controls how strictly the AI grades your flashcard answers</small>
-                    </div>
-
+                </div>
+                <div class="modal-footer-settings">
                     <button id="save-settings-btn" class="primary-btn">Save Settings</button>
                 </div>
             </div>

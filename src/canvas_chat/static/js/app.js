@@ -270,28 +270,18 @@ class App {
 
     /**
      * Hide UI elements that should not be shown in admin mode.
-     * In admin mode, users don't configure API keys or custom models.
+     * In admin mode, users don't configure API keys, search, custom models, or proxy.
+     * Settings modal: sidebar items and panels with data-admin-restricted get .admin-hidden.
      */
     hideAdminRestrictedUI() {
-        // Hide API keys section in settings modal
-        const apiKeysSection = document.getElementById('settings-api-keys-section');
-        if (apiKeysSection) {
-            apiKeysSection.style.display = 'none';
+        const settingsModal = document.getElementById('settings-modal');
+        if (settingsModal) {
+            settingsModal.querySelectorAll('[data-admin-restricted]').forEach((el) => {
+                el.classList.add('admin-hidden');
+            });
+            this.modalManager.setSettingsCategory();
         }
-
-        // Hide LLM proxy section in settings modal (admin controls endpoints)
-        const proxySection = document.getElementById('settings-proxy-section');
-        if (proxySection) {
-            proxySection.style.display = 'none';
-        }
-
-        // Hide custom models section in settings modal
-        const customModelsSection = document.getElementById('settings-custom-models-section');
-        if (customModelsSection) {
-            customModelsSection.style.display = 'none';
-        }
-
-        console.log('[App] Hidden admin-restricted UI elements (API keys, proxy, custom models)');
+        console.log('[App] Hidden admin-restricted UI elements (API keys, search, proxy, custom models)');
     }
 
     /**
@@ -749,6 +739,12 @@ class App {
         });
         document.getElementById('save-settings-btn').addEventListener('click', () => {
             this.saveSettings();
+        });
+        document.getElementById('settings-modal')?.querySelector('.settings-sidebar')?.addEventListener('click', (e) => {
+            const item = e.target.closest('.settings-sidebar-item');
+            if (item && !item.classList.contains('admin-hidden')) {
+                this.modalManager.setSettingsCategory(item.dataset.category);
+            }
         });
 
         document.getElementById('copilot-auth-start').addEventListener('click', () => {
@@ -3539,7 +3535,7 @@ class App {
                 if (settingsLink) {
                     settingsLink.addEventListener('click', (e) => {
                         e.preventDefault();
-                        this.modalManager.showSettingsModal();
+                        this.modalManager.showSettingsModal('llm');
                     });
                 }
             }

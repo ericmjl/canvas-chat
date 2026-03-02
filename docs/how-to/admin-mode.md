@@ -10,7 +10,7 @@ Admin mode is designed for enterprise or internal deployments where:
 - API keys should not be visible to end users (even in browser DevTools)
 - Users shouldn't need to bring their own API keys
 
-For personal use or demos, stick with normal mode where users provide their own keys via the Settings panel.
+For personal use or demos, stick with normal mode where users provide their own keys via the Settings panel. Settings is organized by category (LLM providers, Search, Custom models, Proxy, Features, Plugins) so users can find the right section quickly.
 
 ## Prerequisites
 
