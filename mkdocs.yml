@@ -50,6 +50,7 @@ markdown_extensions:
 
 nav:
     - Home: index.md
+    - Presentations: presentations/README.md
     - Contributing to docs: CONTRIBUTING.md
     - How-to guides:
           - Admin mode: how-to/admin-mode.md

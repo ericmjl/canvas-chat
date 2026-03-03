@@ -1,0 +1,2475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas Chat — Overview</title>
+  <style>
+    /* ===== Canvas Chat theme (dark mode — matches app base.css) ===== */
+    :root {
+      --bg: #1a1a1a;
+      --fg: #e4e4e7;
+      --heading: #228be6;
+      --accent: #228be6;
+      --accent2: #9333ea;
+      --surface: #2d2d2d;
+      --surface2: #27272a;
+      --muted: #71717a;
+      --border: #3f3f46;
+      --code-bg: #27272a;
+      --code-fg: #e4e4e7;
+      --body-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --heading-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono-font: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+      --diagram-stroke: #228be6;
+      --diagram-fill: #2d2d2d;
+      --diagram-text: #e4e4e7;
+      --diagram-highlight: #9333ea;
+      --diagram-arrow: #9ca3af;
+    }
+
+    /* ===== Base Layout ===== */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body { background: var(--bg); color: var(--fg); font-family: var(--body-font); }
+    .deck { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+    .slide {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; justify-content: center;
+      padding: 6vh 8vw;
+      opacity: 0; transition: opacity 0.5s ease;
+      pointer-events: none; overflow: hidden;
+    }
+    .slide.active { opacity: 1; pointer-events: auto; }
+
+    /* ===== Typography ===== */
+    h1 { font-size: 3.5vw; font-family: var(--heading-font); color: var(--heading); margin-bottom: 2vh; }
+    h2 { font-size: 2.8vw; font-family: var(--heading-font); color: var(--heading); margin-bottom: 2vh; }
+    h3 { font-size: 2vw; font-family: var(--heading-font); color: var(--heading); margin-bottom: 1.5vh; }
+    p, li { font-size: 1.6vw; line-height: 1.7; margin-bottom: 1vh; }
+    ul, ol { padding-left: 2vw; }
+    li { list-style: none; }
+    li::before { content: "\203A "; color: var(--accent); font-weight: 600; }
+    code {
+      font-family: var(--mono-font); background: var(--surface);
+      padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em;
+    }
+    pre {
+      background: var(--surface); padding: 2vh 2vw;
+      border-radius: 8px; overflow-x: auto; border: 1px solid var(--border);
+    }
+    pre code { background: none; padding: 0; font-size: 1.2vw; line-height: 1.5; }
+    a { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); }
+    a:hover { border-bottom-style: solid; }
+    .big { font-size: 2.2vw; }
+    .dim { color: var(--muted); }
+    .accent { color: var(--accent); }
+
+    /* ===== Nav bar ===== */
+    .nav-bar {
+      position: fixed; bottom: 2.5vh; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 12px; align-items: center; z-index: 100;
+    }
+    .progress { display: flex; gap: 6px; align-items: center; }
+    .progress-dot {
+      width: 8px; height: 8px; border-radius: 4px; background: var(--muted);
+      transition: width 0.35s ease, background 0.35s ease; cursor: pointer;
+    }
+    .progress-dot.active { width: 32px; background: var(--accent); }
+    .nav-arrow {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      width: 36px; height: 32px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--muted); cursor: pointer;
+      transition: color 0.2s, border-color 0.2s; user-select: none; flex-shrink: 0;
+    }
+    .nav-arrow:hover { color: var(--accent); border-color: var(--accent); }
+    .nav-arrow .arrow { font-size: 1vw; line-height: 1; font-family: var(--body-font); }
+    .nav-arrow .key { font-size: 0.55vw; font-family: var(--mono-font); opacity: 0.7; }
+
+    /* ===== Overview grid (Escape) ===== */
+    .overview-overlay {
+      position: fixed; inset: 0; background: var(--bg); z-index: 200;
+      display: none; align-items: center; justify-content: center; padding: 3vh 3vw; overflow: auto;
+    }
+    .overview-overlay.visible { display: flex; flex-direction: column; }
+    .overview-overlay .overview-hint { font-size: 1.2vw; color: var(--muted); margin-bottom: 2vh; }
+    .overview-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; max-width: 90vw;
+    }
+    .overview-card {
+      background: var(--surface); border: 2px solid var(--border); border-radius: 8px; padding: 1rem;
+      cursor: pointer; text-align: center; transition: border-color 0.2s, transform 0.2s;
+    }
+    .overview-card:hover { border-color: var(--accent); transform: scale(1.02); }
+    .overview-card.active { border-color: var(--accent); background: var(--surface2); }
+    .overview-card .num { font-size: 1.5vw; font-weight: 700; color: var(--accent); display: block; }
+    .overview-card .title {
+      font-size: 0.9vw; margin-top: 0.5rem; color: var(--fg); line-height: 1.3;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+
+    /* ===== Supplementary slides ===== */
+    .supp-label {
+      display: inline-block; font-size: 0.85vw; text-transform: uppercase;
+      letter-spacing: 0.15em; color: var(--muted); border: 1px solid var(--border);
+      border-radius: 4px; padding: 0.2em 0.7em; margin-bottom: 2vh;
+    }
+    .supp-link {
+      color: var(--accent); text-decoration: none;
+      border-bottom: 1px dashed var(--accent); cursor: pointer;
+    }
+    .supp-link:hover { border-bottom-style: solid; }
+    .progress-sep {
+      width: 1px; height: 12px; background: var(--border); margin: 0 4px; flex-shrink: 0;
+    }
+    .progress-dot.supplementary { opacity: 0.5; }
+    .progress-dot.supplementary.active { opacity: 1; }
+    .overview-card.supplementary { opacity: 0.7; }
+    .overview-card.supplementary .num::before { content: "\207A"; font-size: 0.8em; }
+
+    /* ===== Diagram base classes ===== */
+    .diagram-node { fill: var(--diagram-fill); stroke: var(--diagram-stroke); stroke-width: 2; }
+    .diagram-highlight { fill: var(--diagram-highlight); stroke: var(--diagram-highlight); stroke-width: 2; }
+    .diagram-diamond { fill: var(--surface2); stroke: var(--diagram-stroke); stroke-width: 2; }
+    .diagram-label { fill: var(--diagram-text); font-family: var(--body-font); font-size: 14px; text-anchor: middle; dominant-baseline: central; }
+    .diagram-label-inv { fill: var(--bg); font-family: var(--body-font); font-size: 14px; text-anchor: middle; dominant-baseline: central; }
+    .diagram-label-sm { fill: var(--diagram-text); font-family: var(--body-font); font-size: 11px; text-anchor: middle; dominant-baseline: central; opacity: 0.7; }
+    .diagram-edge { stroke: var(--diagram-arrow); stroke-width: 2; fill: none; }
+    .diagram-edge-accent { stroke: var(--diagram-stroke); stroke-width: 2; fill: none; }
+    .slide svg { max-width: 100%; height: auto; }
+
+    /* ===== Animation base classes ===== */
+    .slide .anim-fade { opacity: 0; transform: translateY(20px); }
+    .slide.active .anim-fade {
+      opacity: 1; transform: translateY(0);
+      transition: opacity 0.6s ease var(--delay, 0s), transform 0.6s ease var(--delay, 0s);
+    }
+    .slide .anim-draw { stroke-dasharray: var(--len, 1000); stroke-dashoffset: var(--len, 1000); }
+    .slide.active .anim-draw {
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 1.2s ease-in-out var(--delay, 0s);
+    }
+    @keyframes pulse-glow {
+      0%, 100% { filter: drop-shadow(0 0 3px var(--diagram-stroke)); }
+      50%      { filter: drop-shadow(0 0 10px var(--diagram-stroke)); }
+    }
+    .slide.active .anim-pulse {
+      animation: pulse-glow 2s ease-in-out infinite;
+      animation-delay: var(--delay, 0s);
+    }
+
+    /* ===== Mini-canvas (life-like Canvas Chat nodes + edges, draggable) ===== */
+    .mini-canvas {
+      position: relative;
+      width: 420px;
+      height: 320px;
+      background: #121212;
+      background-image: radial-gradient(circle, #4b5563 1px, transparent 1px);
+      background-size: 20px 20px;
+      border-radius: 12px;
+      border: 1.5px dashed var(--border);
+      overflow: hidden;
+    }
+    .mini-canvas .edges-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+    .mini-canvas .edges-layer path {
+      fill: none;
+      stroke: #9ca3af;
+      stroke-width: 2;
+    }
+    .mini-canvas .nodes-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+    .mini-canvas .node {
+      position: absolute;
+      width: 150px;
+      min-height: 56px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+      border: 2px solid;
+      display: flex;
+      flex-direction: column;
+      cursor: grab;
+      font-family: var(--body-font);
+      font-size: 11px;
+      overflow: hidden;
+    }
+    .mini-canvas .node:active {
+      cursor: grabbing;
+    }
+    .mini-canvas .node.human {
+      background: #1e3a5f;
+      border-color: #2563eb;
+    }
+    .mini-canvas .node.ai {
+      background: #3b2d4a;
+      border-color: #9333ea;
+    }
+    .mini-canvas .node.summary {
+      background: #1a3d27;
+      border-color: #16a34a;
+    }
+    .mini-canvas .node.excerpt {
+      background: #fffde7;
+      border-color: #ffd54f;
+    }
+    .mini-canvas .node.excerpt .node-summary,
+    .mini-canvas .node.excerpt .node-header,
+    .mini-canvas .node.excerpt .node-content {
+      color: #1e1e1e;
+    }
+    .mini-canvas .node-summary {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      color: #a1a1aa;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .mini-canvas .node-type-icon { opacity: 0.8; }
+    .mini-canvas .summary-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mini-canvas .node-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      color: #a1a1aa;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .mini-canvas .drag-handle {
+      display: grid;
+      grid-template-columns: repeat(2, 3px);
+      grid-template-rows: repeat(3, 3px);
+      gap: 1px;
+      padding: 2px;
+      margin: -2px 4px -2px -2px;
+      cursor: grab;
+      border-radius: 2px;
+    }
+    .mini-canvas .drag-handle:hover { background: rgba(255,255,255,0.1); }
+    .mini-canvas .grip-dot {
+      width: 2px;
+      height: 2px;
+      background: currentColor;
+      border-radius: 50%;
+      opacity: 0.6;
+    }
+    .mini-canvas .node-type {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: #e4e4e7;
+    }
+    .mini-canvas .node-content {
+      padding: 6px 8px;
+      color: #e4e4e7;
+      line-height: 1.35;
+      flex: 1;
+    }
+    .mini-canvas .node-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px 8px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .mini-canvas .node-action {
+      font-size: 10px;
+      color: #a1a1aa;
+      background: transparent;
+      border: none;
+      padding: 2px 4px;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    .mini-canvas .node-action:hover { color: #e4e4e7; background: rgba(255,255,255,0.08); }
+    .mini-canvas .mini-canvas-caption {
+      position: absolute;
+      bottom: 6px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    /* ===== Chat & Reply demo: input bar at bottom, then nodes appear ===== */
+    .chat-reply-demo {
+      width: 420px;
+      border-radius: 12px;
+      border: 1.5px dashed var(--border);
+      overflow: hidden;
+      background: #121212;
+    }
+    .chat-reply-demo .mini-canvas {
+      border: none;
+      border-radius: 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .chat-reply-demo .mini-canvas-caption {
+      display: none;
+    }
+    .chat-reply-input-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      font-family: var(--mono-font);
+      font-size: 12px;
+    }
+    .chat-reply-input-bar input {
+      flex: 1;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: var(--fg);
+      font-family: inherit;
+      font-size: inherit;
+    }
+    .chat-reply-input-bar input::placeholder {
+      color: var(--muted);
+    }
+    .chat-reply-input-bar .send-btn {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 8px;
+      cursor: default;
+      font-size: 16px;
+    }
+    .chat-reply-demo .node.demo-hidden {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s ease;
+    }
+    .chat-reply-demo .edges-layer path.edge {
+      stroke-dasharray: 1000;
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.5s ease;
+    }
+    .chat-reply-demo .edges-layer path.demo-hidden {
+      stroke-dashoffset: 1000;
+      marker-end: none;
+    }
+
+    /* ===== Highlight & Branch demo: growing selection, excerpt updates live ===== */
+    .highlight-branch-demo {
+      width: 420px;
+      border-radius: 12px;
+      border: 1.5px dashed var(--border);
+      overflow: visible;
+      background: #121212;
+    }
+    .highlight-branch-demo .mini-canvas {
+      border: none;
+      border-radius: 0;
+    }
+    .highlight-branch-demo .mini-canvas-caption {
+      display: none;
+    }
+    .highlight-branch-demo .node.excerpt.demo-hidden,
+    .highlight-branch-demo .node.human.demo-hidden {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s ease;
+    }
+    .highlight-branch-demo .edges-layer path.edge {
+      stroke-dasharray: 1000;
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.5s ease;
+    }
+    .highlight-branch-demo .edges-layer path.demo-hidden {
+      stroke-dashoffset: 1000;
+      marker-end: none;
+    }
+    /* Yellow highlight: only in source node after Branch (when excerpt node is selected) */
+    .highlight-branch-demo .source-highlight {
+      background: #fffde7;
+      color: inherit;
+      padding: 2px 4px;
+      border-radius: 3px;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+    }
+    /* Blue selection simulation: only while user is "selecting" text (before Branch) */
+    .highlight-branch-demo .demo-selection {
+      background: rgba(59, 130, 246, 0.35);
+      color: inherit;
+      padding: 2px 0;
+      border-radius: 2px;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+    }
+    .highlight-branch-selection-preview {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      top: 60px;
+      min-width: 200px;
+      max-width: 320px;
+      padding: 8px 12px;
+      background: var(--surface);
+      border: 2px solid var(--accent);
+      border-radius: 8px;
+      font-size: 11px;
+      color: var(--fg);
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    .highlight-branch-selection-preview.visible {
+      opacity: 1;
+    }
+    .highlight-branch-selection-preview .preview-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .highlight-branch-selection-preview .preview-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    /* ===== Multi-Select demo: two AI nodes, input below, subtle AI response indicator ===== */
+    .multi-select-demo {
+      width: 420px;
+      border-radius: 12px;
+      border: 1.5px dashed var(--border);
+      overflow: hidden;
+      background: #121212;
+    }
+    .multi-select-demo .mini-canvas {
+      border: none;
+      border-radius: 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .multi-select-demo .mini-canvas-caption {
+      display: none;
+    }
+    .multi-select-demo .node.demo-hidden {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s ease;
+    }
+    .multi-select-demo .node.demo-selected {
+      border-color: var(--accent);
+      border-width: 3px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3), 0 0 0 4px rgba(34, 139, 230, 0.3);
+      outline: 2px dashed var(--accent);
+      outline-offset: 4px;
+    }
+    .multi-select-demo .edges-layer path.edge {
+      stroke-dasharray: 1000;
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.5s ease;
+    }
+    .multi-select-demo .edges-layer path.demo-hidden {
+      stroke-dashoffset: 1000;
+      marker-end: none;
+    }
+    .multi-select-demo .multi-select-input-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      font-family: var(--mono-font);
+      font-size: 12px;
+    }
+    .multi-select-demo .multi-select-input-bar input {
+      flex: 1;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: var(--fg);
+      font-family: inherit;
+      font-size: inherit;
+    }
+    .multi-select-demo .multi-select-input-bar input::placeholder {
+      color: var(--muted);
+    }
+    .multi-select-demo .multi-select-input-bar .send-btn {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 8px;
+      cursor: default;
+      font-size: 16px;
+    }
+    .multi-select-thinking {
+      padding: 6px 12px;
+      font-size: 11px;
+      color: var(--muted);
+      font-style: italic;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      min-height: 0;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .multi-select-thinking.visible {
+      opacity: 1;
+    }
+    .multi-select-thinking .thinking-dots::after {
+      content: '';
+      animation: multiSelectThinkingDots 1.2s steps(4, end) infinite;
+    }
+    @keyframes multiSelectThinkingDots {
+      0%, 20% { content: ''; }
+      40% { content: '.'; }
+      60% { content: '..'; }
+      80%, 100% { content: '...'; }
+    }
+
+    /* ===== Auto-Layout demo ===== */
+    .auto-layout-demo .nodes-layer .node {
+      transition: left 0.55s cubic-bezier(.34,1.56,.64,1), top 0.55s cubic-bezier(.34,1.56,.64,1);
+    }
+    .auto-layout-demo .mini-canvas {
+      border: none;
+      border-radius: 0;
+    }
+    .auto-layout-demo .mini-canvas-caption {
+      display: none;
+    }
+    .auto-layout-demo .demo-toolbar {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 10px;
+      z-index: 5;
+    }
+    .auto-layout-demo .toolbar-btn {
+      padding: 4px 12px;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-family: var(--body-font);
+      font-size: 11px;
+      cursor: default;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .auto-layout-demo .toolbar-btn.demo-hover {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+    }
+    .auto-layout-demo .toolbar-btn.demo-active {
+      transform: scale(0.94);
+    }
+    .auto-layout-demo .demo-cursor {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      z-index: 20;
+      pointer-events: none;
+      opacity: 0;
+      transition: left 0.5s cubic-bezier(.25,.46,.45,.94), top 0.5s cubic-bezier(.25,.46,.45,.94), opacity 0.25s ease;
+    }
+    .auto-layout-demo .demo-cursor.visible {
+      opacity: 1;
+    }
+    .auto-layout-demo .click-burst {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(34,139,230,0.5) 0%, rgba(34,139,230,0) 70%);
+      z-index: 15;
+      pointer-events: none;
+      opacity: 0;
+    }
+    .auto-layout-demo .click-burst.active {
+      animation: autoLayoutBurst 0.5s ease-out forwards;
+    }
+    @keyframes autoLayoutBurst {
+      0% { width: 0; height: 0; opacity: 0.9; transform: translate(-50%, -50%) scale(0); }
+      50% { opacity: 0.7; }
+      100% { width: 60px; height: 60px; opacity: 0; transform: translate(-50%, -50%) scale(1); }
+    }
+    .auto-layout-demo .sunray {
+      position: absolute;
+      width: 2px;
+      height: 12px;
+      background: var(--accent);
+      z-index: 15;
+      pointer-events: none;
+      opacity: 0;
+      border-radius: 1px;
+    }
+    .auto-layout-demo .sunray.active {
+      animation: autoLayoutRay 0.45s ease-out forwards;
+    }
+    @keyframes autoLayoutRay {
+      0% { opacity: 0.9; transform: translate(-50%, -50%) scaleY(0.3); }
+      50% { opacity: 0.8; }
+      100% { opacity: 0; transform: translate(-50%, -50%) translateY(var(--ray-dy)) translateX(var(--ray-dx)) scaleY(1); }
+    }
+
+    /* ===== Navigate demo (semantic zoom: scroll to zoom in/out) ===== */
+    .navigate-demo .mini-canvas {
+      position: relative;
+      border: none;
+      border-radius: 0;
+    }
+    .navigate-demo .mini-canvas-caption {
+      display: none;
+    }
+    .navigate-demo .zoom-container {
+      position: absolute;
+      inset: 0;
+      transition: transform 0.6s cubic-bezier(.25,.46,.45,.94);
+    }
+    .navigate-demo .zoom-container.zoom-in {
+      transform: scale(1.35);
+      transform-origin: 210px 160px;
+    }
+    .navigate-demo .nodes-layer .node .node-summary,
+    .navigate-demo .nodes-layer .node .node-header,
+    .navigate-demo .nodes-layer .node .node-content {
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+    .navigate-demo.zoom-summary .nodes-layer .node .node-summary {
+      opacity: 1;
+      visibility: visible;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 12px;
+    }
+    .navigate-demo.zoom-summary .nodes-layer .node .node-summary .node-type-icon {
+      font-size: 28px;
+    }
+    .navigate-demo.zoom-summary .nodes-layer .node .node-summary .summary-text {
+      font-size: 14px;
+    }
+    .navigate-demo.zoom-summary .nodes-layer .node .node-header,
+    .navigate-demo.zoom-summary .nodes-layer .node .node-content {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .navigate-demo.zoom-full .nodes-layer .node .node-summary {
+      opacity: 0;
+      visibility: hidden;
+    }
+    .navigate-demo.zoom-full .nodes-layer .node .node-header,
+    .navigate-demo.zoom-full .nodes-layer .node .node-content {
+      opacity: 1;
+      visibility: visible;
+    }
+    .navigate-demo .navigate-cursor {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      z-index: 20;
+      pointer-events: none;
+      opacity: 0;
+      transition: left 0.5s cubic-bezier(.25,.46,.45,.94), top 0.5s cubic-bezier(.25,.46,.45,.94), opacity 0.25s ease;
+    }
+    .navigate-demo .navigate-cursor.visible {
+      opacity: 1;
+    }
+    .navigate-demo .scroll-hint {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 24px;
+      height: 32px;
+      margin-left: 18px;
+      margin-top: -16px;
+      z-index: 18;
+      pointer-events: none;
+      opacity: 0;
+      border: 2px solid var(--fg);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .navigate-demo .scroll-hint.visible {
+      opacity: 1;
+      animation: navigateScrollHint 0.8s ease-in-out;
+    }
+    .navigate-demo .scroll-hint::before,
+    .navigate-demo .scroll-hint::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      width: 4px;
+      height: 6px;
+      margin-left: -2px;
+      background: var(--fg);
+      border-radius: 2px;
+    }
+    .navigate-demo .scroll-hint::before {
+      top: 6px;
+    }
+    .navigate-demo .scroll-hint::after {
+      bottom: 6px;
+    }
+    @keyframes navigateScrollHint {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+      20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      50% { transform: translate(-50%, -60%) scale(1); }
+      80% { transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    /* ===== Slash-command diagram (mimics app: canvas on top, menu above input, input at bottom) ===== */
+    .slash-diagram {
+      width: 380px;
+      padding: 14px;
+      background: #121212;
+      background-image: radial-gradient(circle, #4b5563 1px, transparent 1px);
+      background-size: 18px 18px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .slash-diagram .result-node {
+      flex: 1;
+      min-height: 140px;
+    }
+    .slash-diagram .slash-menu {
+      flex-shrink: 0;
+    }
+    .slash-diagram .input-bar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      font-family: var(--mono-font);
+      font-size: 13px;
+      color: var(--fg);
+    }
+    .slash-diagram .input-bar:focus-within {
+      border-color: var(--accent);
+    }
+    .slash-diagram .input-bar span {
+      flex: 1;
+      color: var(--accent);
+    }
+    .slash-diagram .send-btn {
+      width: 36px;
+      height: 36px;
+      flex-shrink: 0;
+      border: none;
+      background: var(--accent);
+      color: white;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .slash-diagram .slash-menu {
+      background: var(--bg);
+      border: 1px solid #4b5563;
+      border-radius: 8px;
+      box-shadow: 0 10px 15px rgba(0,0,0,0.4);
+      padding: 4px;
+      min-width: 220px;
+    }
+    .slash-diagram .slash-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 8px 12px;
+      border-radius: 4px;
+    }
+    .slash-diagram .slash-item.selected {
+      background: rgba(34, 139, 230, 0.2);
+    }
+    .slash-diagram .slash-item .name {
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--mono-font);
+      color: var(--accent);
+    }
+    .slash-diagram .slash-item .desc {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .slash-diagram .slash-hint {
+      padding: 6px 12px;
+      border-top: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .slash-diagram .result-node {
+      background: #2d2445;
+      border: 2px solid #7c3aed;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    .slash-diagram .result-node .node-summary {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      color: #a1a1aa;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 11px;
+    }
+    .slash-diagram .result-node .node-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      color: #a1a1aa;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .slash-diagram .result-node .node-content {
+      padding: 10px 12px;
+      color: var(--fg);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .slash-diagram .result-node .line {
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.12);
+      margin-bottom: 6px;
+    }
+    .slash-diagram .result-node .line:last-child { margin-bottom: 0; }
+
+  </style>
+</head>
+<body>
+  <!-- Shared SVG defs -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto-start-reverse">
+        <polygon points="0 0, 10 3.5, 0 7" fill="var(--diagram-arrow)" />
+      </marker>
+      <marker id="arrow-accent" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto-start-reverse">
+        <polygon points="0 0, 10 3.5, 0 7" fill="var(--diagram-stroke)" />
+      </marker>
+      <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%">
+        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15" />
+      </filter>
+    </defs>
+  </svg>
+
+  <div class="deck">
+
+    <!-- ==================== SLIDE 1: Title ==================== -->
+    <section class="slide" id="title">
+      <h1 style="font-size:4.5vw;">Canvas Chat</h1>
+      <p class="big dim" style="margin-top:1vh;">A visual, non-linear chat interface where conversations are nodes on an infinite canvas.</p>
+      <p class="anim-fade" style="--delay:0.4s; margin-top:3vh; font-size:1.4vw;">
+        <a href="https://ericmjl--canvas-chat-fastapi-app.modal.run/" style="color:var(--accent);">Try it online</a>
+        &nbsp;&middot;&nbsp;
+        <a href="https://github.com/ericmjl/canvas-chat" style="color:var(--accent);">GitHub</a>
+        &nbsp;&middot;&nbsp;
+        <a href="https://ericmjl.github.io/canvas-chat/" style="color:var(--accent);">Docs</a>
+      </p>
+    </section>
+
+    <!-- ==================== SLIDE 2: Quick Start ==================== -->
+    <section class="slide" id="quick-start">
+      <h2>Quick Start</h2>
+      <p class="dim" style="margin-bottom:2vh;">One command. No installation.</p>
+      <pre class="anim-fade" style="--delay:0.2s"><code>uvx canvas-chat launch</code></pre>
+      <p class="anim-fade" style="--delay:0.5s; margin-top:2vh;">Your browser opens automatically to the local server.</p>
+      <p class="anim-fade dim" style="--delay:0.7s; margin-top:2vh; font-size:1.3vw;">Or try it instantly at <a href="https://ericmjl--canvas-chat-fastapi-app.modal.run/" style="color:var(--accent);">ericmjl--canvas-chat-fastapi-app.modal.run</a> &mdash; bring your own API keys.</p>
+    </section>
+
+    <!-- ==================== SLIDE 3: Core Idea (spotlight) ==================== -->
+    <section class="slide" id="core-idea" style="justify-content:center;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4vw; align-items:center;">
+        <div>
+          <p class="dim anim-fade" style="--delay:0.1s; font-size:1vw; text-transform:uppercase; letter-spacing:0.2em; margin-bottom:1vh;">Core Idea</p>
+          <h2 class="anim-fade" style="--delay:0.2s; font-size:3vw;">Conversations as a Graph</h2>
+          <p class="anim-fade" style="--delay:0.4s; font-size:2vw; color:var(--accent); margin-top:2vh; line-height:1.4;">
+            Infinite canvas.<br>Directed acyclic graph.<br>Local-first storage.
+          </p>
+          <div class="anim-fade" style="--delay:0.7s; display:flex; gap:0.8vw; flex-wrap:wrap; margin-top:3vh;">
+            <span style="background:var(--accent); color:var(--bg); padding:0.4em 1em; border-radius:999px; font-size:1.1vw; font-weight:600;">Pan &amp; zoom</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.4em 1em; border-radius:999px; font-size:1.1vw;">Branch anywhere</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.4em 1em; border-radius:999px; font-size:1.1vw;">No server data</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.4em 1em; border-radius:999px; font-size:1.1vw;">IndexedDB</span>
+          </div>
+        </div>
+        <div class="anim-fade" style="--delay:0.5s;" id="mini-canvas-wrap">
+          <div class="mini-canvas" id="mini-canvas-graph">
+            <svg class="edges-layer" width="420" height="320" viewBox="0 0 420 320">
+              <defs>
+                <marker id="mini-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto-start-reverse">
+                  <polygon points="0 0, 8 3, 0 6" fill="#9ca3af" />
+                </marker>
+              </defs>
+              <path class="edge" data-source="user1" data-target="ai1" marker-end="url(#mini-arrow)" d="" />
+              <path class="edge" data-source="user1" data-target="ai2" marker-end="url(#mini-arrow)" d="" />
+              <path class="edge" data-source="ai1" data-target="user2" marker-end="url(#mini-arrow)" d="" />
+              <path class="edge" data-source="user2" data-target="merged" marker-end="url(#mini-arrow)" d="" />
+              <path class="edge" data-source="ai2" data-target="merged" marker-end="url(#mini-arrow)" d="" />
+            </svg>
+            <div class="nodes-layer">
+              <div class="node human" data-node-id="user1" data-x="20" data-y="24" style="left:20px;top:24px;">
+                <div class="node-summary"><span class="node-type-icon">&#128100;</span><span class="summary-text">User</span></div>
+                <div class="node-header">
+                  <div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div>
+                  <span class="node-type">Human</span>
+                </div>
+                <div class="node-content">"Tell me about..."</div>
+                <div class="node-actions"><button class="node-action">Reply (r)</button><button class="node-action">Edit (e)</button><button class="node-action">Copy (c)</button></div>
+              </div>
+              <div class="node ai" data-node-id="ai1" data-x="230" data-y="8" style="left:230px;top:8px;">
+                <div class="node-summary"><span class="node-type-icon">&#129302;</span><span class="summary-text">AI</span></div>
+                <div class="node-header">
+                  <div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div>
+                  <span class="node-type">AI</span>
+                </div>
+                <div class="node-content">Response A</div>
+                <div class="node-actions"><button class="node-action">Reply (r)</button><button class="node-action">Copy (c)</button></div>
+              </div>
+              <div class="node ai" data-node-id="ai2" data-x="230" data-y="88" style="left:230px;top:88px;">
+                <div class="node-summary"><span class="node-type-icon">&#129302;</span><span class="summary-text">AI</span></div>
+                <div class="node-header">
+                  <div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div>
+                  <span class="node-type">AI</span>
+                </div>
+                <div class="node-content">Response B</div>
+                <div class="node-actions"><button class="node-action">Reply (r)</button><button class="node-action">Copy (c)</button></div>
+              </div>
+              <div class="node human" data-node-id="user2" data-x="20" data-y="178" style="left:20px;top:178px;">
+                <div class="node-summary"><span class="node-type-icon">&#128100;</span><span class="summary-text">User</span></div>
+                <div class="node-header">
+                  <div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div>
+                  <span class="node-type">Human</span>
+                </div>
+                <div class="node-content">"Go deeper on..."</div>
+                <div class="node-actions"><button class="node-action">Reply (r)</button><button class="node-action">Edit (e)</button><button class="node-action">Copy (c)</button></div>
+              </div>
+              <div class="node summary" data-node-id="merged" data-x="230" data-y="178" style="left:230px;top:178px;">
+                <div class="node-summary"><span class="node-type-icon">&#128260;</span><span class="summary-text">Merged</span></div>
+                <div class="node-header">
+                  <div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div>
+                  <span class="node-type">Summary</span>
+                </div>
+                <div class="node-content">Multi-select reply</div>
+                <div class="node-actions"><button class="node-action">Reply (r)</button><button class="node-action">Copy (c)</button></div>
+              </div>
+            </div>
+            <div class="mini-canvas-caption">Drag nodes to move — infinite canvas, pan, zoom, explore</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 4: Core Workflows intro ==================== -->
+    <section class="slide" id="user-workflows">
+      <h2>Core Workflows</h2>
+      <p class="dim" style="font-size:1.2vw;">Six key workflows. Each slide has an interactive mini-canvas — drag nodes like in the app.</p>
+    </section>
+
+    <!-- ==================== SLIDE 5: Chat & Reply ==================== -->
+    <section class="slide" id="workflow-chat-reply" style="justify-content:center;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4vw; align-items:center;">
+        <div>
+          <h2 class="anim-fade" style="--delay:0.1s;">Chat &amp; Reply</h2>
+          <p class="anim-fade" style="--delay:0.2s; font-size:1.4vw;">Type a message, press Enter. Click any node and reply to branch the conversation.</p>
+        </div>
+        <div class="anim-fade" style="--delay:0.3s;">
+          <div class="chat-reply-demo" id="chat-reply-demo">
+            <div class="mini-canvas" data-canvas-id="chat-reply">
+              <svg class="edges-layer" width="420" height="320" viewBox="0 0 420 320">
+                <defs><marker id="arrow-chat-reply" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto-start-reverse"><polygon points="0 0, 8 3, 0 6" fill="#9ca3af" /></marker></defs>
+                <path class="edge demo-hidden" data-source="u1" data-target="a1" marker-end="url(#arrow-chat-reply)" d="" />
+              </svg>
+              <div class="nodes-layer">
+                <div class="node human demo-hidden" data-node-id="u1" data-x="24" data-y="120" style="left:24px;top:120px;">
+                  <div class="node-summary"><span class="node-type-icon">&#128100;</span><span class="summary-text">User</span></div>
+                  <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">Human</span></div>
+                  <div class="node-content" data-demo-content="">"Tell me about..."</div>
+                  <div class="node-actions"><button class="node-action">Reply (r)</button></div>
+                </div>
+                <div class="node ai demo-hidden" data-node-id="a1" data-x="246" data-y="120" style="left:246px;top:120px;">
+                  <div class="node-summary"><span class="node-type-icon">&#129302;</span><span class="summary-text">AI</span></div>
+                  <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">AI</span></div>
+                  <div class="node-content">Here’s a quick overview…</div>
+                  <div class="node-actions"><button class="node-action">Reply (r)</button></div>
+                </div>
+              </div>
+              <div class="mini-canvas-caption">Drag nodes to move</div>
+            </div>
+            <div class="chat-reply-input-bar">
+              <input type="text" id="chat-reply-input" placeholder="Type a message... Enter to send" autocomplete="off" readonly tabindex="-1" />
+              <button type="button" class="send-btn" id="chat-reply-send" aria-label="Send">&#9993;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 6: Highlight & Branch ==================== -->
+    <section class="slide" id="workflow-highlight-branch" style="justify-content:center;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4vw; align-items:center;">
+        <div>
+          <h2 class="anim-fade" style="--delay:0.1s;">Highlight &amp; Branch</h2>
+          <p class="anim-fade" style="--delay:0.2s; font-size:1.4vw;">Select text within a node, click Branch to create an excerpt node and continue from there.</p>
+        </div>
+        <div class="anim-fade" style="--delay:0.3s;">
+          <div class="highlight-branch-demo" id="highlight-branch-demo">
+            <div class="mini-canvas" data-canvas-id="highlight-branch" style="position:relative;">
+              <div class="highlight-branch-selection-preview" id="highlight-branch-preview" aria-hidden="true">
+                <div class="preview-label">Selection</div>
+                <div class="preview-text" id="highlight-branch-preview-text">"..."</div>
+              </div>
+              <svg class="edges-layer" width="420" height="320" viewBox="0 0 420 320">
+                <defs><marker id="arrow-highlight-branch" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto-start-reverse"><polygon points="0 0, 8 3, 0 6" fill="#9ca3af" /></marker></defs>
+                <path class="edge demo-hidden" data-source="u1" data-target="ex1" marker-end="url(#arrow-highlight-branch)" d="" />
+              </svg>
+              <div class="nodes-layer">
+                <div class="node human" data-node-id="u1" data-x="24" data-y="100" style="left:24px;top:100px;">
+                  <div class="node-summary"><span class="node-type-icon">&#128100;</span><span class="summary-text">User</span></div>
+                  <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">Human</span></div>
+                  <div class="node-content" data-demo-source="Quantum computing uses qubits and superposition.">Quantum computing uses qubits and superposition.</div>
+                  <div class="node-actions"><button class="node-action">Branch</button></div>
+                </div>
+                <div class="node excerpt demo-hidden" data-node-id="ex1" data-x="250" data-y="110" style="left:250px;top:110px;">
+                  <div class="node-summary"><span class="summary-text">Excerpt</span></div>
+                  <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div></div>
+                  <div class="node-content" data-demo-excerpt-content="">Selected excerpt</div>
+                  <div class="node-actions"><button class="node-action">Reply (r)</button></div>
+                </div>
+              </div>
+              <div class="mini-canvas-caption">Drag nodes to move</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 7: Multi-Select ==================== -->
+    <section class="slide" id="workflow-multi-select" style="justify-content:center;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4vw; align-items:center;">
+        <div>
+          <h2 class="anim-fade" style="--delay:0.1s;">Multi-Select</h2>
+          <p class="anim-fade" style="--delay:0.2s; font-size:1.4vw;">Cmd/Ctrl+Click multiple nodes to combine their context into a single reply.</p>
+        </div>
+        <div class="anim-fade" style="--delay:0.3s;">
+          <div class="multi-select-demo" id="multi-select-demo">
+            <div class="mini-canvas" data-canvas-id="multi-select">
+              <svg class="edges-layer" width="420" height="320" viewBox="0 0 420 320">
+                <defs><marker id="arrow-multi-select" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto-start-reverse"><polygon points="0 0, 8 3, 0 6" fill="#9ca3af" /></marker></defs>
+                <path class="edge demo-hidden" data-source="ai1" data-target="merged" marker-end="url(#arrow-multi-select)" d="" />
+                <path class="edge demo-hidden" data-source="ai2" data-target="merged" marker-end="url(#arrow-multi-select)" d="" />
+              </svg>
+              <div class="nodes-layer">
+                <div class="node ai" data-node-id="ai1" data-x="24" data-y="40" style="left:24px;top:40px;">
+                  <div class="node-summary"><span class="node-type-icon">&#129302;</span><span class="summary-text">AI</span></div>
+                  <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">AI</span></div>
+                  <div class="node-content">First model’s response…</div>
+                  <div class="node-actions"><button class="node-action">Reply (r)</button></div>
+                </div>
+                <div class="node ai" data-node-id="ai2" data-x="24" data-y="180" style="left:24px;top:180px;">
+                  <div class="node-summary"><span class="node-type-icon">&#129302;</span><span class="summary-text">AI</span></div>
+                  <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">AI</span></div>
+                  <div class="node-content">Second model’s response…</div>
+                  <div class="node-actions"><button class="node-action">Reply (r)</button></div>
+                </div>
+                <div class="node human demo-hidden" data-node-id="merged" data-x="246" data-y="100" style="left:246px;top:100px;">
+                  <div class="node-summary"><span class="node-type-icon">&#128100;</span><span class="summary-text">User</span></div>
+                  <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">Human</span></div>
+                  <div class="node-content" data-demo-content="">Compare these and summarize</div>
+                  <div class="node-actions"><button class="node-action">Reply (r)</button></div>
+                </div>
+              </div>
+              <div class="mini-canvas-caption">Drag nodes to move</div>
+            </div>
+            <div class="multi-select-thinking" id="multi-select-thinking" aria-hidden="true">
+              <span class="thinking-dots">Thinking</span>
+            </div>
+            <div class="multi-select-input-bar">
+              <input type="text" id="multi-select-input" placeholder="Reply to selected nodes... Enter to send" autocomplete="off" readonly tabindex="-1" />
+              <button type="button" class="send-btn" id="multi-select-send" aria-label="Send">&#9993;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 8: Auto-Layout ==================== -->
+    <section class="slide" id="workflow-auto-layout" style="justify-content:center;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4vw; align-items:center;">
+        <div>
+          <h2 class="anim-fade" style="--delay:0.1s;">Auto-Layout</h2>
+          <p class="anim-fade" style="--delay:0.2s; font-size:1.4vw;">Click the layout button to arrange nodes in a clean left-to-right hierarchy.</p>
+        </div>
+        <div class="anim-fade" style="--delay:0.3s;">
+          <div class="auto-layout-demo" id="auto-layout-demo">
+            <div class="mini-canvas" data-canvas-id="auto-layout" style="position:relative;">
+              <svg class="edges-layer" width="420" height="320" viewBox="0 0 420 320">
+                <defs><marker id="arrow-auto-layout" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto-start-reverse"><polygon points="0 0, 8 3, 0 6" fill="#9ca3af" /></marker></defs>
+                <path class="edge" data-source="u1" data-target="a1" marker-end="url(#arrow-auto-layout)" d="" />
+                <path class="edge" data-source="u1" data-target="a2" marker-end="url(#arrow-auto-layout)" d="" />
+              </svg>
+              <div class="nodes-layer">
+                <div class="node human" data-node-id="u1" data-x="150" data-y="20" style="left:150px;top:20px;">
+                  <div class="node-summary"><span class="node-type-icon">&#128100;</span><span class="summary-text">User</span></div>
+                  <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">Human</span></div>
+                  <div class="node-content">Prompt</div>
+                  <div class="node-actions"><button class="node-action">Reply (r)</button></div>
+                </div>
+                <div class="node ai" data-node-id="a1" data-x="50" data-y="140" style="left:50px;top:140px;">
+                  <div class="node-summary"><span class="node-type-icon">&#129302;</span><span class="summary-text">AI</span></div>
+                  <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">AI</span></div>
+                  <div class="node-content">Response 1</div>
+                  <div class="node-actions"><button class="node-action">Reply (r)</button></div>
+                </div>
+                <div class="node ai" data-node-id="a2" data-x="200" data-y="190" style="left:200px;top:190px;">
+                  <div class="node-summary"><span class="node-type-icon">&#129302;</span><span class="summary-text">AI</span></div>
+                  <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">AI</span></div>
+                  <div class="node-content">Response 2</div>
+                  <div class="node-actions"><button class="node-action">Reply (r)</button></div>
+                </div>
+              </div>
+              <div class="demo-toolbar" id="auto-layout-toolbar">
+                <span class="toolbar-btn" style="opacity:0.4;">Zoom</span>
+                <span class="toolbar-btn" id="auto-layout-toolbar-btn">Layout</span>
+                <span class="toolbar-btn" style="opacity:0.4;">Export</span>
+              </div>
+              <svg class="demo-cursor" id="auto-layout-cursor" viewBox="0 0 24 24" style="left:0;top:0;"><path d="M5 3l14 8-6.5 2L9 19.5z" fill="#fff" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/></svg>
+              <div class="click-burst" id="auto-layout-burst"></div>
+              <div class="mini-canvas-caption"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 9: Navigate ==================== -->
+    <section class="slide" id="workflow-navigate" style="justify-content:center;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4vw; align-items:center;">
+        <div>
+          <h2 class="anim-fade" style="--delay:0.1s;">Navigate</h2>
+          <p class="anim-fade" style="--delay:0.2s; font-size:1.4vw;">Drag to pan, scroll to zoom. Semantic zoom: zoomed out shows summaries.</p>
+        </div>
+        <div class="anim-fade" style="--delay:0.3s;">
+          <div class="navigate-demo zoom-summary" id="navigate-demo">
+            <div class="mini-canvas" data-canvas-id="navigate" style="position:relative;">
+              <svg class="edges-layer" width="420" height="320" viewBox="0 0 420 320">
+                <defs><marker id="arrow-navigate" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto-start-reverse"><polygon points="0 0, 8 3, 0 6" fill="#9ca3af" /></marker></defs>
+              </svg>
+              <div class="zoom-container" id="navigate-zoom-container">
+                <div class="nodes-layer">
+                  <div class="node summary" data-node-id="s1" data-x="30" data-y="120" style="left:30px;top:120px;">
+                    <div class="node-summary"><span class="node-type-icon">&#128260;</span><span class="summary-text">Summary</span></div>
+                    <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">Summary</span></div>
+                    <div class="node-content">Key points from the discussion…</div>
+                  </div>
+                  <div class="node summary" data-node-id="s2" data-x="160" data-y="120" style="left:160px;top:120px;">
+                    <div class="node-summary"><span class="node-type-icon">&#128260;</span><span class="summary-text">Summary</span></div>
+                    <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">Summary</span></div>
+                    <div class="node-content">Summary of the main ideas…</div>
+                  </div>
+                  <div class="node summary" data-node-id="s3" data-x="290" data-y="120" style="left:290px;top:120px;">
+                    <div class="node-summary"><span class="node-type-icon">&#128260;</span><span class="summary-text">Summary</span></div>
+                    <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">Summary</span></div>
+                    <div class="node-content">Conclusions and next steps…</div>
+                  </div>
+                </div>
+              </div>
+              <svg class="navigate-cursor" id="navigate-cursor" viewBox="0 0 24 24" style="left:0;top:0;"><path d="M5 3l14 8-6.5 2L9 19.5z" fill="#fff" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/></svg>
+              <div class="scroll-hint" id="navigate-scroll-hint" aria-hidden="true"></div>
+              <div class="mini-canvas-caption"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 10: Export / Import ==================== -->
+    <section class="slide" id="workflow-export-import" style="justify-content:center;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4vw; align-items:center;">
+        <div>
+          <h2 class="anim-fade" style="--delay:0.1s;">Export / Import</h2>
+          <p class="anim-fade" style="--delay:0.2s; font-size:1.4vw;">Save sessions as <code>.canvaschat</code> files. Share or restore anytime.</p>
+        </div>
+        <div class="anim-fade" style="--delay:0.3s;">
+          <div class="mini-canvas" data-canvas-id="export-import">
+            <svg class="edges-layer" width="420" height="320" viewBox="0 0 420 320">
+              <defs><marker id="arrow-export-import" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto-start-reverse"><polygon points="0 0, 8 3, 0 6" fill="#9ca3af" /></marker></defs>
+              <path class="edge" data-source="n1" data-target="n2" marker-end="url(#arrow-export-import)" d="" />
+            </svg>
+            <div class="nodes-layer">
+              <div class="node human" data-node-id="n1" data-x="60" data-y="120" style="left:60px;top:120px;">
+                <div class="node-summary"><span class="node-type-icon">&#128100;</span><span class="summary-text">User</span></div>
+                <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">Human</span></div>
+                <div class="node-content">Session</div>
+              </div>
+              <div class="node ai" data-node-id="n2" data-x="246" data-y="120" style="left:246px;top:120px;">
+                <div class="node-summary"><span class="node-type-icon">&#129302;</span><span class="summary-text">AI</span></div>
+                <div class="node-header"><div class="drag-handle"><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span><span class="grip-dot"></span></div><span class="node-type">AI</span></div>
+                <div class="node-content">Saved · Load to restore</div>
+              </div>
+            </div>
+            <div class="mini-canvas-caption">Save as .canvaschat · Load anytime to restore</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 11: Spotlight — Slash Commands ==================== -->
+    <section class="slide" id="spotlight-slash-commands" style="justify-content:center;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4vw; align-items:center;">
+        <div>
+          <p class="dim anim-fade" style="--delay:0.1s; font-size:1vw; text-transform:uppercase; letter-spacing:0.2em; margin-bottom:1vh;">Spotlight</p>
+          <h2 class="anim-fade" style="--delay:0.2s; font-size:3.2vw;">Slash Commands</h2>
+          <p class="anim-fade" style="--delay:0.4s; font-size:2vw; color:var(--accent); margin-top:2vh; line-height:1.4;">Type <code style="background:var(--surface); padding:0.15em 0.4em; border-radius:6px;">/</code> to explore.<br>Powerful features, one keystroke away.</p>
+          <div class="anim-fade" style="--delay:0.7s; display:flex; gap:0.8vw; flex-wrap:wrap; margin-top:3vh;">
+            <span style="background:var(--accent); color:var(--bg); padding:0.4em 1em; border-radius:999px; font-size:1.1vw; font-weight:600;">/search</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.4em 1em; border-radius:999px; font-size:1.1vw;">/research</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.4em 1em; border-radius:999px; font-size:1.1vw;">/committee</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.4em 1em; border-radius:999px; font-size:1.1vw;">/matrix</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.4em 1em; border-radius:999px; font-size:1.1vw;">/factcheck</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.4em 1em; border-radius:999px; font-size:1.1vw;">/code</span>
+          </div>
+          <p class="anim-fade dim" style="--delay:1.0s; margin-top:2vh; font-size:1.1vw;"><a class="supp-link" data-goto="supp-slash-commands">Full command reference &rarr;</a></p>
+        </div>
+        <div class="anim-fade slash-diagram-wrap" style="--delay:0.5s;">
+          <div class="slash-diagram">
+            <!-- Top: Research report node (the result on the canvas) -->
+            <div class="result-node">
+              <div class="node-summary">
+                <span>&#129302;</span>
+                <span>Research report</span>
+              </div>
+              <div class="node-header">
+                <span style="opacity:0.6;">&#8942;&#8942;</span>
+                <span>RESEARCH</span>
+              </div>
+              <div class="node-content">
+                <div class="line" style="width:85%;"></div>
+                <div class="line" style="width:95%;"></div>
+                <div class="line" style="width:70%;"></div>
+                <div class="line" style="width:88%;"></div>
+              </div>
+            </div>
+
+            <!-- Above input: slash command menu (only /research + /search) -->
+            <div class="slash-menu">
+              <div class="slash-item selected">
+                <span class="name">/research</span>
+                <span class="desc">Deep research via Exa</span>
+              </div>
+              <div class="slash-item">
+                <span class="name">/search</span>
+                <span class="desc">Web search</span>
+              </div>
+              <div class="slash-hint">↑↓ to navigate · Enter to select</div>
+            </div>
+
+            <!-- Bottom: input bar (chat input at bottom of UI) -->
+            <div class="input-bar">
+              <span>/research quantum computing</span>
+              <button type="button" class="send-btn" aria-label="Send">&#9993;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 12: Key Features ==================== -->
+    <section class="slide" id="key-features">
+      <h2>Key Features</h2>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:3vw; margin-top:1vh;">
+        <ul style="font-size:1.4vw;">
+          <li class="anim-fade" style="--delay:0.2s"><strong class="accent">Web Research</strong> &mdash; <code>/research</code> generates deep reports via Exa API</li>
+          <li class="anim-fade" style="--delay:0.35s"><strong class="accent">Web Search</strong> &mdash; <code>/search</code> finds relevant pages and summarizes them</li>
+          <li class="anim-fade" style="--delay:0.5s"><strong class="accent">LLM Committee</strong> &mdash; <code>/committee</code> consults multiple LLMs and synthesizes</li>
+          <li class="anim-fade" style="--delay:0.65s"><strong class="accent">Matrix Evaluation</strong> &mdash; <code>/matrix</code> builds cross-product comparison tables</li>
+          <li class="anim-fade" style="--delay:0.8s"><strong class="accent">Fact-Check</strong> &mdash; <code>/factcheck</code> verifies claims with web evidence</li>
+        </ul>
+        <ul style="font-size:1.4vw;">
+          <li class="anim-fade" style="--delay:0.3s"><strong class="accent">Code Execution</strong> &mdash; <code>/code</code> runs Python in-browser with Pyodide</li>
+          <li class="anim-fade" style="--delay:0.45s"><strong class="accent">Image Analysis</strong> &mdash; paste, drag, or upload images for multimodal AI</li>
+          <li class="anim-fade" style="--delay:0.6s"><strong class="accent">PDF Import</strong> &mdash; upload PDFs and chat with their contents</li>
+          <li class="anim-fade" style="--delay:0.75s"><strong class="accent">Markdown &amp; Math</strong> &mdash; full Markdown with KaTeX LaTeX rendering</li>
+          <li class="anim-fade" style="--delay:0.9s"><strong class="accent">Multi-Provider</strong> &mdash; OpenAI, Anthropic, Google, Groq, Ollama, OpenRouter</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 13: Settings & Data ==================== -->
+    <section class="slide" id="settings-data">
+      <h2>Settings &amp; Data</h2>
+      <p class="dim" style="margin-bottom:2vh;">Bring your own keys. Your data stays in your browser.</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4vw; margin-top:1vh;">
+        <div class="anim-fade" style="--delay:0.2s;">
+          <h3 style="font-size:1.6vw;">API Keys</h3>
+          <p style="font-size:1.3vw;">Configure via the Settings panel. Supported providers:</p>
+          <div style="display:flex; gap:0.6vw; flex-wrap:wrap; margin-top:1vh;">
+            <span style="background:var(--surface); color:var(--fg); padding:0.3em 0.8em; border-radius:999px; font-size:1vw;">OpenAI</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.3em 0.8em; border-radius:999px; font-size:1vw;">Anthropic</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.3em 0.8em; border-radius:999px; font-size:1vw;">Google AI</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.3em 0.8em; border-radius:999px; font-size:1vw;">Groq</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.3em 0.8em; border-radius:999px; font-size:1vw;">Ollama</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.3em 0.8em; border-radius:999px; font-size:1vw;">OpenRouter</span>
+            <span style="background:var(--surface); color:var(--fg); padding:0.3em 0.8em; border-radius:999px; font-size:1vw;">Exa</span>
+          </div>
+          <p style="font-size:1.15vw; margin-top:1.5vh;" class="dim">Keys stored in <code>localStorage</code> &mdash; never sent to Canvas Chat servers.</p>
+        </div>
+        <div class="anim-fade" style="--delay:0.4s;">
+          <h3 style="font-size:1.6vw;">Local-First Storage</h3>
+          <p style="font-size:1.3vw;">All conversation data lives in your browser's IndexedDB. Nothing is stored server-side.</p>
+          <ul style="font-size:1.2vw; margin-top:1vh;">
+            <li>Export sessions as <code>.canvaschat</code> files</li>
+            <li>Import to restore or share</li>
+            <li>Admin mode for enterprise: server-side keys via <code>config.yaml</code></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 14: For Developers — Tech Stack ==================== -->
+    <section class="slide" id="tech-stack">
+      <h2>Tech Stack</h2>
+      <p class="dim" style="margin-bottom:2vh;">Deliberately simple. No frameworks, no build step.</p>
+      <svg viewBox="0 0 800 200" style="margin-top:1vh;">
+        <g class="anim-fade" style="--delay:0.1s">
+          <rect class="diagram-node" x="20" y="60" width="140" height="70" rx="8" filter="url(#shadow)" />
+          <text class="diagram-label" x="90" y="88" style="font-size:13px; font-weight:600">FastAPI</text>
+          <text class="diagram-label-sm" x="90" y="108">Backend + proxy</text>
+        </g>
+        <line class="diagram-edge anim-draw" style="--len:40; --delay:0.4s" x1="160" y1="95" x2="200" y2="95" marker-end="url(#arrow)" />
+        <g class="anim-fade" style="--delay:0.3s">
+          <rect class="diagram-node" x="200" y="60" width="140" height="70" rx="8" filter="url(#shadow)" />
+          <text class="diagram-label" x="270" y="88" style="font-size:13px; font-weight:600">Vanilla JS</text>
+          <text class="diagram-label-sm" x="270" y="108">ES modules</text>
+        </g>
+        <line class="diagram-edge anim-draw" style="--len:40; --delay:0.6s" x1="340" y1="95" x2="380" y2="95" marker-end="url(#arrow)" />
+        <g class="anim-fade" style="--delay:0.5s">
+          <rect class="diagram-node" x="380" y="60" width="140" height="70" rx="8" filter="url(#shadow)" />
+          <text class="diagram-label" x="450" y="88" style="font-size:13px; font-weight:600">Yjs (CRDT)</text>
+          <text class="diagram-label-sm" x="450" y="108">Graph data model</text>
+        </g>
+        <line class="diagram-edge anim-draw" style="--len:40; --delay:0.8s" x1="520" y1="95" x2="560" y2="95" marker-end="url(#arrow)" />
+        <g class="anim-fade" style="--delay:0.7s">
+          <rect class="diagram-highlight" x="560" y="60" width="140" height="70" rx="8" filter="url(#shadow)" />
+          <text class="diagram-label-inv" x="630" y="88" style="font-size:13px; font-weight:600">LiteLLM</text>
+          <text class="diagram-label-inv" x="630" y="108" style="font-size:11px">Multi-provider</text>
+        </g>
+      </svg>
+      <p class="anim-fade dim" style="--delay:1s; margin-top:2vh; font-size:1.3vw;">Frontend: SVG canvas + CSS. Backend: Python. Storage: IndexedDB. Deployment: Modal.</p>
+    </section>
+
+    <!-- ==================== SLIDE 15: Run Locally ==================== -->
+    <section class="slide" id="run-locally">
+      <h2>Run Locally</h2>
+      <p class="dim" style="margin-bottom:2vh;">For contributors and local development.</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4vw;">
+        <div>
+          <h3 class="anim-fade" style="--delay:0.1s; font-size:1.5vw;">Prerequisites</h3>
+          <ul class="anim-fade" style="--delay:0.2s; font-size:1.3vw;">
+            <li>Python 3.11+</li>
+            <li><a href="https://pixi.sh" style="color:var(--accent);">Pixi</a> (recommended) or uv</li>
+          </ul>
+          <h3 class="anim-fade" style="--delay:0.4s; font-size:1.5vw; margin-top:2vh;">Setup</h3>
+          <pre class="anim-fade" style="--delay:0.5s"><code>git clone https://github.com/ericmjl/canvas-chat.git
+cd canvas-chat
+pixi install</code></pre>
+        </div>
+        <div>
+          <h3 class="anim-fade" style="--delay:0.6s; font-size:1.5vw;">Dev Server</h3>
+          <pre class="anim-fade" style="--delay:0.7s"><code>pixi run dev</code></pre>
+          <p class="anim-fade" style="--delay:0.8s; font-size:1.3vw; margin-top:1vh;">Opens at <code>http://127.0.0.1:7865</code>. Hot reload is enabled &mdash; edit files and the server restarts automatically.</p>
+          <h3 class="anim-fade" style="--delay:0.9s; font-size:1.5vw; margin-top:2vh;">Tests</h3>
+          <pre class="anim-fade" style="--delay:1.0s"><code>pixi run test      # Python
+pixi run test-js   # JavaScript</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 16: Codebase at a Glance ==================== -->
+    <section class="slide" id="codebase">
+      <h2>Codebase at a Glance</h2>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:3vw; margin-top:1vh;">
+        <div class="anim-fade" style="--delay:0.2s;">
+          <pre style="font-size:1.1vw;"><code>canvas-chat/
+├── src/canvas_chat/
+│   ├── app.py            # FastAPI routes
+│   ├── config.py         # Configuration
+│   ├── plugins/          # Python plugins
+│   └── static/
+│       ├── index.html    # Main page
+│       ├── css/          # Modular CSS (9 files)
+│       └── js/           # ES modules
+│           ├── app.js        # Orchestrator
+│           ├── canvas.js     # SVG canvas
+│           ├── crdt-graph.js # CRDT graph
+│           ├── chat.js       # LLM API
+│           └── feature-*.js  # Plugins
+├── tests/                # Unit tests
+├── cypress/              # E2E tests
+├── docs/                 # Diataxis docs
+└── modal_app.py          # Deployment</code></pre>
+        </div>
+        <div class="anim-fade" style="--delay:0.4s;">
+          <h3 style="font-size:1.5vw;">Key modules</h3>
+          <ul style="font-size:1.2vw;">
+            <li><code>app.js</code> &mdash; main orchestrator, slash commands, keyboard shortcuts</li>
+            <li><code>canvas.js</code> &mdash; SVG canvas, pan/zoom, node rendering, semantic zoom</li>
+            <li><code>crdt-graph.js</code> &mdash; Yjs-backed graph data model and traversal</li>
+            <li><code>chat.js</code> &mdash; LLM API calls, streaming via SSE</li>
+            <li><code>graph-types.js</code> &mdash; node/edge type definitions and factories</li>
+            <li><code>feature-plugin.js</code> &mdash; plugin base class with AppContext DI</li>
+          </ul>
+          <h3 style="font-size:1.5vw; margin-top:2vh;">Design principles</h3>
+          <ul style="font-size:1.2vw;">
+            <li>Excalidraw-inspired aesthetic</li>
+            <li>No frameworks &mdash; vanilla JS + CSS</li>
+            <li>Local-first, no server-side user data</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 17: Plugin Architecture ==================== -->
+    <section class="slide" id="plugin-architecture">
+      <h2>Three-Level Plugin System</h2>
+      <p class="dim" style="margin-bottom:2vh;">Extensibility from simple custom nodes to complex features. <a class="supp-link" data-goto="supp-plugin-levels">Detail &rarr;</a></p>
+      <svg viewBox="0 0 800 280" style="margin-top:1vh;">
+        <!-- Level 1 -->
+        <g class="anim-fade" style="--delay:0.1s">
+          <rect class="diagram-node" x="30" y="20" width="220" height="70" rx="8" filter="url(#shadow)" />
+          <text class="diagram-label" x="140" y="48" style="font-size:14px; font-weight:600">Level 1</text>
+          <text class="diagram-label-sm" x="140" y="70">Custom Node Types</text>
+        </g>
+        <!-- Level 2 -->
+        <g class="anim-fade" style="--delay:0.3s">
+          <rect class="diagram-highlight" x="290" y="20" width="220" height="70" rx="8" filter="url(#shadow)" />
+          <text class="diagram-label-inv" x="400" y="48" style="font-size:14px; font-weight:600">Level 2</text>
+          <text class="diagram-label-inv" x="400" y="70" style="font-size:11px">Feature Plugins</text>
+        </g>
+        <!-- Level 3 -->
+        <g class="anim-fade" style="--delay:0.5s">
+          <rect class="diagram-node" x="550" y="20" width="220" height="70" rx="8" filter="url(#shadow)" />
+          <text class="diagram-label" x="660" y="48" style="font-size:14px; font-weight:600">Level 3</text>
+          <text class="diagram-label-sm" x="660" y="70">Extension Hooks</text>
+        </g>
+        <!-- Arrows -->
+        <line class="diagram-edge anim-draw" style="--len:40; --delay:0.6s" x1="250" y1="55" x2="288" y2="55" marker-end="url(#arrow)" />
+        <line class="diagram-edge anim-draw" style="--len:40; --delay:0.7s" x1="510" y1="55" x2="548" y2="55" marker-end="url(#arrow)" />
+
+        <!-- Details row -->
+        <g class="anim-fade" style="--delay:0.7s">
+          <rect style="fill:var(--surface); stroke:var(--border); stroke-width:1; stroke-dasharray:4,3;" x="30" y="120" width="220" height="140" rx="6" />
+          <text class="diagram-label" x="140" y="148" style="font-size:12px; fill:var(--accent)">Custom rendering</text>
+          <text class="diagram-label-sm" x="140" y="170">Custom actions</text>
+          <text class="diagram-label-sm" x="140" y="190">Node-specific data</text>
+          <text class="diagram-label-sm" x="140" y="210">No slash commands</text>
+          <text class="diagram-label-sm" x="140" y="235" style="fill:var(--muted)">e.g. poll, chart</text>
+        </g>
+        <g class="anim-fade" style="--delay:0.9s">
+          <rect style="fill:var(--surface); stroke:var(--border); stroke-width:1; stroke-dasharray:4,3;" x="290" y="120" width="220" height="140" rx="6" />
+          <text class="diagram-label" x="400" y="148" style="font-size:12px; fill:var(--accent)">Slash commands</text>
+          <text class="diagram-label-sm" x="400" y="170">Multi-step LLM workflows</text>
+          <text class="diagram-label-sm" x="400" y="190">AppContext DI</text>
+          <text class="diagram-label-sm" x="400" y="210">State management</text>
+          <text class="diagram-label-sm" x="400" y="235" style="fill:var(--muted)">e.g. /committee, /matrix</text>
+        </g>
+        <g class="anim-fade" style="--delay:1.1s">
+          <rect style="fill:var(--surface); stroke:var(--border); stroke-width:1; stroke-dasharray:4,3;" x="550" y="120" width="220" height="140" rx="6" />
+          <text class="diagram-label" x="660" y="148" style="font-size:12px; fill:var(--accent)">Event interception</text>
+          <text class="diagram-label-sm" x="660" y="170">Logging, validation</text>
+          <text class="diagram-label-sm" x="660" y="190">Modify existing behavior</text>
+          <text class="diagram-label-sm" x="660" y="210">Multiple listeners</text>
+          <text class="diagram-label-sm" x="660" y="235" style="fill:var(--muted)">e.g. smart-fix</text>
+        </g>
+        <!-- Dashed lines from top to bottom -->
+        <line style="stroke:var(--border); stroke-width:1.5; stroke-dasharray:5,4;" x1="140" y1="90" x2="140" y2="120" />
+        <line style="stroke:var(--border); stroke-width:1.5; stroke-dasharray:5,4;" x1="400" y1="90" x2="400" y2="120" />
+        <line style="stroke:var(--border); stroke-width:1.5; stroke-dasharray:5,4;" x1="660" y1="90" x2="660" y2="120" />
+      </svg>
+    </section>
+
+    <!-- ==================== SLIDE 18: Building a Plugin ==================== -->
+    <section class="slide" id="build-plugin">
+      <h2>Building a Plugin</h2>
+      <p class="dim" style="margin-bottom:2vh;">Extend Canvas Chat with a few lines of JavaScript.</p>
+      <pre class="anim-fade" style="--delay:0.2s; font-size:1.15vw;"><code>import { FeaturePlugin } from './feature-plugin.js';
+
+export class MyFeature extends FeaturePlugin {
+  constructor(context) {
+    super(context);
+    this.graph = context.graph;
+    this.canvas = context.canvas;
+    this.chat = context.chat;
+  }
+
+  getSlashCommands() {
+    return [{
+      command: '/mycommand',
+      description: 'Does something cool',
+      placeholder: 'Enter input...',
+    }];
+  }
+
+  async handleCommand(command, args, context) {
+    // Your logic here
+  }
+}</code></pre>
+      <p class="anim-fade dim" style="--delay:0.5s; margin-top:1.5vh; font-size:1.2vw;">Register in <code>feature-registry.js</code> or load via <code>config.yaml</code> plugins list. See the <a href="https://ericmjl.github.io/canvas-chat/" style="color:var(--accent);">docs</a> for the full guide.</p>
+    </section>
+
+    <!-- ==================== SLIDE 19: Docs & Contributing ==================== -->
+    <section class="slide" id="docs-contributing">
+      <h2>Documentation &amp; Contributing</h2>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4vw; margin-top:2vh;">
+        <div class="anim-fade" style="--delay:0.2s;">
+          <h3 style="font-size:1.5vw;">Diataxis Docs</h3>
+          <p style="font-size:1.3vw;">Documentation follows the <a href="https://diataxis.fr/" style="color:var(--accent);">Diataxis</a> framework:</p>
+          <ul style="font-size:1.2vw; margin-top:1vh;">
+            <li><code>docs/explanation/</code> &mdash; Design decisions, "why" docs</li>
+            <li><code>docs/how-to/</code> &mdash; Task-oriented guides</li>
+            <li><code>docs/reference/</code> &mdash; API and config reference</li>
+          </ul>
+        </div>
+        <div class="anim-fade" style="--delay:0.4s;">
+          <h3 style="font-size:1.5vw;">Contributing</h3>
+          <ul style="font-size:1.2vw;">
+            <li>All changes via pull request (never push to main)</li>
+            <li>Pre-commit hooks for JSDoc linting</li>
+            <li>Unit tests (Python + JS) and Cypress E2E tests</li>
+            <li>Pixi as task runner (<code>pixi run dev</code>, <code>pixi run test</code>)</li>
+          </ul>
+          <p style="font-size:1.2vw; margin-top:1.5vh;">Browse the repo: <a href="https://github.com/ericmjl/canvas-chat" style="color:var(--accent);">github.com/ericmjl/canvas-chat</a></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 20: Thank You ==================== -->
+    <section class="slide" id="thank-you">
+      <h1 style="font-size:3.5vw;">Thank You</h1>
+      <p class="big" style="margin-top:1vh;">
+        <a href="https://ericmjl--canvas-chat-fastapi-app.modal.run/" style="color:var(--accent);">Try it online</a>
+        &nbsp;&middot;&nbsp;
+        <a href="https://github.com/ericmjl/canvas-chat" style="color:var(--accent);">GitHub</a>
+        &nbsp;&middot;&nbsp;
+        <a href="https://ericmjl.github.io/canvas-chat/" style="color:var(--accent);">Docs</a>
+      </p>
+      <pre style="margin-top:3vh;"><code>uvx canvas-chat launch</code></pre>
+      <div style="margin-top:4vh;">
+        <p class="dim" style="font-size:1.2vw;">Supplementary slides:</p>
+        <ul style="font-size:1.2vw; margin-top:0.5vh;">
+          <li><a class="supp-link" data-goto="supp-slash-commands">All slash commands</a></li>
+          <li><a class="supp-link" data-goto="supp-plugin-levels">Plugin levels in detail</a></li>
+          <li><a class="supp-link" data-goto="supp-keyboard-shortcuts">Keyboard shortcuts</a></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ==================== SUPPLEMENTARY: Slash Commands ==================== -->
+    <section class="slide" id="supp-slash-commands" data-supplementary>
+      <span class="supp-label">Supplementary</span>
+      <h2>All Slash Commands</h2>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:3vw; margin-top:1vh;">
+        <ul style="font-size:1.25vw;">
+          <li><code>/search &lt;query&gt;</code> &mdash; Web search via Exa</li>
+          <li><code>/research &lt;topic&gt;</code> &mdash; Deep research report via Exa</li>
+          <li><code>/committee &lt;question&gt;</code> &mdash; Multi-LLM consultation + synthesis</li>
+          <li><code>/matrix &lt;context&gt;</code> &mdash; Cross-product evaluation table</li>
+          <li><code>/factcheck</code> &mdash; Verify claims with web evidence</li>
+        </ul>
+        <ul style="font-size:1.25vw;">
+          <li><code>/code</code> &mdash; Run Python in-browser (Pyodide)</li>
+          <li><code>/flashcards</code> &mdash; Generate flashcards from content</li>
+          <li><code>/git &lt;url&gt;</code> &mdash; Fetch a Git repository</li>
+          <li><code>/youtube &lt;url&gt;</code> &mdash; Fetch YouTube video transcript</li>
+          <li><code>/fetch &lt;url&gt;</code> &mdash; Fetch URL content (HTML, PDF)</li>
+          <li><code>/note</code> &mdash; Create a note node</li>
+        </ul>
+      </div>
+      <p class="dim" style="margin-top:2vh; font-size:1.1vw;">Type <code>/</code> in the input to see the autocomplete menu with all available commands.</p>
+    </section>
+
+    <!-- ==================== SUPPLEMENTARY: Plugin Levels ==================== -->
+    <section class="slide" id="supp-plugin-levels" data-supplementary>
+      <span class="supp-label">Supplementary</span>
+      <h2>Plugin Levels in Detail</h2>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:2vw; margin-top:1vh;">
+        <div style="border:1px solid var(--border); border-radius:8px; padding:2vh 1.5vw;">
+          <h3 style="font-size:1.4vw;">Level 1: Custom Nodes</h3>
+          <ul style="font-size:1.1vw;">
+            <li>Register via <code>node-registry.js</code></li>
+            <li>Custom rendering (HTML/CSS)</li>
+            <li>Custom action buttons</li>
+            <li>Custom data model</li>
+            <li>No slash commands needed</li>
+          </ul>
+          <p class="dim" style="font-size:1vw; margin-top:1vh;">Example: poll node, chart node</p>
+        </div>
+        <div style="border:1px solid var(--accent); border-radius:8px; padding:2vh 1.5vw;">
+          <h3 style="font-size:1.4vw;">Level 2: Feature Plugins</h3>
+          <ul style="font-size:1.1vw;">
+            <li>Extend <code>FeaturePlugin</code> base class</li>
+            <li>Slash commands via <code>getSlashCommands()</code></li>
+            <li>Multi-step LLM workflows</li>
+            <li>AppContext dependency injection</li>
+            <li>Canvas event handlers</li>
+          </ul>
+          <p class="dim" style="font-size:1vw; margin-top:1vh;">Example: /committee, /matrix, /research</p>
+        </div>
+        <div style="border:1px solid var(--border); border-radius:8px; padding:2vh 1.5vw;">
+          <h3 style="font-size:1.4vw;">Level 3: Extension Hooks</h3>
+          <ul style="font-size:1.1vw;">
+            <li>Subscribe to plugin events</li>
+            <li>Intercept operations</li>
+            <li>Logging and validation</li>
+            <li>Multiple listeners per event</li>
+            <li>Enhance, don't replace</li>
+          </ul>
+          <p class="dim" style="font-size:1vw; margin-top:1vh;">Example: smart-fix plugin</p>
+        </div>
+      </div>
+      <p class="dim" style="margin-top:2vh; font-size:1.1vw;">Plugins can be JS-only, Python-only, or paired (JS + Python). Configured in <code>config.yaml</code>.</p>
+    </section>
+
+    <!-- ==================== SUPPLEMENTARY: Keyboard Shortcuts ==================== -->
+    <section class="slide" id="supp-keyboard-shortcuts" data-supplementary>
+      <span class="supp-label">Supplementary</span>
+      <h2>Keyboard Shortcuts</h2>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:3vw; margin-top:1vh;">
+        <div>
+          <h3 style="font-size:1.4vw;">Navigation</h3>
+          <ul style="font-size:1.15vw;">
+            <li><code>Cmd/Ctrl + F</code> &mdash; Search nodes</li>
+            <li><code>Escape</code> &mdash; Deselect all nodes</li>
+            <li><code>F</code> &mdash; Fit all nodes in view</li>
+            <li><code>L</code> &mdash; Auto-layout</li>
+          </ul>
+          <h3 style="font-size:1.4vw; margin-top:2vh;">Selection</h3>
+          <ul style="font-size:1.15vw;">
+            <li><code>Cmd/Ctrl + Click</code> &mdash; Multi-select</li>
+            <li><code>Cmd/Ctrl + A</code> &mdash; Select all</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="font-size:1.4vw;">Node Actions</h3>
+          <ul style="font-size:1.15vw;">
+            <li><code>E</code> &mdash; Edit selected node</li>
+            <li><code>C</code> &mdash; Copy node content</li>
+            <li><code>Delete/Backspace</code> &mdash; Delete selected nodes</li>
+            <li><code>Cmd/Ctrl + Z</code> &mdash; Undo</li>
+            <li><code>Cmd/Ctrl + Shift + Z</code> &mdash; Redo</li>
+          </ul>
+          <h3 style="font-size:1.4vw; margin-top:2vh;">Other</h3>
+          <ul style="font-size:1.15vw;">
+            <li><code>?</code> &mdash; Open help modal</li>
+            <li><code>N</code> &mdash; New note node</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Nav bar -->
+  <div class="nav-bar">
+    <div class="nav-arrow nav-prev"><span class="arrow">&#8249;</span><span class="key">j</span></div>
+    <div class="progress"></div>
+    <div class="nav-arrow nav-next"><span class="arrow">&#8250;</span><span class="key">k</span></div>
+  </div>
+
+  <!-- Overview overlay -->
+  <div class="overview-overlay" id="overview" aria-label="Slide overview">
+    <p class="overview-hint">Click a slide to jump &middot; Esc to close</p>
+    <div class="overview-grid"></div>
+  </div>
+
+  <script>
+    (function () {
+      var slides = document.querySelectorAll('.slide');
+      var current = 0;
+      var total = slides.length;
+      var progress = document.querySelector('.progress');
+      var prevBtn = document.querySelector('.nav-prev');
+      var nextBtn = document.querySelector('.nav-next');
+      var overview = document.getElementById('overview');
+      var overviewGrid = overview.querySelector('.overview-grid');
+
+      var suppInserted = false;
+      for (var i = 0; i < total; i++) {
+        if (!suppInserted && slides[i].hasAttribute('data-supplementary')) {
+          var sep = document.createElement('div');
+          sep.className = 'progress-sep';
+          progress.appendChild(sep);
+          suppInserted = true;
+        }
+        var dot = document.createElement('div');
+        dot.className = 'progress-dot';
+        if (slides[i].hasAttribute('data-supplementary')) dot.classList.add('supplementary');
+        dot.dataset.index = i;
+        dot.addEventListener('click', function () {
+          show(parseInt(this.dataset.index));
+        });
+        progress.appendChild(dot);
+      }
+      var dots = progress.querySelectorAll('.progress-dot');
+
+      for (var i = 0; i < total; i++) {
+        var card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'overview-card';
+        if (slides[i].hasAttribute('data-supplementary')) card.classList.add('supplementary');
+        card.dataset.index = i;
+        var titleEl = slides[i].querySelector('h1, h2, h3');
+        var title = titleEl ? titleEl.textContent.trim() : 'Slide ' + (i + 1);
+        card.innerHTML = '<span class="num">' + (i + 1) + '</span><span class="title">' + title.replace(/</g, '&lt;') + '</span>';
+        card.addEventListener('click', function () {
+          show(parseInt(this.dataset.index));
+          overview.classList.remove('visible');
+        });
+        overviewGrid.appendChild(card);
+      }
+      var overviewCards = overviewGrid.querySelectorAll('.overview-card');
+
+      var slideIdMap = {};
+      for (var i = 0; i < total; i++) {
+        if (slides[i].id) slideIdMap[slides[i].id] = i;
+      }
+
+      function getSlideIndexFromHash() {
+        var hash = window.location.hash;
+        if (!hash || hash.length < 2) return 0;
+        var n = parseInt(hash.slice(1), 10);
+        if (isNaN(n) || n < 0 || n >= total) return 0;
+        return n;
+      }
+
+      function updateHashForSlide(idx) {
+        var url = window.location.pathname + window.location.search + '#' + idx;
+        if (window.history.replaceState) {
+          window.history.replaceState(null, '', url);
+        } else {
+          window.location.hash = idx;
+        }
+      }
+
+      function show(idx) {
+        if (idx < 0 || idx >= total) return;
+        slides[current].classList.remove('active');
+        dots[current].classList.remove('active');
+        if (overviewCards[current]) overviewCards[current].classList.remove('active');
+        current = idx;
+        slides[current].classList.add('active');
+        dots[current].classList.add('active');
+        if (overviewCards[current]) overviewCards[current].classList.add('active');
+        updateHashForSlide(current);
+        setTimeout(function () {
+          document.dispatchEvent(new CustomEvent('slidechange', { detail: { index: current, slide: slides[current] } }));
+        }, 0);
+      }
+
+      document.addEventListener('click', function (e) {
+        var link = e.target.closest('[data-goto]');
+        if (link) {
+          e.preventDefault();
+          var target = link.getAttribute('data-goto');
+          if (slideIdMap[target] !== undefined) show(slideIdMap[target]);
+        }
+      });
+
+      prevBtn.addEventListener('click', function () { show(current - 1); });
+      nextBtn.addEventListener('click', function () { show(current + 1); });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          overview.classList.toggle('visible');
+          if (overview.classList.contains('visible')) {
+            for (var i = 0; i < overviewCards.length; i++) {
+              overviewCards[i].classList.toggle('active', i === current);
+            }
+          }
+          return;
+        }
+        if (overview.classList.contains('visible')) return;
+        switch (e.key) {
+          case ' ':
+            e.preventDefault();
+            show(current + (e.shiftKey ? -1 : 1));
+            break;
+          case 'ArrowRight': case 'k':
+            show(current + 1);
+            break;
+          case 'ArrowLeft': case 'j':
+            show(current - 1);
+            break;
+        }
+      });
+
+      window.addEventListener('hashchange', function () {
+        var idx = getSlideIndexFromHash();
+        if (idx !== current) show(idx);
+      });
+
+      show(getSlideIndexFromHash());
+    })();
+  </script>
+  <script>
+    (function () {
+      var NODE_W = 150;
+      var NODE_H = 56;
+      var CANVAS_W = 420;
+      var CANVAS_H = 320;
+
+      function getConnectionPoint(nodePos, nodeSize, otherCenter) {
+        var center = { x: nodePos.x + nodeSize.width / 2, y: nodePos.y + nodeSize.height / 2 };
+        var dx = otherCenter.x - center.x;
+        var dy = otherCenter.y - center.y;
+        var angle = Math.atan2(dy, dx);
+        var PI = Math.PI;
+        var side, x, y;
+        if (angle >= -PI / 4 && angle < PI / 4) {
+          side = 'right';
+          x = nodePos.x + nodeSize.width;
+          y = center.y;
+        } else if (angle >= PI / 4 && angle < (3 * PI) / 4) {
+          side = 'bottom';
+          x = center.x;
+          y = nodePos.y + nodeSize.height;
+        } else if (angle >= (-3 * PI) / 4 && angle < -PI / 4) {
+          side = 'top';
+          x = center.x;
+          y = nodePos.y;
+        } else {
+          side = 'left';
+          x = nodePos.x;
+          y = center.y;
+        }
+        return { x: x, y: y, side: side };
+      }
+
+      function calculateBezierPath(sourcePos, sourceSize, targetPos, targetSize) {
+        var sourceCenter = { x: sourcePos.x + sourceSize.width / 2, y: sourcePos.y + sourceSize.height / 2 };
+        var targetCenter = { x: targetPos.x + targetSize.width / 2, y: targetPos.y + targetSize.height / 2 };
+        var sourcePoint = getConnectionPoint(sourcePos, sourceSize, targetCenter);
+        var targetPoint = getConnectionPoint(targetPos, targetSize, sourceCenter);
+        var distance = Math.sqrt(Math.pow(targetPoint.x - sourcePoint.x, 2) + Math.pow(targetPoint.y - sourcePoint.y, 2));
+        var controlOffset = Math.min(distance * 0.4, 80);
+        var cp1x, cp1y, cp2x, cp2y;
+        switch (sourcePoint.side) {
+          case 'right': cp1x = sourcePoint.x + controlOffset; cp1y = sourcePoint.y; break;
+          case 'left': cp1x = sourcePoint.x - controlOffset; cp1y = sourcePoint.y; break;
+          case 'top': cp1x = sourcePoint.x; cp1y = sourcePoint.y - controlOffset; break;
+          case 'bottom': cp1x = sourcePoint.x; cp1y = sourcePoint.y + controlOffset; break;
+        }
+        switch (targetPoint.side) {
+          case 'right': cp2x = targetPoint.x + controlOffset; cp2y = targetPoint.y; break;
+          case 'left': cp2x = targetPoint.x - controlOffset; cp2y = targetPoint.y; break;
+          case 'top': cp2x = targetPoint.x; cp2y = targetPoint.y - controlOffset; break;
+          case 'bottom': cp2x = targetPoint.x; cp2y = targetPoint.y + controlOffset; break;
+        }
+        return 'M ' + sourcePoint.x + ' ' + sourcePoint.y + ' C ' + cp1x + ' ' + cp1y + ', ' + cp2x + ' ' + cp2y + ', ' + targetPoint.x + ' ' + targetPoint.y;
+      }
+
+      function getNodeRect(el) {
+        var x = parseFloat(el.getAttribute('data-x')) || parseFloat(el.style.left) || 0;
+        var y = parseFloat(el.getAttribute('data-y')) || parseFloat(el.style.top) || 0;
+        var w = el.offsetWidth || NODE_W;
+        var h = el.offsetHeight || NODE_H;
+        return { x: x, y: y, width: w, height: h };
+      }
+
+      function initMiniCanvas(canvas) {
+        function updateAllEdges() {
+          var paths = canvas.querySelectorAll('.edges-layer path[data-source][data-target]');
+          paths.forEach(function (path) {
+            var sid = path.getAttribute('data-source');
+            var tid = path.getAttribute('data-target');
+            var src = canvas.querySelector('.node[data-node-id="' + sid + '"]');
+            var tgt = canvas.querySelector('.node[data-node-id="' + tid + '"]');
+            if (!src || !tgt) return;
+            var sp = getNodeRect(src);
+            var tp = getNodeRect(tgt);
+            var d = calculateBezierPath(sp, { width: sp.width, height: sp.height }, tp, { width: tp.width, height: tp.height });
+            path.setAttribute('d', d);
+          });
+        }
+
+        canvas.querySelectorAll('.node').forEach(function (node) {
+          node.addEventListener('mousedown', function (e) {
+            if (e.target.closest('button')) return;
+            e.preventDefault();
+            var rect = canvas.getBoundingClientRect();
+            var nx = parseFloat(node.style.left) || 0;
+            var ny = parseFloat(node.style.top) || 0;
+            var offsetX = e.clientX - rect.left - nx;
+            var offsetY = e.clientY - rect.top - ny;
+
+            function move(e) {
+              var r = canvas.getBoundingClientRect();
+              var left = e.clientX - r.left - offsetX;
+              var top = e.clientY - r.top - offsetY;
+              var maxLeft = CANVAS_W - (node.offsetWidth || NODE_W);
+              var maxTop = CANVAS_H - (node.offsetHeight || NODE_H);
+              left = Math.max(0, Math.min(maxLeft, left));
+              top = Math.max(0, Math.min(maxTop, top));
+              node.style.left = left + 'px';
+              node.style.top = top + 'px';
+              node.setAttribute('data-x', left);
+              node.setAttribute('data-y', top);
+              updateAllEdges();
+            }
+
+            function up() {
+              document.removeEventListener('mousemove', move);
+              document.removeEventListener('mouseup', up);
+            }
+
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
+          });
+        });
+
+        updateAllEdges();
+        canvas.addEventListener('minicanvas-update-edges', updateAllEdges);
+      }
+
+      document.querySelectorAll('.mini-canvas').forEach(initMiniCanvas);
+    })();
+  </script>
+  <script>
+    (function () {
+      var TYPING_MS = 45;
+      var MESSAGE = 'Tell me about quantum computing';
+      var timeoutIds = [];
+
+      function resetChatReplyDemo(slide) {
+        var wrap = slide.querySelector('#chat-reply-demo');
+        if (!wrap) return;
+        var input = wrap.querySelector('#chat-reply-input');
+        var userNode = wrap.querySelector('.node.human[data-node-id="u1"]');
+        var aiNode = wrap.querySelector('.node.ai[data-node-id="a1"]');
+        var edge = wrap.querySelector('.edge[data-source="u1"]');
+        var contentEl = wrap.querySelector('.node-content[data-demo-content]');
+        if (input) input.value = '';
+        if (userNode) userNode.classList.add('demo-hidden');
+        if (aiNode) aiNode.classList.add('demo-hidden');
+        if (edge) edge.classList.add('demo-hidden');
+        if (contentEl) contentEl.textContent = '"Tell me about..."';
+      }
+
+      function runChatReplyDemo(slide) {
+        var wrap = slide.querySelector('#chat-reply-demo');
+        if (!wrap) return;
+        var canvas = wrap.querySelector('.mini-canvas[data-canvas-id="chat-reply"]');
+        var input = wrap.querySelector('#chat-reply-input');
+        var userNode = wrap.querySelector('.node.human[data-node-id="u1"]');
+        var aiNode = wrap.querySelector('.node.ai[data-node-id="a1"]');
+        var edge = wrap.querySelector('.edge[data-source="u1"]');
+        var contentEl = wrap.querySelector('.node-content[data-demo-content]');
+        if (!canvas || !input || !userNode || !aiNode || !edge) return;
+
+        resetChatReplyDemo(slide);
+        timeoutIds.forEach(clearTimeout);
+        timeoutIds = [];
+
+        var delay = 0;
+        function after(ms, fn) {
+          delay += ms;
+          timeoutIds.push(setTimeout(fn, delay));
+        }
+
+        after(500, function () {
+          var i = 0;
+          function typeNext() {
+            if (i <= MESSAGE.length) {
+              input.value = MESSAGE.slice(0, i);
+              i++;
+              timeoutIds.push(setTimeout(typeNext, TYPING_MS));
+            }
+          }
+          typeNext();
+        });
+        after(MESSAGE.length * TYPING_MS, function () {});
+        after(400, function () {
+          input.value = '';
+        });
+        after(300, function () {
+          if (contentEl) contentEl.textContent = '"' + MESSAGE + '"';
+          userNode.classList.remove('demo-hidden');
+        });
+        after(400, function () {
+          canvas.dispatchEvent(new CustomEvent('minicanvas-update-edges'));
+          edge.getBoundingClientRect();
+          edge.classList.remove('demo-hidden');
+          aiNode.classList.remove('demo-hidden');
+          timeoutIds.push(setTimeout(function () {
+            runChatReplyDemo(slide);
+          }, 2500));
+        });
+      }
+
+      document.addEventListener('slidechange', function (e) {
+        if (!e.detail || !e.detail.slide) return;
+        if (e.detail.slide.id === 'workflow-chat-reply') {
+          runChatReplyDemo(e.detail.slide);
+        } else {
+          timeoutIds.forEach(clearTimeout);
+          timeoutIds = [];
+        }
+      });
+    })();
+  </script>
+  <script>
+    (function () {
+      var HIGHLIGHT_BRANCH_SOURCE = 'Quantum computing uses qubits and superposition.';
+      var HIGHLIGHT_CHAR_MS = 40;
+      var highlightBranchTimeoutIds = [];
+
+      function escapeHtml(s) {
+        var div = document.createElement('div');
+        div.textContent = s;
+        return div.innerHTML;
+      }
+
+      function resetHighlightBranchDemo(slide) {
+        var wrap = slide.querySelector('#highlight-branch-demo');
+        if (!wrap) return;
+        var userContent = wrap.querySelector('.node.human .node-content[data-demo-source]');
+        var excerptNode = wrap.querySelector('.node.excerpt[data-node-id="ex1"]');
+        var excerptContent = wrap.querySelector('.node-content[data-demo-excerpt-content]');
+        var edge = wrap.querySelector('.edge[data-source="u1"][data-target="ex1"]');
+        var preview = wrap.querySelector('#highlight-branch-preview');
+        var previewText = wrap.querySelector('#highlight-branch-preview-text');
+        if (userContent) {
+          var src = userContent.getAttribute('data-demo-source') || '';
+          userContent.innerHTML = escapeHtml(src);
+        }
+        if (preview) preview.classList.remove('visible');
+        if (previewText) previewText.textContent = '"..."';
+        if (excerptNode) excerptNode.classList.add('demo-hidden');
+        if (excerptContent) excerptContent.textContent = '';
+        if (edge) edge.classList.add('demo-hidden');
+      }
+
+      function runHighlightBranchDemo(slide) {
+        var wrap = slide.querySelector('#highlight-branch-demo');
+        if (!wrap) return;
+        var canvas = wrap.querySelector('.mini-canvas[data-canvas-id="highlight-branch"]');
+        var userContent = wrap.querySelector('.node.human .node-content[data-demo-source]');
+        var excerptNode = wrap.querySelector('.node.excerpt[data-node-id="ex1"]');
+        var excerptContent = wrap.querySelector('.node-content[data-demo-excerpt-content]');
+        var edge = wrap.querySelector('.edge[data-source="u1"][data-target="ex1"]');
+        var preview = wrap.querySelector('#highlight-branch-preview');
+        var previewText = wrap.querySelector('#highlight-branch-preview-text');
+        if (!canvas || !userContent || !excerptNode || !edge || !preview || !previewText) return;
+
+        var source = userContent.getAttribute('data-demo-source') || HIGHLIGHT_BRANCH_SOURCE;
+        resetHighlightBranchDemo(slide);
+        highlightBranchTimeoutIds.forEach(clearTimeout);
+        highlightBranchTimeoutIds = [];
+
+        var delay = 0;
+        function after(ms, fn) {
+          delay += ms;
+          highlightBranchTimeoutIds.push(setTimeout(fn, delay));
+        }
+
+        after(500, function () {
+          preview.classList.add('visible');
+          var n = 0;
+          function growSelection() {
+            if (n <= source.length) {
+              var before = source.slice(0, n);
+              var afterText = source.slice(n);
+              userContent.innerHTML = (before ? '<mark class="demo-selection">' + escapeHtml(before) + '</mark>' : '') + escapeHtml(afterText);
+              previewText.textContent = '"' + (before || '...') + '"';
+              n++;
+              highlightBranchTimeoutIds.push(setTimeout(growSelection, HIGHLIGHT_CHAR_MS));
+            }
+          }
+          growSelection();
+        });
+        after(source.length * HIGHLIGHT_CHAR_MS, function () {});
+        after(400, function () {
+          preview.classList.remove('visible');
+          userContent.innerHTML = '<mark class="source-highlight">' + escapeHtml(source) + '</mark>';
+          if (excerptContent) excerptContent.textContent = source;
+          excerptNode.classList.remove('demo-hidden');
+          canvas.dispatchEvent(new CustomEvent('minicanvas-update-edges'));
+          edge.getBoundingClientRect();
+          edge.classList.remove('demo-hidden');
+          highlightBranchTimeoutIds.push(setTimeout(function () {
+            runHighlightBranchDemo(slide);
+          }, 2500));
+        });
+      }
+
+      document.addEventListener('slidechange', function (e) {
+        if (!e.detail || !e.detail.slide) return;
+        if (e.detail.slide.id === 'workflow-highlight-branch') {
+          runHighlightBranchDemo(e.detail.slide);
+        } else {
+          highlightBranchTimeoutIds.forEach(clearTimeout);
+          highlightBranchTimeoutIds = [];
+        }
+      });
+    })();
+  </script>
+  <script>
+    (function () {
+      var MULTI_SELECT_TYPING_MS = 45;
+      var MULTI_SELECT_MESSAGE = 'Compare these and summarize';
+      var multiSelectTimeoutIds = [];
+
+      function resetMultiSelectDemo(slide) {
+        var wrap = slide.querySelector('#multi-select-demo');
+        if (!wrap) return;
+        var input = wrap.querySelector('#multi-select-input');
+        var ai1 = wrap.querySelector('.node[data-node-id="ai1"]');
+        var ai2 = wrap.querySelector('.node[data-node-id="ai2"]');
+        var mergedNode = wrap.querySelector('.node[data-node-id="merged"]');
+        var mergedContent = wrap.querySelector('.node[data-node-id="merged"] .node-content[data-demo-content]');
+        var edge1 = wrap.querySelector('.edge[data-source="ai1"]');
+        var edge2 = wrap.querySelector('.edge[data-source="ai2"]');
+        var thinking = wrap.querySelector('#multi-select-thinking');
+        if (input) input.value = '';
+        if (ai1) ai1.classList.remove('demo-selected');
+        if (ai2) ai2.classList.remove('demo-selected');
+        if (mergedNode) mergedNode.classList.add('demo-hidden');
+        if (mergedContent) mergedContent.textContent = '';
+        if (edge1) edge1.classList.add('demo-hidden');
+        if (edge2) edge2.classList.add('demo-hidden');
+        if (thinking) thinking.classList.remove('visible');
+      }
+
+      function runMultiSelectDemo(slide) {
+        var wrap = slide.querySelector('#multi-select-demo');
+        if (!wrap) return;
+        var canvas = wrap.querySelector('.mini-canvas[data-canvas-id="multi-select"]');
+        var input = wrap.querySelector('#multi-select-input');
+        var ai1 = wrap.querySelector('.node[data-node-id="ai1"]');
+        var ai2 = wrap.querySelector('.node[data-node-id="ai2"]');
+        var mergedNode = wrap.querySelector('.node[data-node-id="merged"]');
+        var mergedContent = wrap.querySelector('.node[data-node-id="merged"] .node-content[data-demo-content]');
+        var edge1 = wrap.querySelector('.edge[data-source="ai1"]');
+        var edge2 = wrap.querySelector('.edge[data-source="ai2"]');
+        var thinking = wrap.querySelector('#multi-select-thinking');
+        if (!canvas || !input || !ai1 || !ai2 || !mergedNode || !edge1 || !edge2 || !thinking) return;
+
+        resetMultiSelectDemo(slide);
+        multiSelectTimeoutIds.forEach(clearTimeout);
+        multiSelectTimeoutIds = [];
+
+        var delay = 0;
+        function after(ms, fn) {
+          delay += ms;
+          multiSelectTimeoutIds.push(setTimeout(fn, delay));
+        }
+
+        after(500, function () {
+          ai1.classList.add('demo-selected');
+        });
+        after(700, function () {
+          ai2.classList.add('demo-selected');
+        });
+        after(400, function () {
+          var i = 0;
+          function typeNext() {
+            if (i <= MULTI_SELECT_MESSAGE.length) {
+              input.value = MULTI_SELECT_MESSAGE.slice(0, i);
+              i++;
+              multiSelectTimeoutIds.push(setTimeout(typeNext, MULTI_SELECT_TYPING_MS));
+            }
+          }
+          typeNext();
+        });
+        after(MULTI_SELECT_MESSAGE.length * MULTI_SELECT_TYPING_MS, function () {});
+        after(400, function () {
+          input.value = '';
+          thinking.classList.add('visible');
+        });
+        after(900, function () {
+          thinking.classList.remove('visible');
+          if (mergedContent) mergedContent.textContent = MULTI_SELECT_MESSAGE;
+          mergedNode.classList.remove('demo-hidden');
+          canvas.dispatchEvent(new CustomEvent('minicanvas-update-edges'));
+          edge1.getBoundingClientRect();
+          edge1.classList.remove('demo-hidden');
+          edge2.classList.remove('demo-hidden');
+          multiSelectTimeoutIds.push(setTimeout(function () {
+            runMultiSelectDemo(slide);
+          }, 2500));
+        });
+      }
+
+      document.addEventListener('slidechange', function (e) {
+        if (!e.detail || !e.detail.slide) return;
+        if (e.detail.slide.id === 'workflow-multi-select') {
+          runMultiSelectDemo(e.detail.slide);
+        } else {
+          multiSelectTimeoutIds.forEach(clearTimeout);
+          multiSelectTimeoutIds = [];
+        }
+      });
+    })();
+  </script>
+  <script>
+    (function () {
+      var MESSY = { u1: { x: 150, y: 20 }, a1: { x: 50, y: 140 }, a2: { x: 200, y: 190 } };
+      var CLEAN = { u1: { x: 24, y: 120 }, a1: { x: 240, y: 50 }, a2: { x: 240, y: 200 } };
+      var autoLayoutTimeoutIds = [];
+      var RAY_COUNT = 8;
+
+      function setPositions(wrap, positions, updateEdges) {
+        if (!wrap) return;
+        var canvas = wrap.querySelector('.mini-canvas[data-canvas-id="auto-layout"]');
+        if (!canvas) return;
+        for (var id in positions) {
+          var node = canvas.querySelector('.node[data-node-id="' + id + '"]');
+          if (!node) continue;
+          var p = positions[id];
+          node.style.left = p.x + 'px';
+          node.style.top = p.y + 'px';
+          node.setAttribute('data-x', p.x);
+          node.setAttribute('data-y', p.y);
+        }
+        if (updateEdges !== false) canvas.dispatchEvent(new CustomEvent('minicanvas-update-edges'));
+      }
+
+      function resetAutoLayoutDemo(slide) {
+        var wrap = slide.querySelector('#auto-layout-demo');
+        if (!wrap) return;
+        var cursor = wrap.querySelector('#auto-layout-cursor');
+        var btn = wrap.querySelector('#auto-layout-toolbar-btn');
+        var burst = wrap.querySelector('#auto-layout-burst');
+        if (cursor) { cursor.classList.remove('visible'); cursor.style.left = '0px'; cursor.style.top = '0px'; }
+        if (btn) { btn.classList.remove('demo-hover', 'demo-active'); }
+        if (burst) burst.classList.remove('active');
+        wrap.querySelectorAll('.sunray').forEach(function (r) { r.remove(); });
+        setPositions(wrap, MESSY);
+      }
+
+      function createSunrays(wrap, cx, cy) {
+        for (var i = 0; i < RAY_COUNT; i++) {
+          var angle = (i / RAY_COUNT) * 2 * Math.PI;
+          var dx = Math.cos(angle) * 18;
+          var dy = Math.sin(angle) * 18;
+          var ray = document.createElement('div');
+          ray.className = 'sunray';
+          ray.style.left = cx + 'px';
+          ray.style.top = cy + 'px';
+          ray.style.setProperty('--ray-dx', dx + 'px');
+          ray.style.setProperty('--ray-dy', dy + 'px');
+          ray.style.transform = 'translate(-50%,-50%) rotate(' + (angle * 180 / Math.PI + 90) + 'deg)';
+          wrap.querySelector('.mini-canvas').appendChild(ray);
+          ray.offsetWidth;
+          ray.classList.add('active');
+        }
+      }
+
+      function runAutoLayoutDemo(slide) {
+        var wrap = slide.querySelector('#auto-layout-demo');
+        if (!wrap) return;
+        var canvas = wrap.querySelector('.mini-canvas[data-canvas-id="auto-layout"]');
+        var cursor = wrap.querySelector('#auto-layout-cursor');
+        var btn = wrap.querySelector('#auto-layout-toolbar-btn');
+        var burst = wrap.querySelector('#auto-layout-burst');
+        if (!canvas || !cursor || !btn || !burst) return;
+
+        resetAutoLayoutDemo(slide);
+        autoLayoutTimeoutIds.forEach(clearTimeout);
+        autoLayoutTimeoutIds = [];
+
+        var delay = 0;
+        function after(ms, fn) {
+          delay += ms;
+          autoLayoutTimeoutIds.push(setTimeout(fn, delay));
+        }
+
+        after(600, function () {
+          cursor.style.left = '60px';
+          cursor.style.top = '260px';
+          cursor.classList.add('visible');
+        });
+
+        after(100, function () {
+          var btnRect = btn.getBoundingClientRect();
+          var canvasRect = canvas.getBoundingClientRect();
+          var targetX = btnRect.left - canvasRect.left + btnRect.width / 2;
+          var targetY = btnRect.top - canvasRect.top + btnRect.height / 2;
+          cursor.style.left = targetX + 'px';
+          cursor.style.top = targetY + 'px';
+        });
+
+        after(550, function () {
+          btn.classList.add('demo-hover');
+        });
+
+        after(300, function () {
+          btn.classList.add('demo-active');
+          var btnRect = btn.getBoundingClientRect();
+          var canvasRect = canvas.getBoundingClientRect();
+          var cx = btnRect.left - canvasRect.left + btnRect.width / 2;
+          var cy = btnRect.top - canvasRect.top + btnRect.height / 2;
+          burst.style.left = cx + 'px';
+          burst.style.top = cy + 'px';
+          burst.classList.remove('active');
+          burst.offsetWidth;
+          burst.classList.add('active');
+          createSunrays(wrap, cx, cy);
+        });
+
+        after(120, function () {
+          btn.classList.remove('demo-active');
+          setPositions(wrap, CLEAN);
+        });
+
+        after(700, function () {
+          btn.classList.remove('demo-hover');
+          cursor.classList.remove('visible');
+        });
+
+        after(2500, function () {
+          runAutoLayoutDemo(slide);
+        });
+      }
+
+      document.addEventListener('slidechange', function (e) {
+        if (!e.detail || !e.detail.slide) return;
+        if (e.detail.slide.id === 'workflow-auto-layout') {
+          runAutoLayoutDemo(e.detail.slide);
+        } else {
+          autoLayoutTimeoutIds.forEach(clearTimeout);
+          autoLayoutTimeoutIds = [];
+        }
+      });
+    })();
+  </script>
+  <script>
+    (function () {
+      var navigateTimeoutIds = [];
+
+      function resetNavigateDemo(slide) {
+        var wrap = slide.querySelector('#navigate-demo');
+        if (!wrap) return;
+        wrap.classList.remove('zoom-full');
+        wrap.classList.add('zoom-summary');
+        var container = wrap.querySelector('#navigate-zoom-container');
+        if (container) container.classList.remove('zoom-in');
+        var cursor = wrap.querySelector('#navigate-cursor');
+        var hint = wrap.querySelector('#navigate-scroll-hint');
+        if (cursor) { cursor.classList.remove('visible'); cursor.style.left = '0px'; cursor.style.top = '0px'; }
+        if (hint) hint.classList.remove('visible');
+      }
+
+      function runNavigateDemo(slide) {
+        var wrap = slide.querySelector('#navigate-demo');
+        if (!wrap) return;
+        var canvas = wrap.querySelector('.mini-canvas[data-canvas-id="navigate"]');
+        var cursor = wrap.querySelector('#navigate-cursor');
+        var hint = wrap.querySelector('#navigate-scroll-hint');
+        var zoomContainer = wrap.querySelector('#navigate-zoom-container');
+        if (!canvas || !cursor || !hint || !zoomContainer) return;
+
+        resetNavigateDemo(slide);
+        navigateTimeoutIds.forEach(clearTimeout);
+        navigateTimeoutIds = [];
+
+        var delay = 0;
+        function after(ms, fn) {
+          delay += ms;
+          navigateTimeoutIds.push(setTimeout(fn, delay));
+        }
+
+        after(500, function () {
+          cursor.style.left = '80px';
+          cursor.style.top = '280px';
+          cursor.classList.add('visible');
+        });
+
+        after(100, function () {
+          cursor.style.left = '210px';
+          cursor.style.top = '160px';
+        });
+
+        after(600, function () {
+          hint.classList.add('visible');
+        });
+
+        after(900, function () {
+          wrap.classList.remove('zoom-summary');
+          wrap.classList.add('zoom-full');
+          zoomContainer.classList.add('zoom-in');
+        });
+
+        after(2800, function () {
+          wrap.classList.remove('zoom-full');
+          wrap.classList.add('zoom-summary');
+          zoomContainer.classList.remove('zoom-in');
+        });
+
+        after(500, function () {
+          hint.classList.remove('visible');
+          cursor.classList.remove('visible');
+        });
+
+        after(2500, function () {
+          runNavigateDemo(slide);
+        });
+      }
+
+      document.addEventListener('slidechange', function (e) {
+        if (!e.detail || !e.detail.slide) return;
+        if (e.detail.slide.id === 'workflow-navigate') {
+          runNavigateDemo(e.detail.slide);
+        } else {
+          navigateTimeoutIds.forEach(clearTimeout);
+          navigateTimeoutIds = [];
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
