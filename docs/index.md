@@ -81,6 +81,10 @@ See [Admin Mode Setup](how-to/admin-mode.md) for details.
 12. **Navigate**: Drag the handle (⋮⋮) to move nodes, scroll to zoom, double-click canvas to fit content
 13. **Export**: Click 💾 to save your session as a `.canvaschat` file
 
+## Presentations
+
+A product overview is available as a single-file HTML slide deck: [View the Canvas Chat Overview presentation](presentations/canvas-chat-overview.html). You can also read about it on the [Presentations](presentations/README.md) page.
+
 ## Development
 
 For contributors or local development:
