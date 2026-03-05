@@ -26,6 +26,12 @@ describe('Settings Modal', () => {
         cy.get('#settings-panel-search').should('have.class', 'active');
         cy.get('#settings-panel-search h3').should('contain', 'Search');
 
+        // Click Shortcuts
+        cy.get('.settings-sidebar-item[data-category="shortcuts"]').click();
+        cy.get('#settings-panel-shortcuts').should('have.class', 'active');
+        cy.get('#settings-panel-shortcuts h3').should('contain', 'Keyboard shortcuts');
+        cy.get('#shortcuts-list .shortcuts-row').should('have.length.at.least', 5);
+
         // Click Features
         cy.get('.settings-sidebar-item[data-category="features"]').click();
         cy.get('#settings-panel-features').should('have.class', 'active');
@@ -94,11 +100,39 @@ describe('Settings Modal', () => {
         cy.get('.settings-sidebar-item[data-category="custom-models"]').should('have.class', 'admin-hidden');
         cy.get('.settings-sidebar-item[data-category="proxy"]').should('have.class', 'admin-hidden');
 
-        // Features and Plugins remain visible
+        // Shortcuts, Features and Plugins remain visible
+        cy.get('.settings-sidebar-item[data-category="shortcuts"]').should('not.have.class', 'admin-hidden');
         cy.get('.settings-sidebar-item[data-category="features"]').should('not.have.class', 'admin-hidden');
         cy.get('.settings-sidebar-item[data-category="plugins"]').should('not.have.class', 'admin-hidden');
 
-        // First visible panel should be Features (default when LLM is hidden)
-        cy.get('#settings-panel-features').should('have.class', 'active');
+        // First visible panel should be Shortcuts (first non-admin-restricted in sidebar order)
+        cy.get('#settings-panel-shortcuts').should('have.class', 'active');
+    });
+
+    it('Shortcuts panel: change binding, save, reopen persists; reset restores', () => {
+        cy.get('#settings-btn').click();
+        cy.get('#settings-modal').should('be.visible');
+        cy.get('.settings-sidebar-item[data-category="shortcuts"]').click();
+        cy.get('#settings-panel-shortcuts').should('have.class', 'active');
+
+        // Find "Show help" row and click Change
+        cy.get('#shortcuts-list .shortcuts-row').contains('Show help').parents('.shortcuts-row').as('helpRow');
+        cy.get('@helpRow').find('.shortcuts-change-btn').click();
+        cy.get('@helpRow').find('.shortcuts-key').should('contain', 'Press a key');
+        // Simulate keydown for 'h'
+        cy.get('body').trigger('keydown', { key: 'h', keyCode: 72, which: 72 });
+        cy.get('@helpRow').find('.shortcuts-key').should('contain', 'h');
+
+        cy.get('#save-settings-btn').click();
+        cy.get('#settings-modal').should('not.be.visible');
+
+        cy.get('#settings-btn').click();
+        cy.get('.settings-sidebar-item[data-category="shortcuts"]').click();
+        cy.get('#shortcuts-list .shortcuts-row').contains('Show help').parents('.shortcuts-row').find('.shortcuts-key').should('contain', 'h');
+
+        // Reset to default for Show help (restore ? so other tests are unaffected)
+        cy.get('#shortcuts-list .shortcuts-row').contains('Show help').parents('.shortcuts-row').find('.shortcuts-reset-btn').click();
+        cy.get('#shortcuts-list .shortcuts-row').contains('Show help').parents('.shortcuts-row').find('.shortcuts-key').should('not.contain', 'h');
+        cy.get('#save-settings-btn').click();
     });
 });

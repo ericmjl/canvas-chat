@@ -150,7 +150,12 @@ No mouse needed!
 
 ## Customization
 
-Currently, keyboard shortcuts are not customizable. If you need different bindings, please open an issue on GitHub.
+You can override default keyboard shortcuts in **Settings → Shortcuts**. Open the Settings modal, click "Shortcuts" in the sidebar, then:
+
+- **Change:** Click "Change" for an action, then press the key combination you want (e.g. `⌘K`). You must press a full combo (modifier + key); pressing only a modifier (Cmd, Ctrl, Shift, Alt) is ignored. Press **Escape** to cancel without changing.
+- **Reset to default:** This button appears only when the shortcut for that action differs from the default. If you click "Change" and press the same key as the default, no override is stored and "Reset to default" is not shown.
+
+Keybindings are stored in your browser and are not included in session export/import.
 
 ## Accessibility
 

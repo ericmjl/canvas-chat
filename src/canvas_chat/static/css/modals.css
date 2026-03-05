@@ -265,6 +265,48 @@
     text-decoration: underline;
 }
 
+/* Shortcuts panel */
+.shortcuts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.shortcuts-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--bg-secondary);
+}
+
+.shortcuts-row:last-child {
+    border-bottom: none;
+}
+
+.shortcuts-row.shortcuts-capturing {
+    background: var(--node-highlight);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+}
+
+.shortcuts-label {
+    flex: 1;
+    min-width: 140px;
+}
+
+.shortcuts-key {
+    font-family: var(--font-mono);
+    min-width: 80px;
+    text-align: right;
+}
+
+.shortcuts-change-btn,
+.shortcuts-reset-btn {
+    flex-shrink: 0;
+}
+
 .copilot-auth-actions {
     display: flex;
     flex-wrap: wrap;
