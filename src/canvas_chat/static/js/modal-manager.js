@@ -11,6 +11,13 @@
  * - escapeHtmlText: HTML escaping utility
  */
 
+import {
+    eventToSpec,
+    formatKeyForDisplay,
+    getActionList,
+    getEffectiveKeybindings,
+    getKeyDisplayForAction,
+} from './keybindings.js';
 import { wrapNode } from './node-protocols.js';
 import { storage } from './storage.js';
 import { apiUrl, escapeHtmlText } from './utils.js';
@@ -27,6 +34,10 @@ class ModalManager {
         this.app = app;
         // Map of plugin modals: Map<`${pluginId}:${modalId}`, HTMLElement>
         this._pluginModals = new Map();
+        /** @type {Object.<string, {key: string, shift?: boolean, ctrl?: boolean}>} User keybinding overrides (pending until Save) */
+        this._shortcutOverrides = {};
+        /** @type {string|null} actionId when capturing next key for Shortcuts panel */
+        this._shortcutCaptureActionId = null;
         this.copilotDeviceCode = null;
         this.copilotVerificationUrl = null;
         this.copilotInterval = 5;
@@ -432,6 +443,11 @@ class ModalManager {
         // Load flashcard strictness
         document.getElementById('flashcard-strictness').value = storage.getFlashcardStrictness();
 
+        // Load shortcut overrides and render Shortcuts panel
+        this._shortcutOverrides = { ...storage.getKeybindings() };
+        this._shortcutCaptureActionId = null;
+        this.renderShortcutsPanel();
+
         // Render custom models list
         this.renderCustomModelsList();
 
@@ -439,9 +455,110 @@ class ModalManager {
     }
 
     /**
+     * Return current shortcut overrides for saveSettings to persist.
+     * @returns {Object.<string, {key: string, shift?: boolean, ctrl?: boolean}>}
+     */
+    getShortcutOverrides() {
+        return { ...this._shortcutOverrides };
+    }
+
+    /**
+     * Populate the Shortcuts settings panel and wire key-capture.
+     */
+    renderShortcutsPanel() {
+        const container = document.getElementById('shortcuts-list');
+        if (!container) return;
+        const getOverrides = () => this._shortcutOverrides;
+        const effective = getEffectiveKeybindings(getOverrides);
+        const defaultEffective = getEffectiveKeybindings(() => ({}));
+        const actionList = getActionList();
+        const self = this;
+
+        container.innerHTML = actionList
+            .map((item) => {
+                const currentKey = getKeyDisplayForAction(item.actionId, effective);
+                const defaultKey = getKeyDisplayForAction(item.actionId, defaultEffective);
+                const differsFromDefault = currentKey !== defaultKey;
+                const resetBtn = differsFromDefault
+                    ? `<button type="button" class="secondary-btn shortcuts-reset-btn" title="Reset to default">Reset to default</button>`
+                    : '';
+                return `<div class="shortcuts-row" data-action-id="${escapeHtmlText(item.actionId)}">
+                        <span class="shortcuts-label">${escapeHtmlText(item.label)}</span>
+                        <span class="shortcuts-key" aria-label="Current shortcut">${escapeHtmlText(currentKey)}</span>
+                        <button type="button" class="secondary-btn shortcuts-change-btn" title="Click then press a key">Change</button>
+                        ${resetBtn}
+                    </div>`;
+            })
+            .join('');
+
+        container.querySelectorAll('.shortcuts-change-btn').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                const row = e.target.closest('.shortcuts-row');
+                const actionId = row.dataset.actionId;
+                self._shortcutCaptureActionId = actionId;
+                row.classList.add('shortcuts-capturing');
+                const keyDisplay = row.querySelector('.shortcuts-key');
+                if (keyDisplay) keyDisplay.textContent = 'Press key combo (e.g. ⌘K)…';
+            });
+        });
+
+        container.querySelectorAll('.shortcuts-reset-btn').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                const row = e.target.closest('.shortcuts-row');
+                const actionId = row.dataset.actionId;
+                delete self._shortcutOverrides[actionId];
+                self.renderShortcutsPanel();
+            });
+        });
+    }
+
+    /**
+     * Handle keydown during shortcut capture (called from app or global listener).
+     * Ignores modifier-only keys (Meta, Control, Shift, Alt) so only full combinations are stored.
+     * @param {KeyboardEvent} e
+     * @returns {boolean} true if capture was active and key was applied or ignored (consumed)
+     */
+    handleShortcutCaptureKeydown(e) {
+        if (this._shortcutCaptureActionId == null) return false;
+        if (e.key === 'Escape') {
+            this._shortcutCaptureActionId = null;
+            this.renderShortcutsPanel();
+            return true;
+        }
+        // Ignore modifier-only: pressing Cmd/Ctrl/Shift/Alt alone must not set the binding
+        const modifierOnlyKeys = ['Meta', 'Control', 'Shift', 'Alt', 'AltGraph'];
+        if (modifierOnlyKeys.includes(e.key)) {
+            e.preventDefault();
+            return true;
+        }
+        const spec = eventToSpec(e);
+        if (!spec) return false;
+        e.preventDefault();
+        const actionId = this._shortcutCaptureActionId;
+        this._shortcutOverrides[actionId] = spec;
+        // If the new binding matches the default, remove the override so we don't persist redundancy
+        const effective = getEffectiveKeybindings(() => this._shortcutOverrides);
+        const defaultEffective = getEffectiveKeybindings(() => ({}));
+        if (getKeyDisplayForAction(actionId, effective) === getKeyDisplayForAction(actionId, defaultEffective)) {
+            delete this._shortcutOverrides[actionId];
+        }
+        this._shortcutCaptureActionId = null;
+        this.renderShortcutsPanel();
+        return true;
+    }
+
+    /**
+     * Clear shortcut capture state (e.g. when closing settings).
+     */
+    clearShortcutCapture() {
+        this._shortcutCaptureActionId = null;
+    }
+
+    /**
      * Close the settings modal.
      */
     hideSettingsModal() {
+        this.clearShortcutCapture();
         document.getElementById('settings-modal').style.display = 'none';
     }
 
@@ -550,9 +667,34 @@ class ModalManager {
     // --- Help Modal ---
 
     /**
+     * Populate the Help modal keyboard shortcuts table from current keybindings.
+     */
+    renderHelpShortcutsTable() {
+        const tbody = document.getElementById('help-shortcuts-tbody');
+        if (!tbody) return;
+        const effective = getEffectiveKeybindings();
+        const actionList = getActionList();
+        const rows = actionList.map((item) => {
+            const specs = effective[item.actionId];
+            let keyDisplay = '—';
+            if (specs && specs.length > 0) {
+                const first = specs[0];
+                const parts = [];
+                if (first.ctrl) parts.push('Ctrl');
+                if (first.shift) parts.push('Shift');
+                parts.push(first.key);
+                keyDisplay = formatKeyForDisplay(parts.length === 1 ? first.key : parts.join('+'));
+            }
+            return `<tr><td><kbd>${escapeHtmlText(keyDisplay)}</kbd></td><td>${escapeHtmlText(item.label)}</td></tr>`;
+        });
+        tbody.innerHTML = rows.join('');
+    }
+
+    /**
      *
      */
     showHelpModal() {
+        this.renderHelpShortcutsTable();
         document.getElementById('help-modal').style.display = 'flex';
     }
 

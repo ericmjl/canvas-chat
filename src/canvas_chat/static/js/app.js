@@ -38,6 +38,13 @@ import './plugins/summary.js'; // Side-effect import for SummaryNode plugin regi
 import './plugins/synthesis-node.js'; // Side-effect import for SynthesisNode plugin registration
 import './plugins/youtube-node.js'; // Side-effect import for YouTubeNode plugin registration
 // Note: poll.js is an external plugin - load via config.yaml
+import {
+    buildKeyToActionMap,
+    getActionForKey,
+    getActionIdsForKey,
+    getEffectiveKeybindings,
+    eventToKeyString,
+} from './keybindings.js';
 import { wrapNode } from './node-protocols.js';
 import { SearchIndex, getNodeTypeIcon } from './search.js';
 import { readSSEStream } from './sse.js';
@@ -954,123 +961,122 @@ class App {
             this.closeTagDrawer();
         });
 
-        // Keyboard shortcuts
+        // Keyboard shortcuts (keybinding layer: getActionForKey + actionId dispatch)
         document.addEventListener('keydown', (e) => {
-            // Cmd/Ctrl+K to open search
-            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-                e.preventDefault();
-                this.openSearch();
-                return;
-            }
+            // Shortcut capture in Settings panel (takes precedence when active)
+            if (this.modalManager.handleShortcutCaptureKeydown(e)) return;
 
-            // Escape to close modals, popover, search, or clear selection
+            const inInput = e.target.matches('input, textarea');
+
+            // 1) Escape - always first, non-remappable
             if (e.key === 'Escape') {
-                // Priority order: popover > search > any modal > clear selection
                 if (this.canvas.isNavPopoverOpen()) {
                     this.canvas.hideNavPopover();
                 } else if (this.isSearchOpen()) {
                     this.closeSearch();
                 } else if (this.modalManager.closeAnyOpenModal()) {
-                    // Modal was closed, nothing more to do
+                    // Modal was closed
                 } else {
                     this.canvas.clearSelection();
                 }
+                return;
             }
 
-            // Enter to confirm popover selection
+            // 2) Enter when popover open - confirm selection
             if (e.key === 'Enter' && this.canvas.isNavPopoverOpen()) {
                 e.preventDefault();
                 this.canvas.confirmPopoverSelection();
                 return;
             }
 
-            // Arrow Up/Down for parent/child navigation
-            if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'j' || e.key === 'k') {
-                // If popover is open, navigate within it
+            const effective = getEffectiveKeybindings();
+            const keyToActionMap = buildKeyToActionMap(effective);
+            const actionId = inInput ? null : getActionForKey(e, keyToActionMap);
+
+            // 3) Global actions
+            if (actionId === 'search') {
+                e.preventDefault();
+                this.openSearch();
+                return;
+            }
+            if (actionId === 'help') {
+                e.preventDefault();
+                this.modalManager.showHelpModal();
+                return;
+            }
+            if (actionId === 'undo') {
+                e.preventDefault();
+                this.undo();
+                return;
+            }
+            if (actionId === 'redo') {
+                e.preventDefault();
+                this.redo();
+                return;
+            }
+            if (actionId === 'deleteNodes') {
+                this.deleteSelectedNodes();
+                return;
+            }
+            if (actionId === 'zoomFitAll') {
+                e.preventDefault();
+                this.canvas.fitToContentAnimated(400);
+                return;
+            }
+            if (actionId === 'popoverConfirm') {
+                e.preventDefault();
+                this.canvas.confirmPopoverSelection();
+                return;
+            }
+
+            // 4) Navigation (popover or single node)
+            if (actionId === 'navigateParent' || actionId === 'navigateChild') {
                 if (this.canvas.isNavPopoverOpen()) {
                     e.preventDefault();
-                    this.canvas.navigatePopoverSelection(e.key === 'ArrowUp' || e.key === 'j' ? -1 : 1);
+                    this.canvas.navigatePopoverSelection(actionId === 'navigateParent' ? -1 : 1);
                     return;
                 }
-
-                // Otherwise, if node is selected and not in input, navigate to parent/child
-                if (!e.target.matches('input, textarea')) {
+                if (!inInput) {
                     const selectedNodeIds = this.canvas.getSelectedNodeIds();
                     if (selectedNodeIds.length === 1) {
                         e.preventDefault();
-                        if (e.key === 'ArrowUp' || e.key === 'j') {
+                        if (actionId === 'navigateParent') {
                             this.navigateToParentKeyboard(selectedNodeIds[0]);
                         } else {
                             this.navigateToChildKeyboard(selectedNodeIds[0]);
                         }
                     }
                 }
-            }
-
-            // ? to show help (when not in input)
-            if (e.key === '?' && !e.target.matches('input, textarea')) {
-                e.preventDefault();
-                this.modalManager.showHelpModal();
-            }
-
-            // Cmd/Ctrl+Z for undo, Cmd/Ctrl+Shift+Z for redo
-            if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
-                e.preventDefault();
-                if (e.shiftKey) {
-                    this.redo();
-                } else {
-                    this.undo();
-                }
                 return;
             }
 
-            // Delete to remove selected nodes
-            if ((e.key === 'Delete' || e.key === 'Backspace') && !e.target.matches('input, textarea')) {
-                this.deleteSelectedNodes();
-            }
-
-            // Keyboard shortcuts for node actions (protocol-based dispatch)
-            if (!e.target.matches('input, textarea')) {
+            // 5) Node actions (single node selected; dispatch if node supports action)
+            if (!inInput && actionId) {
                 const selectedNodeIds = this.canvas.getSelectedNodeIds();
                 if (selectedNodeIds.length === 1) {
                     const node = this.graph.getNode(selectedNodeIds[0]);
                     if (node) {
                         const wrapped = wrapNode(node);
                         const shortcuts = wrapped.getKeyboardShortcuts();
-
-                        // Check if pressed key matches any shortcut
-                        for (const [key, config] of Object.entries(shortcuts)) {
-                            // Match key (case-sensitive for uppercase keys like 'A')
-                            const keyMatches = e.key === key;
-                            // Check modifiers
-                            const shiftMatches = !config.shift || e.shiftKey;
-                            const ctrlMatches = !config.ctrl || e.ctrlKey || e.metaKey;
-                            // Don't trigger if Ctrl/Cmd is pressed (unless required by shortcut)
-                            // If shortcut requires Ctrl: Ctrl must be pressed
-                            // If shortcut doesn't require Ctrl: Ctrl must NOT be pressed
-                            const noAccidentalCtrl = config.ctrl
-                                ? (e.ctrlKey || e.metaKey)
-                                : !(e.ctrlKey || e.metaKey);
-
-                            if (keyMatches && shiftMatches && ctrlMatches && noAccidentalCtrl) {
-                                // Special handling for 'r' - focus chat input instead of emitting event
-                                if (key === 'r' && config.handler === 'nodeReply') {
+                        const keyString = eventToKeyString(e);
+                        const actionIdsToTry = keyString
+                            ? [...new Set([actionId, ...getActionIdsForKey(keyString, effective)])]
+                            : [actionId];
+                        for (const aid of actionIdsToTry) {
+                            for (const config of Object.values(shortcuts)) {
+                                if (config.action !== aid) continue;
+                                if (aid === 'reply' && config.handler === 'nodeReply') {
                                     e.preventDefault();
                                     this.chatInput.focus();
                                     return;
                                 }
-
-                                // Special handling for 'c' - don't trigger if Ctrl/Cmd is pressed
-                                // (This is redundant with noAccidentalCtrl check above, but kept for clarity)
-                                if (key === 'c' && (e.ctrlKey || e.metaKey)) {
-                                    return; // Let browser handle Ctrl+C
-                                }
-
-                                // Don't open edit modal for node types that are not content-editable
-                                if (config.handler === 'nodeEditContent' && typeof wrapped.isContentEditable === 'function' && !wrapped.isContentEditable()) {
-                                    return;
-                                }
-
+                                if (aid === 'copy' && (e.ctrlKey || e.metaKey)) return;
+                                if (
+                                    config.handler === 'nodeEditContent' &&
+                                    typeof wrapped.isContentEditable === 'function' &&
+                                    !wrapped.isContentEditable()
+                                )
+                                    continue;
                                 e.preventDefault();
                                 this.canvas.emit(config.handler, node.id);
                                 return;
@@ -1080,10 +1086,37 @@ class App {
                 }
             }
 
-            // Cmd/Ctrl+Enter to run code in selected code node
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !e.target.matches('input, textarea')) {
+            // 6) Node actions that are not in protocol shortcuts: fitViewport, collapse, expand, zoomSelection, runCode, generate, analyze
+            if (!inInput) {
                 const selectedNodeIds = this.canvas.getSelectedNodeIds();
-                if (selectedNodeIds.length === 1) {
+                if (actionId === 'fitViewport' && selectedNodeIds.length === 1) {
+                    e.preventDefault();
+                    this.handleNodeFitToViewport(selectedNodeIds[0]);
+                    return;
+                }
+                if (actionId === 'collapse' && selectedNodeIds.length === 1) {
+                    const node = this.graph.getNode(selectedNodeIds[0]);
+                    const children = this.graph.getChildren(selectedNodeIds[0]);
+                    if (node && children.length > 0 && !node.collapsed) {
+                        e.preventDefault();
+                        this.handleNodeCollapse(selectedNodeIds[0]);
+                    }
+                    return;
+                }
+                if (actionId === 'expand' && selectedNodeIds.length === 1) {
+                    const node = this.graph.getNode(selectedNodeIds[0]);
+                    if (node && node.collapsed) {
+                        e.preventDefault();
+                        this.handleNodeCollapse(selectedNodeIds[0]);
+                    }
+                    return;
+                }
+                if (actionId === 'zoomSelection' && selectedNodeIds.length > 0) {
+                    e.preventDefault();
+                    this.canvas.zoomToSelectionAnimated(selectedNodeIds);
+                    return;
+                }
+                if (actionId === 'runCode' && selectedNodeIds.length === 1) {
                     const node = this.graph.getNode(selectedNodeIds[0]);
                     if (node) {
                         const wrapped = wrapNode(node);
@@ -1092,79 +1125,30 @@ class App {
                             this.canvas.emit('nodeRunCode', selectedNodeIds[0]);
                         }
                     }
+                    return;
                 }
-            }
-
-            // Shift+A to trigger AI actions (Generate for Code nodes, Analyze for CSV nodes)
-            if (e.shiftKey && e.key === 'A' && !e.target.matches('input, textarea')) {
-                const selectedNodeIds = this.canvas.getSelectedNodeIds();
-                if (selectedNodeIds.length === 1) {
+                if (actionId === 'generate' && selectedNodeIds.length === 1) {
                     const node = this.graph.getNode(selectedNodeIds[0]);
                     if (node) {
                         const wrapped = wrapNode(node);
-                        const actions = wrapped.getActions();
-
-                        // Check for AI-related actions
-                        if (actions.some((a) => a.id === 'generate')) {
+                        if (wrapped.getActions && wrapped.getActions().some((a) => a.id === 'generate')) {
                             e.preventDefault();
                             this.canvas.emit('nodeGenerate', selectedNodeIds[0]);
-                        } else if (actions.some((a) => a.id === 'analyze')) {
+                        }
+                    }
+                    return;
+                }
+                if (actionId === 'analyze' && selectedNodeIds.length === 1) {
+                    const node = this.graph.getNode(selectedNodeIds[0]);
+                    if (node) {
+                        const wrapped = wrapNode(node);
+                        if (wrapped.getActions && wrapped.getActions().some((a) => a.id === 'analyze')) {
                             e.preventDefault();
                             this.handleNodeAnalyze(selectedNodeIds[0]);
                         }
                     }
+                    return;
                 }
-            }
-
-            // 'f' to fit selected node to viewport (80%)
-            if (e.key === 'f' && !e.target.matches('input, textarea')) {
-                const selectedNodeIds = this.canvas.getSelectedNodeIds();
-                if (selectedNodeIds.length === 1) {
-                    e.preventDefault();
-                    this.handleNodeFitToViewport(selectedNodeIds[0]);
-                }
-            }
-
-            // '-' to collapse selected node (hide children)
-            if (e.key === '-' && !e.target.matches('input, textarea')) {
-                const selectedNodeIds = this.canvas.getSelectedNodeIds();
-                if (selectedNodeIds.length === 1) {
-                    const node = this.graph.getNode(selectedNodeIds[0]);
-                    const children = this.graph.getChildren(selectedNodeIds[0]);
-                    // Only collapse if node has children and is not already collapsed
-                    if (node && children.length > 0 && !node.collapsed) {
-                        e.preventDefault();
-                        this.handleNodeCollapse(selectedNodeIds[0]);
-                    }
-                }
-            }
-
-            // '=' to expand selected node (show children)
-            if (e.key === '=' && !e.target.matches('input, textarea')) {
-                const selectedNodeIds = this.canvas.getSelectedNodeIds();
-                if (selectedNodeIds.length === 1) {
-                    const node = this.graph.getNode(selectedNodeIds[0]);
-                    // Only expand if node is collapsed
-                    if (node && node.collapsed) {
-                        e.preventDefault();
-                        this.handleNodeCollapse(selectedNodeIds[0]);
-                    }
-                }
-            }
-
-            // 'z' to zoom to selected nodes (fit selection in viewport at 80%)
-            if (e.key === 'z' && !e.shiftKey && !e.target.matches('input, textarea') && !(e.metaKey || e.ctrlKey)) {
-                const selectedNodeIds = this.canvas.getSelectedNodeIds();
-                if (selectedNodeIds.length > 0) {
-                    e.preventDefault();
-                    this.canvas.zoomToSelectionAnimated(selectedNodeIds);
-                }
-            }
-
-            // 'Shift+Z' to zoom out to fit all content (same as double-click on canvas)
-            if (e.key === 'Z' && e.shiftKey && !e.target.matches('input, textarea')) {
-                e.preventDefault();
-                this.canvas.fitToContentAnimated(400);
             }
         });
 
@@ -4122,6 +4106,10 @@ class App {
         // Save flashcard strictness
         const strictness = document.getElementById('flashcard-strictness').value;
         storage.setFlashcardStrictness(strictness);
+
+        // Save shortcut overrides
+        const shortcutOverrides = this.modalManager.getShortcutOverrides();
+        storage.setKeybindings(shortcutOverrides);
 
         // Reload models to reflect newly configured API keys
         this.loadModels();

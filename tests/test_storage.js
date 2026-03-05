@@ -6,6 +6,8 @@
 import { test, assertEqual, assertTrue, assertFalse, assertNull, assertDeepEqual } from './test_setup.js';
 import { Storage } from '../src/canvas_chat/static/js/storage.js';
 
+const KEYBINDINGS_KEY = 'canvas-chat-keybindings';
+
 // ============================================================
 // Mock localStorage for testing
 // ============================================================
@@ -883,4 +885,62 @@ test('setFlashcardStrictness: persists across function calls', () => {
     // Create a new storage instance with the same localStorage
     const storage2 = createStrictnessStorage(mockStorage);
     assertEqual(storage2.getFlashcardStrictness(), 'strict');
+});
+
+// ============================================================
+// Keybindings storage (Storage class getKeybindings / setKeybindings)
+// ============================================================
+
+test('getKeybindings: returns empty object when no stored value', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        assertDeepEqual(storage.getKeybindings(), {});
+    } finally {
+        global.localStorage = original;
+    }
+});
+
+test('setKeybindings then getKeybindings returns same content', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        const overrides = { reply: { key: 'x' }, help: { key: 'h' } };
+        storage.setKeybindings(overrides);
+        assertDeepEqual(storage.getKeybindings(), overrides);
+    } finally {
+        global.localStorage = original;
+    }
+});
+
+test('getKeybindings: invalid JSON returns empty object', () => {
+    const mock = new MockLocalStorage();
+    mock.setItem(KEYBINDINGS_KEY, 'not valid json');
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        assertDeepEqual(storage.getKeybindings(), {});
+    } finally {
+        global.localStorage = original;
+    }
+});
+
+test('keybindings round-trip: second set overwrites', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        storage.setKeybindings({ reply: { key: 'x' } });
+        assertEqual(storage.getKeybindings().reply.key, 'x');
+        storage.setKeybindings({ help: { key: 'h' } });
+        assertDeepEqual(storage.getKeybindings(), { help: { key: 'h' } });
+    } finally {
+        global.localStorage = original;
+    }
 });

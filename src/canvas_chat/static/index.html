@@ -216,6 +216,7 @@
                             <li><button type="button" class="settings-sidebar-item" data-category="search" data-admin-restricted>Search</button></li>
                             <li><button type="button" class="settings-sidebar-item" data-category="custom-models" data-admin-restricted>Custom models</button></li>
                             <li><button type="button" class="settings-sidebar-item" data-category="proxy" data-admin-restricted>Proxy</button></li>
+                            <li><button type="button" class="settings-sidebar-item" data-category="shortcuts">Shortcuts</button></li>
                             <li><button type="button" class="settings-sidebar-item" data-category="features">Features</button></li>
                             <li><button type="button" class="settings-sidebar-item" data-category="plugins">Plugins</button></li>
                         </ul>
@@ -341,6 +342,13 @@
                                     >Leave empty to use default provider endpoints. Supports OpenAI-compatible APIs.</small
                                 >
                             </div>
+                        </div>
+
+                        <!-- Shortcuts -->
+                        <div id="settings-panel-shortcuts" class="settings-panel" data-category="shortcuts">
+                            <h3>Keyboard shortcuts</h3>
+                            <p class="settings-note">Override default shortcuts. Click a row and press the new key, or use "Change" then press a key. Use "Reset to default" per row to restore.</p>
+                            <div id="shortcuts-list" class="shortcuts-list"></div>
                         </div>
 
                         <!-- Features -->
@@ -474,73 +482,9 @@
 
                     <section class="help-section">
                         <h3>Keyboard Shortcuts</h3>
+                        <p class="settings-note">Customize in Settings → Shortcuts.</p>
                         <table class="shortcuts-table">
-                            <tbody>
-                                <tr>
-                                    <td><kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>K</kbd></td>
-                                    <td>Search nodes</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>Z</kbd></td>
-                                    <td>Undo</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd></td>
-                                    <td>Redo</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td>
-                                    <td>Delete selected nodes</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>R</kbd></td>
-                                    <td>Focus reply input (when node selected)</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>C</kbd></td>
-                                    <td>Copy node content (when node selected)</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>F</kbd></td>
-                                    <td>Fit node to viewport (when node selected)</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>-</kbd></td>
-                                    <td>Collapse children (when node selected)</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>=</kbd></td>
-                                    <td>Expand children (when node selected)</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Z</kbd></td>
-                                    <td>Zoom to selection (when node(s) selected)</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Shift</kbd> + <kbd>Z</kbd></td>
-                                    <td>Zoom out to fit all content</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>j</kbd> / <kbd>k</kbd></td>
-                                    <td>Navigate to parent/child nodes</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Escape</kbd></td>
-                                    <td>Clear selection / Close dialogs</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Enter</kbd></td>
-                                    <td>Send message</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>Shift</kbd> + <kbd>Enter</kbd></td>
-                                    <td>New line in message</td>
-                                </tr>
-                                <tr>
-                                    <td><kbd>?</kbd></td>
-                                    <td>Show this help</td>
-                                </tr>
-                            </tbody>
+                            <tbody id="help-shortcuts-tbody"></tbody>
                         </table>
                     </section>
 

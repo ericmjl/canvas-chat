@@ -702,6 +702,28 @@ class Storage {
         // Fall back to global base URL
         return this.getBaseUrl();
     }
+
+    /**
+     * Get user keybinding overrides from localStorage.
+     * Only overrides are stored; missing actions fall back to defaults in keybindings.js.
+     * @returns {Object.<string, {key: string, shift?: boolean, ctrl?: boolean}>}
+     */
+    getKeybindings() {
+        try {
+            const data = localStorage.getItem('canvas-chat-keybindings');
+            return data ? JSON.parse(data) : {};
+        } catch {
+            return {};
+        }
+    }
+
+    /**
+     * Save keybinding overrides to localStorage.
+     * @param {Object.<string, {key: string, shift?: boolean, ctrl?: boolean}>} overrides
+     */
+    setKeybindings(overrides) {
+        localStorage.setItem('canvas-chat-keybindings', JSON.stringify(overrides || {}));
+    }
 }
 
 // Export class and singleton instance

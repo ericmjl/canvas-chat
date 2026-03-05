@@ -91,6 +91,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/sse.js`         | Server-sent events utilities                                           | Streaming connection handling                                                                            |
 | `src/canvas_chat/static/js/utils.js`       | Pure utility functions                                                 | Image resizing, error formatting, text processing                                                        |
 | `src/canvas_chat/static/js/model-utils.js` | Model utility functions                                                | Model-related utilities                                                                                  |
+| `src/canvas_chat/static/js/keybindings.js` | Default shortcuts, merge, lookup; user overrides via Settings → Shortcuts | Adding/remapping keyboard shortcut actions                                                               |
 
 #### Plugin architecture modules
 
@@ -185,6 +186,7 @@ canvas-chat/
 | `PRIORITY`                          | `feature-registry.js:8-12`              | Plugin priority levels (BUILTIN > OFFICIAL > COMMUNITY) |
 | `PluginConfig`                      | `config.py:78-197`                      | Plugin configuration dataclass (JS/PY/paired plugins)   |
 | `CANVAS_CHAT_ENABLE_GITHUB_COPILOT` | `config.py:is_github_copilot_enabled()` | Enable/disable GitHub Copilot (default: true)           |
+| `DEFAULT_KEYBINDINGS` / keybinding storage | `keybindings.js`, `storage.js` (`canvas-chat-keybindings`) | Default shortcuts; user overrides in Settings → Shortcuts |
 | CSS variables                       | `style.css:10-75`                       | Colors, sizing, theming                                 |
 
 ### Zoom levels (semantic zoom)
