@@ -118,7 +118,7 @@ describe('Settings Modal', () => {
         // Find "Show help" row and click Change
         cy.get('#shortcuts-list .shortcuts-row').contains('Show help').parents('.shortcuts-row').as('helpRow');
         cy.get('@helpRow').find('.shortcuts-change-btn').click();
-        cy.get('@helpRow').find('.shortcuts-key').should('contain', 'Press a key');
+        cy.get('@helpRow').find('.shortcuts-key').should('contain', 'Press key combo');
         // Simulate keydown for 'h'
         cy.get('body').trigger('keydown', { key: 'h', keyCode: 72, which: 72 });
         cy.get('@helpRow').find('.shortcuts-key').should('contain', 'h');
