@@ -292,7 +292,7 @@ class SlashCommandMenu {
                 } else if (isContextDisabled) {
                     disabledSuffix = ' <span class="requires-context">(requires text or selected node)</span>';
                 } else if (isCsvDisabled) {
-                    disabledSuffix = ' <span class="requires-csv">(requires selected CSV node)</span>';
+                    disabledSuffix = ' <span class="requires-csv">(requires selected table node)</span>';
                 }
 
                 // Show which provider will be used for search/research commands
