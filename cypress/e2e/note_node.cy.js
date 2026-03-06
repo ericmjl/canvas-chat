@@ -3,6 +3,7 @@ describe('Note Node Creation', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
+        cy.get('#chat-input', { timeout: 15000 }).should('be.visible');
     });
 
     it('creates a note node via /note command', () => {

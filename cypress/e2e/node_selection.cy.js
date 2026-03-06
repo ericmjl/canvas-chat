@@ -3,6 +3,7 @@ describe('Node Selection and Deletion', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
+        cy.get('#chat-input', { timeout: 15000 }).should('be.visible');
     });
 
     it('selects and deletes a node', () => {

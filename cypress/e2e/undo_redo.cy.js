@@ -3,7 +3,7 @@ describe('Undo and Redo', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.wait(1000);
+        cy.get('#chat-input', { timeout: 15000 }).should('be.visible');
     });
 
     it('undos and redos node deletion', () => {

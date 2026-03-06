@@ -153,6 +153,10 @@ class ExcelFileUploadHandler extends FileUploadHandlerPlugin {
             throw new Error('Please select an Excel file (.xlsx or .xls).');
         }
 
+        if (typeof XLSX === 'undefined') {
+            throw new Error('Spreadsheet library is still loading. Please try again in a moment.');
+        }
+
         const MAX_SIZE = 15 * 1024 * 1024; // 15 MB
         this.validateFile(file, MAX_SIZE, 'Excel');
 

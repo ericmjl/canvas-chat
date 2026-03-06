@@ -3,7 +3,7 @@ describe('Settings Modal', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
-        cy.wait(1000); // Wait for app to fully initialize
+        cy.get('#chat-input', { timeout: 15000 }).should('be.visible');
     });
 
     it('opens and closes settings modal', () => {
