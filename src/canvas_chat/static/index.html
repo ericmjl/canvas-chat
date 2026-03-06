@@ -31,8 +31,8 @@
         <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension@5.1.5/lib/index.umd.js"></script>
         <!-- Papa Parse for CSV parsing -->
         <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
-        <!-- SheetJS Community Edition for Excel (.xlsx, .xls) parsing -->
-        <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+        <!-- SheetJS Community Edition for Excel (.xlsx, .xls) parsing (defer to avoid blocking initial load) -->
+        <script defer src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
         <!-- Pyodide for Python execution in browser -->
         <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
         <!-- highlight.js for Python syntax highlighting -->

@@ -3,6 +3,7 @@ describe('Keyboard Interactions', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
+        cy.get('#chat-input', { timeout: 15000 }).should('be.visible');
     });
 
     it('sends message with Enter key', () => {

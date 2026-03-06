@@ -3,6 +3,7 @@ describe('Canvas Pan and Zoom', () => {
         cy.clearLocalStorage();
         cy.clearIndexedDB();
         cy.visit('/');
+        cy.get('#chat-input', { timeout: 15000 }).should('be.visible');
     });
 
     it('pans canvas by dragging', () => {
