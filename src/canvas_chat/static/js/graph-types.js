@@ -11,7 +11,7 @@
 
 /**
  * Valid node type values
- * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'powerpoint'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'code'|'youtube'|'git_repo'} NodeTypeValue
+ * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'powerpoint'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'excel'|'prism'|'code'|'youtube'|'git_repo'} NodeTypeValue
  */
 
 /**
@@ -238,6 +238,8 @@ const NodeType = {
     FLASHCARD: 'flashcard', // Spaced repetition flashcard
     FACTCHECK: 'factcheck', // Fact-checking verdict node
     CSV: 'csv', // Uploaded CSV data for analysis
+    EXCEL: 'excel', // Excel sheet data for analysis (one node per sheet)
+    PRISM: 'prism', // GraphPad Prism table data for analysis (one node per table)
     CODE: 'code', // Python code for execution
 };
 
@@ -265,6 +267,8 @@ const DEFAULT_NODE_SIZES = {
     [NodeType.IMAGE]: { width: 640, height: 480 },
     [NodeType.FACTCHECK]: { width: 640, height: 480 },
     [NodeType.CSV]: { width: 640, height: 480 },
+    [NodeType.EXCEL]: { width: 640, height: 480 },
+    [NodeType.PRISM]: { width: 640, height: 480 },
     [NodeType.CODE]: { width: 640, height: 400 },
 
     // Small nodes (420x200) - User input, short content

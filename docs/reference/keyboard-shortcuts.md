@@ -95,8 +95,9 @@ Type these in the chat input to trigger special commands:
 | `/factcheck` | Verify claims with web search | `/factcheck verify these` |
 | `/matrix` | Create comparison table | `/matrix compare options` |
 | `/committee` | Multi-LLM consultation | `/committee should we use X?` |
+| `/code` | Run Python in-browser (Pyodide) | Select a table node (CSV, Excel, or Prism), then `/code` to analyze data as DataFrames |
 
-See [How to use web search](../how-to/web-search.md), [How to conduct deep research](../how-to/deep-research.md), [How to fact-check claims](../how-to/factcheck.md), and [How to use the LLM committee](../how-to/llm-committee.md) for details.
+See [How to use Excel and Prism data with /code](../how-to/use-excel-and-prism-with-code.md), [How to use web search](../how-to/web-search.md), [How to conduct deep research](../how-to/deep-research.md), [How to fact-check claims](../how-to/factcheck.md), and [How to use the LLM committee](../how-to/llm-committee.md) for details.
 
 ## Undo/Redo Actions
 

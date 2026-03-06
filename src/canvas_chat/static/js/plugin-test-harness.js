@@ -208,6 +208,24 @@ class MockCanvas {
 
     /**
      *
+     * @param {Object} _graph
+     * @returns {void}
+     */
+    updateAllEdges(_graph) {
+        // Mock implementation
+    }
+
+    /**
+     *
+     * @param {Object} _graph
+     * @returns {void}
+     */
+    updateAllNavButtonStates(_graph) {
+        // Mock implementation
+    }
+
+    /**
+     *
      * @param {string} _nodeId
      * @returns {void}
      */

@@ -24,6 +24,7 @@
     "private": true,
     "_comment": "test script delegates to pixi - pyproject.toml is the single source of truth for test commands. See AGENTS.md for details.",
     "dependencies": {
-        "pdfjs-dist": "^5.4.624"
+        "pdfjs-dist": "^5.4.624",
+        "xlsx": "^0.18.5"
     }
 }

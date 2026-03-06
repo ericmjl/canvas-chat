@@ -19,6 +19,8 @@ import './plugins/cell-node.js'; // Side-effect import for CellNode plugin regis
 import './plugins/code.js'; // Side-effect import for CodeNode plugin registration and CodeFeature
 import './plugins/column-node.js'; // Side-effect import for ColumnNode plugin registration
 import './plugins/csv-node.js'; // Side-effect import for CsvNode plugin registration
+import './plugins/excel-node.js'; // Side-effect import for ExcelNode plugin registration
+import './plugins/prism-node.js'; // Side-effect import for PrismNode plugin registration
 import './plugins/factcheck.js'; // Side-effect import for FactcheckNode plugin registration
 import './plugins/fetch-result-node.js'; // Side-effect import for FetchResultNode plugin registration
 import './plugins/flashcard-node.js'; // Side-effect import for FlashcardNode plugin registration
@@ -685,12 +687,12 @@ class App {
         this.slashCommandMenu.attach(this.chatInput);
         // Provide context checker for commands that require selected nodes
         this.slashCommandMenu.getHasContext = () => this.canvas.getSelectedNodeIds().length > 0;
-        // Provide CSV checker for commands that require selected CSV nodes
+        // Provide table-node checker for /code (CSV, Excel, or Prism nodes with csvData)
         this.slashCommandMenu.getHasSelectedCsv = () => {
             const selectedIds = this.canvas.getSelectedNodeIds();
             return selectedIds.some((id) => {
                 const node = this.graph.getNode(id);
-                return node && node.type === NodeType.CSV;
+                return node && node.csvData && [NodeType.CSV, NodeType.EXCEL, NodeType.PRISM].includes(node.type);
             });
         };
 

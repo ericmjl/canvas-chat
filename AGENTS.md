@@ -104,7 +104,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/node-protocols.js`             | Node protocol classes, wrapNode utility | Node rendering, actions, protocol implementations |
 | `src/canvas_chat/static/js/plugin-test-harness.js`        | Testing utilities for plugins           | Writing plugin tests                              |
 | `src/canvas_chat/static/js/file-upload-handler-plugin.js` | FileUploadHandlerPlugin base class      | File upload handler plugin base class             |
-| `src/canvas_chat/static/js/file-upload-registry.js`       | File upload handler registration        | Registering file upload handlers                  |
+| `src/canvas_chat/static/js/file-upload-registry.js`       | File upload handler registration        | Registering file upload handlers (CSV, Excel, Prism produce table nodes with csvData for /code) |
 
 #### Feature plugins (built-in)
 
@@ -120,6 +120,8 @@ canvas-chat/
 | `src/canvas_chat/static/js/plugins/youtube.js`   | YouTubeFeature class   | YouTube video fetching with transcript (`/youtube` command)  |
 | `src/canvas_chat/static/js/plugins/url-fetch.js` | UrlFetchFeature class  | Generic URL fetching (`/fetch`), PDF viewer hydration + pagination (Prev/Next, ←/→) |
 | `src/canvas_chat/static/js/plugins/powerpoint-node.js` | PowerPointFeature + PowerPointNode | PPTX upload, slide navigation drawer, per-slide captioning, slide extraction |
+| `src/canvas_chat/static/js/plugins/excel-node.js`      | ExcelNode + Excel upload handler    | Excel (.xlsx, .xls) upload, one node per sheet, csvData for /code            |
+| `src/canvas_chat/static/js/plugins/prism-node.js` | PrismNode + Prism upload handler   | Prism (.pzfx) upload, one node per table, csvData for /code                  |
 
 #### Example plugins
 
@@ -180,7 +182,7 @@ canvas-chat/
 
 | Constant                            | Location                                | Purpose                                                 |
 | ----------------------------------- | --------------------------------------- | ------------------------------------------------------- |
-| `NodeType`                          | `graph-types.js:11-32`                  | All node type definitions                               |
+| `NodeType`                          | `graph-types.js`                        | All node type definitions (includes CSV, EXCEL, PRISM table nodes for /code) |
 | `EdgeType`                          | `graph-types.js:82-94`                  | All edge type definitions                               |
 | `DEFAULT_NODE_SIZES`                | `graph-types.js:40-68`                  | Default dimensions by node type                         |
 | `PRIORITY`                          | `feature-registry.js:8-12`              | Plugin priority levels (BUILTIN > OFFICIAL > COMMUNITY) |

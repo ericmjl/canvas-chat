@@ -42,10 +42,11 @@ if (!global.indexedDB) {
     };
 }
 
-// Mock pyodideRunner
+// Mock pyodideRunner (preload used by handleCodeCommand)
 if (!global.pyodideRunner) {
     global.pyodideRunner = {
         run: async () => ({ stdout: '', error: null }),
+        preload: () => {},
     };
 }
 
@@ -59,8 +60,9 @@ import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harn
 import { PRIORITY } from '../src/canvas_chat/static/js/feature-registry.js';
 import { assertTrue } from './test_helpers/assertions.js';
 
-// Import CodeFeature class
+// Import CodeFeature class and graph-types for table node test
 const { CodeFeature } = await import('../src/canvas_chat/static/js/plugins/code.js');
+const { createNode, NodeType } = await import('../src/canvas_chat/static/js/graph-types.js');
 
 async function asyncTest(description, fn) {
     try {
@@ -213,6 +215,49 @@ await asyncTest('CodeFeature emits extension hooks', async () => {
     // featureRegistry is provided by FeaturePlugin base class
     // In test harness, it's set via AppContext
     assertTrue(feature.featureRegistry !== null, 'Has featureRegistry for emitting hooks');
+});
+
+// Test: /code includes EXCEL and PRISM table nodes in csvNodeIds (table node generalization)
+await asyncTest('handleCodeCommand includes EXCEL and PRISM nodes in csvNodeIds', async () => {
+    const harness = new PluginTestHarness();
+
+    await harness.loadPlugin({
+        id: 'code',
+        feature: CodeFeature,
+        slashCommands: [{ command: '/code', description: 'Run Python', placeholder: '', handler: 'handleCommand' }],
+        priority: PRIORITY.BUILTIN,
+    });
+
+    const excelNode = createNode(NodeType.EXCEL, '', {
+        csvData: 'A,B\n1,2',
+        filename: 'data.xlsx',
+        sheetName: 'Sheet1',
+        position: { x: 0, y: 0 },
+    });
+    const prismNode = createNode(NodeType.PRISM, '', {
+        csvData: 'X,Y\n10,20',
+        filename: 'exp.pzfx',
+        tableTitle: 'Table 1',
+        position: { x: 300, y: 0 },
+    });
+
+    harness.mockApp.graph.addNode(excelNode);
+    harness.mockApp.graph.addNode(prismNode);
+
+    harness.mockApp.canvas.getSelectedNodeIds = () => [excelNode.id, prismNode.id];
+
+    const handled = await harness.executeSlashCommand('/code', '');
+    assertTrue(handled, '/code command should be handled');
+
+    const codeNodes = harness.createdNodes.filter((n) => n.type === NodeType.CODE);
+    assertTrue(codeNodes.length >= 1, 'At least one Code node should be created');
+    const codeNode = codeNodes[codeNodes.length - 1];
+    assertTrue(
+        Array.isArray(codeNode.csvNodeIds) && codeNode.csvNodeIds.length === 2,
+        'Code node should have csvNodeIds with 2 table nodes'
+    );
+    assertTrue(codeNode.csvNodeIds.includes(excelNode.id), 'csvNodeIds should include Excel node');
+    assertTrue(codeNode.csvNodeIds.includes(prismNode.id), 'csvNodeIds should include Prism node');
 });
 
 console.log('\n=== All Code plugin tests passed! ===\n');

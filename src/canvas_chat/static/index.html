@@ -31,6 +31,8 @@
         <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension@5.1.5/lib/index.umd.js"></script>
         <!-- Papa Parse for CSV parsing -->
         <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
+        <!-- SheetJS Community Edition for Excel (.xlsx, .xls) parsing -->
+        <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
         <!-- Pyodide for Python execution in browser -->
         <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
         <!-- highlight.js for Python syntax highlighting -->
@@ -435,7 +437,7 @@
         <input
             type="file"
             id="pdf-file-input"
-            accept=".pdf,application/pdf,image/*,.csv,text/csv,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation,.ppt,application/vnd.ms-powerpoint"
+            accept=".pdf,application/pdf,image/*,.csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.pzfx,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation,.ppt,application/vnd.ms-powerpoint"
             style="display: none"
         />
 

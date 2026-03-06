@@ -450,10 +450,10 @@ export class CodeFeature extends FeaturePlugin {
      * Handle slash command
      * @param {string} command - The slash command
      * @param {string} args - Command arguments
-     * @param {Object} context - Command context
+         * @param {Object} _context - Command context
      * @returns {Promise<boolean>}
      */
-    async handleCommand(command, args, context) {
+    async handleCommand(command, args, _context) {
         if (command === '/code') {
             await this.handleCodeCommand(args);
             return true;
@@ -469,7 +469,7 @@ export class CodeFeature extends FeaturePlugin {
         const selectedIds = this.canvas.getSelectedNodeIds();
         const csvNodeIds = selectedIds.filter((id) => {
             const node = this.graph.getNode(id);
-            return node && node.type === NodeType.CSV;
+            return node && node.csvData && [NodeType.CSV, NodeType.EXCEL, NodeType.PRISM].includes(node.type);
         });
 
         // Determine position based on all selected nodes
