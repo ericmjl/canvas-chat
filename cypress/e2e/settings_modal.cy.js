@@ -4,6 +4,7 @@ describe('Settings Modal', () => {
         cy.clearIndexedDB();
         cy.visit('/');
         cy.get('#chat-input', { timeout: 15000 }).should('be.visible');
+        cy.get('body[data-app-ready="true"]', { timeout: 20000 }).should('exist');
     });
 
     it('opens and closes settings modal', () => {
