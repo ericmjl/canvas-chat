@@ -204,6 +204,9 @@ class App {
 
         // Show empty state if needed
         this.updateEmptyState();
+
+        // Signal for E2E tests that app init (including event listeners) is complete
+        document.body.dataset.appReady = 'true';
     }
 
     /**
