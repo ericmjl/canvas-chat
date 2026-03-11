@@ -120,6 +120,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/plugins/youtube.js`   | YouTubeFeature class   | YouTube video fetching with transcript (`/youtube` command)  |
 | `src/canvas_chat/static/js/plugins/url-fetch.js` | UrlFetchFeature class  | Generic URL fetching (`/fetch`), PDF viewer hydration + pagination (Prev/Next, ←/→) |
 | `src/canvas_chat/static/js/plugins/powerpoint-node.js` | PowerPointFeature + PowerPointNode | PPTX upload, slide navigation drawer, per-slide captioning, slide extraction |
+| `src/canvas_chat/static/js/plugins/html-slides.js`      | HtmlSlidesFeature + HtmlSlidesNode | HTML slides output node (`/slides`), single-file presentation embed, Prev/Next nav |
 | `src/canvas_chat/static/js/plugins/excel-node.js`      | ExcelNode + Excel upload handler    | Excel (.xlsx, .xls) upload, one node per sheet, csvData for /code            |
 | `src/canvas_chat/static/js/plugins/prism-node.js` | PrismNode + Prism upload handler   | Prism (.pzfx) upload, one node per table, csvData for /code                  |
 
@@ -182,7 +183,7 @@ canvas-chat/
 
 | Constant                            | Location                                | Purpose                                                 |
 | ----------------------------------- | --------------------------------------- | ------------------------------------------------------- |
-| `NodeType`                          | `graph-types.js`                        | All node type definitions (includes CSV, EXCEL, PRISM table nodes for /code) |
+| `NodeType`                          | `graph-types.js`                        | All node type definitions (includes CSV, EXCEL, PRISM, html_slides for /slides) |
 | `EdgeType`                          | `graph-types.js:82-94`                  | All edge type definitions                               |
 | `DEFAULT_NODE_SIZES`                | `graph-types.js:40-68`                  | Default dimensions by node type                         |
 | `PRIORITY`                          | `feature-registry.js:8-12`              | Plugin priority levels (BUILTIN > OFFICIAL > COMMUNITY) |
@@ -236,6 +237,7 @@ Quick reference guide for finding the right documentation based on what you need
 | **How does the committee feature work?**         | [llm-committee.md](docs/how-to/llm-committee.md)                 | Multi-LLM consultation and synthesis          |
 | **How does fact-checking work?**                 | [factcheck.md](docs/how-to/factcheck.md)                         | Claim verification with web search            |
 | **How do I use the matrix evaluation?**          | [use-matrix-evaluation.md](docs/how-to/use-matrix-evaluation.md) | Creating and using comparison matrices        |
+| **How do I create HTML slides?**                 | [html-slides.md](docs/how-to/html-slides.md)                     | /slides command, paste or generate, embed in node |
 | **How do I import PDFs?**                        | [import-pdfs.md](docs/how-to/import-pdfs.md)                     | Uploading and working with PDF documents      |
 | **How do I use images?**                         | [use-images.md](docs/how-to/use-images.md)                       | Adding and working with images                |
 | **How do I navigate nodes?**                     | [navigate-nodes.md](docs/how-to/navigate-nodes.md)               | Keyboard shortcuts and navigation             |
@@ -767,6 +769,7 @@ pixi run npx cypress run --browser electron --headless --spec cypress/e2e/matrix
 - `cypress/e2e/new_canvas.cy.js` - New canvas creation tests
 - `cypress/e2e/undo_redo.cy.js` - Global undo/redo tests
 - `cypress/e2e/url_fetch_no_ui_break.cy.js` - URL fetch: dangerous HTML does not break UI
+- `cypress/e2e/html_slides.cy.js` - HTML slides node (/slides with pasted HTML, toolbar, blob URL iframe)
 
 ### Unit tests
 
@@ -809,6 +812,7 @@ Write unit tests for logic that does not require API calls:
 - `tests/test_committee_plugin.js` - CommitteeFeature plugin tests
 - `tests/test_factcheck_plugin.js` - FactcheckFeature plugin tests
 - `tests/test_flashcards_plugin.js` - FlashcardFeature plugin tests
+- `tests/test_html_slides.js` - HTML slides helpers (isPastedHtml, stripMarkdownHtmlWrapper)
 - `tests/test_matrix_plugin.js` - MatrixFeature plugin tests
 - `tests/test_research_plugin.js` - ResearchFeature plugin tests
 

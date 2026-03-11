@@ -11,7 +11,7 @@
 
 /**
  * Valid node type values
- * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'powerpoint'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'excel'|'prism'|'code'|'youtube'|'git_repo'} NodeTypeValue
+ * @typedef {'human'|'ai'|'note'|'summary'|'reference'|'search'|'research'|'highlight'|'matrix'|'cell'|'row'|'column'|'fetch_result'|'pdf'|'powerpoint'|'html_slides'|'opinion'|'synthesis'|'review'|'image'|'flashcard'|'factcheck'|'csv'|'excel'|'prism'|'code'|'youtube'|'git_repo'} NodeTypeValue
  */
 
 /**
@@ -229,6 +229,7 @@ const NodeType = {
     FETCH_RESULT: 'fetch_result', // Fetched content from URL (generic)
     PDF: 'pdf', // Imported PDF document
     POWERPOINT: 'powerpoint', // Imported PowerPoint deck (PPTX)
+    HTML_SLIDES: 'html_slides', // Single-file HTML presentation (html-presentations skill)
     YOUTUBE: 'youtube', // YouTube video with transcript
     GIT_REPO: 'git_repo', // Git repository with file selection
     OPINION: 'opinion', // Committee member's opinion
@@ -258,6 +259,7 @@ const DEFAULT_NODE_SIZES = {
     [NodeType.FETCH_RESULT]: { width: 640, height: 480 },
     [NodeType.PDF]: { width: 640, height: 480 },
     [NodeType.POWERPOINT]: { width: 480, height: 400 },
+    [NodeType.HTML_SLIDES]: { width: 720, height: 480 },
     [NodeType.YOUTUBE]: { width: 640, height: 480 },
     [NodeType.GIT_REPO]: { width: 640, height: 480 },
     [NodeType.OPINION]: { width: 640, height: 480 },

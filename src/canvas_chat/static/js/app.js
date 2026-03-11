@@ -24,6 +24,7 @@ import './plugins/prism-node.js'; // Side-effect import for PrismNode plugin reg
 import './plugins/factcheck.js'; // Side-effect import for FactcheckNode plugin registration
 import './plugins/fetch-result-node.js'; // Side-effect import for FetchResultNode plugin registration
 import './plugins/flashcard-node.js'; // Side-effect import for FlashcardNode plugin registration
+import './plugins/html-slides.js'; // Side-effect import for HtmlSlidesNode plugin registration (HtmlSlidesFeature in feature-registry)
 import './plugins/highlight-node.js'; // Side-effect import for HighlightNode plugin registration
 import './plugins/human-node.js'; // Side-effect import for HumanNode plugin registration
 import './plugins/image-node.js'; // Side-effect import for ImageNode plugin registration
