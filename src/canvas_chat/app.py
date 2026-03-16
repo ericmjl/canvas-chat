@@ -974,7 +974,7 @@ async def fetch_anthropic_models(api_key: str) -> list[dict]:
 async def root():
     """Serve the main application."""
     index_path = STATIC_DIR / "index.html"
-    html = index_path.read_text()
+    html = index_path.read_text(encoding="utf-8")
 
     # Inject plugin script tags if plugins are configured
     config = get_admin_config()
@@ -1069,7 +1069,7 @@ async def serve_plugin(plugin_name: str):
         raise HTTPException(status_code=404, detail=f"Plugin '{plugin_name}' not found")
 
     try:
-        content = plugin.js_path.read_text()
+        content = plugin.js_path.read_text(encoding="utf-8")
         return HTMLResponse(content=content, media_type="application/javascript")
     except Exception as e:
         logger.error(f"Error serving plugin {plugin_name}: {e}")
