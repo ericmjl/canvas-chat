@@ -37,3 +37,7 @@ repos:
             entry: pixi lock
             language: system
             pass_filenames: false
+    - repo: https://github.com/ericmjl/webp-pre-commit
+      rev: v0.0.12
+      hooks:
+          - id: convert-to-webp

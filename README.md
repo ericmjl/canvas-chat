@@ -2,6 +2,8 @@
 
 A visual, non-linear chat interface where conversations are nodes on an infinite canvas. Explore topics by branching, merging, and navigating your discussions as a directed acyclic graph (DAG).
 
+![Canvas Chat in action](docs/assets/canvas-chat-screenshot.webp)
+
 📚 **[Documentation](https://ericmjl.github.io/canvas-chat/)**
 
 ## Try It Online
