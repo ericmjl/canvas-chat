@@ -37,7 +37,7 @@ class GenerateCodeRequest(BaseModel):
     existing_code: str | None = None  # Current code (for modifications)
     dataframe_info: list[dict] | None = None  # DataFrame metadata
     context: list[Message] | None = None  # Ancestor node content
-    model: str = "anthropic/claude-sonnet-4-20250514"
+    model: str = "claude-sonnet-4-20250514"
     api_key: str | None = None
     base_url: str | None = None
 

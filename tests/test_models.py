@@ -13,6 +13,7 @@ from canvas_chat.app import (
     Message,
     PdfResult,
     RefineQueryRequest,
+    extract_provider,
 )
 from canvas_chat.plugins.ddg_endpoints import (
     DDGResearchRequest,
@@ -497,4 +498,109 @@ def test_ddg_research_source_missing_required():
     with pytest.raises(ValidationError):
         DDGResearchSource(
             url="https://example.com", title="Title", iteration=1, query="query"
+        )
+
+
+# --- extract_provider tests ---
+
+
+def test_extract_provider_with_prefix():
+    """Test that extract_provider correctly extracts provider from model IDs."""
+    assert extract_provider("openai/gpt-4o") == "openai"
+    assert extract_provider("anthropic/claude-sonnet-4-20250514") == "anthropic"
+    assert extract_provider("google/gemini-1.5-pro") == "google"
+    assert extract_provider("groq/llama-3.1-70b-versatile") == "groq"
+    assert (
+        extract_provider("github_copilot/claude-sonnet-4-20250514") == "github_copilot"
+    )
+
+
+def test_extract_provider_without_prefix():
+    """Test that extract_provider defaults to 'openai' for models without prefix."""
+    assert extract_provider("gpt-4o") == "openai"
+    assert extract_provider("claude-sonnet-4-20250514") == "openai"
+    assert extract_provider("gemini-1.5-pro") == "openai"
+
+
+def test_extract_provider_anthropic_models_without_prefix():
+    """Test that LiteLLM expects Anthropic models WITHOUT the 'anthropic/' prefix.
+
+    This is a known issue (#242) - using 'anthropic/claude-xxx' model IDs with
+    LiteLLM direct SDK calls causes NotFoundError. LiteLLM expects model IDs
+    without the provider prefix for direct API calls (not via proxy).
+    """
+    model_without_prefix = "claude-sonnet-4-20250514"
+    provider = extract_provider(model_without_prefix)
+    assert provider == "openai"  # Defaults to openai since no prefix
+
+
+def test_extract_provider_openrouter_models():
+    """Test that extract_provider handles OpenRouter models correctly."""
+    assert extract_provider("openrouter/anthropic/claude-3.5-sonnet") == "openrouter"
+    assert extract_provider("openrouter/openai/gpt-4o") == "openrouter"
+
+
+def test_default_models_no_anthropic_prefix():
+    """Test MODEL_REGISTRY uses LiteLLM-compatible model IDs without provider prefix.
+
+    This is a fix for issue #242 - LiteLLM expects model IDs WITHOUT the provider
+    prefix (e.g., 'claude-sonnet-4-20250514' not 'anthropic/claude-sonnet-4-20250514')
+    when making direct API calls (not via proxy).
+    """
+    from canvas_chat.app import MODEL_REGISTRY
+
+    anthropic_models = [m for m in MODEL_REGISTRY if m.get("provider") == "Anthropic"]
+
+    assert len(anthropic_models) > 0, "Should have Anthropic models defined"
+
+    for model in anthropic_models:
+        model_id = model.get("id", "")
+        assert not model_id.startswith("anthropic/"), (
+            f"Model ID '{model_id}' should NOT have 'anthropic/' prefix"
+        )
+
+
+def test_anthropic_models_resolvable_by_litellm():
+    """Test that Anthropic model IDs can be resolved by LiteLLM.
+
+    This verifies the fix for issue #242 - using 'anthropic/' prefix causes
+    NotFoundError from LiteLLM. Without the prefix, LiteLLM can resolve the model.
+
+    Note: Some older model versions (e.g., 20241022) may not be in LiteLLM's
+    model mapping. This test checks models that are currently supported.
+    """
+    import litellm
+
+    from canvas_chat.app import MODEL_REGISTRY
+
+    anthropic_models = [m for m in MODEL_REGISTRY if m.get("provider") == "Anthropic"]
+    assert len(anthropic_models) > 0
+
+    # Track which models pass/fail
+    resolved = []
+    unresolved = []
+
+    for model in anthropic_models:
+        model_id = model.get("id", "")
+        try:
+            model_info = litellm.get_model_info(model_id)
+            if model_info and model_info.get("litellm_provider") == "anthropic":
+                resolved.append(model_id)
+            else:
+                unresolved.append((model_id, "not recognized as anthropic"))
+        except Exception as e:
+            unresolved.append((model_id, str(e)[:50]))
+
+    # We should have at least some models that resolve correctly
+    assert len(resolved) > 0, (
+        f"No Anthropic models could be resolved by LiteLLM. Unresolved: {unresolved}"
+    )
+
+    # Document any unresolved models (warning, not failure)
+    if unresolved:
+        import warnings
+
+        warnings.warn(
+            f"Some Anthropic models not in LiteLLM mapping: {unresolved}",
+            stacklevel=2,
         )

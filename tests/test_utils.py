@@ -71,3 +71,61 @@ def test_extract_provider_case_sensitivity():
     """Test that extract_provider preserves case."""
     assert extract_provider("OpenAI/gpt-4o") == "OpenAI"
     assert extract_provider("ANTHROPIC/claude") == "ANTHROPIC"
+
+
+# --- File encoding tests ---
+
+
+def test_read_text_calls_specify_encoding():
+    """Test that all read_text() calls in the codebase specify encoding.
+
+    This is a fix for issue #242 - on Windows, read_text() defaults to the
+    system encoding (cp1252 on English Windows) which causes UnicodeDecodeError
+    when reading UTF-8 files. All read_text() calls must specify encoding='utf-8'.
+    """
+    import ast
+    from pathlib import Path
+
+    src_dir = Path(__file__).parent.parent / "src" / "canvas_chat"
+    issues = []
+
+    for py_file in src_dir.rglob("*.py"):
+        try:
+            content = py_file.read_text(encoding="utf-8")
+            tree = ast.parse(content, filename=str(py_file))
+        except Exception:
+            continue  # Skip files that can't be parsed
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                # Check for .read_text() calls
+                if (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "read_text"
+                ):
+                    # Check if encoding argument is provided
+                    has_encoding = False
+                    for keyword in node.keywords:
+                        if keyword.arg == "encoding":
+                            has_encoding = True
+                            # Check it's set to utf-8
+                            if (
+                                isinstance(keyword.value, ast.Constant)
+                                and keyword.value.value != "utf-8"
+                            ):
+                                issues.append(
+                                    f"{py_file}:{node.lineno}: "
+                                    f"read_text() encoding should be 'utf-8', "
+                                    f"got '{keyword.value.value}'"
+                                )
+                            break
+
+                    if not has_encoding:
+                        issues.append(
+                            f"{py_file}:{node.lineno}: "
+                            f"read_text() missing required encoding='utf-8' parameter"
+                        )
+
+    assert len(issues) == 0, (
+        "Found read_text() calls without encoding='utf-8':\n" + "\n".join(issues)
+    )

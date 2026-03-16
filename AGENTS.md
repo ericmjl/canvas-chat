@@ -35,6 +35,7 @@ This includes:
 - 2026-01-24: Used `--no-verify` flag with git commit after adding pre-commit hooks (tsc + jsdoc). NEVER use this - always let pre-commit hooks run. If hooks fail, fix issues and commit normally.
 - 2026-01-24: Removed TypeScript type checking from pre-commit hooks and pixi tasks. Project uses plain JavaScript with JSDoc annotations for documentation only, not strict type checking.
 - 2026-01-25: Consolidated `/code` command handling into CodeFeature plugin. All code node operations (`handleCode`, `handleNodeRunCode`, `handleNodeGenerate`, `handleNodeGenerateSubmit`, `gatherCodeGenerationContext`) have been moved from app.js to plugins/code.js. App.js now delegates to CodeFeature via canvas events (`nodeRunCode`, `nodeGenerate`, etc.).
+- 2026-03-15: Always use `encoding="utf-8"` when calling `read_text()`. On Windows, the default encoding is cp1252 which causes UnicodeDecodeError when reading UTF-8 files.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -78,51 +79,51 @@ canvas-chat/
 
 #### Core modules
 
-| File                                       | Purpose                                                                | Edit for...                                                                                              |
-| ------------------------------------------ | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `src/canvas_chat/static/js/app.js`         | Main application, orchestrates everything                              | Slash commands, keyboard shortcuts, App class methods                                                    |
-| `src/canvas_chat/static/js/canvas.js`      | SVG canvas, pan/zoom, node/edge rendering with defensive edge deferral | Node appearance, drag behavior, viewport logic, node event handlers, edge rendering, deferred edge queue |
-| `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions                                     | Node types, edge types, createNode/createEdge utilities                                                  |
-| `src/canvas_chat/static/js/crdt-graph.js`  | CRDT-backed graph (Yjs), graph traversal                               | Graph data model, node positioning, graph traversal                                                      |
-| `src/canvas_chat/static/js/layout.js`      | Pure layout functions for overlap detection                            | Overlap detection, overlap resolution, node positioning algorithms                                       |
-| `src/canvas_chat/static/js/chat.js`        | LLM API calls, streaming                                               | API integration, message formatting, token estimation                                                    |
-| `src/canvas_chat/static/js/storage.js`     | localStorage persistence                                               | Session storage, API key storage, settings                                                               |
-| `src/canvas_chat/static/js/search.js`      | Node search functionality                                              | Search UI, filtering logic                                                                               |
-| `src/canvas_chat/static/js/sse.js`         | Server-sent events utilities                                           | Streaming connection handling                                                                            |
-| `src/canvas_chat/static/js/utils.js`       | Pure utility functions                                                 | Image resizing, error formatting, text processing                                                        |
-| `src/canvas_chat/static/js/model-utils.js` | Model utility functions                                                | Model-related utilities                                                                                  |
+| File                                       | Purpose                                                                   | Edit for...                                                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `src/canvas_chat/static/js/app.js`         | Main application, orchestrates everything                                 | Slash commands, keyboard shortcuts, App class methods                                                    |
+| `src/canvas_chat/static/js/canvas.js`      | SVG canvas, pan/zoom, node/edge rendering with defensive edge deferral    | Node appearance, drag behavior, viewport logic, node event handlers, edge rendering, deferred edge queue |
+| `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions                                        | Node types, edge types, createNode/createEdge utilities                                                  |
+| `src/canvas_chat/static/js/crdt-graph.js`  | CRDT-backed graph (Yjs), graph traversal                                  | Graph data model, node positioning, graph traversal                                                      |
+| `src/canvas_chat/static/js/layout.js`      | Pure layout functions for overlap detection                               | Overlap detection, overlap resolution, node positioning algorithms                                       |
+| `src/canvas_chat/static/js/chat.js`        | LLM API calls, streaming                                                  | API integration, message formatting, token estimation                                                    |
+| `src/canvas_chat/static/js/storage.js`     | localStorage persistence                                                  | Session storage, API key storage, settings                                                               |
+| `src/canvas_chat/static/js/search.js`      | Node search functionality                                                 | Search UI, filtering logic                                                                               |
+| `src/canvas_chat/static/js/sse.js`         | Server-sent events utilities                                              | Streaming connection handling                                                                            |
+| `src/canvas_chat/static/js/utils.js`       | Pure utility functions                                                    | Image resizing, error formatting, text processing                                                        |
+| `src/canvas_chat/static/js/model-utils.js` | Model utility functions                                                   | Model-related utilities                                                                                  |
 | `src/canvas_chat/static/js/keybindings.js` | Default shortcuts, merge, lookup; user overrides via Settings → Shortcuts | Adding/remapping keyboard shortcut actions                                                               |
 
 #### Plugin architecture modules
 
-| File                                                      | Purpose                                 | Edit for...                                       |
-| --------------------------------------------------------- | --------------------------------------- | ------------------------------------------------- |
-| `src/canvas_chat/static/js/feature-plugin.js`             | FeaturePlugin base class, AppContext    | Plugin base class, dependency injection           |
-| `src/canvas_chat/static/js/feature-registry.js`           | Plugin registration and lifecycle       | Registering plugins, slash command routing        |
-| `src/canvas_chat/static/js/plugin-events.js`              | Event system for plugin communication   | Event types, cancellable events                   |
-| `src/canvas_chat/static/js/node-registry.js`              | Custom node type registration           | Registering custom node types                     |
-| `src/canvas_chat/static/js/node-protocols.js`             | Node protocol classes, wrapNode utility | Node rendering, actions, protocol implementations |
-| `src/canvas_chat/static/js/plugin-test-harness.js`        | Testing utilities for plugins           | Writing plugin tests                              |
-| `src/canvas_chat/static/js/file-upload-handler-plugin.js` | FileUploadHandlerPlugin base class      | File upload handler plugin base class             |
+| File                                                      | Purpose                                 | Edit for...                                                                                     |
+| --------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `src/canvas_chat/static/js/feature-plugin.js`             | FeaturePlugin base class, AppContext    | Plugin base class, dependency injection                                                         |
+| `src/canvas_chat/static/js/feature-registry.js`           | Plugin registration and lifecycle       | Registering plugins, slash command routing                                                      |
+| `src/canvas_chat/static/js/plugin-events.js`              | Event system for plugin communication   | Event types, cancellable events                                                                 |
+| `src/canvas_chat/static/js/node-registry.js`              | Custom node type registration           | Registering custom node types                                                                   |
+| `src/canvas_chat/static/js/node-protocols.js`             | Node protocol classes, wrapNode utility | Node rendering, actions, protocol implementations                                               |
+| `src/canvas_chat/static/js/plugin-test-harness.js`        | Testing utilities for plugins           | Writing plugin tests                                                                            |
+| `src/canvas_chat/static/js/file-upload-handler-plugin.js` | FileUploadHandlerPlugin base class      | File upload handler plugin base class                                                           |
 | `src/canvas_chat/static/js/file-upload-registry.js`       | File upload handler registration        | Registering file upload handlers (CSV, Excel, Prism produce table nodes with csvData for /code) |
 
 #### Feature plugins (built-in)
 
-| File                                             | Purpose                | Edit for...                                                  |
-| ------------------------------------------------ | ---------------------- | ------------------------------------------------------------ |
-| `src/canvas_chat/static/js/flashcards.js`        | FlashcardFeature class | Flashcard generation, spaced repetition UI                   |
-| `src/canvas_chat/static/js/committee.js`         | CommitteeFeature class | Multi-LLM consultation, synthesis                            |
-| `src/canvas_chat/static/js/matrix.js`            | MatrixFeature class    | Comparison matrix creation, cell filling                     |
-| `src/canvas_chat/static/js/factcheck.js`         | FactcheckFeature class | Claim verification, web search integration                   |
-| `src/canvas_chat/static/js/research.js`          | ResearchFeature class  | Deep research with Exa API                                   |
-| `src/canvas_chat/static/js/code-feature.js`      | CodeFeature class      | Self-healing code execution                                  |
-| `src/canvas_chat/static/js/plugins/git-repo.js`  | GitRepoFeature class   | Git repository fetching with file selection (`/git` command) |
-| `src/canvas_chat/static/js/plugins/youtube.js`   | YouTubeFeature class   | YouTube video fetching with transcript (`/youtube` command)  |
-| `src/canvas_chat/static/js/plugins/url-fetch.js` | UrlFetchFeature class  | Generic URL fetching (`/fetch`), PDF viewer hydration + pagination (Prev/Next, ←/→) |
-| `src/canvas_chat/static/js/plugins/powerpoint-node.js` | PowerPointFeature + PowerPointNode | PPTX upload, slide navigation drawer, per-slide captioning, slide extraction |
-| `src/canvas_chat/static/js/plugins/html-slides.js`      | HtmlSlidesFeature + HtmlSlidesNode | HTML slides output node (`/slides`), single-file presentation embed, Prev/Next nav |
-| `src/canvas_chat/static/js/plugins/excel-node.js`      | ExcelNode + Excel upload handler    | Excel (.xlsx, .xls) upload, one node per sheet, csvData for /code            |
-| `src/canvas_chat/static/js/plugins/prism-node.js` | PrismNode + Prism upload handler   | Prism (.pzfx) upload, one node per table, csvData for /code                  |
+| File                                                   | Purpose                            | Edit for...                                                                         |
+| ------------------------------------------------------ | ---------------------------------- | ----------------------------------------------------------------------------------- |
+| `src/canvas_chat/static/js/flashcards.js`              | FlashcardFeature class             | Flashcard generation, spaced repetition UI                                          |
+| `src/canvas_chat/static/js/committee.js`               | CommitteeFeature class             | Multi-LLM consultation, synthesis                                                   |
+| `src/canvas_chat/static/js/matrix.js`                  | MatrixFeature class                | Comparison matrix creation, cell filling                                            |
+| `src/canvas_chat/static/js/factcheck.js`               | FactcheckFeature class             | Claim verification, web search integration                                          |
+| `src/canvas_chat/static/js/research.js`                | ResearchFeature class              | Deep research with Exa API                                                          |
+| `src/canvas_chat/static/js/code-feature.js`            | CodeFeature class                  | Self-healing code execution                                                         |
+| `src/canvas_chat/static/js/plugins/git-repo.js`        | GitRepoFeature class               | Git repository fetching with file selection (`/git` command)                        |
+| `src/canvas_chat/static/js/plugins/youtube.js`         | YouTubeFeature class               | YouTube video fetching with transcript (`/youtube` command)                         |
+| `src/canvas_chat/static/js/plugins/url-fetch.js`       | UrlFetchFeature class              | Generic URL fetching (`/fetch`), PDF viewer hydration + pagination (Prev/Next, ←/→) |
+| `src/canvas_chat/static/js/plugins/powerpoint-node.js` | PowerPointFeature + PowerPointNode | PPTX upload, slide navigation drawer, per-slide captioning, slide extraction        |
+| `src/canvas_chat/static/js/plugins/html-slides.js`     | HtmlSlidesFeature + HtmlSlidesNode | HTML slides output node (`/slides`), single-file presentation embed, Prev/Next nav  |
+| `src/canvas_chat/static/js/plugins/excel-node.js`      | ExcelNode + Excel upload handler   | Excel (.xlsx, .xls) upload, one node per sheet, csvData for /code                   |
+| `src/canvas_chat/static/js/plugins/prism-node.js`      | PrismNode + Prism upload handler   | Prism (.pzfx) upload, one node per table, csvData for /code                         |
 
 #### Example plugins
 
@@ -134,63 +135,63 @@ canvas-chat/
 
 #### Support modules
 
-| File                                               | Purpose                               | Edit for...                           |
-| -------------------------------------------------- | ------------------------------------- | ------------------------------------- |
-| `src/canvas_chat/static/js/streaming-manager.js`   | Concurrent streaming state management | Managing multiple LLM streams         |
-| `src/canvas_chat/static/js/modal-manager.js`       | Modal lifecycle management            | Modal creation, event handling        |
-| `src/canvas_chat/static/js/file-upload-handler.js` | File upload dispatcher                | Routes uploads to registered handlers |
-| `src/canvas_chat/static/js/undo-manager.js`        | Undo/redo functionality               | Action history, undo operations       |
-| `src/canvas_chat/static/js/web-grounding.js`       | Web search grounding for LLM context  | deriveSearchQuery, runWebSearch, appendWebContextToMessages |
-| `src/canvas_chat/static/js/slash-command-menu.js`  | Slash command autocomplete UI         | Command menu behavior                 |
-| `src/canvas_chat/static/js/pyodide-runner.js`      | Python code execution (Pyodide)       | Code execution, environment setup     |
-| `src/canvas_chat/static/js/highlight-utils.js`     | Text highlighting utilities           | Text selection, excerpt extraction    |
-| `src/canvas_chat/static/js/scroll-utils.js`        | Scroll container detection            | Scroll event handling, DOM traversal  |
+| File                                               | Purpose                               | Edit for...                                                   |
+| -------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------- |
+| `src/canvas_chat/static/js/streaming-manager.js`   | Concurrent streaming state management | Managing multiple LLM streams                                 |
+| `src/canvas_chat/static/js/modal-manager.js`       | Modal lifecycle management            | Modal creation, event handling                                |
+| `src/canvas_chat/static/js/file-upload-handler.js` | File upload dispatcher                | Routes uploads to registered handlers                         |
+| `src/canvas_chat/static/js/undo-manager.js`        | Undo/redo functionality               | Action history, undo operations                               |
+| `src/canvas_chat/static/js/web-grounding.js`       | Web search grounding for LLM context  | deriveSearchQuery, runWebSearch, appendWebContextToMessages   |
+| `src/canvas_chat/static/js/slash-command-menu.js`  | Slash command autocomplete UI         | Command menu behavior                                         |
+| `src/canvas_chat/static/js/pyodide-runner.js`      | Python code execution (Pyodide)       | Code execution, environment setup                             |
+| `src/canvas_chat/static/js/highlight-utils.js`     | Text highlighting utilities           | Text selection, excerpt extraction                            |
+| `src/canvas_chat/static/js/scroll-utils.js`        | Scroll container detection            | Scroll event handling, DOM traversal                          |
 | `src/canvas_chat/static/js/plugins/pdf-viewer.js`  | PDF.js viewer + text extraction       | PDF worker config, load/render/extract, IndexedDB for uploads |
-| `src/canvas_chat/static/js/event-emitter.js`       | Event emitter pattern                 | Event-driven architecture             |
+| `src/canvas_chat/static/js/event-emitter.js`       | Event emitter pattern                 | Event-driven architecture                                     |
 
 ### Frontend (HTML/CSS)
 
-| File                                        | Purpose                       | Edit for...                                  |
-| ------------------------------------------- | ----------------------------- | -------------------------------------------- |
-| `src/canvas_chat/static/index.html`         | Main HTML, modals, templates  | New modals, toolbar buttons, HTML structure. Settings modal: sidebar categories (LLM, Search, Custom models, Proxy, Features, Plugins) + single visible panel; all panels in DOM for `saveSettings()`.  |
-| `src/canvas_chat/static/css/style.css`      | Main stylesheet (imports all) | Main CSS entry point, CSS variables          |
-| `src/canvas_chat/static/css/base.css`       | Base styles, resets           | Global resets, base typography               |
-| `src/canvas_chat/static/css/canvas.css`     | Canvas-specific styles        | SVG canvas, pan/zoom, viewport               |
-| `src/canvas_chat/static/css/components.css` | Reusable components           | Buttons, inputs, tooltips, shared components |
-| `src/canvas_chat/static/css/input.css`      | Input area styles             | Chat input, textarea, input controls         |
-| `src/canvas_chat/static/css/matrix.css`     | Matrix node styles            | Matrix table, cell styling                   |
-| `src/canvas_chat/static/css/modals.css`     | Modal styles                  | Modal dialogs, overlays, forms               |
-| `src/canvas_chat/static/css/nodes.css`      | Node-specific styles          | Node containers, content, headers            |
-| `src/canvas_chat/static/css/toolbar.css`    | Toolbar styles                | Top toolbar, buttons, controls               |
+| File                                        | Purpose                       | Edit for...                                                                                                                                                                                            |
+| ------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/canvas_chat/static/index.html`         | Main HTML, modals, templates  | New modals, toolbar buttons, HTML structure. Settings modal: sidebar categories (LLM, Search, Custom models, Proxy, Features, Plugins) + single visible panel; all panels in DOM for `saveSettings()`. |
+| `src/canvas_chat/static/css/style.css`      | Main stylesheet (imports all) | Main CSS entry point, CSS variables                                                                                                                                                                    |
+| `src/canvas_chat/static/css/base.css`       | Base styles, resets           | Global resets, base typography                                                                                                                                                                         |
+| `src/canvas_chat/static/css/canvas.css`     | Canvas-specific styles        | SVG canvas, pan/zoom, viewport                                                                                                                                                                         |
+| `src/canvas_chat/static/css/components.css` | Reusable components           | Buttons, inputs, tooltips, shared components                                                                                                                                                           |
+| `src/canvas_chat/static/css/input.css`      | Input area styles             | Chat input, textarea, input controls                                                                                                                                                                   |
+| `src/canvas_chat/static/css/matrix.css`     | Matrix node styles            | Matrix table, cell styling                                                                                                                                                                             |
+| `src/canvas_chat/static/css/modals.css`     | Modal styles                  | Modal dialogs, overlays, forms                                                                                                                                                                         |
+| `src/canvas_chat/static/css/nodes.css`      | Node-specific styles          | Node containers, content, headers                                                                                                                                                                      |
+| `src/canvas_chat/static/css/toolbar.css`    | Toolbar styles                | Top toolbar, buttons, controls                                                                                                                                                                         |
 
 ### Backend (Python/FastAPI)
 
-| File                                            | Purpose                            | Edit for...                                          |
-| ----------------------------------------------- | ---------------------------------- | ---------------------------------------------------- |
-| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints, backend logic                         |
-| `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode               |
-| `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server                   |
-| `src/canvas_chat/__init__.py`                   | Package initialization             | Package metadata, version                            |
-| `src/canvas_chat/file_upload_registry.py`       | File upload handler registration   | Registering Python file upload handlers              |
-| `src/canvas_chat/file_upload_handler_plugin.py` | FileUploadHandlerPlugin base class | File upload handler plugin base class                |
-| `src/canvas_chat/plugins/pptx_handler.py`       | PPTX file upload handler           | PowerPoint slide rendering (LibreOffice) + text extraction (python-pptx) |
-| `src/canvas_chat/plugins/ddg_endpoints.py`     | DuckDuckGo search + research API   | DDG search/research endpoints (fallback when no Exa key); edit for DDG behavior |
-| `src/canvas_chat/plugins/pptx_endpoints.py`     | PPTX API endpoints                 | PPTX caption/title and narrative preset endpoints    |
-| `src/canvas_chat/plugins/`                      | Python plugin modules              | Backend plugins (matrix_handler, code_handler, etc.) |
-| `modal_app.py`                                  | Modal deployment config            | Deployment settings                                  |
+| File                                            | Purpose                            | Edit for...                                                                     |
+| ----------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------- |
+| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints, backend logic                                                    |
+| `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode                                          |
+| `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server                                              |
+| `src/canvas_chat/__init__.py`                   | Package initialization             | Package metadata, version                                                       |
+| `src/canvas_chat/file_upload_registry.py`       | File upload handler registration   | Registering Python file upload handlers                                         |
+| `src/canvas_chat/file_upload_handler_plugin.py` | FileUploadHandlerPlugin base class | File upload handler plugin base class                                           |
+| `src/canvas_chat/plugins/pptx_handler.py`       | PPTX file upload handler           | PowerPoint slide rendering (LibreOffice) + text extraction (python-pptx)        |
+| `src/canvas_chat/plugins/ddg_endpoints.py`      | DuckDuckGo search + research API   | DDG search/research endpoints (fallback when no Exa key); edit for DDG behavior |
+| `src/canvas_chat/plugins/pptx_endpoints.py`     | PPTX API endpoints                 | PPTX caption/title and narrative preset endpoints                               |
+| `src/canvas_chat/plugins/`                      | Python plugin modules              | Backend plugins (matrix_handler, code_handler, etc.)                            |
+| `modal_app.py`                                  | Modal deployment config            | Deployment settings                                                             |
 
 ### Key constants and their locations
 
-| Constant                            | Location                                | Purpose                                                 |
-| ----------------------------------- | --------------------------------------- | ------------------------------------------------------- |
-| `NodeType`                          | `graph-types.js`                        | All node type definitions (includes CSV, EXCEL, PRISM, html_slides for /slides) |
-| `EdgeType`                          | `graph-types.js:82-94`                  | All edge type definitions                               |
-| `DEFAULT_NODE_SIZES`                | `graph-types.js:40-68`                  | Default dimensions by node type                         |
-| `PRIORITY`                          | `feature-registry.js:8-12`              | Plugin priority levels (BUILTIN > OFFICIAL > COMMUNITY) |
-| `PluginConfig`                      | `config.py:78-197`                      | Plugin configuration dataclass (JS/PY/paired plugins)   |
-| `CANVAS_CHAT_ENABLE_GITHUB_COPILOT` | `config.py:is_github_copilot_enabled()` | Enable/disable GitHub Copilot (default: true)           |
-| `DEFAULT_KEYBINDINGS` / keybinding storage | `keybindings.js`, `storage.js` (`canvas-chat-keybindings`) | Default shortcuts; user overrides in Settings → Shortcuts |
-| CSS variables                       | `style.css:10-75`                       | Colors, sizing, theming                                 |
+| Constant                                   | Location                                                   | Purpose                                                                         |
+| ------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `NodeType`                                 | `graph-types.js`                                           | All node type definitions (includes CSV, EXCEL, PRISM, html_slides for /slides) |
+| `EdgeType`                                 | `graph-types.js:82-94`                                     | All edge type definitions                                                       |
+| `DEFAULT_NODE_SIZES`                       | `graph-types.js:40-68`                                     | Default dimensions by node type                                                 |
+| `PRIORITY`                                 | `feature-registry.js:8-12`                                 | Plugin priority levels (BUILTIN > OFFICIAL > COMMUNITY)                         |
+| `PluginConfig`                             | `config.py:78-197`                                         | Plugin configuration dataclass (JS/PY/paired plugins)                           |
+| `CANVAS_CHAT_ENABLE_GITHUB_COPILOT`        | `config.py:is_github_copilot_enabled()`                    | Enable/disable GitHub Copilot (default: true)                                   |
+| `DEFAULT_KEYBINDINGS` / keybinding storage | `keybindings.js`, `storage.js` (`canvas-chat-keybindings`) | Default shortcuts; user overrides in Settings → Shortcuts                       |
+| CSS variables                              | `style.css:10-75`                                          | Colors, sizing, theming                                                         |
 
 ### Zoom levels (semantic zoom)
 
@@ -230,35 +231,35 @@ Quick reference guide for finding the right documentation based on what you need
 
 #### User Features
 
-| Task/Question                                    | Documentation                                                    | Description                                   |
-| ------------------------------------------------ | ---------------------------------------------------------------- | --------------------------------------------- |
-| **How does deep research work?**                 | [deep-research.md](docs/how-to/deep-research.md)                 | Using the /research command for deep research |
-| **How does web search work?**                    | [web-search.md](docs/how-to/web-search.md)                       | Using the /search command for web searches    |
-| **How does the committee feature work?**         | [llm-committee.md](docs/how-to/llm-committee.md)                 | Multi-LLM consultation and synthesis          |
-| **How does fact-checking work?**                 | [factcheck.md](docs/how-to/factcheck.md)                         | Claim verification with web search            |
-| **How do I use the matrix evaluation?**          | [use-matrix-evaluation.md](docs/how-to/use-matrix-evaluation.md) | Creating and using comparison matrices        |
+| Task/Question                                    | Documentation                                                    | Description                                       |
+| ------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------- |
+| **How does deep research work?**                 | [deep-research.md](docs/how-to/deep-research.md)                 | Using the /research command for deep research     |
+| **How does web search work?**                    | [web-search.md](docs/how-to/web-search.md)                       | Using the /search command for web searches        |
+| **How does the committee feature work?**         | [llm-committee.md](docs/how-to/llm-committee.md)                 | Multi-LLM consultation and synthesis              |
+| **How does fact-checking work?**                 | [factcheck.md](docs/how-to/factcheck.md)                         | Claim verification with web search                |
+| **How do I use the matrix evaluation?**          | [use-matrix-evaluation.md](docs/how-to/use-matrix-evaluation.md) | Creating and using comparison matrices            |
 | **How do I create HTML slides?**                 | [html-slides.md](docs/how-to/html-slides.md)                     | /slides command, paste or generate, embed in node |
-| **How do I import PDFs?**                        | [import-pdfs.md](docs/how-to/import-pdfs.md)                     | Uploading and working with PDF documents      |
-| **How do I use images?**                         | [use-images.md](docs/how-to/use-images.md)                       | Adding and working with images                |
-| **How do I navigate nodes?**                     | [navigate-nodes.md](docs/how-to/navigate-nodes.md)               | Keyboard shortcuts and navigation             |
-| **How do I highlight and branch conversations?** | [highlight-and-branch.md](docs/how-to/highlight-and-branch.md)   | Creating conversation branches                |
-| **How do I add OpenRouter models?**             | [openrouter-models.md](docs/how-to/openrouter-models.md)         | Using OpenRouter with one API key for many models |
-| **What keyboard shortcuts are available?**       | [keyboard-shortcuts.md](docs/reference/keyboard-shortcuts.md)    | Complete list of keyboard shortcuts           |
+| **How do I import PDFs?**                        | [import-pdfs.md](docs/how-to/import-pdfs.md)                     | Uploading and working with PDF documents          |
+| **How do I use images?**                         | [use-images.md](docs/how-to/use-images.md)                       | Adding and working with images                    |
+| **How do I navigate nodes?**                     | [navigate-nodes.md](docs/how-to/navigate-nodes.md)               | Keyboard shortcuts and navigation                 |
+| **How do I highlight and branch conversations?** | [highlight-and-branch.md](docs/how-to/highlight-and-branch.md)   | Creating conversation branches                    |
+| **How do I add OpenRouter models?**              | [openrouter-models.md](docs/how-to/openrouter-models.md)         | Using OpenRouter with one API key for many models |
+| **What keyboard shortcuts are available?**       | [keyboard-shortcuts.md](docs/reference/keyboard-shortcuts.md)    | Complete list of keyboard shortcuts               |
 
 #### Architecture & Design
 
-| Task/Question                                       | Documentation                                                           | Description                                          |
-| --------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------- |
-| **Why is the plugin system designed this way?**     | [plugin-architecture.md](docs/explanation/plugin-architecture.md)       | Design rationale for three-level plugin architecture |
-| **How does streaming work?**                        | [streaming-architecture.md](docs/explanation/streaming-architecture.md) | Server-sent events and streaming design              |
-| **How does auto-layout work?**                      | [auto-layout.md](docs/explanation/auto-layout.md)                       | Node positioning and overlap resolution              |
-| **How does the committee feature work internally?** | [committee-architecture.md](docs/explanation/committee-architecture.md) | Multi-LLM consultation design                        |
-| **How does matrix evaluation work?**                | [matrix-evaluation.md](docs/explanation/matrix-evaluation.md)           | Matrix cell filling and evaluation design            |
-| **How does matrix resizing work?**                  | [matrix-resize-behavior.md](docs/explanation/matrix-resize-behavior.md) | Matrix node resize behavior                          |
-| **How does URL fetching work?**                     | [url-fetching.md](docs/explanation/url-fetching.md)                     | URL content extraction design                        |
-| **How does WebRTC signaling work?**                 | [webrtc-signaling.md](docs/explanation/webrtc-signaling.md)             | WebRTC peer connection signaling                     |
-| **What is admin mode and how is it secured?**       | [admin-mode-security.md](docs/explanation/admin-mode-security.md)       | Admin mode security design                           |
-| **Why is viewport focus explicit (no pan on nodeAdded)?** | [viewport-focus.md](docs/explanation/viewport-focus.md)             | Rationale for explicit focus; do not revert to reactive pan |
+| Task/Question                                             | Documentation                                                           | Description                                                 |
+| --------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **Why is the plugin system designed this way?**           | [plugin-architecture.md](docs/explanation/plugin-architecture.md)       | Design rationale for three-level plugin architecture        |
+| **How does streaming work?**                              | [streaming-architecture.md](docs/explanation/streaming-architecture.md) | Server-sent events and streaming design                     |
+| **How does auto-layout work?**                            | [auto-layout.md](docs/explanation/auto-layout.md)                       | Node positioning and overlap resolution                     |
+| **How does the committee feature work internally?**       | [committee-architecture.md](docs/explanation/committee-architecture.md) | Multi-LLM consultation design                               |
+| **How does matrix evaluation work?**                      | [matrix-evaluation.md](docs/explanation/matrix-evaluation.md)           | Matrix cell filling and evaluation design                   |
+| **How does matrix resizing work?**                        | [matrix-resize-behavior.md](docs/explanation/matrix-resize-behavior.md) | Matrix node resize behavior                                 |
+| **How does URL fetching work?**                           | [url-fetching.md](docs/explanation/url-fetching.md)                     | URL content extraction design                               |
+| **How does WebRTC signaling work?**                       | [webrtc-signaling.md](docs/explanation/webrtc-signaling.md)             | WebRTC peer connection signaling                            |
+| **What is admin mode and how is it secured?**             | [admin-mode-security.md](docs/explanation/admin-mode-security.md)       | Admin mode security design                                  |
+| **Why is viewport focus explicit (no pan on nodeAdded)?** | [viewport-focus.md](docs/explanation/viewport-focus.md)                 | Rationale for explicit focus; do not revert to reactive pan |
 
 #### Configuration & Deployment
 
