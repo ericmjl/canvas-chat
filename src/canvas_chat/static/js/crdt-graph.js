@@ -118,6 +118,7 @@ class CRDTGraph extends EventEmitter {
      * Create a new CRDT-backed graph
      * @param {string} sessionId - Unique session identifier for persistence
      * @param {Object} legacyData - Legacy data to load (nodes, edges, tags)
+     * @spec GRPH-REQ-001
      */
     constructor(sessionId = null, legacyData = {}) {
         // Call EventEmitter constructor
@@ -562,17 +563,17 @@ class CRDTGraph extends EventEmitter {
                 const yTags = new Y.Array();
                 yTags.push(value);
                 yNode.set('tags', yTags);
-                } else if (key === 'cells' && value) {
-                    // Matrix cells - store as Y.Map
-                    const yCells = new Y.Map();
-                    for (const [cellKey, cellValue] of Object.entries(value)) {
-                        const yCell = new Y.Map();
-                        yCell.set('content', cellValue.content);
-                        yCell.set('filled', cellValue.filled || false);
-                        yCell.set('filling', cellValue.filling || false);
-                        yCells.set(cellKey, yCell);
-                    }
-                    yNode.set('cells', yCells);
+            } else if (key === 'cells' && value) {
+                // Matrix cells - store as Y.Map
+                const yCells = new Y.Map();
+                for (const [cellKey, cellValue] of Object.entries(value)) {
+                    const yCell = new Y.Map();
+                    yCell.set('content', cellValue.content);
+                    yCell.set('filled', cellValue.filled || false);
+                    yCell.set('filling', cellValue.filling || false);
+                    yCells.set(cellKey, yCell);
+                }
+                yNode.set('cells', yCells);
             } else if (key === 'metadata' && value && typeof value === 'object') {
                 // Metadata object - store as Y.Map to preserve nested properties
                 const yMetadata = new Y.Map();
@@ -1431,9 +1432,7 @@ class CRDTGraph extends EventEmitter {
         if (cellEntries.length) parts.push('Cells:\n' + cellEntries.join('\n'));
         const results = node.webSearchResults || [];
         if (results.length > 0) {
-            const sourceLines = results.map(
-                (r, i) => `[${i + 1}] ${r.title || ''} (${r.url || ''})`
-            );
+            const sourceLines = results.map((r, i) => `[${i + 1}] ${r.title || ''} (${r.url || ''})`);
             parts.push('Web sources:\n' + sourceLines.join('\n'));
         }
         return parts.join('\n\n').trim() || '';
@@ -1476,8 +1475,7 @@ class CRDTGraph extends EventEmitter {
             NodeType.GIT_REPO,
         ];
         return sorted.map((node) => {
-            const content =
-                node.type === NodeType.MATRIX ? this.getMatrixContextString(node) : node.content;
+            const content = node.type === NodeType.MATRIX ? this.getMatrixContextString(node) : node.content;
             const msg = {
                 role: userTypes.includes(node.type) ? 'user' : 'assistant',
                 content: content || '',

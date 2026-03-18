@@ -207,6 +207,7 @@ class StreamingManager {
     /**
      * Stop streaming for a node.
      * Handles both individual nodes and grouped nodes (stops entire group).
+     * @spec CHAT-REQ-003
      *
      * @param {string} nodeId - The node to stop
      * @returns {boolean} True if stop was successful
@@ -299,6 +300,7 @@ class StreamingManager {
 
     /**
      * Continue streaming for a stopped node.
+     * @spec CHAT-REQ-003
      *
      * @param {string} nodeId - The node to continue
      * @returns {Promise<boolean>} True if continue was successful

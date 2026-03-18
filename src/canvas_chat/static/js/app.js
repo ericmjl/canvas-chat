@@ -298,7 +298,7 @@ class App {
     }
 
     /**
-     *
+     * @spec CHAT-REQ-008
      */
     async loadModels() {
         // In admin mode, use admin-configured models
@@ -321,6 +321,7 @@ class App {
         ];
 
         // Fetch models from all providers in parallel
+        // @spec CHAT-REQ-021
         const fetchPromises = providers
             .filter((p) => p.key) // Only providers with keys
             .map((p) => chat.fetchProviderModels(p.name, p.key));
@@ -753,12 +754,15 @@ class App {
         document.getElementById('save-settings-btn').addEventListener('click', () => {
             this.saveSettings();
         });
-        document.getElementById('settings-modal')?.querySelector('.settings-sidebar')?.addEventListener('click', (e) => {
-            const item = e.target.closest('.settings-sidebar-item');
-            if (item && !item.classList.contains('admin-hidden')) {
-                this.modalManager.setSettingsCategory(item.dataset.category);
-            }
-        });
+        document
+            .getElementById('settings-modal')
+            ?.querySelector('.settings-sidebar')
+            ?.addEventListener('click', (e) => {
+                const item = e.target.closest('.settings-sidebar-item');
+                if (item && !item.classList.contains('admin-hidden')) {
+                    this.modalManager.setSettingsCategory(item.dataset.category);
+                }
+            });
 
         document.getElementById('copilot-auth-start').addEventListener('click', () => {
             this.modalManager.startCopilotAuth();
@@ -1278,7 +1282,7 @@ class App {
     }
 
     /**
-     *
+     * @spec CHAT-REQ-001
      */
     async handleSend() {
         const content = this.chatInput.value.trim();
@@ -1324,6 +1328,7 @@ class App {
         // Get selected nodes - if none selected, create a new root node
         let parentIds = this.canvas.getSelectedNodeIds();
 
+        // @spec CHAT-REQ-012
         // Create human node
         const humanNode = createNode(NodeType.HUMAN, content, {
             position: this.graph.autoPosition(parentIds.length > 0 ? parentIds : []),
@@ -1387,6 +1392,7 @@ class App {
             messages,
             model,
             // onChunk
+            // @spec CHAT-REQ-014
             (chunk, fullContent) => {
                 this.canvas.updateNodeContent(aiNode.id, fullContent, true);
                 this.graph.updateNode(aiNode.id, { content: fullContent });
@@ -1420,6 +1426,7 @@ class App {
      * Use this for "add one node and show it" flows (chat, summarize, image extract, etc.).
      * For multiple nodes or when focus is not needed, use graph.addNode() and call
      * canvas.zoomToSelectionAnimated(nodeIds) or canvas.panToNodeAnimated(nodeId) when you want focus.
+     * @spec CHAT-REQ-004
      * @param {Object} node - The node to add
      */
     addUserNode(node) {
