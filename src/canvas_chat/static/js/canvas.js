@@ -30,6 +30,7 @@ class Canvas {
         // Viewport state
         this.viewBox = { x: 0, y: 0, width: 1000, height: 800 };
         this.scale = 1;
+        // @spec CANV-REQ-003: Zoom MUST be constrained between 0.1 and 3.0
         this.minScale = 0.1;
         this.maxScale = 3;
 
@@ -723,8 +724,7 @@ class Canvas {
             return;
         }
 
-        const parentElement =
-            anchorNode.nodeType === Node.TEXT_NODE ? anchorNode.parentElement : anchorNode;
+        const parentElement = anchorNode.nodeType === Node.TEXT_NODE ? anchorNode.parentElement : anchorNode;
         let nodeContent = parentElement?.closest('.node-content');
         let nodeId = null;
 
@@ -753,7 +753,6 @@ class Canvas {
 
         this.showBranchTooltip(tooltipX, tooltipY);
     }
-
 
     // --- PDF Drag & Drop Handlers ---
 
@@ -1858,6 +1857,7 @@ class Canvas {
 
     /**
      * Render a node to the canvas
+     * @spec CANV-REQ-001
      * @param {Object} node
      * @returns {void}
      */
@@ -3214,6 +3214,7 @@ class Canvas {
     }
 
     /**
+     * @spec CHAT-REQ-014
      * Update node content (for streaming)
      * @param nodeId
      * @param content
@@ -3858,6 +3859,7 @@ class Canvas {
     // --- Edge Rendering ---
 
     /**
+     * @spec CANV-REQ-005
      * Render an edge as a bezier curve.
      * Supports two signatures:
      * 1. renderEdge(edge, graph) - Automatically fetches fresh positions (Recommended)

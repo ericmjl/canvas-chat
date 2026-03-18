@@ -724,6 +724,30 @@ Always use in-app modals for user interactions that require confirmation or inpu
 
 **CRITICAL:** Always run unit tests after making code changes to ensure nothing is broken.
 
+### EARS Specification Management
+
+**When renumbering EARS specs, you MUST sync with the codebase:**
+
+1. **Check for @spec annotations:** Before renumbering, search the codebase for `@spec` annotations that reference the specs being changed:
+
+    ```bash
+    rg '@spec' src/canvas_chat/static/js/
+    ```
+
+2. **Update all code references:** If specs are renumbered, update all `@spec` annotations in source files to match the new IDs.
+
+3. **Update spec Location fields:** Verify that the `**Location**:` field in each spec points to the correct file and function. Run grep commands to verify the function exists:
+
+    ```bash
+    rg 'functionName' src/canvas_chat/static/js/
+    ```
+
+4. **Keep IDs sequential:** EARS spec IDs should be sequential within each spec file (e.g., CHAT-REQ-001, CHAT-REQ-002, ...). Avoid gaps or non-sequential numbers.
+
+5. **Document new specs:** When adding new specs, assign the next available sequential ID and add a proper `**Location**:` field pointing to the implementing code.
+
+**Why this matters:** Spec IDs are the source of truth for traceability. Code annotations link implementation to requirements. If they drift, you lose the ability to trace changes back to requirements.
+
 ```bash
 pixi run test      # Python tests
 pixi run test-js   # JavaScript tests

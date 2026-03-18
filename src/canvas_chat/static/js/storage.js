@@ -296,6 +296,7 @@ class Storage {
     /**
      * Save API keys to localStorage
      * @param keys
+     * @spec CHAT-REQ-007
      */
     saveApiKeys(keys) {
         localStorage.setItem('canvas-chat-api-keys', JSON.stringify(keys));
@@ -528,6 +529,7 @@ class Storage {
     /**
      * Save the currently selected model
      * @param model
+     * @spec CHAT-REQ-006
      */
     setCurrentModel(model) {
         localStorage.setItem('canvas-chat-model', model);

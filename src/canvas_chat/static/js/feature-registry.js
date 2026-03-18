@@ -229,6 +229,7 @@ class FeatureRegistry {
     }
 
     /**
+     * @spec PLUG-REQ-001
      * Register a feature plugin
      * @param {Object} config - Feature configuration
      * @param {string} config.id - Unique feature identifier

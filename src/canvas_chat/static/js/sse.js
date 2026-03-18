@@ -31,6 +31,7 @@ function normalizeText(text) {
 }
 
 /**
+ * @spec CHAT-REQ-002
  * Create an SSE stream reader that handles buffering and parsing
  *
  * @param {Response} response - Fetch response with SSE body
