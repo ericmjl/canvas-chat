@@ -33,6 +33,12 @@ describe('Settings Modal', () => {
         cy.get('#settings-panel-shortcuts h3').should('contain', 'Keyboard shortcuts');
         cy.get('#shortcuts-list .shortcuts-row').should('have.length.at.least', 5);
 
+        // Click Canvas
+        cy.get('.settings-sidebar-item[data-category="canvas"]').click();
+        cy.get('#settings-panel-canvas').should('have.class', 'active');
+        cy.get('#settings-panel-canvas h3').should('contain', 'Canvas');
+        cy.get('#zoom-wheel-sensitivity').should('have.value', '50');
+
         // Click Features
         cy.get('.settings-sidebar-item[data-category="features"]').click();
         cy.get('#settings-panel-features').should('have.class', 'active');

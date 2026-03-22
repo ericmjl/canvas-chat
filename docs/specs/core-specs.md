@@ -175,15 +175,15 @@ The system MUST allow users to pan the canvas by dragging on empty space. Pannin
 
 ### [x] CANV-REQ-003: Zoom Canvas
 
-**Location**: `canvas.js`
+**Location**: `canvas.js`, `utils.js`, `storage.js`
 
-The system MUST allow users to zoom the canvas using scroll wheel (with Ctrl), trackpad pinch, or touch gestures. Zoom MUST be constrained between 0.1 and 3.0.
+The system MUST allow users to zoom the canvas using scroll wheel (with Ctrl), trackpad pinch, or touch gestures. Zoom MUST be constrained between 0.1 and 3.0. Ctrl+scroll MUST use cursor-anchored zoom. Wheel deltas MUST be normalized for `deltaMode` (pixel, line, page) before applying scale. The user MUST be able to adjust zoom step size via Settings (slider persisted in localStorage). High-frequency wheel events MAY be coalesced to one update per animation frame. Touch pinch and Safari gesture zoom are unchanged by normalization.
 
 ### [x] CANV-REQ-004: Semantic Zoom
 
-**Location**: `canvas.js`, `nodes.css`
+**Location**: `canvas.js`, `utils.js` (`resolveSemanticZoomBand`), `nodes.css`
 
-The system MUST show full node content at zoom > 0.6, summary text at zoom 0.35-0.6, and minimal view at zoom <= 0.35. This MUST be implemented via CSS classes on the canvas container.
+The nominal bands are: full node content at scale **> 0.6**, summary text at **0.35 < scale ≤ 0.6**, minimal view at **scale ≤ 0.35**. To avoid flicker when scale oscillates near a boundary, the CSS class on the canvas container MUST use **hysteresis**: transitions between full and summary use inner thresholds **0.58** (down) and **0.62** (up); transitions between summary and mini use **0.33** (down) and **0.37** (up). On first paint or when no prior band is stored, the band MUST be derived from nominal thresholds only. Drag affordances (e.g. handle vs drag-anywhere) remain driven by **numeric scale** in `canvas.js`, not by the hysteresis band. Implementation MUST map bands to CSS classes `zoom-full`, `zoom-summary`, `zoom-mini` on the canvas container.
 
 ### [x] CANV-REQ-005: Render Edges
 

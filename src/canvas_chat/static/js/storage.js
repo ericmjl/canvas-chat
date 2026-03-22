@@ -615,6 +615,29 @@ class Storage {
         localStorage.setItem('canvas-chat-flashcard-strictness', value);
     }
 
+    /**
+     * Get Ctrl+scroll / pinch zoom sensitivity (Settings slider 0–100, default 50).
+     * @returns {number}
+     */
+    getZoomWheelSensitivity() {
+        const raw = localStorage.getItem('canvas-chat-zoom-wheel-sensitivity');
+        if (raw === null) {
+            return 50;
+        }
+        const n = parseInt(raw, 10);
+        return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50;
+    }
+
+    /**
+     * Persist zoom wheel sensitivity (0–100).
+     * @param {number|string} value
+     */
+    setZoomWheelSensitivity(value) {
+        const n = parseInt(String(value), 10);
+        const v = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50;
+        localStorage.setItem('canvas-chat-zoom-wheel-sensitivity', String(v));
+    }
+
     // --- Custom Models (localStorage) ---
 
     /**

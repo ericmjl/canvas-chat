@@ -7,7 +7,14 @@ import { NodeType, getDefaultNodeSize } from './graph-types.js';
 import { highlightTextInHtml } from './highlight-utils.js';
 import { wrapNode } from './node-protocols.js';
 import { findScrollableContainer } from './scroll-utils.js';
-import { escapeHtmlText, truncateText } from './utils.js';
+import {
+    escapeHtmlText,
+    normalizeWheelDeltaY,
+    resolveSemanticZoomBand,
+    scaleAfterWheelZoom,
+    semanticBandToCssClass,
+    truncateText,
+} from './utils.js';
 
 /**
  *
@@ -33,6 +40,13 @@ class Canvas {
         // @spec CANV-REQ-003: Zoom MUST be constrained between 0.1 and 3.0
         this.minScale = 0.1;
         this.maxScale = 3;
+        /** Settings 0–100; applied via setZoomWheelSensitivity. */
+        this.zoomWheelSensitivity = 50;
+        /** @type {'full'|'summary'|'mini'|undefined} Semantic zoom band (hysteresis). */
+        this._semanticZoomBand = undefined;
+        /** Coalesce high-frequency ctrl+wheel into one update per animation frame. */
+        /** @type {{ pendingDelta: number, rafId: number|null, clientX: number, clientY: number }} */
+        this._wheelZoomCoalesce = { pendingDelta: 0, rafId: null, clientX: 0, clientY: 0 };
 
         // Interaction state
         this.isPanning = false;
@@ -636,6 +650,7 @@ class Canvas {
 
         // Wheel events: pinch-to-zoom (ctrlKey) or two-finger pan
         this.container.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
+        this.container.addEventListener('pointerleave', this._flushPendingWheelZoom.bind(this));
 
         // Touch events for mobile/tablet
         this.container.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
@@ -851,16 +866,10 @@ class Canvas {
             `${this.viewBox.x} ${this.viewBox.y} ${this.viewBox.width} ${this.viewBox.height}`
         );
 
-        // Update zoom level class for semantic zoom
+        // Semantic zoom CSS classes (hysteresis — see CANV-REQ-004, resolveSemanticZoomBand)
+        this._semanticZoomBand = resolveSemanticZoomBand(this.scale, this._semanticZoomBand);
         this.container.classList.remove('zoom-full', 'zoom-summary', 'zoom-mini');
-
-        if (this.scale > 0.6) {
-            this.container.classList.add('zoom-full');
-        } else if (this.scale > 0.35) {
-            this.container.classList.add('zoom-summary');
-        } else {
-            this.container.classList.add('zoom-mini');
-        }
+        this.container.classList.add(semanticBandToCssClass(this._semanticZoomBand));
 
         // Check if any nodes are visible and update hint
         this.updateNoNodesHint();
@@ -1041,38 +1050,94 @@ class Canvas {
     }
 
     /**
+     * Persisted Settings value 0–100 for Ctrl+scroll zoom step size.
+     * @param {number|string} value
+     */
+    setZoomWheelSensitivity(value) {
+        const n = Number.parseInt(String(value), 10);
+        this.zoomWheelSensitivity = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50;
+    }
+
+    /**
+     * Apply accumulated normalized wheel delta at a screen anchor (cursor-anchored zoom).
+     * @param {number} normalizedDeltaSum
+     * @param {number} clientX
+     * @param {number} clientY
+     */
+    _applyWheelZoom(normalizedDeltaSum, clientX, clientY) {
+        if (normalizedDeltaSum === 0) {
+            return;
+        }
+        const rect = this.container.getBoundingClientRect();
+        const pointBefore = this.clientToSvg(clientX, clientY);
+        const newScale = scaleAfterWheelZoom(
+            this.scale,
+            normalizedDeltaSum,
+            this.zoomWheelSensitivity,
+            this.minScale,
+            this.maxScale
+        );
+        if (newScale === this.scale) {
+            return;
+        }
+        this.scale = newScale;
+        this.viewBox.width = rect.width / this.scale;
+        this.viewBox.height = rect.height / this.scale;
+        const pointAfter = this.clientToSvg(clientX, clientY);
+        this.viewBox.x += pointBefore.x - pointAfter.x;
+        this.viewBox.y += pointBefore.y - pointAfter.y;
+        this.updateViewBox();
+    }
+
+    /**
+     * Flush pending coalesced wheel zoom (pointer left canvas or cancel rAF).
+     */
+    _flushPendingWheelZoom() {
+        if (this._wheelZoomCoalesce.rafId !== null) {
+            cancelAnimationFrame(this._wheelZoomCoalesce.rafId);
+            this._wheelZoomCoalesce.rafId = null;
+        }
+        const d = this._wheelZoomCoalesce.pendingDelta;
+        if (d === 0) {
+            return;
+        }
+        this._wheelZoomCoalesce.pendingDelta = 0;
+        this._applyWheelZoom(d, this._wheelZoomCoalesce.clientX, this._wheelZoomCoalesce.clientY);
+    }
+
+    /**
      *
      * @param e
      */
     handleWheel(e) {
-        const rect = this.container.getBoundingClientRect();
-
         // Check if this is a pinch-to-zoom gesture (ctrlKey is set by trackpad pinch)
         // IMPORTANT: Check this FIRST before scrollable content check, because pinch-to-zoom
         // should always control canvas zoom, even when cursor is over a node
         if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
 
-            // Pinch to zoom
-            // deltaY is negative when zooming in (fingers spreading)
-            const zoomFactor = 1 - e.deltaY * 0.01;
-            const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * zoomFactor));
-
-            if (newScale === this.scale) return;
-
-            // Zoom towards mouse/gesture position
-            const pointBefore = this.clientToSvg(e.clientX, e.clientY);
-
-            this.scale = newScale;
-            this.viewBox.width = rect.width / this.scale;
-            this.viewBox.height = rect.height / this.scale;
-
-            const pointAfter = this.clientToSvg(e.clientX, e.clientY);
-
-            this.viewBox.x += pointBefore.x - pointAfter.x;
-            this.viewBox.y += pointBefore.y - pointAfter.y;
-
-            this.updateViewBox();
+            const lineHeight = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+            const pageH = this.container.clientHeight || window.innerHeight || 800;
+            const nd = normalizeWheelDeltaY(e.deltaY, e.deltaMode, lineHeight, pageH);
+            this._wheelZoomCoalesce.pendingDelta += nd;
+            this._wheelZoomCoalesce.clientX = e.clientX;
+            this._wheelZoomCoalesce.clientY = e.clientY;
+            if (this._wheelZoomCoalesce.rafId === null) {
+                const tick = () => {
+                    this._wheelZoomCoalesce.rafId = null;
+                    const acc = this._wheelZoomCoalesce.pendingDelta;
+                    if (acc === 0) {
+                        return;
+                    }
+                    this._wheelZoomCoalesce.pendingDelta = 0;
+                    const { clientX, clientY } = this._wheelZoomCoalesce;
+                    this._applyWheelZoom(acc, clientX, clientY);
+                    if (this._wheelZoomCoalesce.pendingDelta !== 0) {
+                        this._wheelZoomCoalesce.rafId = requestAnimationFrame(tick);
+                    }
+                };
+                this._wheelZoomCoalesce.rafId = requestAnimationFrame(tick);
+            }
         } else {
             // Regular two-finger scroll (pan) - check if we should scroll node content instead
             // Find the best scroll container by checking which element actually has overflow

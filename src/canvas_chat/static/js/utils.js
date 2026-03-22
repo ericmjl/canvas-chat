@@ -417,6 +417,144 @@ async function resizeImage(file, maxDimension = 2048) {
 }
 
 // =============================================================================
+// Canvas wheel zoom (Ctrl+scroll) — normalized deltas + multiplicative scale
+// =============================================================================
+
+/** WheelEvent.deltaMode: pixel deltas (trackpad / some browsers). */
+export const DOM_DELTA_PIXEL = 0;
+/** WheelEvent.deltaMode: line height multiples (many mouse wheels). */
+export const DOM_DELTA_LINE = 1;
+/** WheelEvent.deltaMode: page height multiples. */
+export const DOM_DELTA_PAGE = 2;
+
+/**
+ * Default Settings slider value (0–100). 50 matches the former slider maximum (5.0× internal multiplier).
+ */
+export const DEFAULT_ZOOM_WHEEL_SENSITIVITY = 50;
+
+/**
+ * Convert wheel deltaY to pixel-equivalent so zoom steps are consistent across
+ * devices (trackpad vs mouse) and deltaMode values.
+ *
+ * @param {number} deltaY - Raw WheelEvent.deltaY
+ * @param {number} deltaMode - WheelEvent.deltaMode (0, 1, or 2)
+ * @param {number} lineHeightPx - Typical line height in CSS pixels (e.g. root font size)
+ * @param {number} pageHeightPx - Viewport or container height for page mode
+ * @returns {number}
+ */
+export function normalizeWheelDeltaY(deltaY, deltaMode, lineHeightPx, pageHeightPx) {
+    if (deltaMode === DOM_DELTA_LINE) {
+        return deltaY * lineHeightPx;
+    }
+    if (deltaMode === DOM_DELTA_PAGE) {
+        return deltaY * pageHeightPx;
+    }
+    return deltaY;
+}
+
+/**
+ * Maps Settings slider 0–100 to a multiplier on zoom step size (k in scaleAfterWheelZoom).
+ * Slider **50** matches the former maximum (5.0×); **0** is minimal (0.2×); **100** extends
+ * headroom beyond that (10.0×).
+ *
+ * @param {number} sensitivity0to100
+ * @returns {number}
+ */
+export function zoomWheelSensitivityMultiplier(sensitivity0to100) {
+    const s = Math.max(0, Math.min(100, sensitivity0to100));
+    if (s <= 50) {
+        return 0.2 + (s / 50) * 4.8;
+    }
+    return 5.0 + ((s - 50) / 50) * 5.0;
+}
+
+/**
+ * Next canvas scale after applying accumulated wheel delta. Positive normalizedDeltaY
+ * scrolls “down” (typical browser: zoom out).
+ *
+ * @param {number} currentScale
+ * @param {number} normalizedDeltaY - Pixel-equivalent delta
+ * @param {number} sensitivity0to100 - Settings value 0–100
+ * @param {number} minScale
+ * @param {number} maxScale
+ * @returns {number}
+ */
+export function scaleAfterWheelZoom(currentScale, normalizedDeltaY, sensitivity0to100, minScale, maxScale) {
+    if (normalizedDeltaY === 0) {
+        return currentScale;
+    }
+    const sensMul = zoomWheelSensitivityMultiplier(sensitivity0to100);
+    const k = 0.002 * sensMul;
+    const factor = Math.exp(-k * normalizedDeltaY);
+    let next = currentScale * factor;
+    if (next < minScale) {
+        next = minScale;
+    }
+    if (next > maxScale) {
+        next = maxScale;
+    }
+    return next;
+}
+
+/**
+ * Semantic zoom band with hysteresis near nominal 0.6 and 0.35 scale thresholds
+ * to avoid CSS mode flicker when oscillating around boundaries.
+ *
+ * @param {number} scale - Current canvas scale
+ * @param {'full'|'summary'|'mini'|undefined|null} previousBand - Prior band; undefined uses nominal thresholds
+ * @returns {'full'|'summary'|'mini'}
+ */
+export function resolveSemanticZoomBand(scale, previousBand) {
+    if (previousBand === undefined || previousBand === null) {
+        if (scale > 0.6) {
+            return 'full';
+        }
+        if (scale > 0.35) {
+            return 'summary';
+        }
+        return 'mini';
+    }
+    if (previousBand === 'full') {
+        if (scale < 0.58) {
+            return scale <= 0.33 ? 'mini' : 'summary';
+        }
+        return 'full';
+    }
+    if (previousBand === 'summary') {
+        if (scale > 0.62) {
+            return 'full';
+        }
+        if (scale < 0.33) {
+            return 'mini';
+        }
+        return 'summary';
+    }
+    if (previousBand === 'mini') {
+        if (scale > 0.37) {
+            return scale > 0.62 ? 'full' : 'summary';
+        }
+        return 'mini';
+    }
+    return 'summary';
+}
+
+/**
+ * CSS class on the canvas container for semantic zoom styling.
+ *
+ * @param {'full'|'summary'|'mini'} band
+ * @returns {string}
+ */
+export function semanticBandToCssClass(band) {
+    if (band === 'full') {
+        return 'zoom-full';
+    }
+    if (band === 'summary') {
+        return 'zoom-summary';
+    }
+    return 'zoom-mini';
+}
+
+// =============================================================================
 // Exports
 // =============================================================================
 

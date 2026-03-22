@@ -888,6 +888,39 @@ test('setFlashcardStrictness: persists across function calls', () => {
 });
 
 // ============================================================
+// Zoom wheel sensitivity (Storage class)
+// ============================================================
+
+test('getZoomWheelSensitivity: returns 50 by default', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        assertEqual(storage.getZoomWheelSensitivity(), 50);
+    } finally {
+        global.localStorage = original;
+    }
+});
+
+test('setZoomWheelSensitivity: round-trip and clamping', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        storage.setZoomWheelSensitivity(80);
+        assertEqual(storage.getZoomWheelSensitivity(), 80);
+        storage.setZoomWheelSensitivity(200);
+        assertEqual(storage.getZoomWheelSensitivity(), 100);
+        storage.setZoomWheelSensitivity(-5);
+        assertEqual(storage.getZoomWheelSensitivity(), 0);
+    } finally {
+        global.localStorage = original;
+    }
+});
+
+// ============================================================
 // Keybindings storage (Storage class getKeybindings / setKeybindings)
 // ============================================================
 

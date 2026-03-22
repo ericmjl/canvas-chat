@@ -7,6 +7,10 @@ import {
     test,
     assertEqual
 } from './test_setup.js';
+import {
+    resolveSemanticZoomBand,
+    semanticBandToCssClass,
+} from '../src/canvas_chat/static/js/utils.js';
 
 // ============================================================
 // Navigation popover selection logic tests
@@ -88,49 +92,49 @@ test('Popover selection: handles two item list wrapping up', () => {
 });
 
 // ============================================================
-// Zoom class determination tests
+// Semantic zoom band (nominal + hysteresis) — utils.resolveSemanticZoomBand
 // ============================================================
 
-/**
- * Get zoom class based on scale
- * Copy of logic from canvas.js for testing
- */
-function getZoomClass(scale) {
-    if (scale > 0.6) {
-        return 'zoom-full';
-    } else if (scale > 0.35) {
-        return 'zoom-summary';
-    } else {
-        return 'zoom-mini';
-    }
+function cssClassForScale(scale, previousBand) {
+    return semanticBandToCssClass(resolveSemanticZoomBand(scale, previousBand));
 }
 
-test('getZoomClass: scale 0.8 returns zoom-full', () => {
-    assertEqual(getZoomClass(0.8), 'zoom-full');
+test('semantic zoom nominal: scale 0.8 returns zoom-full', () => {
+    assertEqual(cssClassForScale(0.8, undefined), 'zoom-full');
 });
 
-test('getZoomClass: scale 1.0 returns zoom-full', () => {
-    assertEqual(getZoomClass(1.0), 'zoom-full');
+test('semantic zoom nominal: scale 1.0 returns zoom-full', () => {
+    assertEqual(cssClassForScale(1.0, undefined), 'zoom-full');
 });
 
-test('getZoomClass: scale 0.6 returns zoom-summary (boundary)', () => {
-    // Note: scale > 0.6 is full, so 0.6 exactly is summary
-    assertEqual(getZoomClass(0.6), 'zoom-summary');
+test('semantic zoom nominal: scale 0.6 returns zoom-summary (boundary)', () => {
+    assertEqual(cssClassForScale(0.6, undefined), 'zoom-summary');
 });
 
-test('getZoomClass: scale 0.5 returns zoom-summary', () => {
-    assertEqual(getZoomClass(0.5), 'zoom-summary');
+test('semantic zoom nominal: scale 0.5 returns zoom-summary', () => {
+    assertEqual(cssClassForScale(0.5, undefined), 'zoom-summary');
 });
 
-test('getZoomClass: scale 0.35 returns zoom-mini (boundary)', () => {
-    // Note: scale > 0.35 is summary, so 0.35 exactly is mini
-    assertEqual(getZoomClass(0.35), 'zoom-mini');
+test('semantic zoom nominal: scale 0.35 returns zoom-mini (boundary)', () => {
+    assertEqual(cssClassForScale(0.35, undefined), 'zoom-mini');
 });
 
-test('getZoomClass: scale 0.3 returns zoom-mini', () => {
-    assertEqual(getZoomClass(0.3), 'zoom-mini');
+test('semantic zoom nominal: scale 0.3 returns zoom-mini', () => {
+    assertEqual(cssClassForScale(0.3, undefined), 'zoom-mini');
 });
 
-test('getZoomClass: scale 0.1 returns zoom-mini', () => {
-    assertEqual(getZoomClass(0.1), 'zoom-mini');
+test('semantic zoom nominal: scale 0.1 returns zoom-mini', () => {
+    assertEqual(cssClassForScale(0.1, undefined), 'zoom-mini');
+});
+
+test('semantic zoom hysteresis: stays full between 0.58 and 0.62 when coming from full', () => {
+    assertEqual(cssClassForScale(0.59, 'full'), 'zoom-full');
+});
+
+test('semantic zoom hysteresis: drops to summary below 0.58 from full', () => {
+    assertEqual(cssClassForScale(0.57, 'full'), 'zoom-summary');
+});
+
+test('semantic zoom hysteresis: summary returns to full above 0.62', () => {
+    assertEqual(cssClassForScale(0.63, 'summary'), 'zoom-full');
 });

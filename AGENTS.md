@@ -90,7 +90,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/storage.js`     | localStorage persistence                                                  | Session storage, API key storage, settings                                                               |
 | `src/canvas_chat/static/js/search.js`      | Node search functionality                                                 | Search UI, filtering logic                                                                               |
 | `src/canvas_chat/static/js/sse.js`         | Server-sent events utilities                                              | Streaming connection handling                                                                            |
-| `src/canvas_chat/static/js/utils.js`       | Pure utility functions                                                    | Image resizing, error formatting, text processing                                                        |
+| `src/canvas_chat/static/js/utils.js`       | Pure utility functions                                                    | Image resizing, error formatting, text processing, wheel zoom + semantic-zoom band helpers              |
 | `src/canvas_chat/static/js/model-utils.js` | Model utility functions                                                   | Model-related utilities                                                                                  |
 | `src/canvas_chat/static/js/keybindings.js` | Default shortcuts, merge, lookup; user overrides via Settings → Shortcuts | Adding/remapping keyboard shortcut actions                                                               |
 
@@ -191,15 +191,18 @@ canvas-chat/
 | `PluginConfig`                             | `config.py:78-197`                                         | Plugin configuration dataclass (JS/PY/paired plugins)                           |
 | `CANVAS_CHAT_ENABLE_GITHUB_COPILOT`        | `config.py:is_github_copilot_enabled()`                    | Enable/disable GitHub Copilot (default: true)                                   |
 | `DEFAULT_KEYBINDINGS` / keybinding storage | `keybindings.js`, `storage.js` (`canvas-chat-keybindings`) | Default shortcuts; user overrides in Settings → Shortcuts                       |
+| Zoom wheel sensitivity                     | `storage.js` (`canvas-chat-zoom-wheel-sensitivity`), `utils.js` (`DEFAULT_ZOOM_WHEEL_SENSITIVITY` = 50) | Settings → Canvas; slider 50 = former “max” step, 100 = stronger; live `input` updates canvas |
 | CSS variables                              | `style.css:10-75`                                          | Colors, sizing, theming                                                         |
 
 ### Zoom levels (semantic zoom)
 
-| Scale      | Class          | Behavior                          |
-| ---------- | -------------- | --------------------------------- |
-| > 0.6      | `zoom-full`    | Full node content visible         |
-| 0.35 - 0.6 | `zoom-summary` | Summary text shown, drag anywhere |
-| <= 0.35    | `zoom-mini`    | Minimal view, drag anywhere       |
+Nominal bands (CSS class selection uses **hysteresis** — see `resolveSemanticZoomBand` in `utils.js` and CANV-REQ-004): full ↔ summary at **0.58 / 0.62**; summary ↔ mini at **0.33 / 0.37**. Drag behavior still uses numeric scale (`> 0.6` vs `<= 0.6`) in `canvas.js`.
+
+| Nominal scale | Class (typical) | Behavior                          |
+| ------------- | --------------- | --------------------------------- |
+| > 0.6         | `zoom-full`     | Full node content visible         |
+| 0.35 - 0.6    | `zoom-summary`  | Summary text shown, drag anywhere |
+| <= 0.35       | `zoom-mini`     | Minimal view, drag anywhere       |
 
 ## Documentation
 
@@ -245,6 +248,7 @@ Quick reference guide for finding the right documentation based on what you need
 | **How do I highlight and branch conversations?** | [highlight-and-branch.md](docs/how-to/highlight-and-branch.md)   | Creating conversation branches                    |
 | **How do I add OpenRouter models?**              | [openrouter-models.md](docs/how-to/openrouter-models.md)         | Using OpenRouter with one API key for many models |
 | **What keyboard shortcuts are available?**       | [keyboard-shortcuts.md](docs/reference/keyboard-shortcuts.md)    | Complete list of keyboard shortcuts               |
+| **How do canvas zoom and semantic zoom work?**   | [canvas-zoom.md](docs/reference/canvas-zoom.md)                 | Ctrl+scroll, sensitivity slider, semantic zoom bands |
 
 #### Architecture & Design
 
@@ -810,6 +814,7 @@ Write unit tests for logic that does not require API calls:
 - `tests/test_app_init.js` - Integration test to verify App class initializes without errors (catches undefined method references)
 - `tests/test_utils.js` - Concurrent state management tests
 - `tests/test_utils_basic.js` - Basic utility functions (extractUrlFromReferenceNode, formatMatrixAsText, formatUserError, etc.)
+- `tests/test_wheel_zoom.js` - Ctrl+scroll zoom math (`normalizeWheelDeltaY`, `scaleAfterWheelZoom`)
 - `tests/test_web_grounding.js` - Web grounding helper (appendWebContextToMessages)
 - `tests/test_utils_messages.js` - buildMessagesForApi edge cases
 - `tests/test_layout.js` - Layout and overlap resolution functions

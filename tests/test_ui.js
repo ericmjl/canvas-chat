@@ -11,6 +11,7 @@ import { assertEqual, assertTrue } from './test_helpers/assertions.js';
 // Import ES modules
 const { highlightTextInHtml, extractExcerptText, normalizeKatexDuplication, alignStart, alignEnd, findMatchRegion } =
     await import('../src/canvas_chat/static/js/highlight-utils.js');
+const { resolveSemanticZoomBand, semanticBandToCssClass } = await import('../src/canvas_chat/static/js/utils.js');
 
 // Simple test runner
 let passed = 0;
@@ -295,18 +296,17 @@ test('Node rendering: includes delete button', () => {
 // ============================================================
 
 /**
- * Simulate zoom class update logic
+ * Simulate canvas semantic zoom class update (matches canvas.js + resolveSemanticZoomBand)
  */
 function updateZoomClass(container, scale) {
     container.classList.remove('zoom-full', 'zoom-summary', 'zoom-mini');
-
-    if (scale > 0.6) {
-        container.classList.add('zoom-full');
-    } else if (scale > 0.35) {
-        container.classList.add('zoom-summary');
-    } else {
-        container.classList.add('zoom-mini');
+    let prev = container.dataset.semanticZoomBand;
+    if (prev === undefined || prev === '') {
+        prev = undefined;
     }
+    const band = resolveSemanticZoomBand(scale, prev);
+    container.dataset.semanticZoomBand = band;
+    container.classList.add(semanticBandToCssClass(band));
 }
 
 test('Zoom class: updates correctly for full zoom', () => {
