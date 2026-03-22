@@ -140,6 +140,7 @@ class App {
 
         // Initialize canvas
         this.canvas = new Canvas('canvas-container', 'canvas');
+        this.canvas.setZoomWheelSensitivity(storage.getZoomWheelSensitivity());
 
         // Configure streaming manager with canvas and graph getter
         this.streamingManager.setCanvas(this.canvas);
@@ -754,6 +755,15 @@ class App {
         document.getElementById('save-settings-btn').addEventListener('click', () => {
             this.saveSettings();
         });
+        const zoomWheelSensEl = document.getElementById('zoom-wheel-sensitivity');
+        if (zoomWheelSensEl) {
+            zoomWheelSensEl.addEventListener('input', () => {
+                const v = zoomWheelSensEl.value;
+                storage.setZoomWheelSensitivity(v);
+                this.canvas.setZoomWheelSensitivity(v);
+                zoomWheelSensEl.setAttribute('aria-valuenow', String(storage.getZoomWheelSensitivity()));
+            });
+        }
         document
             .getElementById('settings-modal')
             ?.querySelector('.settings-sidebar')
@@ -4119,6 +4129,13 @@ class App {
         // Save flashcard strictness
         const strictness = document.getElementById('flashcard-strictness').value;
         storage.setFlashcardStrictness(strictness);
+
+        const zoomSensEl = document.getElementById('zoom-wheel-sensitivity');
+        if (zoomSensEl) {
+            storage.setZoomWheelSensitivity(zoomSensEl.value);
+            this.canvas.setZoomWheelSensitivity(zoomSensEl.value);
+            zoomSensEl.setAttribute('aria-valuenow', String(storage.getZoomWheelSensitivity()));
+        }
 
         // Save shortcut overrides
         const shortcutOverrides = this.modalManager.getShortcutOverrides();

@@ -391,7 +391,7 @@ class ModalManager {
     /**
      * Set the active settings category (sidebar + panel). If the requested category is
      * hidden (e.g. admin mode), switches to the first visible category.
-     * @param {string} [categoryId] - One of: llm, search, custom-models, proxy, features, plugins
+     * @param {string} [categoryId] - One of: llm, search, custom-models, proxy, shortcuts, canvas, features, plugins
      */
     setSettingsCategory(categoryId) {
         const modal = document.getElementById('settings-modal');
@@ -419,7 +419,7 @@ class ModalManager {
 
     /**
      * Open the settings modal and optionally switch to a category (e.g. 'llm' for "Add API key").
-     * @param {string} [categoryId] - Category to show: llm, search, custom-models, proxy, features, plugins
+     * @param {string} [categoryId] - Category to show: llm, search, custom-models, proxy, shortcuts, canvas, features, plugins
      */
     showSettingsModal(categoryId) {
         const modal = document.getElementById('settings-modal');
@@ -442,6 +442,13 @@ class ModalManager {
 
         // Load flashcard strictness
         document.getElementById('flashcard-strictness').value = storage.getFlashcardStrictness();
+
+        const zoomSensEl = document.getElementById('zoom-wheel-sensitivity');
+        if (zoomSensEl) {
+            const zs = storage.getZoomWheelSensitivity();
+            zoomSensEl.value = String(zs);
+            zoomSensEl.setAttribute('aria-valuenow', String(zs));
+        }
 
         // Load shortcut overrides and render Shortcuts panel
         this._shortcutOverrides = { ...storage.getKeybindings() };

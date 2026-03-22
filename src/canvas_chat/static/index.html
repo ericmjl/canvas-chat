@@ -219,6 +219,7 @@
                             <li><button type="button" class="settings-sidebar-item" data-category="custom-models" data-admin-restricted>Custom models</button></li>
                             <li><button type="button" class="settings-sidebar-item" data-category="proxy" data-admin-restricted>Proxy</button></li>
                             <li><button type="button" class="settings-sidebar-item" data-category="shortcuts">Shortcuts</button></li>
+                            <li><button type="button" class="settings-sidebar-item" data-category="canvas">Canvas</button></li>
                             <li><button type="button" class="settings-sidebar-item" data-category="features">Features</button></li>
                             <li><button type="button" class="settings-sidebar-item" data-category="plugins">Plugins</button></li>
                         </ul>
@@ -351,6 +352,28 @@
                             <h3>Keyboard shortcuts</h3>
                             <p class="settings-note">Override default shortcuts. Click a row and press the new key, or use "Change" then press a key. Use "Reset to default" per row to restore.</p>
                             <div id="shortcuts-list" class="shortcuts-list"></div>
+                        </div>
+
+                        <!-- Canvas -->
+                        <div id="settings-panel-canvas" class="settings-panel" data-category="canvas">
+                            <h3>Canvas</h3>
+                            <p class="settings-note">Pan and zoom (Ctrl+scroll or trackpad pinch).</p>
+                            <div class="api-key-group">
+                                <label for="zoom-wheel-sensitivity">Zoom sensitivity</label>
+                                <input
+                                    type="range"
+                                    id="zoom-wheel-sensitivity"
+                                    min="0"
+                                    max="100"
+                                    value="50"
+                                    aria-valuemin="0"
+                                    aria-valuemax="100"
+                                    aria-valuenow="50"
+                                />
+                                <small class="key-hint"
+                                    >Lower = smaller steps per scroll; higher = larger steps. Middle (50) is default.</small
+                                >
+                            </div>
                         </div>
 
                         <!-- Features -->
