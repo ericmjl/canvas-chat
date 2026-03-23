@@ -43,6 +43,13 @@
     outline-offset: 4px;
 }
 
+/* Navigation preview (breadcrumb / nav popover hover) — @spec NAV-HOVER-001 */
+.node.preview-highlight:not(.selected) {
+    outline: 2px solid var(--node-highlight-border);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(251, 192, 45, 0.35);
+}
+
 .node.copy-flash {
     animation: copy-flash 0.3s ease;
 }

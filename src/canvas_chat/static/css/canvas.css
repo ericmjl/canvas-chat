@@ -5,7 +5,7 @@
 /* Canvas Container */
 #canvas-container {
     position: fixed;
-    top: var(--toolbar-height);
+    top: calc(var(--toolbar-height) + var(--relationship-panel-height));
     left: 0;
     right: 0;
     bottom: var(--input-height);

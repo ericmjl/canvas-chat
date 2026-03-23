@@ -81,7 +81,7 @@ canvas-chat/
 
 | File                                       | Purpose                                                                   | Edit for...                                                                                              |
 | ------------------------------------------ | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `src/canvas_chat/static/js/app.js`         | Main application, orchestrates everything                                 | Slash commands, keyboard shortcuts, App class methods                                                    |
+| `src/canvas_chat/static/js/app.js`         | Main application, orchestrates everything                                 | Slash commands, keyboard shortcuts, App class methods, graph breadcrumb (`getNavigableParents` / `getNavigableChildren`, `#relationship-panel` / `#relationship-breadcrumb`) |
 | `src/canvas_chat/static/js/canvas.js`      | SVG canvas, pan/zoom, node/edge rendering with defensive edge deferral    | Node appearance, drag behavior, viewport logic, node event handlers, edge rendering, deferred edge queue |
 | `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions                                        | Node types, edge types, createNode/createEdge utilities                                                  |
 | `src/canvas_chat/static/js/crdt-graph.js`  | CRDT-backed graph (Yjs), graph traversal                                  | Graph data model, node positioning, graph traversal                                                      |
@@ -153,7 +153,7 @@ canvas-chat/
 
 | File                                        | Purpose                       | Edit for...                                                                                                                                                                                            |
 | ------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/canvas_chat/static/index.html`         | Main HTML, modals, templates  | New modals, toolbar buttons, HTML structure. Settings modal: sidebar categories (LLM, Search, Custom models, Proxy, Features, Plugins) + single visible panel; all panels in DOM for `saveSettings()`. |
+| `src/canvas_chat/static/index.html`         | Main HTML, modals, templates  | New modals, toolbar buttons, HTML structure; `#relationship-panel` / `#relationship-breadcrumb` (graph context). Settings modal: sidebar categories (LLM, Search, Custom models, Proxy, Features, Plugins) + single visible panel; all panels in DOM for `saveSettings()`. |
 | `src/canvas_chat/static/css/style.css`      | Main stylesheet (imports all) | Main CSS entry point, CSS variables                                                                                                                                                                    |
 | `src/canvas_chat/static/css/base.css`       | Base styles, resets           | Global resets, base typography                                                                                                                                                                         |
 | `src/canvas_chat/static/css/canvas.css`     | Canvas-specific styles        | SVG canvas, pan/zoom, viewport                                                                                                                                                                         |
@@ -244,7 +244,7 @@ Quick reference guide for finding the right documentation based on what you need
 | **How do I create HTML slides?**                 | [html-slides.md](docs/how-to/html-slides.md)                     | /slides command, paste or generate, embed in node |
 | **How do I import PDFs?**                        | [import-pdfs.md](docs/how-to/import-pdfs.md)                     | Uploading and working with PDF documents          |
 | **How do I use images?**                         | [use-images.md](docs/how-to/use-images.md)                       | Adding and working with images                    |
-| **How do I navigate nodes?**                     | [navigate-nodes.md](docs/how-to/navigate-nodes.md)               | Keyboard shortcuts and navigation                 |
+| **How do I navigate nodes?**                     | [navigate-nodes.md](docs/how-to/navigate-nodes.md)               | Keyboard shortcuts, header ↑/↓, graph breadcrumb (parent › current › child) |
 | **How do I highlight and branch conversations?** | [highlight-and-branch.md](docs/how-to/highlight-and-branch.md)   | Creating conversation branches                    |
 | **How do I add OpenRouter models?**              | [openrouter-models.md](docs/how-to/openrouter-models.md)         | Using OpenRouter with one API key for many models |
 | **What keyboard shortcuts are available?**       | [keyboard-shortcuts.md](docs/reference/keyboard-shortcuts.md)    | Complete list of keyboard shortcuts               |
@@ -254,6 +254,7 @@ Quick reference guide for finding the right documentation based on what you need
 
 | Task/Question                                             | Documentation                                                           | Description                                                 |
 | --------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **Breadcrumb graph context (EARS / traceability)**        | [breadcrumb-nav-specs.md](docs/specs/breadcrumb-nav-specs.md)           | Requirements for parent › current › child bar and hover preview |
 | **Why is the plugin system designed this way?**           | [plugin-architecture.md](docs/explanation/plugin-architecture.md)       | Design rationale for three-level plugin architecture        |
 | **How does streaming work?**                              | [streaming-architecture.md](docs/explanation/streaming-architecture.md) | Server-sent events and streaming design                     |
 | **How does auto-layout work?**                            | [auto-layout.md](docs/explanation/auto-layout.md)                       | Node positioning and overlap resolution                     |
@@ -355,6 +356,18 @@ After completing a task, take a moment to review the code you've written and loo
 - Dead code or unused variables
 
 It's fine if there's nothing to refactor, but if improvements exist, address them before committing.
+
+## Arrow of intent audit (design-driven)
+
+Non-negotiable chain: **intent → specs/tests → code** (see design-driven development: align behavior with stated goals before and after implementation).
+
+**Before merge on substantive UI or behavior work:** run an **intent audit** so shortcuts and copy do not drift from the goal. The **main agent** may do this directly or delegate to a **checking pass** (e.g. a subagent) whose **only** job is:
+
+1. Re-read the relevant user intent and any specs/EARS/tests that define the feature.
+2. List **departures** from arrow of intent (code without tests, tests without spec, UX that contradicts the goal).
+3. Return that list so the main agent can fix gaps before merge.
+
+This is not a substitute for automated tests; it catches mismatches between what we meant to build and what shipped.
 
 ## When implementing a new feature
 
@@ -794,6 +807,7 @@ pixi run npx cypress run --browser electron --headless --spec cypress/e2e/matrix
 - `cypress/e2e/keyboard_interactions.cy.js` - Keyboard shortcut tests
 - `cypress/e2e/canvas_interactions.cy.js` - Canvas pan/zoom/select tests
 - `cypress/e2e/node_selection.cy.js` - Node selection behavior tests
+- `cypress/e2e/relationship_panel.cy.js` - Graph breadcrumb (single neighbor, navigate to parent)
 - `cypress/e2e/help_modal.cy.js` - Help modal tests
 - `cypress/e2e/new_canvas.cy.js` - New canvas creation tests
 - `cypress/e2e/undo_redo.cy.js` - Global undo/redo tests

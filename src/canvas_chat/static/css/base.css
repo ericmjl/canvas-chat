@@ -74,6 +74,9 @@
 
     /* Spacing */
     --toolbar-height: 48px;
+    /* Breadcrumb bar: 0 when hidden; JS sets to var(--relationship-panel-size) when visible */
+    --relationship-panel-height: 0px;
+    --relationship-panel-size: 40px;
     --input-height: 60px;
 
     /* Typography */

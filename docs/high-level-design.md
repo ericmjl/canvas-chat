@@ -312,3 +312,22 @@ canvas-chat-0.x.x/
 ## 12. Summary
 
 Canvas-Chat is a chat app that visualizes your LLM conversations as a graph. The key insight is that LLM workflows are non-linear - you branch, iterate, reference, and extract. A visual canvas naturally supports this, while still being fundamentally about chatting with LLMs.
+
+## 13. Breadcrumb graph context (single-node navigation)
+
+**Added:** 2026-03-22
+
+### Problem
+
+When exactly one node is selected, the app showed a two-row strip (Parents / Children) with truncated text chips, while the node header offered a navigation popover with icon, type label, and summary. Those surfaces duplicated information at different fidelity and did not give a clear sense of **position** in the graph or **preview before navigating**.
+
+### Goals
+
+- Replace the two-row chip strip with a **single-row breadcrumb**: `[ parent context ] > [ current node ] > [ child context ]`, using the same navigable-neighbor logic as header navigation.
+- **Match popover fidelity** for neighbor choices: icon + type label + truncated summary for a single neighbor; a count label (`Parents (N)` / `Children (N)`) that opens the existing nav popover when there are multiple neighbors.
+- **Preview before navigate**: on hover of a single-neighbor segment or a nav popover item, show a short text tooltip and **highlight the target node on the canvas** so the user can see where they would jump.
+
+### Non-goals
+
+- Full tree or minimap of the graph; grandchildren-only views; keyboard-only chords dedicated to the breadcrumb (global Arrow Up/Down / j/k remain the primary keyboard navigation).
+- Replacing the node-header ↑/↓ buttons or their popover behavior beyond shared preview-on-hover for popover items.

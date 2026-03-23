@@ -8,20 +8,22 @@ import { storage } from './storage.js';
 /**
  * Build a key string from key and modifier flags (single source of truth for format).
  * Letter keys without modifier: lowercase. With Shift: key as-reported (e.g. Z).
- * Modifiers: Ctrl (never Meta), Shift. Format: "Key" or "Modifier+Key".
+ * Modifiers: Ctrl (never Meta), Alt (Option on Mac), Shift. Format: "Key" or "Modifier+Key".
  * @param {string} key - KeyboardEvent.key
  * @param {boolean} [shiftKey]
  * @param {boolean} [ctrlKey] - true if ctrl OR meta (Cmd on Mac)
- * @returns {string} e.g. "r", "Ctrl+k", "Shift+Z"
+ * @param {boolean} [altKey]
+ * @returns {string} e.g. "r", "Ctrl+k", "Shift+Z", "Alt+p"
  */
-function keyAndModifiersToKeyString(key, shiftKey, ctrlKey) {
+function keyAndModifiersToKeyString(key, shiftKey, ctrlKey, altKey) {
     if (!key || key.length === 0) return null;
     const parts = [];
     if (ctrlKey) parts.push('Ctrl');
+    if (altKey) parts.push('Alt');
     if (shiftKey) parts.push('Shift');
     let keyPart = key;
     if (key.length === 1 && key >= 'A' && key <= 'Z' && !shiftKey) keyPart = key.toLowerCase();
-    if (key.length === 1 && key >= 'a' && key <= 'z' && !ctrlKey && !shiftKey) keyPart = key;
+    if (key.length === 1 && key >= 'a' && key <= 'z' && !ctrlKey && !shiftKey && !altKey) keyPart = key;
     parts.push(keyPart);
     return parts.length === 1 ? keyPart : parts.join('+');
 }
@@ -35,14 +37,15 @@ function keyAndModifiersToKeyString(key, shiftKey, ctrlKey) {
 export function eventToKeyString(e) {
     if (!e || !e.key || e.key.length === 0) return null;
     const ctrl = !!(e.ctrlKey || e.metaKey);
-    return keyAndModifiersToKeyString(e.key, !!e.shiftKey, ctrl);
+    const alt = !!e.altKey;
+    return keyAndModifiersToKeyString(e.key, !!e.shiftKey, ctrl, alt);
 }
 
 /**
  * Convert a key event to a spec object for storage (overrides).
  * Letter keys without Shift stored lowercase.
  * @param {{ key: string, shiftKey?: boolean, ctrlKey?: boolean, metaKey?: boolean }} e
- * @returns {{ key: string, shift?: boolean, ctrl?: boolean }|null}
+ * @returns {{ key: string, shift?: boolean, ctrl?: boolean, alt?: boolean }|null}
  */
 export function eventToSpec(e) {
     if (!e || !e.key || e.key.length === 0) return null;
@@ -52,16 +55,17 @@ export function eventToSpec(e) {
         key,
         shift: !!e.shiftKey,
         ctrl: !!(e.ctrlKey || e.metaKey),
+        alt: !!e.altKey,
     };
 }
 
 /**
  * Convert a key spec to key string for buildKeyToActionMap.
- * @param {{ key: string, shift?: boolean, ctrl?: boolean }} spec
+ * @param {{ key: string, shift?: boolean, ctrl?: boolean, alt?: boolean }} spec
  * @returns {string}
  */
 function specToKeyString(spec) {
-    return keyAndModifiersToKeyString(spec.key, !!spec.shift, !!spec.ctrl);
+    return keyAndModifiersToKeyString(spec.key, !!spec.shift, !!spec.ctrl, !!spec.alt);
 }
 
 /**
@@ -126,9 +130,9 @@ const ACTION_LABELS = {
 /**
  * Merge default keybindings with user overrides.
  * Overrides replace the default keys for that action; unknown actionIds in overrides are ignored.
- * @param {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean}>>} defaults
- * @param {Object.<string, {key: string, shift?: boolean, ctrl?: boolean}>} overrides
- * @returns {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean}>>}
+ * @param {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean, alt?: boolean}>>} defaults
+ * @param {Object.<string, {key: string, shift?: boolean, ctrl?: boolean, alt?: boolean}>} overrides
+ * @returns {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean, alt?: boolean}>>}
  */
 export function mergeKeybindings(defaults, overrides) {
     const result = {};
@@ -138,7 +142,14 @@ export function mergeKeybindings(defaults, overrides) {
     if (overrides && typeof overrides === 'object') {
         for (const [actionId, spec] of Object.entries(overrides)) {
             if (actionId in result && spec && typeof spec === 'object' && spec.key) {
-                result[actionId] = [{ key: spec.key, shift: !!spec.shift, ctrl: !!spec.ctrl }];
+                result[actionId] = [
+                    {
+                        key: spec.key,
+                        shift: !!spec.shift,
+                        ctrl: !!spec.ctrl,
+                        alt: !!spec.alt,
+                    },
+                ];
             }
         }
     }
@@ -148,7 +159,7 @@ export function mergeKeybindings(defaults, overrides) {
 /**
  * Build a key string -> actionId map from effective keybindings.
  * Multiple keys can map to the same actionId; if one key maps to two actions, last wins.
- * @param {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean}>>} effectiveKeybindings
+ * @param {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean, alt?: boolean}>>} effectiveKeybindings
  * @returns {Object.<string, string>} keyString -> actionId
  */
 export function buildKeyToActionMap(effectiveKeybindings) {
@@ -177,7 +188,7 @@ export function getActionForKey(keyEvent, keyToActionMap) {
 /**
  * Get all actionIds that are bound to a given key string (for node actions that share a key).
  * @param {string} keyString
- * @param {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean}>>} effectiveKeybindings
+ * @param {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean, alt?: boolean}>>} effectiveKeybindings
  * @returns {string[]}
  */
 export function getActionIdsForKey(keyString, effectiveKeybindings) {
@@ -196,7 +207,7 @@ export function getActionIdsForKey(keyString, effectiveKeybindings) {
 /**
  * Get effective keybindings (defaults merged with overrides).
  * @param {() => Object} [getOverrides] - Defaults to () => storage.getKeybindings()
- * @returns {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean}>>}
+ * @returns {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean, alt?: boolean}>>}
  */
 export function getEffectiveKeybindings(getOverrides) {
     const overrides = getOverrides ? getOverrides() : storage.getKeybindings();
@@ -219,19 +230,37 @@ export function getActionList() {
 /**
  * Get display string for an action's key from effective keybindings (e.g. "⌘K").
  * @param {string} actionId
- * @param {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean}>>} effectiveKeybindings
+ * @param {Object.<string, Array<{key: string, shift?: boolean, ctrl?: boolean, alt?: boolean}>>} effectiveKeybindings
  * @returns {string}
  */
 export function getKeyDisplayForAction(actionId, effectiveKeybindings) {
     const specs = effectiveKeybindings[actionId];
     if (!specs || specs.length === 0) return '—';
     const first = specs[0];
-    const parts = [];
-    if (first.ctrl) parts.push('Ctrl');
-    if (first.shift) parts.push('Shift');
-    parts.push(first.key);
-    const keyString = parts.length === 1 ? first.key : parts.join('+');
-    return formatKeyForDisplay(keyString);
+    const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform);
+    const sep = isMac ? '' : '+';
+    const modParts = [];
+    if (first.ctrl) modParts.push(isMac ? '⌘' : 'Ctrl');
+    if (first.alt) modParts.push(isMac ? '⌥' : 'Alt');
+    if (first.shift) modParts.push(isMac ? '⇧' : 'Shift');
+    const keyLabel = formatKeyLabelForDisplay(first.key, isMac);
+    return [...modParts, keyLabel].join(sep);
+}
+
+/**
+ * Format a single key name for display (brackets, arrows).
+ * @param {string} key
+ * @param {boolean} isMac
+ * @returns {string}
+ */
+function formatKeyLabelForDisplay(key, isMac) {
+    if (key === 'BracketLeft') return isMac ? '[' : '[';
+    if (key === 'BracketRight') return isMac ? ']' : ']';
+    if (key === 'ArrowUp') return '↑';
+    if (key === 'ArrowDown') return '↓';
+    if (key === 'ArrowLeft') return '←';
+    if (key === 'ArrowRight') return '→';
+    return key;
 }
 
 /**

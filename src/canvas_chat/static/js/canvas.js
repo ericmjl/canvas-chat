@@ -132,6 +132,8 @@ class Canvas {
         this.navPopover = null;
         this.activeNavNodeId = null;
         this.navPopoverSelectedIndex = 0; // Currently selected item in popover
+        /** @type {string|null} Node id with `.preview-highlight` on its inner `.node` element */
+        this._previewHighlightNodeId = null;
 
         // No-nodes-visible hint
         this.noNodesHint = document.getElementById('no-nodes-hint');
@@ -439,6 +441,18 @@ class Canvas {
                 this.hideNavPopover();
                 this.emit('nodeNavigate', nodeId);
             });
+            // @spec NAV-HOVER-001, NAV-HOVER-003 — preview before navigate (breadcrumb + header popover)
+            item.addEventListener('mouseenter', () => {
+                const nodeId = item.getAttribute('data-node-id');
+                if (nodeId) {
+                    this.highlightNode(nodeId);
+                    this.emit('navPopoverPreviewEnter', nodeId, item);
+                }
+            });
+            item.addEventListener('mouseleave', () => {
+                this.clearHighlight();
+                this.emit('navPopoverPreviewLeave');
+            });
         });
 
         // Reset selection and highlight first item for keyboard navigation
@@ -458,9 +472,36 @@ class Canvas {
      * Hide the navigation popover
      */
     hideNavPopover() {
+        this.clearHighlight();
+        this.emit('navPopoverPreviewLeave');
         this.navPopover.style.display = 'none';
         this.activeNavNodeId = null;
         this.navPopoverSelectedIndex = 0; // Reset selection
+    }
+
+    /**
+     * Temporary highlight on canvas for navigation preview (breadcrumb / popover hover).
+     * @param {string} nodeId
+     */
+    highlightNode(nodeId) {
+        this.clearHighlight();
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) return;
+        const nodeEl = wrapper.querySelector('.node');
+        if (nodeEl) {
+            nodeEl.classList.add('preview-highlight');
+            this._previewHighlightNodeId = nodeId;
+        }
+    }
+
+    /**
+     * Remove navigation preview highlight from the canvas.
+     */
+    clearHighlight() {
+        if (!this._previewHighlightNodeId) return;
+        const wrapper = this.nodeElements.get(this._previewHighlightNodeId);
+        wrapper?.querySelector('.node')?.classList.remove('preview-highlight');
+        this._previewHighlightNodeId = null;
     }
 
     /**
