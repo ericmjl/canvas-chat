@@ -41,6 +41,11 @@ test('eventToKeyString: with Meta (Cmd) normalizes to Ctrl', () => {
     assertEqual(eventToKeyString({ key: 'k', metaKey: true }), 'Ctrl+k');
 });
 
+test('eventToKeyString: with Alt (Option)', () => {
+    assertEqual(eventToKeyString({ key: 'p', altKey: true }), 'Alt+p');
+    assertEqual(eventToKeyString({ key: 'BracketLeft', altKey: true }), 'Alt+BracketLeft');
+});
+
 test('eventToKeyString: special keys', () => {
     assertEqual(eventToKeyString({ key: 'ArrowUp' }), 'ArrowUp');
     assertEqual(eventToKeyString({ key: 'Escape' }), 'Escape');

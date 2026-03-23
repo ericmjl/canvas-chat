@@ -20,6 +20,9 @@ const dom = new JSDOM(
         <g id="nodes-layer"></g>
     </svg>
     <div id="canvas-container"></div>
+    <div id="relationship-panel" hidden>
+        <nav id="relationship-breadcrumb" class="relationship-breadcrumb"></nav>
+    </div>
     <input id="chat-input" />
     <div id="model-picker"></div>
     <button id="clear-btn"></button>
@@ -176,6 +179,10 @@ test('App event listener methods exist', () => {
         'redo',
         'handleSearch',
         'setupGraphEventListeners', // Extracted method for graph event listener setup
+        'setupRelationshipPanel',
+        'refreshRelationshipPanel',
+        'getNavigableParents',
+        'getNavigableChildren',
         // Note: highlightSourceTextInParent migrated to HighlightFeature plugin
         // This method is now accessed via this.featureRegistry.getFeature('highlight')
         // Note: selfHealCode and fixCodeError migrated to CodeFeature

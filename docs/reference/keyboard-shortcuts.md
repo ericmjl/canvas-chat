@@ -29,6 +29,8 @@ These shortcuts work when nodes are selected or when the canvas has focus:
 | `Arrow Up` | Navigate to parent | Shows menu if multiple parents; message if none |
 | `Arrow Down` | Navigate to child | Shows menu if multiple children; message if none |
 
+**Graph context breadcrumb:** When one node is selected, **Arrow Up** / **Arrow Down** (and **j** / **k**) match the node header ↑/↓ for keyboard navigation; the breadcrumb bar is for mouse/touch and shows parent › current › child with optional hover previews.
+
 ## Chat Input
 
 These shortcuts work when the chat input field is focused:

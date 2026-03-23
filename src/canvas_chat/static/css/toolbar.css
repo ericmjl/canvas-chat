@@ -326,3 +326,121 @@
     white-space: nowrap;
     z-index: 10;
 }
+
+/* Graph context breadcrumb (below toolbar, above canvas) — @spec NAV-UI-001 */
+.relationship-panel {
+    position: fixed;
+    top: var(--toolbar-height);
+    left: 0;
+    right: 0;
+    z-index: 99;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--bg-secondary);
+    box-shadow: var(--shadow-sm);
+}
+
+.relationship-panel[hidden] {
+    display: none !important;
+}
+
+.relationship-breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 6px 16px 8px;
+    min-height: 28px;
+    max-width: 100%;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.rel-chevron {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-weight: 600;
+    user-select: none;
+}
+
+.rel-crumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: min(420px, 100%);
+    min-width: 0;
+}
+
+button.rel-crumb {
+    font: inherit;
+    text-align: left;
+    padding: 4px 10px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--bg-secondary);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+}
+
+button.rel-crumb:hover {
+    background: var(--bg-canvas);
+    border-color: var(--accent);
+}
+
+.rel-crumb-current {
+    padding: 4px 10px;
+    border-radius: var(--radius-md);
+    border: 1px dashed var(--border);
+    background: var(--bg-canvas);
+    color: var(--text-primary);
+    max-width: min(480px, 100%);
+}
+
+.rel-crumb-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.rel-crumb-type {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.rel-crumb-summary {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-tertiary);
+}
+
+.rel-crumb-multi {
+    font-weight: 600;
+    color: var(--accent);
+    border-style: dashed;
+    background: transparent;
+}
+
+/* Floating preview tooltip (body-appended) — @spec NAV-HOVER-003 */
+.relationship-preview-tooltip {
+    position: fixed;
+    z-index: 10050;
+    max-width: 320px;
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    pointer-events: none;
+    white-space: pre-wrap;
+    word-break: break-word;
+}

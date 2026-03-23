@@ -20,18 +20,18 @@ import './plugins/code.js'; // Side-effect import for CodeNode plugin registrati
 import './plugins/column-node.js'; // Side-effect import for ColumnNode plugin registration
 import './plugins/csv-node.js'; // Side-effect import for CsvNode plugin registration
 import './plugins/excel-node.js'; // Side-effect import for ExcelNode plugin registration
-import './plugins/prism-node.js'; // Side-effect import for PrismNode plugin registration
 import './plugins/factcheck.js'; // Side-effect import for FactcheckNode plugin registration
 import './plugins/fetch-result-node.js'; // Side-effect import for FetchResultNode plugin registration
 import './plugins/flashcard-node.js'; // Side-effect import for FlashcardNode plugin registration
-import './plugins/html-slides.js'; // Side-effect import for HtmlSlidesNode plugin registration (HtmlSlidesFeature in feature-registry)
 import './plugins/highlight-node.js'; // Side-effect import for HighlightNode plugin registration
+import './plugins/html-slides.js'; // Side-effect import for HtmlSlidesNode plugin registration (HtmlSlidesFeature in feature-registry)
 import './plugins/human-node.js'; // Side-effect import for HumanNode plugin registration
 import './plugins/image-node.js'; // Side-effect import for ImageNode plugin registration
 import './plugins/matrix.js'; // Side-effect import for MatrixNode plugin registration
 import './plugins/note.js'; // Side-effect import for NoteNode plugin registration (NoteFeature imported by feature-registry.js) - consolidated plugin
 import './plugins/opinion-node.js'; // Side-effect import for OpinionNode plugin registration
 import './plugins/pdf-node.js'; // Side-effect import for PdfNode plugin registration
+import './plugins/prism-node.js'; // Side-effect import for PrismNode plugin registration
 import './plugins/reference.js'; // Side-effect import for ReferenceNode plugin registration
 import './plugins/research-node.js'; // Side-effect import for ResearchNode plugin registration
 import './plugins/review-node.js'; // Side-effect import for ReviewNode plugin registration
@@ -43,13 +43,22 @@ import './plugins/youtube-node.js'; // Side-effect import for YouTubeNode plugin
 // Note: poll.js is an external plugin - load via config.yaml
 import {
     buildKeyToActionMap,
+    eventToKeyString,
     getActionForKey,
     getActionIdsForKey,
     getEffectiveKeybindings,
-    eventToKeyString,
 } from './keybindings.js';
 import { wrapNode } from './node-protocols.js';
 import { SearchIndex, getNodeTypeIcon } from './search.js';
+
+/** @spec NAV-HOVER-003 */
+const NAV_PREVIEW_TOOLTIP_DELAY_MS = 200;
+/** @spec NAV-HOVER-003 */
+const NAV_PREVIEW_TOOLTIP_MAX_CHARS = 120;
+/** Inline neighbor summary length (aligned with nav popover truncation). */
+const BREADCRUMB_INLINE_SUMMARY_MAX = 40;
+/** Current node title/summary in breadcrumb center. */
+const BREADCRUMB_CURRENT_TITLE_MAX = 48;
 import { readSSEStream } from './sse.js';
 import {
     apiUrl,
@@ -127,6 +136,11 @@ class App {
         this.budgetText = document.getElementById('budget-text');
         this.selectedIndicator = document.getElementById('selected-nodes-indicator');
         this.selectedCount = document.getElementById('selected-count');
+
+        /** @type {number|null} */
+        this._navPreviewTooltipTimer = null;
+        /** @type {HTMLElement|null} */
+        this._navPreviewTooltipEl = null;
 
         this.init();
     }
@@ -599,16 +613,22 @@ class App {
                 this.canvas.renderNode(node);
                 this.updateEmptyState();
             })
-            .on('nodeRemoved', () => this.updateEmptyState())
+            .on('nodeRemoved', () => {
+                this.updateEmptyState();
+                this.refreshRelationshipPanel();
+            })
             .on('edgeAdded', (edge) => {
                 // Use safe renderer that fetches fresh positions to prevent stale edges
                 this.canvas.renderEdge(edge, this.graph);
+                this.refreshRelationshipPanel();
             })
             .on('edgeRemoved', (edgeId) => {
                 this.canvas.removeEdge(edgeId);
+                this.refreshRelationshipPanel();
             })
             .on('nodeUpdated', (node) => {
                 this.canvas.renderNode(node);
+                this.refreshRelationshipPanel();
             })
             .on('tagCreated', this.handleTagCreated.bind(this));
     }
@@ -677,6 +697,12 @@ class App {
         this.canvas.on('navParentClick', this.handleNavParentClick.bind(this));
         this.canvas.on('navChildClick', this.handleNavChildClick.bind(this));
         this.canvas.on('nodeNavigate', this.handleNodeNavigate.bind(this));
+        this.canvas.on('navPopoverPreviewEnter', (nodeId, anchorEl) => {
+            this._scheduleNavPreviewTooltip(nodeId, anchorEl);
+        });
+        this.canvas.on('navPopoverPreviewLeave', () => {
+            this._clearNavPreviewTooltip();
+        });
         // Collapse/expand event for hiding/showing descendants
         this.canvas.on('nodeCollapse', this.handleNodeCollapse.bind(this));
         // Register modal canvas handlers
@@ -986,7 +1012,7 @@ class App {
             // Shortcut capture in Settings panel (takes precedence when active)
             if (this.modalManager.handleShortcutCaptureKeydown(e)) return;
 
-            const inInput = e.target.matches('input, textarea');
+            const inInput = e.target.matches('input, textarea, [contenteditable="true"]');
 
             // 1) Escape - always first, non-remappable
             if (e.key === 'Escape') {
@@ -1220,6 +1246,257 @@ class App {
         window.addEventListener('beforeunload', () => {
             this.graph.releaseAllLocks?.();
         });
+
+        this.setupRelationshipPanel();
+    }
+
+    /**
+     * One-time: breadcrumb clicks (single neighbor, multi-neighbor popover).
+     * @spec NAV-UI-011, NAV-UI-021
+     */
+    setupRelationshipPanel() {
+        const panel = document.getElementById('relationship-panel');
+        if (!panel) return;
+        panel.addEventListener('click', (e) => {
+            const multi = e.target.closest('.rel-crumb-multi');
+            if (multi) {
+                e.preventDefault();
+                const ctxId = multi.getAttribute('data-context-node-id');
+                const direction = multi.getAttribute('data-direction');
+                if (!ctxId || !direction) return;
+                const list =
+                    direction === 'parent'
+                        ? this.getNavigableParents(ctxId)
+                        : this.getNavigableChildren(ctxId);
+                this.canvas.handleNavButtonClick(ctxId, direction, list, multi);
+                return;
+            }
+            const inline = e.target.closest('.rel-crumb-inline');
+            if (inline) {
+                e.preventDefault();
+                const id = inline.getAttribute('data-neighbor-node-id');
+                if (id) this.handleNodeNavigate(id);
+            }
+        });
+    }
+
+    /**
+     * Build graph-context breadcrumb: parent(s) > current > child(ren).
+     * @spec NAV-UI-001–006, NAV-UI-010–022
+     */
+    refreshRelationshipPanel() {
+        const panel = document.getElementById('relationship-panel');
+        const crumb = document.getElementById('relationship-breadcrumb');
+        if (!panel || !crumb) return;
+
+        const ids = this.canvas.getSelectedNodeIds();
+        if (ids.length !== 1) {
+            panel.hidden = true;
+            panel.setAttribute('aria-hidden', 'true');
+            crumb.replaceChildren();
+            document.documentElement.style.setProperty('--relationship-panel-height', '0px');
+            return;
+        }
+
+        const nodeId = ids[0];
+        const node = this.graph.getNode(nodeId);
+        if (!node) {
+            panel.hidden = true;
+            crumb.replaceChildren();
+            document.documentElement.style.setProperty('--relationship-panel-height', '0px');
+            return;
+        }
+
+        const parents = this.getNavigableParents(nodeId);
+        const children = this.getNavigableChildren(nodeId);
+
+        crumb.replaceChildren();
+
+        if (parents.length > 0) {
+            crumb.appendChild(this._buildNeighborSegment('parent', parents, nodeId));
+            crumb.appendChild(this._makeBreadcrumbChevron());
+        }
+
+        crumb.appendChild(this._buildCurrentNodeSegment(node));
+
+        if (children.length > 0) {
+            crumb.appendChild(this._makeBreadcrumbChevron());
+            crumb.appendChild(this._buildNeighborSegment('child', children, nodeId));
+        }
+
+        panel.hidden = false;
+        panel.setAttribute('aria-hidden', 'false');
+        document.documentElement.style.setProperty('--relationship-panel-height', 'var(--relationship-panel-size)');
+    }
+
+    /**
+     * @param {'parent'|'child'} direction
+     * @param {Object[]} nodes
+     * @param {string} contextNodeId
+     * @returns {HTMLElement}
+     */
+    _buildNeighborSegment(direction, nodes, contextNodeId) {
+        if (nodes.length === 1) {
+            const n = nodes[0];
+            const wrapped = wrapNode(n);
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'rel-crumb rel-crumb-inline';
+            btn.setAttribute('data-neighbor-node-id', n.id);
+            const summary = wrapped.getSummaryText(this.canvas);
+            const short =
+                summary.length > BREADCRUMB_INLINE_SUMMARY_MAX
+                    ? `${summary.slice(0, BREADCRUMB_INLINE_SUMMARY_MAX)}...`
+                    : summary;
+            btn.title = summary;
+            const icon = document.createElement('span');
+            icon.className = 'rel-crumb-icon';
+            icon.textContent = wrapped.getTypeIcon();
+            const typeEl = document.createElement('span');
+            typeEl.className = 'rel-crumb-type';
+            typeEl.textContent = wrapped.getTypeLabel();
+            const sumEl = document.createElement('span');
+            sumEl.className = 'rel-crumb-summary';
+            sumEl.textContent = short;
+            btn.appendChild(icon);
+            btn.appendChild(typeEl);
+            btn.appendChild(sumEl);
+            btn.addEventListener('mouseenter', () => {
+                this.canvas.highlightNode(n.id);
+                this._scheduleNavPreviewTooltip(n.id, btn);
+            });
+            btn.addEventListener('mouseleave', () => {
+                this.canvas.clearHighlight();
+                this._clearNavPreviewTooltip();
+            });
+            return btn;
+        }
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'rel-crumb rel-crumb-multi';
+        btn.setAttribute('data-context-node-id', contextNodeId);
+        btn.setAttribute('data-direction', direction);
+        const label = direction === 'parent' ? 'Parents' : 'Children';
+        btn.textContent = `${label} (${nodes.length})`;
+        btn.title = `Open ${label.toLowerCase()} list`;
+        return btn;
+    }
+
+    /**
+     * @param {Object} node
+     * @returns {HTMLSpanElement}
+     */
+    _buildCurrentNodeSegment(node) {
+        const wrapped = wrapNode(node);
+        const span = document.createElement('span');
+        span.className = 'rel-crumb rel-crumb-current';
+        span.setAttribute('aria-current', 'true');
+        const titleSrc = node.title || wrapped.getSummaryText(this.canvas) || '';
+        const short =
+            titleSrc.length > BREADCRUMB_CURRENT_TITLE_MAX
+                ? `${titleSrc.slice(0, BREADCRUMB_CURRENT_TITLE_MAX)}...`
+                : titleSrc;
+        const icon = document.createElement('span');
+        icon.className = 'rel-crumb-icon';
+        icon.textContent = wrapped.getTypeIcon();
+        const typeEl = document.createElement('span');
+        typeEl.className = 'rel-crumb-type';
+        typeEl.textContent = wrapped.getTypeLabel();
+        const sumEl = document.createElement('span');
+        sumEl.className = 'rel-crumb-summary';
+        sumEl.textContent = short;
+        span.appendChild(icon);
+        span.appendChild(typeEl);
+        span.appendChild(sumEl);
+        return span;
+    }
+
+    /**
+     * @returns {HTMLSpanElement}
+     */
+    _makeBreadcrumbChevron() {
+        const s = document.createElement('span');
+        s.className = 'rel-chevron';
+        s.setAttribute('aria-hidden', 'true');
+        s.textContent = '›';
+        return s;
+    }
+
+    /**
+     * Plain preview text for navigation tooltip.
+     * @param {Object} node
+     * @returns {string}
+     */
+    _getNavPreviewPlainText(node) {
+        const wrapped = wrapNode(node);
+        const t = wrapped.getSummaryText(this.canvas);
+        if (!t) return '';
+        return t.length > NAV_PREVIEW_TOOLTIP_MAX_CHARS ? t.slice(0, NAV_PREVIEW_TOOLTIP_MAX_CHARS) + '...' : t;
+    }
+
+    /**
+     * @param {string} nodeId
+     * @param {HTMLElement} anchorEl
+     */
+    _scheduleNavPreviewTooltip(nodeId, anchorEl) {
+        this._clearNavPreviewTooltipTimerOnly();
+        this._navPreviewTooltipTimer = window.setTimeout(() => {
+            this._navPreviewTooltipTimer = null;
+            const n = this.graph.getNode(nodeId);
+            if (!n) return;
+            const text = this._getNavPreviewPlainText(n);
+            if (!text) return;
+            this._showNavPreviewTooltip(text, anchorEl);
+        }, NAV_PREVIEW_TOOLTIP_DELAY_MS);
+    }
+
+    /**
+     *
+     */
+    _clearNavPreviewTooltipTimerOnly() {
+        if (this._navPreviewTooltipTimer != null) {
+            clearTimeout(this._navPreviewTooltipTimer);
+            this._navPreviewTooltipTimer = null;
+        }
+    }
+
+    /**
+     *
+     */
+    _clearNavPreviewTooltip() {
+        this._clearNavPreviewTooltipTimerOnly();
+        if (this._navPreviewTooltipEl) {
+            this._navPreviewTooltipEl.remove();
+            this._navPreviewTooltipEl = null;
+        }
+    }
+
+    /**
+     * @param {string} text
+     * @param {HTMLElement} anchorEl
+     */
+    _showNavPreviewTooltip(text, anchorEl) {
+        this._clearNavPreviewTooltip();
+        const el = document.createElement('div');
+        el.className = 'relationship-preview-tooltip';
+        el.textContent = text;
+        document.body.appendChild(el);
+        this._navPreviewTooltipEl = el;
+        const r = anchorEl.getBoundingClientRect();
+        let top = r.bottom + 8;
+        let left = r.left;
+        el.style.top = `${top}px`;
+        el.style.left = `${left}px`;
+        const rect = el.getBoundingClientRect();
+        if (rect.right > window.innerWidth - 8) {
+            left = Math.max(8, window.innerWidth - rect.width - 8);
+            el.style.left = `${left}px`;
+        }
+        if (rect.bottom > window.innerHeight - 8) {
+            top = Math.max(8, r.top - rect.height - 8);
+            el.style.top = `${top}px`;
+        }
     }
 
     // --- Node Operations ---
@@ -1556,20 +1833,7 @@ class App {
      * @param {HTMLElement} button - The button element that was clicked
      */
     handleNavParentClick(nodeId, button) {
-        const parents = this.graph.getParents(nodeId);
-        // Get direct visible parents
-        const directVisibleParents = parents.filter((parent) => this.graph.isNodeVisible(parent.id));
-        // Also get visible ancestors through hidden paths (e.g., collapsed nodes that connect through hidden children)
-        const ancestorsThroughHidden = this.graph.getVisibleAncestorsThroughHidden(nodeId);
-
-        // Combine and deduplicate
-        const allNavigableParents = [...directVisibleParents];
-        for (const ancestor of ancestorsThroughHidden) {
-            if (!allNavigableParents.some((p) => p.id === ancestor.id)) {
-                allNavigableParents.push(ancestor);
-            }
-        }
-
+        const allNavigableParents = this.getNavigableParents(nodeId);
         this.canvas.handleNavButtonClick(nodeId, 'parent', allNavigableParents, button);
     }
 
@@ -1582,21 +1846,57 @@ class App {
      * @param {HTMLElement} button - The button element that was clicked
      */
     handleNavChildClick(nodeId, button) {
+        const navigableChildren = this.getNavigableChildren(nodeId);
+        this.canvas.handleNavButtonClick(nodeId, 'child', navigableChildren, button);
+    }
+
+    /**
+     * Navigable parent nodes for the mini relationship panel and ↑ — same rules as header nav.
+     * @param {string} nodeId
+     * @returns {Object[]}
+     */
+    getNavigableParents(nodeId) {
+        const parents = this.graph.getParents(nodeId);
+        const directVisibleParents = parents.filter((parent) => this.graph.isNodeVisible(parent.id));
+        const ancestorsThroughHidden = this.graph.getVisibleAncestorsThroughHidden(nodeId);
+
+        const allNavigableParents = [...directVisibleParents];
+        for (const ancestor of ancestorsThroughHidden) {
+            if (!allNavigableParents.some((p) => p.id === ancestor.id)) {
+                allNavigableParents.push(ancestor);
+            }
+        }
+
+        return this._sortNodesForRelationshipPanel(allNavigableParents);
+    }
+
+    /**
+     * Navigable child nodes for the mini relationship panel and ↓ — same rules as header nav.
+     * @param {string} nodeId
+     * @returns {Object[]}
+     */
+    getNavigableChildren(nodeId) {
         const node = this.graph.getNode(nodeId);
-        if (!node) return;
+        if (!node) return [];
 
         let navigableChildren;
-
         if (node.collapsed) {
-            // Node is collapsed - get visible descendants through hidden paths
             navigableChildren = this.graph.getVisibleDescendantsThroughHidden(nodeId);
         } else {
-            // Node is not collapsed - get direct visible children
             const children = this.graph.getChildren(nodeId);
             navigableChildren = children.filter((child) => this.graph.isNodeVisible(child.id));
         }
 
-        this.canvas.handleNavButtonClick(nodeId, 'child', navigableChildren, button);
+        return this._sortNodesForRelationshipPanel(navigableChildren);
+    }
+
+    /**
+     * Stable order for relationship chips (matches predictable popover ordering).
+     * @param {Object[]} nodes
+     * @returns {Object[]}
+     */
+    _sortNodesForRelationshipPanel(nodes) {
+        return [...nodes].sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
     }
 
     /**
@@ -1606,19 +1906,7 @@ class App {
      * @param {string} nodeId - The selected node ID
      */
     navigateToParentKeyboard(nodeId) {
-        const parents = this.graph.getParents(nodeId);
-        // Get direct visible parents
-        const directVisibleParents = parents.filter((parent) => this.graph.isNodeVisible(parent.id));
-        // Also get visible ancestors through hidden paths (e.g., collapsed nodes that connect through hidden children)
-        const ancestorsThroughHidden = this.graph.getVisibleAncestorsThroughHidden(nodeId);
-
-        // Combine and deduplicate
-        const allNavigableParents = [...directVisibleParents];
-        for (const ancestor of ancestorsThroughHidden) {
-            if (!allNavigableParents.some((p) => p.id === ancestor.id)) {
-                allNavigableParents.push(ancestor);
-            }
-        }
+        const allNavigableParents = this.getNavigableParents(nodeId);
 
         if (allNavigableParents.length === 0) {
             this.canvas.showNavToast('No parent nodes', nodeId);
@@ -1639,19 +1927,7 @@ class App {
      * @param {string} nodeId - The selected node ID
      */
     navigateToChildKeyboard(nodeId) {
-        const node = this.graph.getNode(nodeId);
-        if (!node) return;
-
-        let navigableChildren;
-
-        if (node.collapsed) {
-            // Node is collapsed - get visible descendants through hidden paths
-            navigableChildren = this.graph.getVisibleDescendantsThroughHidden(nodeId);
-        } else {
-            // Node is not collapsed - get direct visible children
-            const children = this.graph.getChildren(nodeId);
-            navigableChildren = children.filter((child) => this.graph.isNodeVisible(child.id));
-        }
+        const navigableChildren = this.getNavigableChildren(nodeId);
 
         if (navigableChildren.length === 0) {
             this.canvas.showNavToast('No child nodes', nodeId);
@@ -1711,6 +1987,8 @@ class App {
 
         // Save session
         this.saveSession();
+
+        this.refreshRelationshipPanel();
     }
 
     /**
@@ -2559,6 +2837,8 @@ class App {
 
         // Update tag drawer state
         this.updateTagDrawer();
+
+        this.refreshRelationshipPanel();
     }
 
     /**
@@ -2581,28 +2861,8 @@ class App {
 
         // Update tag drawer state
         this.updateTagDrawer();
-    }
 
-    /**
-     *
-     * @param selectedIds
-     */
-    handleNodeDeselect(selectedIds) {
-        this.updateSelectedIndicator(selectedIds);
-        this.updateContextHighlight(selectedIds);
-        this.updateContextBudget(selectedIds);
-
-        // Clear source text highlights when deselecting
-        this.canvas.clearSourceTextHighlights();
-
-        // Clear tag highlighting when clicking on canvas background (no nodes selected)
-        if (selectedIds.length === 0 && this.highlightedTagColor) {
-            this.canvas.highlightNodesByTag(null);
-            this.highlightedTagColor = null;
-        }
-
-        // Update tag drawer state
-        this.updateTagDrawer();
+        this.refreshRelationshipPanel();
     }
 
     /**
