@@ -389,11 +389,12 @@ button.rel-crumb:hover {
     border-color: var(--accent);
 }
 
+/* Current node: matches canvas selection language (subtle tint + accent border) — @spec NAV-UI-006 */
 .rel-crumb-current {
     padding: 4px 10px;
     border-radius: var(--radius-md);
-    border: 1px dashed var(--border);
-    background: var(--bg-canvas);
+    border: 1px solid color-mix(in srgb, var(--selection-color) 42%, var(--border));
+    background: var(--accent-light);
     color: var(--text-primary);
     max-width: min(480px, 100%);
 }
