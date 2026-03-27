@@ -186,6 +186,9 @@ out/
 # Admin mode config (contains API key env var references)
 config.yaml
 
+# uv lock file (use pixi for this project instead)
+uv.lock
+
 # TEMP
 FETCHING*.md
 .plans/
