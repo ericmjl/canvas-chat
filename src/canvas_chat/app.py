@@ -2,7 +2,7 @@
 # dependencies = [
 #     "fastapi>=0.115.0",
 #     "uvicorn>=0.32.0",
-#     "litellm>=1.50.0",
+#     "litellm>=1.50.0,<1.82.7",
 #     "sse-starlette>=2.0.0",
 #     "pydantic>=2.0.0",
 #     "exa-py>=1.0.0",

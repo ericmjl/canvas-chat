@@ -2655,11 +2655,11 @@ packages:
 - pypi: ./
   name: canvas-chat
   version: 0.1.107
-  sha256: 50cbc52c7bdfe5cbe022359575099bcf9b1c1155bd404528ca2b44fa7d0afacb
+  sha256: 120bca4bdfe18ba193783498a2bb578198100dadd46c3cd0284e45eb53e3d6fa
   requires_dist:
   - fastapi>=0.115.0
   - uvicorn>=0.32.0
-  - litellm>=1.50.0
+  - litellm>=1.50.0,<1.82.7
   - llamabot>=0.17.0
   - pydantic>=2.0.0
   - sse-starlette>=2.0.0
