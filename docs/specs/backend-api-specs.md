@@ -1,8 +1,11 @@
 # Backend API Specifications
 
 **Created**: 2026-03-16
+**Updated**: 2026-03-28
 **Status**: Active
 **HLD**: [High-Level Design](../high-level-design.md)
+
+**Implementation note:** HTTP paths, request bodies, and response shapes in this document are stable. The backend may implement LLM calls via **llamabot** (SimpleBot / StructuredBot) behind an adapter while preserving these contracts; see [LLD: llamabot backend proxy](../designs/llamabot-backend-proxy/LLD.md).
 
 ## Chat API
 

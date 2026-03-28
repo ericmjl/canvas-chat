@@ -36,12 +36,21 @@ This includes:
 - 2026-01-24: Removed TypeScript type checking from pre-commit hooks and pixi tasks. Project uses plain JavaScript with JSDoc annotations for documentation only, not strict type checking.
 - 2026-01-25: Consolidated `/code` command handling into CodeFeature plugin. All code node operations (`handleCode`, `handleNodeRunCode`, `handleNodeGenerate`, `handleNodeGenerateSubmit`, `gatherCodeGenerationContext`) have been moved from app.js to plugins/code.js. App.js now delegates to CodeFeature via canvas events (`nodeRunCode`, `nodeGenerate`, etc.).
 - 2026-03-15: Always use `encoding="utf-8"` when calling `read_text()`. On Windows, the default encoding is cp1252 which causes UnicodeDecodeError when reading UTF-8 files.
+- 2026-03-28: LLM backend migration (LiteLLM → llamabot) design lives under `docs/designs/llamabot-backend-proxy/` (LLD + EARS), linked from HLD and `docs/llds/backend-llm-proxy.md`. PocketFlow is not part of that plan.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
 ## Codebase map
 
 Quick reference for which files to edit for common tasks.
+
+### Design documents (LLM backend migration)
+
+| Location | Purpose |
+| -------- | ------- |
+| [`docs/designs/llamabot-backend-proxy/LLD.md`](docs/designs/llamabot-backend-proxy/LLD.md) | Low-level design: llamabot SimpleBot/StructuredBot adapter; LiteLLM retained for images, token count, Copilot model list |
+| [`docs/designs/llamabot-backend-proxy/llm-proxy-EARS.md`](docs/designs/llamabot-backend-proxy/llm-proxy-EARS.md) | EARS requirements for API parity and bot usage |
+| [`docs/llds/backend-llm-proxy.md`](docs/llds/backend-llm-proxy.md) | Narrative LLM proxy + links to the LLD |
 
 ### Directory structure
 
@@ -257,6 +266,7 @@ Quick reference guide for finding the right documentation based on what you need
 | **Breadcrumb graph context (EARS / traceability)**        | [breadcrumb-nav-specs.md](docs/specs/breadcrumb-nav-specs.md)           | Requirements for parent › current › child bar and hover preview |
 | **Why is the plugin system designed this way?**           | [plugin-architecture.md](docs/explanation/plugin-architecture.md)       | Design rationale for three-level plugin architecture        |
 | **How does streaming work?**                              | [streaming-architecture.md](docs/explanation/streaming-architecture.md) | Server-sent events and streaming design                     |
+| **LLM backend (llamabot vs LiteLLM) — LLD + EARS**         | [LLD](docs/designs/llamabot-backend-proxy/LLD.md), [EARS](docs/designs/llamabot-backend-proxy/llm-proxy-EARS.md) | Design-driven migration: SimpleBot/StructuredBot adapter; LiteLLM for images/tokens/Copilot utilities |
 | **How does auto-layout work?**                            | [auto-layout.md](docs/explanation/auto-layout.md)                       | Node positioning and overlap resolution                     |
 | **How does the committee feature work internally?**       | [committee-architecture.md](docs/explanation/committee-architecture.md) | Multi-LLM consultation design                               |
 | **How does matrix evaluation work?**                      | [matrix-evaluation.md](docs/explanation/matrix-evaluation.md)           | Matrix cell filling and evaluation design                   |
