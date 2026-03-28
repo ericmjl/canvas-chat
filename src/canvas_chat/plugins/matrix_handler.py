@@ -5,13 +5,17 @@ Handles matrix-specific API endpoints for parsing rows/columns from context
 and filling matrix cells.
 """
 
+import asyncio
 import json
 import logging
 import re
 import traceback
 
+import litellm
 from fastapi import HTTPException
-from pydantic import BaseModel
+from llamabot import StructuredBot
+from llamabot.components.messages import HumanMessage
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 logger = logging.getLogger(__name__)
@@ -32,6 +36,13 @@ class Message(BaseModel):
 
     role: str
     content: str
+
+
+class MatrixTwoListsOutput(BaseModel):
+    """Structured output for parse-two-lists."""
+
+    rows: list[str] = Field(default_factory=list)
+    columns: list[str] = Field(default_factory=list)
 
 
 class MatrixFillRequest(BaseModel):
@@ -57,6 +68,7 @@ def register_endpoints(app):
         Returns two lists: one for rows, one for columns (max 10 each).
         """
         from canvas_chat.app import (
+            copilot_extras_for_bot,
             extract_provider,
             get_api_key_for_provider,
             inject_admin_credentials,
@@ -97,7 +109,47 @@ Example 2: "1. GitHub Copilot: $10/month... 2. Tabnine: Free tier available..."
 Example 2 output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", "Features", "Python Support"]}}"""  # noqa: E501
 
         try:
-            import litellm
+            api_key = get_api_key_for_provider(provider, request.api_key)
+
+            supports_structured = litellm.supports_response_schema(
+                model=request.model, custom_llm_provider=None
+            )
+
+            if supports_structured:
+                try:
+                    prep = {
+                        "model": request.model,
+                        "messages": [],
+                        "api_key": api_key,
+                        "base_url": request.base_url,
+                    }
+                    prep = prepare_copilot_openai_request(prep, request.model, api_key)
+                    extras = copilot_extras_for_bot(prep)
+                    parse_lists_bot = StructuredBot(
+                        system_prompt=system_prompt,
+                        pydantic_model=MatrixTwoListsOutput,
+                        model_name=prep["model"],
+                        temperature=0.3,
+                        stream_target="none",
+                        api_key=prep.get("api_key"),
+                        **extras,
+                    )
+
+                    def _parse_two_lists_run() -> MatrixTwoListsOutput:
+                        r = parse_lists_bot(
+                            HumanMessage(content=combined_content), num_attempts=5
+                        )
+                        if r is None:
+                            raise RuntimeError("StructuredBot returned None")
+                        return r
+
+                    result = await asyncio.to_thread(_parse_two_lists_run)
+                    return {"rows": result.rows, "columns": result.columns}
+                except Exception:
+                    logger.warning(
+                        "Structured parse-two-lists failed; falling back to text",
+                        exc_info=True,
+                    )
 
             kwargs = {
                 "model": request.model,
@@ -106,23 +158,19 @@ Example 2 output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", 
                     {"role": "user", "content": combined_content},
                 ],
                 "temperature": 0.3,
+                "stream": False,
             }
-
-            api_key = get_api_key_for_provider(provider, request.api_key)
             if api_key:
                 kwargs["api_key"] = api_key
-
             if request.base_url:
                 kwargs["base_url"] = request.base_url
-
             kwargs = prepare_copilot_openai_request(kwargs, request.model, api_key)
 
             response = await litellm.acompletion(**kwargs)
-            title = response.choices[0].message.content.strip()
-
+            title = (response.choices[0].message.content or "").strip()
             title = title.strip("\"'")
 
-            logger.info(f"Generated title: {title}")
+            logger.info(f"Parse-two-lists raw: {title[:200]!r}")
 
             try:
                 parsed = json.loads(title)
