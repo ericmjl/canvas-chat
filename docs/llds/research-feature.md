@@ -3,12 +3,25 @@
 **Created**: 2026-03-16
 **Status**: Implementation
 **Module**: ResearchFeature (deep research and web search)
+**Updated**: 2026-03-28 — Research activity output panel (arrow of intent: HLD §4.4 → this LLD → NODE-REQ-019, RSCH-REQ-005 → tests → code)
+
+## Arrow of intent (traceability)
+
+Documentation and implementation follow one chain so intent does not drift:
+
+```text
+[HLD: Streaming-First + intermediate activity](../high-level-design.md#44-streaming-first)
+        → [this LLD: Research activity output panel](#research-activity-output-panel)
+        → [NODE-REQ-019](../specs/node-types-specs.md) / [RSCH-REQ-005](../specs/feature-plugins-specs.md)
+        → [tests: ResearchNode output panel](../../tests/test_node_protocols.js)
+        → code: `plugins/research-node.js`, `plugins/research.js`, `canvas.ensureOutputPanelContent`
+```
 
 ## Context and Design Philosophy
 
 The ResearchFeature provides two related but distinct capabilities within Canvas-Chat. The `/search` command performs lightweight web searches and displays results as reference nodes. The `/research` command performs deep research, synthesizing information from multiple sources into a comprehensive report. Both commands support context-aware refinement, where selected text or nodes are used to clarify vague queries.
 
-The design philosophy centers on three principles. First, progressive disclosure recognizes that not all research needs are equal; `/search` is fast and lets users explore manually, while `/research` provides comprehensive synthesis for complex topics. Second, dual-provider architecture prioritizes Exa for quality but gracefully falls back to DuckDuckGo when no API key is available, ensuring the feature works for all users. Third, streaming-first experience provides real-time feedback during research, showing status updates and progressive content so users understand what's happening.
+The design philosophy centers on three principles. First, progressive disclosure recognizes that not all research needs are equal; `/search` is fast and lets users explore manually, while `/research` provides comprehensive synthesis for complex topics. Second, dual-provider architecture prioritizes Exa for quality but gracefully falls back to DuckDuckGo when no API key is available, ensuring the feature works for all users. Third, streaming-first experience provides real-time feedback during research, showing status updates and progressive content so users understand what's happening. Fourth, **separation of concerns in the UI**: while research runs, the main node body shows only a short in-progress placeholder plus the topic; the **slide-out output panel** carries the chronological **activity log** (status lines and, for DDG, per-source lines). When streaming finishes, the node body shows the full synthesized report.
 
 ## Technical Overview
 
@@ -146,8 +159,8 @@ The `handleResearch` method implements a more complex flow than search:
 3. **Streaming Registration**: Register with `StreamingManager` for stop/continue support
 4. **Query Refinement**: Same refinement process as search
 5. **Research Execution**: Call appropriate endpoint based on provider
-6. **SSE Processing**: Handle streaming events (status, content, sources)
-7. **Completion**: Clean up streaming state, generate summary
+6. **SSE Processing**: Handle streaming events (status, content, sources); append to `researchActivityLog` and call `canvas.ensureOutputPanelContent` so the activity panel appears on first chunk
+7. **Completion**: Clear `researchActivityActive`, clean up streaming state, generate summary
 
 ### Streaming Integration
 
@@ -248,6 +261,25 @@ Defined in `plugins/research-node.js`:
 - **Type Icon**: "📚"
 - **Header Buttons**: Nav Parent, Nav Child, Collapse, Stop, Continue, Reset Size, Fit Viewport, Delete
 - **Actions**: Reply, Create Flashcards, Copy
+- **Output panel** (`hasOutput` / `renderOutputPanel`): When `researchActivityLog` is non-empty, the canvas shows the standard slide-out panel below the node. The log is a single `<pre>` directly in the panel body (no nested card); the panel chrome provides padding and scroll. While `researchActivityActive` is true, a “Running…” line is shown below the log.
+
+### Research activity output panel
+
+**Problem:** Status and source progress were only visible in the main node body (or as dense markdown). For DuckDuckGo research, terminal-style logs are especially informative; users benefit from a dedicated **activity** surface that mirrors other features (code run output, Git file preview).
+
+**Approach:**
+
+1. **Node fields** (CRDT-backed primitives on the research node):
+   - `researchActivityLog` — newline-separated lines, capped (e.g. 300 lines) to avoid unbounded growth.
+   - `researchActivityActive` — boolean; true while the SSE stream is open; false on `done`, abort, or error.
+
+2. **Protocol** (`ResearchNode`): Implements `hasOutput()` when the trimmed log is non-empty; `renderOutputPanel(canvas)` returns escaped HTML for the log and optional running state (see [NODE-REQ-019](../specs/node-types-specs.md)).
+
+3. **Feature** (`ResearchFeature`): On stream start, seeds the log (e.g. “Starting research…”); on each `status` event appends the line; on each DDG `source` event appends a short “Source: …” line; updates the graph then calls `canvas.ensureOutputPanelContent(nodeId, node)` so the panel is **created** if absent or **refreshed** if present (`canvas.js`).
+
+4. **Canvas**: `ensureOutputPanelContent` wraps the pattern: if `wrapNode(node).hasOutput()` and no panel exists, `renderOutputPanel(node, wrapper)`; else `updateOutputPanelContent`.
+
+**Styling:** `nodes.css` — `.research-activity-log` (monospace text only; no inner box), `.research-activity-status`.
 
 ## Streaming Results Processing
 
@@ -273,21 +305,7 @@ The `true` parameter indicates streaming mode (appending vs replacing).
 
 ### DDG Streaming (Source-by-Source)
 
-For DDG research, sources arrive individually:
-
-```javascript
-if (eventType === 'source') {
-    const source = JSON.parse(data);
-    ddgSourceCount += 1;
-
-    // Build markdown for this source
-    ddgSourcesMd += `### [${title}](${url})...\n\n${summary}\n\n---\n\n`;
-
-    // Update display with growing sources list
-    const sourcesBlock = `## Sources (${ddgSourceCount})\n\n${ddgSourcesMd}`;
-    this.canvas.updateNodeContent(nodeId, content, true);
-}
-```
+For DDG research, sources arrive individually. Status and source lines are appended to the **activity log** (drawer) only. The **node body** stays a short placeholder (`*In progress…*`) until the final `content` event delivers the full report, so the canvas is not filled with duplicate status and source lists.
 
 ### Completion Handling
 
@@ -368,20 +386,22 @@ Backend API Call
         |
         v
 SSE Stream Processing
-  - status events: Update with progress
+  - status events: Append to activity log + refresh output panel; update main body (status / report)
   - content events: Append to report
+  - source events (DDG): Append source line to activity log; update main body sources section
   - sources events: Store for final section
         |
         v
-Completion: normalize + add sources + generate summary
+Completion: clear researchActivityActive + normalize + add sources + generate summary
 ```
 
 ## File Structure
 
 | File                       | Purpose                                                |
 | -------------------------- | ------------------------------------------------------ |
-| `plugins/research.js`      | ResearchFeature class with handleSearch/handleResearch |
-| `plugins/research-node.js` | ResearchNode protocol definition                       |
+| `plugins/research.js`      | ResearchFeature class with handleSearch/handleResearch; activity log + `ensureOutputPanelContent` |
+| `plugins/research-node.js` | ResearchNode protocol; `hasOutput` / `renderOutputPanel` for activity drawer |
+| `canvas.js`                | `ensureOutputPanelContent`, `renderOutputPanel`, `updateOutputPanelContent` |
 | `plugins/search-node.js`   | SearchNode protocol definition                         |
 | `app.py`                   | Exa API endpoints (lines 1822-2066)                    |
 | `plugins/ddg_endpoints.py` | DuckDuckGo fallback endpoints                          |
@@ -425,13 +445,14 @@ This LLD supports the following HLD components:
 
 - **Section 5.2: Backend LLM Proxy** - Research endpoints are part of the FastAPI backend
 - **Section 5.1: Frontend The Canvas** - Research nodes render on the SVG canvas
-- **Section 4.4: Streaming-First** - All research results stream in real-time
+- **Section 4.4: Streaming-First** - All research results stream in real-time; intermediate activity uses the output panel (see [NODE-REQ-019](../specs/node-types-specs.md))
 - **Section 4.3: Plugin-Extensible** - ResearchFeature is a Level 2 feature plugin
 - **Section 6: Node Types** - RESEARCH and SEARCH are documented node types
 - **Section 7: Edge Types** - EdgeType.REFERENCE and SEARCH_RESULT connect research graphs
 
 ## Related Documentation
 
+- [NODE-REQ-019](../specs/node-types-specs.md), [RSCH-REQ-005](../specs/feature-plugins-specs.md) — EARS requirements for the activity panel
 - [How to conduct deep research](../how-to/deep-research.md) - User guide for /research
 - [How to search the web](../how-to/web-search.md) - User guide for /search
 - [High-Level Design](../high-level-design.md) - System overview

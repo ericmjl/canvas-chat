@@ -70,6 +70,10 @@ You'll see status updates as it progresses. Example status messages include:
 
 The exact messages depend on which provider is used.
 
+### Research activity drawer
+
+While research runs, the **node** only shows your topic plus a short *In progress…* line so the card stays readable. Open the **slide-out panel** under the research node (same control as code output panels: expand/collapse at the bottom edge) for the live detail: chronological **status** lines from the backend, and—with the DuckDuckGo fallback—a short line each time a **source** is recorded. The final report still appears in the node when research completes. When research finishes, the activity log remains available until you start a new run on the same node (which clears it).
+
 ## Context-aware research
 
 When you select text or nodes before running `/research`, the AI refines your instructions based on that context.

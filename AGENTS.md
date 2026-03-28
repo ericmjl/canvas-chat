@@ -126,7 +126,8 @@ canvas-chat/
 | `src/canvas_chat/static/js/committee.js`               | CommitteeFeature class             | Multi-LLM consultation, synthesis                                                   |
 | `src/canvas_chat/static/js/matrix.js`                  | MatrixFeature class                | Comparison matrix creation, cell filling                                            |
 | `src/canvas_chat/static/js/factcheck.js`               | FactcheckFeature class             | Claim verification, web search integration                                          |
-| `src/canvas_chat/static/js/research.js`                | ResearchFeature class              | Deep research with Exa API                                                          |
+| `src/canvas_chat/static/js/plugins/research.js`        | ResearchFeature class              | `/research`, `/search`; DDG/Exa SSE; activity log in ResearchNode output panel       |
+| `src/canvas_chat/static/js/plugins/research-node.js`   | ResearchNode protocol              | Research node header/actions; bottom drawer shows streaming research activity lines  |
 | `src/canvas_chat/static/js/code-feature.js`            | CodeFeature class                  | Self-healing code execution                                                         |
 | `src/canvas_chat/static/js/plugins/git-repo.js`        | GitRepoFeature class               | Git repository fetching with file selection (`/git` command)                        |
 | `src/canvas_chat/static/js/plugins/youtube.js`         | YouTubeFeature class               | YouTube video fetching with transcript (`/youtube` command)                         |

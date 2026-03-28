@@ -79,6 +79,60 @@ from canvas_chat.plugins import (
 from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE
 from canvas_chat.url_fetch_registry import UrlFetchRegistry
 
+# LiteLLM: patch before StructuredBot uses ``get_supported_openai_params`` (see below).
+litellm.drop_params = True  # Drop unsupported params gracefully
+
+
+def _patch_litellm_for_llamabot_structured_and_copilot() -> None:
+    """Fix LiteLLM + llamabot StructuredBot for GitHub Copilot model IDs.
+
+    For ``github_copilot/...``, LiteLLM often returns ``None`` from
+    :func:`litellm.get_supported_openai_params`, and ``False`` from
+    :func:`litellm.supports_response_schema`. llamabot's
+    :class:`~llamabot.bot.structuredbot.StructuredBot` then does
+    ``\"response_format\" in params`` and crashes with
+    ``TypeError: argument of type 'NoneType' is not a container or iterable``,
+    or raises ``ValueError`` when params is ``[]``.
+
+    Copilot's chat API is OpenAI-compatible and supports JSON / schema-style
+    responses for structured extraction. We mirror OpenAI's supported param list
+    and treat Copilot as schema-capable when the upstream helpers return
+    unknown/unsupported.
+
+    llamabot imports these functions into ``structuredbot`` by name; after
+    patching :mod:`litellm`, rebind them on that module so runtime lookups use
+    the wrappers.
+    """
+    _orig_params = litellm.get_supported_openai_params
+    _orig_schema = litellm.supports_response_schema
+
+    def _params_wrapped(*args: Any, **kwargs: Any) -> Any:
+        out = _orig_params(*args, **kwargs)
+        if out is not None:
+            return out
+        model = args[0] if args else kwargs.get("model", "")
+        if isinstance(model, str) and model.startswith("github_copilot/"):
+            if args:
+                return _orig_params("openai/gpt-4o", *args[1:])
+            return _orig_params(**{**kwargs, "model": "openai/gpt-4o"})
+        return []
+
+    def _schema_wrapped(model: str, custom_llm_provider: str | None = None) -> bool:
+        if isinstance(model, str) and model.startswith("github_copilot/"):
+            return True
+        return _orig_schema(model=model, custom_llm_provider=custom_llm_provider)
+
+    litellm.get_supported_openai_params = _params_wrapped  # type: ignore[method-assign]
+    litellm.supports_response_schema = _schema_wrapped  # type: ignore[method-assign]
+
+
+_patch_litellm_for_llamabot_structured_and_copilot()
+
+import llamabot.bot.structuredbot as _lb_structured  # noqa: E402
+
+_lb_structured.get_supported_openai_params = litellm.get_supported_openai_params
+_lb_structured.supports_response_schema = litellm.supports_response_schema
+
 # Text completions use llamabot AsyncSimpleBot / AsyncStructuredBot. LiteLLM is
 # still imported for drop_params, token_counter, Copilot model list, images,
 # and supports_response_schema (StructuredBot uses litellm internally too).
@@ -86,9 +140,6 @@ from canvas_chat.url_fetch_registry import UrlFetchRegistry
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Configure litellm
-litellm.drop_params = True  # Drop unsupported params gracefully
 
 app = FastAPI(title="Canvas Chat", version=__version__)
 
@@ -2050,17 +2101,12 @@ async def run_structured_string_list(
     temperature: float = 0.3,
     max_tokens: int = 250,
 ) -> list[str]:
-    """Return a deduped list of strings using ``AsyncStructuredBot``.
+    """Return a deduped list of strings using :class:`AsyncStructuredBot`.
 
-    Uses :class:`JsonStringListOutput` (field ``items``). Raises :class:`ValueError`
-    if the model does not support ``supports_response_schema``.
+    Same pattern as :func:`run_structured_summarize`: no LiteLLM
+    ``supports_response_schema`` gate—StructuredBot + provider handle JSON
+    extraction; retries apply via ``num_attempts`` on the bot.
     """
-    if not litellm.supports_response_schema(model=model, custom_llm_provider=None):
-        raise ValueError(
-            "Structured list generation requires a model that supports structured "
-            "JSON (response_schema)."
-        )
-
     prep = {
         "model": model,
         "messages": [],
