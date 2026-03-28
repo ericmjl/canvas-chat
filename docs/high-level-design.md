@@ -4,7 +4,12 @@
 **Issue:** N/A (comprehensive HLD for entire application)
 **Status:** Draft
 **Created:** 2026-03-16
-**Updated:** 2026-03-17 (added build pipeline, Modal deployment, pip distribution)
+**Updated:** 2026-03-17 (added build pipeline, Modal deployment, pip distribution); 2026-03-28 (linked LLM backend LLD/EARS)
+
+## Related design documents
+
+- **[LLM backend (llamabot)](./designs/llamabot-backend-proxy/LLD.md)** — Low-level design for migrating text completions to llamabot while keeping API contracts stable.
+- **[LLM proxy EARS](./designs/llamabot-backend-proxy/llm-proxy-EARS.md)** — Requirements for parity, SimpleBot/StructuredBot usage, and retained LiteLLM utilities.
 
 ## 1. What Is This Project?
 

@@ -1,7 +1,13 @@
 # Backend: LLM Proxy and Services
 
 **Created**: 2026-03-16
+**Updated**: 2026-03-28
 **Status**: Design Phase
+
+## Related design documents
+
+- **[LLD: llamabot backend proxy](../designs/llamabot-backend-proxy/LLD.md)** — migration plan: SimpleBot/StructuredBot adapter, LiteLLM retained for images/tokens/Copilot utilities.
+- **[EARS: LLM proxy](../designs/llamabot-backend-proxy/llm-proxy-EARS.md)** — testable requirements for API parity and bot usage.
 
 ## Context and Design Philosophy
 
@@ -16,11 +22,20 @@ It does NOT store user data. All conversation data stays in the browser.
 
 ### Architecture
 
+**Target (in progress):** text completions are moving from raw LiteLLM `acompletion` to **llamabot** (`SimpleBot` for unstructured text and SSE, `StructuredBot` for Pydantic/JSON outputs) behind a small backend adapter, while **LiteLLM** remains for image generation, token counting, and Copilot-specific helpers. See the [LLD](../designs/llamabot-backend-proxy/LLD.md).
+
+```text
+Frontend → Backend → llamabot (SimpleBot / StructuredBot) → Provider APIs
+                  ↘ LiteLLM (images, token_counter, Copilot model list only)
+```
+
+Historically, all chat traffic went through LiteLLM end-to-end:
+
 ```text
 Frontend → Backend → LiteLLM → Provider APIs
 ```
 
-LiteLLM provides a unified API across providers:
+LiteLLM (still used where noted above) provides a unified API across providers:
 
 | Provider  | Example Model                  |
 | --------- | ------------------------------ |
@@ -53,7 +68,7 @@ Response: Server-Sent Events (SSE) streaming
 
 - **CORS**: Avoids CORS issues with direct provider calls
 - **Key management**: API keys stored in browser, not exposed to providers directly
-- **Unified interface**: Single endpoint works with any LiteLLM-supported model
+- **Unified interface**: Single endpoint works with any provider/model id the stack supports (same model strings as before; implementation detail may be llamabot + optional LiteLLM utilities)
 
 ## Services
 
@@ -112,7 +127,7 @@ In admin mode:
 
 ### Resolved
 
-1. ✅ LiteLLM - reduces provider-specific code
+1. ✅ LiteLLM - reduces provider-specific code (narrowed over time: chat completions migrate to llamabot; see LLD)
 2. ✅ SSE streaming - real-time token delivery
 3. ✅ No user data storage - privacy, simplicity
 
@@ -123,5 +138,6 @@ In admin mode:
 
 ## References
 
-- HLD: `/docs/high-level-design.md`
-- Implementation: `src/canvas_chat/app.py`
+- HLD: [high-level-design.md](../high-level-design.md)
+- LLD + EARS: [designs/llamabot-backend-proxy/](../designs/llamabot-backend-proxy/LLD.md)
+- Implementation: `src/canvas_chat/app.py` (and plugins under `src/canvas_chat/plugins/`)
