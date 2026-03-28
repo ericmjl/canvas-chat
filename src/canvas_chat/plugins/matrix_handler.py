@@ -8,8 +8,8 @@ and filling matrix cells.
 import logging
 import traceback
 
+import litellm
 from fastapi import HTTPException
-from litellm import supports_response_schema
 from llamabot import AsyncStructuredBot
 from llamabot.components.messages import HumanMessage
 from pydantic import BaseModel, Field
@@ -108,7 +108,9 @@ Example 2 output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", 
         try:
             api_key = get_api_key_for_provider(provider, request.api_key)
 
-            if not supports_response_schema(
+            # Use ``litellm.supports_response_schema`` (module attribute), not a
+            # function imported before ``app`` patches Copilot (see app.py).
+            if not litellm.supports_response_schema(
                 model=request.model, custom_llm_provider=None
             ):
                 raise HTTPException(

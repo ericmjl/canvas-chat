@@ -18,8 +18,8 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+import litellm
 from fastapi import File, UploadFile
-from litellm import supports_response_schema
 from llamabot import AsyncStructuredBot
 from llamabot.components.messages import HumanMessage
 from pydantic import BaseModel, Field
@@ -219,7 +219,7 @@ Rules:
                 prepare_copilot_openai_request,
             )
 
-            if not supports_response_schema(
+            if not litellm.supports_response_schema(
                 model=request.model, custom_llm_provider=None
             ):
                 raise HTTPException(
@@ -325,7 +325,7 @@ Rules:
                 prepare_copilot_openai_request,
             )
 
-            if not supports_response_schema(
+            if not litellm.supports_response_schema(
                 model=request.model, custom_llm_provider=None
             ):
                 raise HTTPException(
@@ -448,7 +448,7 @@ Rules:
                 prepare_copilot_openai_request,
             )
 
-            if not supports_response_schema(
+            if not litellm.supports_response_schema(
                 model=request.model, custom_llm_provider=None
             ):
                 raise HTTPException(
