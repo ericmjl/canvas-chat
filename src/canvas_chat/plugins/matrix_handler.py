@@ -5,15 +5,12 @@ Handles matrix-specific API endpoints for parsing rows/columns from context
 and filling matrix cells.
 """
 
-import asyncio
-import json
 import logging
-import re
 import traceback
 
-import litellm
 from fastapi import HTTPException
-from llamabot import StructuredBot
+from litellm import supports_response_schema
+from llamabot import AsyncStructuredBot
 from llamabot.components.messages import HumanMessage
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -111,98 +108,50 @@ Example 2 output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", 
         try:
             api_key = get_api_key_for_provider(provider, request.api_key)
 
-            supports_structured = litellm.supports_response_schema(
+            if not supports_response_schema(
                 model=request.model, custom_llm_provider=None
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Parse-two-lists needs a model that supports structured JSON "
+                        "(response_schema). Pick a model that supports it for your "
+                        "provider, or switch provider."
+                    ),
+                )
+
+            prep = {
+                "model": request.model,
+                "messages": [],
+                "api_key": api_key,
+                "base_url": request.base_url,
+            }
+            prep = prepare_copilot_openai_request(prep, request.model, api_key)
+            extras = copilot_extras_for_bot(prep)
+            parse_lists_bot = AsyncStructuredBot(
+                system_prompt=system_prompt,
+                pydantic_model=MatrixTwoListsOutput,
+                model_name=prep["model"],
+                temperature=0.3,
+                stream_target="none",
+                api_key=prep.get("api_key"),
+                **extras,
             )
 
-            if supports_structured:
-                try:
-                    prep = {
-                        "model": request.model,
-                        "messages": [],
-                        "api_key": api_key,
-                        "base_url": request.base_url,
-                    }
-                    prep = prepare_copilot_openai_request(prep, request.model, api_key)
-                    extras = copilot_extras_for_bot(prep)
-                    parse_lists_bot = StructuredBot(
-                        system_prompt=system_prompt,
-                        pydantic_model=MatrixTwoListsOutput,
-                        model_name=prep["model"],
-                        temperature=0.3,
-                        stream_target="none",
-                        api_key=prep.get("api_key"),
-                        **extras,
-                    )
+            result = await parse_lists_bot(
+                HumanMessage(content=combined_content), num_attempts=5
+            )
+            if result is None:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Could not obtain valid structured output after retries.",
+                )
+            return {"rows": result.rows, "columns": result.columns}
 
-                    def _parse_two_lists_run() -> MatrixTwoListsOutput:
-                        r = parse_lists_bot(
-                            HumanMessage(content=combined_content), num_attempts=5
-                        )
-                        if r is None:
-                            raise RuntimeError("StructuredBot returned None")
-                        return r
-
-                    result = await asyncio.to_thread(_parse_two_lists_run)
-                    return {"rows": result.rows, "columns": result.columns}
-                except Exception:
-                    logger.warning(
-                        "Structured parse-two-lists failed; falling back to text",
-                        exc_info=True,
-                    )
-
-            kwargs = {
-                "model": request.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": combined_content},
-                ],
-                "temperature": 0.3,
-                "stream": False,
-            }
-            if api_key:
-                kwargs["api_key"] = api_key
-            if request.base_url:
-                kwargs["base_url"] = request.base_url
-            kwargs = prepare_copilot_openai_request(kwargs, request.model, api_key)
-
-            response = await litellm.acompletion(**kwargs)
-            title = (response.choices[0].message.content or "").strip()
-            title = title.strip("\"'")
-
-            logger.info(f"Parse-two-lists raw: {title[:200]!r}")
-
-            try:
-                parsed = json.loads(title)
-                return {
-                    "rows": parsed.get("rows", []),
-                    "columns": parsed.get("columns", []),
-                }
-            except json.JSONDecodeError:
-                rows_match = re.search(r'"rows"\s*:\s*\[([^\]]*)\]', title)
-                cols_match = re.search(r'"columns"\s*:\s*\[([^\]]*)\]', title)
-
-                rows = []
-                cols = []
-
-                if rows_match:
-                    rows = [
-                        m.strip().strip('"')
-                        for m in rows_match.group(1).split(",")
-                        if m.strip()
-                    ]
-
-                if cols_match:
-                    cols = [
-                        m.strip().strip('"')
-                        for m in cols_match.group(1).split(",")
-                        if m.strip()
-                    ]
-
-                return {"rows": rows, "columns": cols}
-
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Generate title failed: {e}")
+            logger.error(f"Parse-two-lists failed: {e}")
             logger.error(traceback.format_exc())
             raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -214,6 +163,7 @@ Example 2 output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", 
         Returns SSE stream with the evaluation content.
         """
         from canvas_chat.app import (
+            _stream_text_deltas_async_simple_bot,
             extract_provider,
             get_api_key_for_provider,
             inject_admin_credentials,
@@ -231,8 +181,6 @@ Example 2 output: {{"rows": ["GitHub Copilot", "Tabnine"], "columns": ["Price", 
 
         async def generate():
             try:
-                import litellm
-
                 system_prompt = f"""You are evaluating items in a matrix.
 Matrix context: {request.context}
 
@@ -258,9 +206,7 @@ intersection of these two items. Do not repeat the item names in your response
 
                 kwargs = {
                     "model": request.model,
-                    "messages": messages,
                     "temperature": 0.5,
-                    "stream": True,
                 }
 
                 api_key = get_api_key_for_provider(provider, request.api_key)
@@ -272,12 +218,10 @@ intersection of these two items. Do not repeat the item names in your response
 
                 kwargs = prepare_copilot_openai_request(kwargs, request.model, api_key)
 
-                response = await litellm.acompletion(**kwargs)
-
-                async for chunk in response:
-                    if chunk.choices and chunk.choices[0].delta.content:
-                        content = chunk.choices[0].delta.content
-                        yield {"event": "message", "data": content}
+                async for content in _stream_text_deltas_async_simple_bot(
+                    messages, kwargs, temperature=0.5
+                ):
+                    yield {"event": "message", "data": content}
 
                 yield {"event": "done", "data": ""}
 

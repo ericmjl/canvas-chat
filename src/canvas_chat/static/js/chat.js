@@ -331,9 +331,12 @@ class Chat {
      * Summarize a branch of conversation
      * @param {Array<ChatMessage>} messages - Conversation messages
      * @param {string} model - Model ID
+     * @param {object} [options] - Optional summarization hints (backend structured output)
+     * @param {string} [options.summaryType] - Free-text summary style or focus
+     * @param {string} [options.summaryLength] - Free-text length guidance
      * @returns {Promise<string>} Summary text
      */
-    async summarize(messages, model) {
+    async summarize(messages, model, options = {}) {
         const apiKey = await this.ensureCopilotAuthFresh(model);
         const baseUrl = this.getBaseUrl();
 
@@ -346,6 +349,13 @@ class Chat {
 
             if (baseUrl) {
                 requestBody.base_url = baseUrl;
+            }
+
+            if (options.summaryType) {
+                requestBody.summary_type = options.summaryType;
+            }
+            if (options.summaryLength) {
+                requestBody.summary_length = options.summaryLength;
             }
 
             const response = await fetch(apiUrl('/api/summarize'), {

@@ -110,7 +110,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/59/73/8d100c4e48935f6a381df60f894ca9c063ea412ce354fbe7a17770ad4092/litellm-1.81.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ac/ec/b4ce46a18bad0b3057edd713c585b14b038ea824ea26167c9eb8eb98554c/llamabot-0.17.14-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/48/49/166b9460ef373f5060037dc1ebcb0bceb86df74b08e5709ef9da3dc05cd2/llamabot-0.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/c6/a04e9cef7c052717fcb28fb63b3824802488f688391895b618e39be0f684/lupa-2.6-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/29/9c/47293c58cc91769130fbf85531280e8cc7868f7fbb6d92f4670071b9cb3e/lxml-6.0.2-cp314-cp314-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
@@ -311,7 +311,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/74/0f/5312b944208efeec5dcbf8e0ed956f8f7c430b0c6458301d206380c90b56/litellm-1.81.5-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ac/ec/b4ce46a18bad0b3057edd713c585b14b038ea824ea26167c9eb8eb98554c/llamabot-0.17.14-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/48/49/166b9460ef373f5060037dc1ebcb0bceb86df74b08e5709ef9da3dc05cd2/llamabot-0.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9e/9c/59e6cffa0d672d662ae17bd7ac8ecd2c89c9449dee499e3eb13ca9cd10d9/lupa-2.6-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl
       - pypi: https://files.pythonhosted.org/packages/3a/ea/a43ba9bb750d4ffdd885f2cd333572f5bb900cd2408b67fdda07e85978a0/lxml-6.0.2-cp314-cp314-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl
@@ -506,7 +506,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/59/73/8d100c4e48935f6a381df60f894ca9c063ea412ce354fbe7a17770ad4092/litellm-1.81.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ac/ec/b4ce46a18bad0b3057edd713c585b14b038ea824ea26167c9eb8eb98554c/llamabot-0.17.14-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/48/49/166b9460ef373f5060037dc1ebcb0bceb86df74b08e5709ef9da3dc05cd2/llamabot-0.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a3/98/f9ff60db84a75ba8725506bbf448fb085bc77868a021998ed2a66d920568/lupa-2.6-cp314-cp314-macosx_11_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c8/e8/c128e37589463668794d503afaeb003987373c5f94d667124ffd8078bbd9/lxml-6.0.2-cp314-cp314-macosx_10_13_x86_64.whl
@@ -698,7 +698,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/59/73/8d100c4e48935f6a381df60f894ca9c063ea412ce354fbe7a17770ad4092/litellm-1.81.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ac/ec/b4ce46a18bad0b3057edd713c585b14b038ea824ea26167c9eb8eb98554c/llamabot-0.17.14-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/48/49/166b9460ef373f5060037dc1ebcb0bceb86df74b08e5709ef9da3dc05cd2/llamabot-0.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/66/9d/d9427394e54d22a35d1139ef12e845fd700d4872a67a34db32516170b746/lupa-2.6-cp314-cp314-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/03/15/d4a377b385ab693ce97b472fe0c77c2b16ec79590e688b3ccc71fba19884/lxml-6.0.2-cp314-cp314-macosx_10_13_universal2.whl
@@ -892,7 +892,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/96/e4/87e3ca82a8bf6e6bfffb42a539a1350dd6ced1b7169397bd439ba56fde10/litellm-1.82.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/79/f0/590cdda796ef68b3dee6bba6feebfa1c9a9e47f1c8cd6fa8417a22b47634/llamabot-0.17.15-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/48/49/166b9460ef373f5060037dc1ebcb0bceb86df74b08e5709ef9da3dc05cd2/llamabot-0.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/e0/c96cf13eccd20c9421ba910304dae0f619724dcf1702864fd59dd386404d/lxml-6.0.2-cp314-cp314-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl
@@ -1114,7 +1114,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/59/73/8d100c4e48935f6a381df60f894ca9c063ea412ce354fbe7a17770ad4092/litellm-1.81.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ac/ec/b4ce46a18bad0b3057edd713c585b14b038ea824ea26167c9eb8eb98554c/llamabot-0.17.14-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/48/49/166b9460ef373f5060037dc1ebcb0bceb86df74b08e5709ef9da3dc05cd2/llamabot-0.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/c6/a04e9cef7c052717fcb28fb63b3824802488f688391895b618e39be0f684/lupa-2.6-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/29/9c/47293c58cc91769130fbf85531280e8cc7868f7fbb6d92f4670071b9cb3e/lxml-6.0.2-cp314-cp314-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
@@ -1333,7 +1333,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/74/0f/5312b944208efeec5dcbf8e0ed956f8f7c430b0c6458301d206380c90b56/litellm-1.81.5-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ac/ec/b4ce46a18bad0b3057edd713c585b14b038ea824ea26167c9eb8eb98554c/llamabot-0.17.14-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/48/49/166b9460ef373f5060037dc1ebcb0bceb86df74b08e5709ef9da3dc05cd2/llamabot-0.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9e/9c/59e6cffa0d672d662ae17bd7ac8ecd2c89c9449dee499e3eb13ca9cd10d9/lupa-2.6-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl
       - pypi: https://files.pythonhosted.org/packages/3a/ea/a43ba9bb750d4ffdd885f2cd333572f5bb900cd2408b67fdda07e85978a0/lxml-6.0.2-cp314-cp314-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl
@@ -1546,7 +1546,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/59/73/8d100c4e48935f6a381df60f894ca9c063ea412ce354fbe7a17770ad4092/litellm-1.81.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ac/ec/b4ce46a18bad0b3057edd713c585b14b038ea824ea26167c9eb8eb98554c/llamabot-0.17.14-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/48/49/166b9460ef373f5060037dc1ebcb0bceb86df74b08e5709ef9da3dc05cd2/llamabot-0.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a3/98/f9ff60db84a75ba8725506bbf448fb085bc77868a021998ed2a66d920568/lupa-2.6-cp314-cp314-macosx_11_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c8/e8/c128e37589463668794d503afaeb003987373c5f94d667124ffd8078bbd9/lxml-6.0.2-cp314-cp314-macosx_10_13_x86_64.whl
@@ -1756,7 +1756,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/59/73/8d100c4e48935f6a381df60f894ca9c063ea412ce354fbe7a17770ad4092/litellm-1.81.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ac/ec/b4ce46a18bad0b3057edd713c585b14b038ea824ea26167c9eb8eb98554c/llamabot-0.17.14-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/48/49/166b9460ef373f5060037dc1ebcb0bceb86df74b08e5709ef9da3dc05cd2/llamabot-0.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/66/9d/d9427394e54d22a35d1139ef12e845fd700d4872a67a34db32516170b746/lupa-2.6-cp314-cp314-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/03/15/d4a377b385ab693ce97b472fe0c77c2b16ec79590e688b3ccc71fba19884/lxml-6.0.2-cp314-cp314-macosx_10_13_universal2.whl
@@ -1966,7 +1966,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/96/e4/87e3ca82a8bf6e6bfffb42a539a1350dd6ced1b7169397bd439ba56fde10/litellm-1.82.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/79/f0/590cdda796ef68b3dee6bba6feebfa1c9a9e47f1c8cd6fa8417a22b47634/llamabot-0.17.15-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/48/49/166b9460ef373f5060037dc1ebcb0bceb86df74b08e5709ef9da3dc05cd2/llamabot-0.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/e0/c96cf13eccd20c9421ba910304dae0f619724dcf1702864fd59dd386404d/lxml-6.0.2-cp314-cp314-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl
@@ -2655,12 +2655,12 @@ packages:
 - pypi: ./
   name: canvas-chat
   version: 0.1.108
-  sha256: 22957aa625b3c1e2f077c88c613bd1f32aa7641656442b1339471f3e06f6e5ad
+  sha256: 1f015cea2dcc690fbf4cbce7100b2a435dd687313276a7807df24af2bbad3444
   requires_dist:
   - fastapi>=0.115.0
   - uvicorn>=0.32.0
   - litellm>=1.50.0,<1.82.7
-  - llamabot>=0.17.0
+  - llamabot>=0.18.0
   - pydantic>=2.0.0
   - sse-starlette>=2.0.0
   - exa-py>=2.0.2,<3
@@ -5794,10 +5794,10 @@ packages:
   - uvloop>=0.21.0,<0.22.0 ; sys_platform != 'win32' and extra == 'proxy'
   - websockets>=15.0.1,<16.0.0 ; extra == 'proxy'
   requires_python: '>=3.9,<4.0'
-- pypi: https://files.pythonhosted.org/packages/ac/ec/b4ce46a18bad0b3057edd713c585b14b038ea824ea26167c9eb8eb98554c/llamabot-0.17.14-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/48/49/166b9460ef373f5060037dc1ebcb0bceb86df74b08e5709ef9da3dc05cd2/llamabot-0.18.0-py3-none-any.whl
   name: llamabot
-  version: 0.17.14
-  sha256: e5d067af9699d95d519cae33acbe44a68964529a4e428cb20a45607e4724e754
+  version: 0.18.0
+  sha256: c5d6e7733beac28cccb3ac444104d8520fc98bdddbf89e4b8c8131bbf466d22c
   requires_dist:
   - beautifulsoup4
   - chonkie
@@ -5807,77 +5807,7 @@ packages:
   - fastmcp
   - httpx
   - jinja2
-  - litellm>=1.71.0
-  - loguru
-  - networkx
-  - numpy
-  - numpydoc
-  - openai
-  - pdfminer-six
-  - pocketflow
-  - pydantic>=2.0
-  - pyprojroot
-  - python-dotenv
-  - python-frontmatter
-  - python-multipart
-  - python-slugify
-  - sqlalchemy
-  - starlette
-  - tenacity
-  - tqdm
-  - typer>=0.15.3
-  - uvicorn
-  - docker ; extra == 'agent'
-  - markdownify ; extra == 'agent'
-  - case-converter ; extra == 'all'
-  - docker ; extra == 'all'
-  - gitpython ; extra == 'all'
-  - ics ; extra == 'all'
-  - ipykernel ; extra == 'all'
-  - lancedb>=0.22 ; extra == 'all'
-  - markdownify ; extra == 'all'
-  - modal ; extra == 'all'
-  - nbformat ; extra == 'all'
-  - prompt-toolkit ; extra == 'all'
-  - pylance ; extra == 'all'
-  - pyperclip ; extra == 'all'
-  - python-frontmatter ; extra == 'all'
-  - rank-bm25 ; extra == 'all'
-  - rerankers ; extra == 'all'
-  - rich ; extra == 'all'
-  - sentence-transformers ; extra == 'all'
-  - tzlocal ; extra == 'all'
-  - case-converter ; extra == 'cli'
-  - gitpython ; extra == 'cli'
-  - nbformat ; extra == 'cli'
-  - prompt-toolkit ; extra == 'cli'
-  - pyperclip ; extra == 'cli'
-  - python-frontmatter ; extra == 'cli'
-  - rich ; extra == 'cli'
-  - ics ; extra == 'notebooks'
-  - ipykernel ; extra == 'notebooks'
-  - modal ; extra == 'notebooks'
-  - tzlocal ; extra == 'notebooks'
-  - lancedb>=0.22 ; extra == 'rag'
-  - pylance ; extra == 'rag'
-  - rank-bm25 ; extra == 'rag'
-  - rerankers ; extra == 'rag'
-  - sentence-transformers ; extra == 'rag'
-  requires_python: '>=3.10,<3.14'
-- pypi: https://files.pythonhosted.org/packages/79/f0/590cdda796ef68b3dee6bba6feebfa1c9a9e47f1c8cd6fa8417a22b47634/llamabot-0.17.15-py3-none-any.whl
-  name: llamabot
-  version: 0.17.15
-  sha256: c626db444d6079dd549601eca7a6a88c61d1518da262c3588cdbaee8605642c2
-  requires_dist:
-  - beautifulsoup4
-  - chonkie
-  - docstring-parser>=0.17.0,<0.18
-  - duckduckgo-search
-  - fastapi>=0.115.9
-  - fastmcp
-  - httpx
-  - jinja2
-  - litellm>=1.71.0
+  - litellm>=1.71.0,<1.82.7
   - loguru
   - networkx
   - numpy

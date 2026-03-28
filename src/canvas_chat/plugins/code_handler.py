@@ -76,7 +76,10 @@ def register_endpoints(app):
 
         try:
             # Import here to avoid circular imports
+            from litellm.exceptions import AuthenticationError, RateLimitError
+
             from canvas_chat.app import (
+                _stream_text_deltas_async_simple_bot,
                 extract_provider,
                 get_api_key_for_provider,
                 prepare_copilot_openai_request,
@@ -163,9 +166,7 @@ def register_endpoints(app):
 
             kwargs = {
                 "model": request.model,
-                "messages": messages,
                 "temperature": 0.3,  # Lower temperature for code generation
-                "stream": True,
             }
 
             if api_key:
@@ -177,18 +178,15 @@ def register_endpoints(app):
 
             async def generate():
                 try:
-                    import litellm
-
-                    response = await litellm.acompletion(**kwargs)
-                    async for chunk in response:
-                        if chunk.choices and chunk.choices[0].delta.content:
-                            content = chunk.choices[0].delta.content
-                            yield {"event": "message", "data": content}
+                    async for content in _stream_text_deltas_async_simple_bot(
+                        messages, kwargs, temperature=0.3
+                    ):
+                        yield {"event": "message", "data": content}
                     yield {"event": "done", "data": ""}
-                except litellm.AuthenticationError as e:
+                except AuthenticationError as e:
                     logger.error(f"Authentication error: {e}")
                     yield {"event": "error", "data": f"Authentication failed: {e}"}
-                except litellm.RateLimitError as e:
+                except RateLimitError as e:
                     logger.error(f"Rate limit error: {e}")
                     yield {"event": "error", "data": f"Rate limit exceeded: {e}"}
                 except Exception as e:

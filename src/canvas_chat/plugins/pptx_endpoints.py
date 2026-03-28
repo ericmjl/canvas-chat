@@ -19,6 +19,9 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import File, UploadFile
+from litellm import supports_response_schema
+from llamabot import AsyncStructuredBot
+from llamabot.components.messages import HumanMessage
 from pydantic import BaseModel, Field
 from slugify import slugify
 from sse_starlette.sse import EventSourceResponse
@@ -39,38 +42,6 @@ logger = logging.getLogger(__name__)
 def _one_paragraph(text: str) -> str:
     """Normalize text to a single paragraph (no newlines, collapsed whitespace)."""
     return " ".join((text or "").strip().split())
-
-
-def _extract_json_object(text: str) -> dict[str, Any]:
-    """Parse a JSON object from LLM output (best-effort).
-
-    This is a fallback mechanism for models/providers that return `message.content`
-    as a string even when using structured output, or for non-structured models.
-    """
-    text = (text or "").strip()
-    if not text:
-        return {}
-
-    # Strict parse
-    try:
-        data = json.loads(text)
-        if isinstance(data, dict):
-            return data
-    except Exception:
-        pass
-
-    # Best-effort: find first {...} region
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        try:
-            data = json.loads(text[start : end + 1])
-            if isinstance(data, dict):
-                return data
-        except Exception:
-            return {}
-
-    return {}
 
 
 def _pptx_fallback_narrative_presets() -> list[dict[str, Any]]:
@@ -244,21 +215,23 @@ Rules:
 
         try:
             from canvas_chat.app import (
-                _llm_text,
-                litellm,
+                copilot_extras_for_bot,
                 prepare_copilot_openai_request,
             )
 
-            supports_structured = litellm.supports_response_schema(
+            if not supports_response_schema(
                 model=request.model, custom_llm_provider=None
-            )
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "PPTX caption/title requires a model that supports structured "
+                        "JSON (response_schema)."
+                    ),
+                )
 
             kwargs: dict[str, Any] = {
                 "model": request.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
                 "temperature": 0.2,
                 "max_tokens": 300,
             }
@@ -271,32 +244,26 @@ Rules:
                 kwargs, request.model, request.api_key
             )
 
-            if supports_structured:
-                kwargs["response_format"] = SlideCaptionTitleOutput
-                response = await litellm.acompletion(**kwargs)
-                content = response.choices[0].message.content
-                if isinstance(content, str):
-                    parsed = _extract_json_object(content)
-                    out = SlideCaptionTitleOutput.model_validate(parsed)
-                elif hasattr(content, "title") and hasattr(content, "caption"):
-                    out = SlideCaptionTitleOutput(
-                        title=content.title, caption=content.caption
-                    )
-                else:
-                    out = SlideCaptionTitleOutput.model_validate(content)
-            else:
-                text = await _llm_text(
-                    model=request.model,
-                    api_key=request.api_key,
-                    base_url=request.base_url,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=0.2,
-                    max_tokens=300,
-                )
-                out = SlideCaptionTitleOutput.model_validate(_extract_json_object(text))
+            extras = copilot_extras_for_bot(kwargs)
+            completion_kwargs = dict(extras)
+            mt = kwargs.get("max_tokens")
+            if mt is not None:
+                completion_kwargs["max_tokens"] = mt
+            caption_bot = AsyncStructuredBot(
+                system_prompt=system_prompt,
+                pydantic_model=SlideCaptionTitleOutput,
+                model_name=kwargs["model"],
+                temperature=0.2,
+                stream_target="none",
+                api_key=kwargs.get("api_key"),
+                **completion_kwargs,
+            )
+            result = await caption_bot(
+                HumanMessage(content=user_prompt), num_attempts=5
+            )
+            if result is None:
+                raise RuntimeError("StructuredBot returned None")
+            out = SlideCaptionTitleOutput.model_validate(result)
 
             out.title = _one_paragraph(out.title).strip('"')
             out.caption = _one_paragraph(out.caption)
@@ -354,21 +321,23 @@ Rules:
 
         try:
             from canvas_chat.app import (
-                _llm_text,
-                litellm,
+                copilot_extras_for_bot,
                 prepare_copilot_openai_request,
             )
 
-            supports_structured = litellm.supports_response_schema(
+            if not supports_response_schema(
                 model=request.model, custom_llm_provider=None
-            )
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "PPTX deck caption/title requires a model that supports "
+                        "structured JSON (response_schema)."
+                    ),
+                )
 
             kwargs: dict[str, Any] = {
                 "model": request.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
                 "temperature": 0.2,
                 "max_tokens": 1200,
             }
@@ -381,31 +350,24 @@ Rules:
                 kwargs, request.model, request.api_key
             )
 
-            if supports_structured:
-                kwargs["response_format"] = DeckCaptionTitleOutput
-                response = await litellm.acompletion(**kwargs)
-                content = response.choices[0].message.content
-                if isinstance(content, str):
-                    out = DeckCaptionTitleOutput.model_validate(
-                        _extract_json_object(content)
-                    )
-                elif hasattr(content, "slides"):
-                    out = DeckCaptionTitleOutput(slides=content.slides)
-                else:
-                    out = DeckCaptionTitleOutput.model_validate(content)
-            else:
-                text = await _llm_text(
-                    model=request.model,
-                    api_key=request.api_key,
-                    base_url=request.base_url,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=0.2,
-                    max_tokens=1200,
-                )
-                out = DeckCaptionTitleOutput.model_validate(_extract_json_object(text))
+            extras = copilot_extras_for_bot(kwargs)
+            completion_kwargs = dict(extras)
+            mt = kwargs.get("max_tokens")
+            if mt is not None:
+                completion_kwargs["max_tokens"] = mt
+            deck_bot = AsyncStructuredBot(
+                system_prompt=system_prompt,
+                pydantic_model=DeckCaptionTitleOutput,
+                model_name=kwargs["model"],
+                temperature=0.2,
+                stream_target="none",
+                api_key=kwargs.get("api_key"),
+                **completion_kwargs,
+            )
+            result = await deck_bot(HumanMessage(content=user_prompt), num_attempts=5)
+            if result is None:
+                raise RuntimeError("StructuredBot returned None")
+            out = DeckCaptionTitleOutput.model_validate(result)
 
             if len(out.slides) != len(prepared):
                 raise HTTPException(
@@ -482,21 +444,23 @@ Rules:
 
         try:
             from canvas_chat.app import (
-                _llm_text,
-                litellm,
+                copilot_extras_for_bot,
                 prepare_copilot_openai_request,
             )
 
-            supports_structured = litellm.supports_response_schema(
+            if not supports_response_schema(
                 model=request.model, custom_llm_provider=None
-            )
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "PPTX narrative presets require a model that supports "
+                        "structured JSON (response_schema)."
+                    ),
+                )
 
             kwargs: dict[str, Any] = {
                 "model": request.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
                 "temperature": 0.3,
                 "max_tokens": 800,
             }
@@ -509,33 +473,26 @@ Rules:
                 kwargs, request.model, request.api_key
             )
 
-            if supports_structured:
-                kwargs["response_format"] = NarrativeStyleSuggestionsOutput
-                response = await litellm.acompletion(**kwargs)
-                content = response.choices[0].message.content
-                if isinstance(content, str):
-                    out = NarrativeStyleSuggestionsOutput.model_validate(
-                        _extract_json_object(content)
-                    )
-                elif hasattr(content, "presets"):
-                    out = NarrativeStyleSuggestionsOutput(presets=content.presets)
-                else:
-                    out = NarrativeStyleSuggestionsOutput.model_validate(content)
-            else:
-                text = await _llm_text(
-                    model=request.model,
-                    api_key=request.api_key,
-                    base_url=request.base_url,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=0.3,
-                    max_tokens=800,
-                )
-                out = NarrativeStyleSuggestionsOutput.model_validate(
-                    _extract_json_object(text)
-                )
+            extras = copilot_extras_for_bot(kwargs)
+            completion_kwargs = dict(extras)
+            mt = kwargs.get("max_tokens")
+            if mt is not None:
+                completion_kwargs["max_tokens"] = mt
+            narrative_bot = AsyncStructuredBot(
+                system_prompt=system_prompt,
+                pydantic_model=NarrativeStyleSuggestionsOutput,
+                model_name=kwargs["model"],
+                temperature=0.3,
+                stream_target="none",
+                api_key=kwargs.get("api_key"),
+                **completion_kwargs,
+            )
+            result = await narrative_bot(
+                HumanMessage(content=user_prompt), num_attempts=5
+            )
+            if result is None:
+                raise RuntimeError("StructuredBot returned None")
+            out = NarrativeStyleSuggestionsOutput.model_validate(result)
 
             presets: list[dict[str, Any]] = []
             for p in out.presets[:5]:
@@ -562,6 +519,8 @@ Rules:
             if not presets:
                 presets = _pptx_fallback_narrative_presets()
             return {"presets": presets}
+        except HTTPException:
+            raise
         except Exception as e:
             logger.warning(f"PPTX narrative style suggestions failed: {e}")
             return {"presets": _pptx_fallback_narrative_presets()}
