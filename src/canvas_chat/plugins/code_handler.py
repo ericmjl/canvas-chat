@@ -79,7 +79,6 @@ def register_endpoints(app):
             from canvas_chat.app import (
                 extract_provider,
                 get_api_key_for_provider,
-                litellm,
                 prepare_copilot_openai_request,
             )
 
@@ -178,6 +177,8 @@ def register_endpoints(app):
 
             async def generate():
                 try:
+                    import litellm
+
                     response = await litellm.acompletion(**kwargs)
                     async for chunk in response:
                         if chunk.choices and chunk.choices[0].delta.content:

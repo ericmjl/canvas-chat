@@ -177,7 +177,7 @@ canvas-chat/
 
 | File                                            | Purpose                            | Edit for...                                                                     |
 | ----------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------- |
-| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints, backend logic                                                    |
+| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints; `litellm.acompletion` for SSE; per-request `SimpleBot` / `StructuredBot` (llamabot, `asyncio.to_thread`) + `copilot_extras_for_bot` after `prepare_copilot_openai_request` |
 | `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode                                          |
 | `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server                                              |
 | `src/canvas_chat/__init__.py`                   | Package initialization             | Package metadata, version                                                       |
