@@ -13,6 +13,8 @@ from canvas_chat.app import (
     Message,
     PdfResult,
     RefineQueryRequest,
+    SummarizeOutput,
+    SummarizeRequest,
     extract_provider,
 )
 from canvas_chat.plugins.ddg_endpoints import (
@@ -119,6 +121,25 @@ def test_refine_query_request_missing_required():
 
     with pytest.raises(ValidationError):
         RefineQueryRequest(user_query="some query")
+
+
+def test_summarize_request_optional_guidance_and_structured_output():
+    """Optional summary_type/summary_length; SummarizeOutput has one field."""
+    r = SummarizeRequest(
+        messages=[Message(role="user", content="Hello")],
+        model="openai/gpt-4o-mini",
+        summary_type="bullet outline of decisions",
+        summary_length="max 5 bullets",
+    )
+    assert r.summary_type == "bullet outline of decisions"
+    assert r.summary_length == "max 5 bullets"
+
+    r_min = SummarizeRequest(messages=[Message(role="user", content="Hi")])
+    assert r_min.summary_type is None
+    assert r_min.summary_length is None
+
+    out = SummarizeOutput(summary="A concise summary.")
+    assert out.summary == "A concise summary."
 
 
 # --- CommitteeRequest tests ---

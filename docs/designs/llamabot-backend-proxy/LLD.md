@@ -22,7 +22,7 @@ This LLD describes migrating **chat completions** (streaming and non-streaming) 
 
 - Centralize provider-agnostic configuration (model id, `api_key`, `base_url`, temperature, max tokens) in one module.
 - Use **SimpleBot** for unstructured text: SSE streams (`/api/chat`, `/api/generate-code`, `/api/matrix/fill`, committee streams, etc.) and one-shot calls (summarize, title, summary, `_llm_text`).
-- Use **StructuredBot** (or equivalent) for Pydantic-backed outputs: refine-query, matrix parse-two-lists, PPTX caption endpoints, `_llm_json_array` use cases.
+- Use **StructuredBot** (or equivalent) for Pydantic-backed outputs: refine-query, matrix parse-two-lists, PPTX caption endpoints, `run_structured_string_list` (DDG query lists).
 - Preserve **admin mode**, **GitHub Copilot** kwargs shaping (`prepare_copilot_openai_request`), and **user-facing error strings** (including Copilot auth hints).
 
 ## 3. Non-goals

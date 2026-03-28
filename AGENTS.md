@@ -37,6 +37,7 @@ This includes:
 - 2026-01-25: Consolidated `/code` command handling into CodeFeature plugin. All code node operations (`handleCode`, `handleNodeRunCode`, `handleNodeGenerate`, `handleNodeGenerateSubmit`, `gatherCodeGenerationContext`) have been moved from app.js to plugins/code.js. App.js now delegates to CodeFeature via canvas events (`nodeRunCode`, `nodeGenerate`, etc.).
 - 2026-03-15: Always use `encoding="utf-8"` when calling `read_text()`. On Windows, the default encoding is cp1252 which causes UnicodeDecodeError when reading UTF-8 files.
 - 2026-03-28: LLM backend migration (LiteLLM → llamabot) design lives under `docs/designs/llamabot-backend-proxy/` (LLD + EARS), linked from HLD and `docs/llds/backend-llm-proxy.md`. PocketFlow is not part of that plan.
+- 2026-03-28: Pin `llamabot>=0.18.0` in `pyproject.toml` (PyPI includes `AsyncSimpleBot`/`AsyncStructuredBot`). Backend still uses sync bots + `asyncio.to_thread` until migrated.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -58,6 +59,7 @@ Quick reference for which files to edit for common tasks.
 canvas-chat/
 ├── src/canvas_chat/          # Main Python package
 │   ├── app.py                # FastAPI backend routes
+│   ├── llm_messages.py       # OpenAI-style dicts → llamabot message tuples
 │   ├── config.py             # Configuration management
 │   ├── __main__.py           # CLI entry point
 │   └── static/               # Frontend assets
@@ -177,7 +179,8 @@ canvas-chat/
 
 | File                                            | Purpose                            | Edit for...                                                                     |
 | ----------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------- |
-| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints; `litellm.acompletion` for SSE; per-request `SimpleBot` / `StructuredBot` (llamabot, `asyncio.to_thread`) + `copilot_extras_for_bot` after `prepare_copilot_openai_request` |
+| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints; `run_structured_summarize` / `run_structured_string_list` + Pydantic outputs; `AsyncSimpleBot` + `_stream_text_deltas_async_simple_bot` for streams; LiteLLM for `drop_params`, token count, Copilot models, `supports_response_schema`, `aimage_generation` |
+| `src/canvas_chat/llm_messages.py`               | Message shape helpers              | Map OpenAI-style dicts / Pydantic messages to `(system_prompt, list[BaseMessage])` for llamabot |
 | `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode                                          |
 | `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server                                              |
 | `src/canvas_chat/__init__.py`                   | Package initialization             | Package metadata, version                                                       |
@@ -202,6 +205,7 @@ canvas-chat/
 | `DEFAULT_KEYBINDINGS` / keybinding storage | `keybindings.js`, `storage.js` (`canvas-chat-keybindings`) | Default shortcuts; user overrides in Settings → Shortcuts                       |
 | Zoom wheel sensitivity                     | `storage.js` (`canvas-chat-zoom-wheel-sensitivity`), `utils.js` (`DEFAULT_ZOOM_WHEEL_SENSITIVITY` = 50) | Settings → Canvas; slider 50 = former “max” step, 100 = stronger; live `input` updates canvas |
 | CSS variables                              | `style.css:10-75`                                          | Colors, sizing, theming                                                         |
+| `DDG_PAGE_BODY_MAX_INPUT_TOKENS`           | `ddg_endpoints.py`                                         | Input token budget for fetched page markdown before per-page LLM summarize (clipped via `clip_page_markdown_to_input_token_budget`) |
 
 ### Zoom levels (semantic zoom)
 

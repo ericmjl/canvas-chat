@@ -24,6 +24,7 @@ import os
 import sys
 import time
 import traceback
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any, TypeVar
 from uuid import uuid4
@@ -43,7 +44,13 @@ from fastapi import (
 )
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from llamabot import SimpleBot, StructuredBot
+from litellm.exceptions import (
+    APIConnectionError,
+    APIError,
+    AuthenticationError,
+    RateLimitError,
+)
+from llamabot import AsyncSimpleBot, AsyncStructuredBot
 from llamabot.components.messages import HumanMessage
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -51,6 +58,10 @@ from sse_starlette.sse import EventSourceResponse
 from canvas_chat import __version__
 from canvas_chat.config import AppConfig, is_github_copilot_enabled
 from canvas_chat.file_upload_registry import FileUploadRegistry
+from canvas_chat.llm_messages import (
+    dict_messages_to_system_and_rest,
+    pydantic_messages_to_system_and_rest,
+)
 
 # Import built-in file upload handler plugins (registers them)
 # Import built-in URL fetch handler plugins (registers them)
@@ -67,6 +78,10 @@ from canvas_chat.plugins import (
 )
 from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE
 from canvas_chat.url_fetch_registry import UrlFetchRegistry
+
+# Text completions use llamabot AsyncSimpleBot / AsyncStructuredBot. LiteLLM is
+# still imported for drop_params, token_counter, Copilot model list, images,
+# and supports_response_schema (StructuredBot uses litellm internally too).
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -229,6 +244,87 @@ class SummarizeRequest(BaseModel):
     model: str = "openai/gpt-4o-mini"
     api_key: str | None = None
     base_url: str | None = None
+    summary_type: str | None = Field(
+        None,
+        description=(
+            "Optional free-text: desired summary style, focus, or format "
+            "(e.g. bullet outline, timeline, key decisions only)."
+        ),
+    )
+    summary_length: str | None = Field(
+        None,
+        description=(
+            "Optional free-text length guidance (e.g. '2–3 sentences', '~150 words')."
+        ),
+    )
+
+
+class SummarizeOutput(BaseModel):
+    """Structured LLM output for /api/summarize (single field)."""
+
+    summary: str = Field(
+        ...,
+        description=(
+            "The summary text, honoring any summary_type and summary_length "
+            "instructions from the request."
+        ),
+    )
+
+
+_SUMMARIZE_DEFAULT_SYSTEM = (
+    "You are a helpful assistant that writes concise, accurate summaries."
+)
+_SUMMARIZE_SCHEMA_HINT = (
+    "\n\nRespond using the provided JSON schema: put the entire response in the "
+    '"summary" field (markdown allowed inside the string).'
+)
+
+
+async def run_structured_summarize(
+    *,
+    model: str,
+    api_key: str | None,
+    base_url: str | None,
+    user_prompt: str,
+    system_prompt: str | None = None,
+    max_tokens: int | None = 500,
+    temperature: float = 0.3,
+    num_attempts: int = 5,
+) -> str:
+    """Run a single structured completion using :class:`SummarizeOutput`.
+
+    Shared by :func:`summarize` and plugins (e.g. DDG research) so all use the
+    same schema and Copilot preparation.
+
+    :param system_prompt: Task-specific system instructions; defaults to branch-summary
+        behavior. The JSON ``summary``-field hint is always appended.
+    """
+    full_system = (system_prompt or _SUMMARIZE_DEFAULT_SYSTEM) + _SUMMARIZE_SCHEMA_HINT
+
+    prep = {
+        "model": model,
+        "messages": [],
+        "api_key": api_key,
+        "base_url": base_url,
+    }
+    prep = prepare_copilot_openai_request(prep, model, api_key)
+    extras = copilot_extras_for_bot(prep)
+    completion_kwargs = dict(extras)
+    if max_tokens is not None:
+        completion_kwargs["max_tokens"] = max_tokens
+    bot = AsyncStructuredBot(
+        system_prompt=full_system,
+        pydantic_model=SummarizeOutput,
+        model_name=prep["model"],
+        temperature=temperature,
+        stream_target="none",
+        api_key=prep.get("api_key"),
+        **completion_kwargs,
+    )
+    result = await bot(HumanMessage(content=user_prompt), num_attempts=num_attempts)
+    if result is None:
+        raise RuntimeError("Structured summarization returned None")
+    return result.summary.strip()
 
 
 class CopilotAuthStartResponse(BaseModel):
@@ -597,6 +693,36 @@ def copilot_extras_for_bot(prepared: dict[str, Any]) -> dict[str, Any]:
     if prepared.get("extra_headers"):
         out["extra_headers"] = prepared["extra_headers"]
     return out
+
+
+async def _stream_text_deltas_async_simple_bot(
+    messages: list[dict[str, Any]],
+    prepared: dict[str, Any],
+    temperature: float,
+) -> AsyncGenerator[str, None]:
+    """Stream assistant text deltas via :class:`~llamabot.bot.simplebot.AsyncSimpleBot`.
+
+    ``prepared`` must be the return value of :func:`prepare_copilot_openai_request`.
+    """
+    system_prompt, rest = dict_messages_to_system_and_rest(messages)
+    if not rest:
+        rest = [HumanMessage(content="")]
+    extras = copilot_extras_for_bot(prepared)
+    completion_kwargs = dict(extras)
+    mt = prepared.get("max_tokens")
+    if mt is not None:
+        completion_kwargs["max_tokens"] = mt
+    bot = AsyncSimpleBot(
+        system_prompt=system_prompt,
+        model_name=prepared["model"],
+        temperature=temperature,
+        stream_target="none",
+        api_key=prepared.get("api_key"),
+        **completion_kwargs,
+    )
+    async for delta in bot.stream_async(*rest):
+        if delta:
+            yield delta
 
 
 def get_copilot_auth_headers(access_token: str | None = None) -> dict:
@@ -1255,17 +1381,15 @@ async def chat(request: ChatRequest, http_request: Request):
     Stream a chat completion response.
 
     The frontend sends the full conversation context (resolved from the DAG).
-    Streams via litellm.acompletion with OpenAI-style kwargs.
+    Streams via llamabot :meth:`~llamabot.bot.simplebot.AsyncSimpleBot.stream_async`.
     """
     # Inject admin credentials if in admin mode
     inject_admin_credentials(request)
 
-    # Build kwargs for litellm
     kwargs = {
         "model": request.model,
-        "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+        "messages": [],
         "temperature": request.temperature,
-        "stream": True,
     }
 
     if request.max_tokens:
@@ -1281,19 +1405,38 @@ async def chat(request: ChatRequest, http_request: Request):
 
     kwargs = prepare_copilot_openai_request(kwargs, request.model, request.api_key)
 
+    system_prompt, base_msgs = pydantic_messages_to_system_and_rest(request.messages)
+    if not base_msgs:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one user, assistant, or tool message is required.",
+        )
+
+    extras = copilot_extras_for_bot(kwargs)
+    completion_kwargs = dict(extras)
+    if request.max_tokens:
+        completion_kwargs["max_tokens"] = request.max_tokens
+
+    chat_bot = AsyncSimpleBot(
+        system_prompt=system_prompt,
+        model_name=kwargs["model"],
+        temperature=request.temperature,
+        stream_target="none",
+        api_key=kwargs.get("api_key"),
+        **completion_kwargs,
+    )
+
     async def generate():
         """Generate SSE events from the LLM stream."""
         try:
-            response = await litellm.acompletion(**kwargs)
-            async for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    yield {"event": "message", "data": content}
+            async for delta in chat_bot.stream_async(*base_msgs):
+                if delta:
+                    yield {"event": "message", "data": delta}
 
             # Send completion signal
             yield {"event": "done", "data": ""}
 
-        except litellm.AuthenticationError as e:
+        except AuthenticationError as e:
             error_msg = str(e)
             # Check for GitHub Copilot auth issues
             if (
@@ -1312,9 +1455,9 @@ async def chat(request: ChatRequest, http_request: Request):
             else:
                 yield {"event": "error", "data": f"Authentication failed: {error_msg}"}
 
-        except litellm.RateLimitError as e:
+        except RateLimitError as e:
             yield {"event": "error", "data": f"Rate limit exceeded: {e}"}
-        except litellm.APIError as e:
+        except APIError as e:
             yield {"event": "error", "data": f"API error: {e}"}
         except Exception as e:
             error_msg = str(e)
@@ -1345,57 +1488,64 @@ async def summarize(request: SummarizeRequest):
     Generate a summary of a conversation branch.
 
     Used for creating summary nodes that condense long branches.
+    Returns structured JSON with a single ``summary`` field (validated via
+    :class:`SummarizeOutput`).
     """
-    # Inject admin credentials if in admin mode
     inject_admin_credentials(request)
 
-    # Build the summarization prompt
+    if not litellm.supports_response_schema(
+        model=request.model, custom_llm_provider=None
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Summarization requires a model that supports structured JSON "
+                "(response_schema). Choose another model or provider."
+            ),
+        )
+
     conversation = "\n".join([f"{m.role}: {m.content}" for m in request.messages])
 
-    summary_prompt = f"""Please provide a concise summary of the following conversation.
+    guidance_parts: list[str] = []
+    if (request.summary_type or "").strip():
+        guidance_parts.append(
+            "Desired summary type or focus (follow this):\n"
+            f"{request.summary_type.strip()}"
+        )
+    if (request.summary_length or "").strip():
+        guidance_parts.append(
+            "Desired length or brevity (follow this):\n"
+            f"{request.summary_length.strip()}"
+        )
+    guidance_block = "\n\n".join(guidance_parts) + "\n\n" if guidance_parts else ""
+
+    user_prompt = f"""{guidance_block}Summarize the following conversation.
 Focus on the key points, decisions, and insights discussed.
 
 Conversation:
-{conversation}
-
-Summary:"""
-
-    kwargs = {
-        "model": request.model,
-        "messages": [{"role": "user", "content": summary_prompt}],
-        "temperature": 0.3,  # Lower temperature for more consistent summaries
-        "max_tokens": 500,
-    }
-
-    if request.api_key:
-        kwargs["api_key"] = request.api_key
-
-    if request.base_url:
-        kwargs["base_url"] = request.base_url
-
-    kwargs = prepare_copilot_openai_request(kwargs, request.model, request.api_key)
+{conversation}"""
 
     try:
-        extras = copilot_extras_for_bot(kwargs)
-        completion_kwargs = dict(extras)
-        completion_kwargs["max_tokens"] = 500
-        summarize_bot = SimpleBot(
-            system_prompt=(
-                "You are a helpful assistant that writes concise, accurate summaries."
-            ),
-            model_name=kwargs["model"],
+        summary_text = await run_structured_summarize(
+            model=request.model,
+            api_key=request.api_key,
+            base_url=request.base_url,
+            user_prompt=user_prompt,
+            system_prompt=None,
+            max_tokens=500,
             temperature=0.3,
-            stream_target="none",
-            api_key=kwargs.get("api_key"),
-            **completion_kwargs,
+            num_attempts=5,
         )
-
-        def _summarize_run() -> str:
-            out = summarize_bot(HumanMessage(content=summary_prompt))
-            return out.content if hasattr(out, "content") else str(out)
-
-        summary = await asyncio.to_thread(_summarize_run)
-        return {"summary": summary}
+        return {"summary": summary_text}
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        if "Structured summarization returned None" in str(e):
+            raise HTTPException(
+                status_code=502,
+                detail="Could not obtain valid structured summary after retries.",
+            ) from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
         error_msg = str(e)
         if request.model.startswith("github_copilot/") and (
@@ -1599,103 +1749,55 @@ Examples:
 - User: "what are alternatives?" Context: "React framework..." → "React framework alternatives comparison" """  # noqa: E501
 
     try:
-        # Check if model supports structured outputs
-        # LiteLLM's supports_response_schema checks if model supports
-        # response_format
-        supports_structured = litellm.supports_response_schema(
+        if not litellm.supports_response_schema(
             model=request.model, custom_llm_provider=None
-        )
-
-        kwargs = {
-            "model": request.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": (
-                        f"User query: {request.user_query}\n\n"
-                        f"Context:\n{request.context[:2000]}"
-                    ),
-                },
-            ],
-            "temperature": 0.3,
-            "max_tokens": 150,
-        }
-
-        # Add API key if provided
-        if request.api_key:
-            kwargs["api_key"] = request.api_key
-        if request.base_url:
-            kwargs["base_url"] = request.base_url
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Refine-query requires a model that supports structured JSON "
+                    "(response_schema). Choose another model or provider."
+                ),
+            )
 
         user_content = (
             f"User query: {request.user_query}\n\nContext:\n{request.context[:2000]}"
         )
 
-        # Use structured generation if supported (llamabot StructuredBot)
-        if supports_structured:
-            logger.info(f"Using structured generation for model {request.model}")
-            try:
-                prep = {
-                    "model": request.model,
-                    "messages": [],
-                    "api_key": request.api_key,
-                    "base_url": request.base_url,
-                }
-                prep = prepare_copilot_openai_request(
-                    prep, request.model, request.api_key
-                )
-                extras = copilot_extras_for_bot(prep)
-                completion_kwargs = dict(extras)
-                completion_kwargs["max_tokens"] = 150
-                refine_query_bot = StructuredBot(
-                    system_prompt=system_prompt,
-                    pydantic_model=RefinedQueryOutput,
-                    model_name=prep["model"],
-                    temperature=0.3,
-                    stream_target="none",
-                    api_key=prep.get("api_key"),
-                    **completion_kwargs,
-                )
+        prep = {
+            "model": request.model,
+            "messages": [],
+            "api_key": request.api_key,
+            "base_url": request.base_url,
+        }
+        prep = prepare_copilot_openai_request(prep, request.model, request.api_key)
+        extras = copilot_extras_for_bot(prep)
+        completion_kwargs = dict(extras)
+        completion_kwargs["max_tokens"] = 150
+        refine_query_bot = AsyncStructuredBot(
+            system_prompt=system_prompt,
+            pydantic_model=RefinedQueryOutput,
+            model_name=prep["model"],
+            temperature=0.3,
+            stream_target="none",
+            api_key=prep.get("api_key"),
+            **completion_kwargs,
+        )
 
-                def _refine_structured_run() -> RefinedQueryOutput:
-                    r = refine_query_bot(
-                        HumanMessage(content=user_content), num_attempts=5
-                    )
-                    if r is None:
-                        raise RuntimeError("StructuredBot returned None")
-                    return r
-
-                result = await asyncio.to_thread(_refine_structured_run)
-                refined_query = result.refined_query.strip()
-            except Exception as structured_error:
-                # If structured generation fails, fall back to regular completion
-                logger.warning(
-                    f"Structured generation failed for {request.model}: "
-                    f"{structured_error}. Falling back to regular completion."
-                )
-                kwargs.pop("response_format", None)
-                kw = {**kwargs, "stream": False}
-                response = await litellm.acompletion(**kw)
-                refined_query = (response.choices[0].message.content or "").strip()
-
-                # Remove quotes if the LLM wrapped the query in them
-                if refined_query.startswith('"') and refined_query.endswith('"'):
-                    refined_query = refined_query[1:-1]
-        else:
-            logger.info(
-                f"Model {request.model} doesn't support structured generation, "
-                "using regular completion"
+        logger.info(f"Using structured generation for model {request.model}")
+        result = await refine_query_bot(
+            HumanMessage(content=user_content), num_attempts=5
+        )
+        if result is None:
+            raise HTTPException(
+                status_code=502,
+                detail="Could not obtain valid structured output after retries.",
             )
-            kw = {**kwargs, "stream": False}
-            response = await litellm.acompletion(**kw)
-            refined_query = (response.choices[0].message.content or "").strip()
+        refined_query = result.refined_query.strip()
 
-            # Remove quotes if the LLM wrapped the query in them
-            if refined_query.startswith('"') and refined_query.endswith('"'):
-                refined_query = refined_query[1:-1]
+        if refined_query.startswith('"') and refined_query.endswith('"'):
+            refined_query = refined_query[1:-1]
 
-        # If LLM returned empty, fall back to original query
         if not refined_query:
             logger.warning("LLM returned empty refined query, using original")
             refined_query = request.user_query
@@ -1703,14 +1805,12 @@ Examples:
         logger.info(f"Refined query: '{refined_query}'")
         return {"original_query": request.user_query, "refined_query": refined_query}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to refine query: {e}")
         logger.error(traceback.format_exc())
-        # Fall back to the original query if LLM fails
-        return {
-            "original_query": request.user_query,
-            "refined_query": request.user_query,
-        }
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 class ImageGenerationRequest(BaseModel):
@@ -1853,13 +1953,13 @@ async def generate_image(request: ImageGenerationRequest):
             "revised_prompt": None,  # Ollama doesn't support revised prompt
         }
 
-    except litellm.AuthenticationError as e:
+    except AuthenticationError as e:
         logger.error(f"Authentication error: {e}")
         raise HTTPException(
             status_code=401,
             detail=f"Authentication failed: {str(e)}. Please check your API key.",
         ) from e
-    except litellm.RateLimitError as e:
+    except RateLimitError as e:
         logger.error(f"Rate limit error: {e}")
         raise HTTPException(
             status_code=429,
@@ -1925,38 +2025,6 @@ async def exa_search(request: ExaSearchRequest):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-def _extract_json_array(text: str) -> list[str]:
-    """Parse a JSON array of strings from LLM output.
-
-    Includes a small best-effort fallback that extracts the first `[...]` region
-    if the model wraps the JSON in extra text.
-    """
-    text = (text or "").strip()
-    if not text:
-        return []
-
-    # Strict parse
-    try:
-        data = json.loads(text)
-        if isinstance(data, list):
-            return [str(x).strip() for x in data if str(x).strip()]
-    except Exception:
-        pass
-
-    # Best-effort: find first [...] region
-    start = text.find("[")
-    end = text.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        try:
-            data = json.loads(text[start : end + 1])
-            if isinstance(data, list):
-                return [str(x).strip() for x in data if str(x).strip()]
-        except Exception:
-            return []
-
-    return []
-
-
 def _dedupe_preserve_order(items: list[str]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
@@ -1972,33 +2040,7 @@ def _dedupe_preserve_order(items: list[str]) -> list[str]:
     return out
 
 
-async def _llm_text(
-    *,
-    model: str,
-    api_key: str | None,
-    base_url: str | None,
-    messages: list[dict],
-    temperature: float = 0.3,
-    max_tokens: int | None = None,
-) -> str:
-    kwargs: dict[str, Any] = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "stream": False,
-    }
-    if max_tokens is not None:
-        kwargs["max_tokens"] = max_tokens
-    if api_key:
-        kwargs["api_key"] = api_key
-    if base_url:
-        kwargs["base_url"] = base_url
-    kwargs = prepare_copilot_openai_request(kwargs, model, api_key)
-    response = await litellm.acompletion(**kwargs)
-    return (response.choices[0].message.content or "").strip()
-
-
-async def _llm_json_array(
+async def run_structured_string_list(
     *,
     model: str,
     api_key: str | None,
@@ -2008,57 +2050,41 @@ async def _llm_json_array(
     temperature: float = 0.3,
     max_tokens: int = 250,
 ) -> list[str]:
-    supports_structured = litellm.supports_response_schema(
-        model=model, custom_llm_provider=None
-    )
-    if supports_structured:
-        try:
-            prep = {
-                "model": model,
-                "messages": [],
-                "api_key": api_key,
-                "base_url": base_url,
-            }
-            prep = prepare_copilot_openai_request(prep, model, api_key)
-            extras = copilot_extras_for_bot(prep)
-            completion_kwargs = dict(extras)
-            completion_kwargs["max_tokens"] = max_tokens
-            json_list_bot = StructuredBot(
-                system_prompt=system_prompt,
-                pydantic_model=JsonStringListOutput,
-                model_name=prep["model"],
-                temperature=temperature,
-                stream_target="none",
-                api_key=prep.get("api_key"),
-                **completion_kwargs,
-            )
+    """Return a deduped list of strings using ``AsyncStructuredBot``.
 
-            def _json_list_run() -> JsonStringListOutput:
-                r = json_list_bot(HumanMessage(content=user_prompt), num_attempts=5)
-                if r is None:
-                    raise RuntimeError("StructuredBot returned None")
-                return r
+    Uses :class:`JsonStringListOutput` (field ``items``). Raises :class:`ValueError`
+    if the model does not support ``supports_response_schema``.
+    """
+    if not litellm.supports_response_schema(model=model, custom_llm_provider=None):
+        raise ValueError(
+            "Structured list generation requires a model that supports structured "
+            "JSON (response_schema)."
+        )
 
-            result = await asyncio.to_thread(_json_list_run)
-            return _dedupe_preserve_order(result.items)
-        except Exception:
-            logger.warning(
-                "Structured list extraction failed; falling back to text parsing",
-                exc_info=True,
-            )
-
-    text = await _llm_text(
-        model=model,
-        api_key=api_key,
-        base_url=base_url,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
+    prep = {
+        "model": model,
+        "messages": [],
+        "api_key": api_key,
+        "base_url": base_url,
+    }
+    prep = prepare_copilot_openai_request(prep, model, api_key)
+    extras = copilot_extras_for_bot(prep)
+    completion_kwargs = dict(extras)
+    completion_kwargs["max_tokens"] = max_tokens
+    json_list_bot = AsyncStructuredBot(
+        system_prompt=system_prompt,
+        pydantic_model=JsonStringListOutput,
+        model_name=prep["model"],
         temperature=temperature,
-        max_tokens=max_tokens,
+        stream_target="none",
+        api_key=prep.get("api_key"),
+        **completion_kwargs,
     )
-    return _dedupe_preserve_order(_extract_json_array(text))
+
+    result = await json_list_bot(HumanMessage(content=user_prompt), num_attempts=5)
+    if result is None:
+        raise RuntimeError("StructuredBot returned None")
+    return _dedupe_preserve_order(result.items)
 
 
 def format_research_output(output) -> str:
@@ -2723,7 +2749,7 @@ Examples of good titles:
         extras = copilot_extras_for_bot(prepared)
         completion_kwargs = dict(extras)
         completion_kwargs["max_tokens"] = 50
-        title_bot = SimpleBot(
+        title_bot = AsyncSimpleBot(
             system_prompt=system_prompt,
             model_name=prepared["model"],
             temperature=0.7,
@@ -2732,17 +2758,14 @@ Examples of good titles:
             **completion_kwargs,
         )
 
-        def _title_run() -> str:
-            out = title_bot(
-                HumanMessage(
-                    content=(
-                        f"Generate a title for this conversation:\n\n{request.content}"
-                    )
+        out = await title_bot(
+            HumanMessage(
+                content=(
+                    f"Generate a title for this conversation:\n\n{request.content}"
                 )
             )
-            return out.content if hasattr(out, "content") else str(out)
-
-        title = await asyncio.to_thread(_title_run)
+        )
+        title = out.content if hasattr(out, "content") else str(out)
 
         # Clean up any quotes or extra formatting
         title = title.strip("\"'")
@@ -2802,7 +2825,7 @@ Examples:
         extras = copilot_extras_for_bot(prepared)
         completion_kwargs = dict(extras)
         completion_kwargs["max_tokens"] = 30
-        node_summary_bot = SimpleBot(
+        node_summary_bot = AsyncSimpleBot(
             system_prompt=system_prompt,
             model_name=prepared["model"],
             temperature=0.5,
@@ -2811,17 +2834,14 @@ Examples:
             **completion_kwargs,
         )
 
-        def _node_summary_run() -> str:
-            out = node_summary_bot(
-                HumanMessage(
-                    content=(
-                        f"Summarize this content:\n\n{request.content[:2000]}"  # noqa: E501
-                    )
+        out = await node_summary_bot(
+            HumanMessage(
+                content=(
+                    f"Summarize this content:\n\n{request.content[:2000]}"  # noqa: E501
                 )
             )
-            return out.content if hasattr(out, "content") else str(out)
-
-        content = await asyncio.to_thread(_node_summary_run)
+        )
+        content = out.content if hasattr(out, "content") else str(out)
 
         # Handle None or empty content from LLM
         if not content:
@@ -2845,7 +2865,7 @@ Examples:
         logger.info(f"Generated summary: {summary}")
         return {"summary": summary}
 
-    except litellm.APIConnectionError as e:
+    except APIConnectionError as e:
         # Handle Gemini MAX_TOKENS bug in LiteLLM
         error_str = str(e).lower()
         if "max_tokens" in error_str or "finishreason" in error_str:
@@ -2922,9 +2942,7 @@ async def stream_single_opinion(
 
         kwargs = {
             "model": model,
-            "messages": messages,
             "temperature": 0.7,
-            "stream": True,
         }
 
         if api_key:
@@ -2936,17 +2954,16 @@ async def stream_single_opinion(
 
         full_content = ""
 
-        response = await litellm.acompletion(**kwargs)
-        async for chunk in response:
-            if chunk.choices and chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                full_content += content
-                await queue.put(
-                    {
-                        "event": "opinion_chunk",
-                        "data": {"index": index, "content": content},
-                    }
-                )
+        async for content in _stream_text_deltas_async_simple_bot(
+            messages, kwargs, temperature=0.7
+        ):
+            full_content += content
+            await queue.put(
+                {
+                    "event": "opinion_chunk",
+                    "data": {"index": index, "content": content},
+                }
+            )
 
         await queue.put(
             {
@@ -3015,9 +3032,7 @@ Please review and rank these opinions.""",
 
         kwargs = {
             "model": reviewer_model,
-            "messages": messages,
             "temperature": 0.5,
-            "stream": True,
         }
 
         if api_key:
@@ -3029,20 +3044,19 @@ Please review and rank these opinions.""",
 
         full_content = ""
 
-        response = await litellm.acompletion(**kwargs)
-        async for chunk in response:
-            if chunk.choices and chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                full_content += content
-                await queue.put(
-                    {
-                        "event": "review_chunk",
-                        "data": {
-                            "reviewer_index": reviewer_index,
-                            "content": content,
-                        },
-                    }
-                )
+        async for content in _stream_text_deltas_async_simple_bot(
+            messages, kwargs, temperature=0.5
+        ):
+            full_content += content
+            await queue.put(
+                {
+                    "event": "review_chunk",
+                    "data": {
+                        "reviewer_index": reviewer_index,
+                        "content": content,
+                    },
+                }
+            )
 
         await queue.put(
             {
@@ -3267,20 +3281,20 @@ Provide your own assessment of the most accurate and helpful response."""
                 request.chairman_model, request.api_keys
             )
 
+            synthesis_messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a chairman synthesizing committee opinions "
+                        "into a final, comprehensive answer."
+                    ),
+                },
+                {"role": "user", "content": synthesis_prompt},
+            ]
+
             kwargs = {
                 "model": request.chairman_model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a chairman synthesizing committee opinions "
-                            "into a final, comprehensive answer."
-                        ),
-                    },
-                    {"role": "user", "content": synthesis_prompt},
-                ],
                 "temperature": 0.5,
-                "stream": True,
             }
 
             if chairman_api_key:
@@ -3294,15 +3308,14 @@ Provide your own assessment of the most accurate and helpful response."""
 
             synthesis_content = ""
 
-            response = await litellm.acompletion(**kwargs)
-            async for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    synthesis_content += content
-                    yield {
-                        "event": "synthesis_chunk",
-                        "data": json.dumps({"content": content}),
-                    }
+            async for content in _stream_text_deltas_async_simple_bot(
+                synthesis_messages, kwargs, temperature=0.5
+            ):
+                synthesis_content += content
+                yield {
+                    "event": "synthesis_chunk",
+                    "data": json.dumps({"content": content}),
+                }
 
             yield {
                 "event": "synthesis_done",

@@ -25,7 +25,7 @@
 
 ## StructuredBot (structured outputs)
 
-- [ ] **LLM-BOT-STR-001**: The system shall use StructuredBot (or equivalent) for endpoints that require validated Pydantic output (refine-query, matrix parse-two-lists, PPTX caption/narrative endpoints, and list extraction currently implemented via `_llm_json_array`).
+- [ ] **LLM-BOT-STR-001**: The system shall use StructuredBot (or equivalent) for endpoints that require validated Pydantic output (refine-query, matrix parse-two-lists, PPTX caption/narrative endpoints, and DDG query lists via `run_structured_string_list`).
 
 - [ ] **LLM-BOT-STR-002**: Where the model does not support schema-constrained generation, the system shall fall back to unstructured generation and parse/validate in a way that preserves current behaviour (including existing fallback branches).
 
