@@ -11,6 +11,41 @@ import { readSSEStream, normalizeText } from '../sse.js';
 import { apiUrl } from '../utils.js';
 import { FeaturePlugin } from '../feature-plugin.js';
 
+/** @type {number} */
+const MAX_RESEARCH_ACTIVITY_LINES = 300;
+
+/**
+ * Append a line to the research activity log, trimming oldest lines when over budget.
+ * @param {string|undefined} currentLog
+ * @param {string} line
+ * @returns {string}
+ */
+function appendResearchActivityLine(currentLog, line) {
+    const trimmed = (line || '').trim();
+    if (!trimmed) {
+        return currentLog || '';
+    }
+    const prev = currentLog || '';
+    const lines = prev ? prev.split('\n') : [];
+    lines.push(trimmed);
+    while (lines.length > MAX_RESEARCH_ACTIVITY_LINES) {
+        lines.shift();
+    }
+    return lines.join('\n');
+}
+
+/**
+ * @param {string} s
+ * @param {number} max
+ * @returns {string}
+ */
+function truncateForActivityLog(s, max = 140) {
+    if (!s || s.length <= max) {
+        return s;
+    }
+    return `${s.slice(0, max - 1)}…`;
+}
+
 /**
  * ResearchFeature - Handles search and research commands with Exa/DuckDuckGo.
  * Extends FeaturePlugin to integrate with the plugin architecture.
@@ -33,6 +68,19 @@ class ResearchFeature extends FeaturePlugin {
      */
     async onLoad() {
         console.log('[ResearchFeature] Loaded');
+    }
+
+    /**
+     * Refresh or create the research activity output panel after graph updates.
+     * @spec RSCH-REQ-005
+     * @param {string} nodeId
+     */
+    _refreshResearchActivityPanel(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) {
+            return;
+        }
+        this.canvas.ensureOutputPanelContent(nodeId, node);
     }
 
     /**
@@ -244,7 +292,11 @@ class ResearchFeature extends FeaturePlugin {
             // Reset content to show we're restarting
             const restartContent = `**Research${providerLabel}:** ${instructions}\n\n*Restarting research...*`;
             this.canvas.updateNodeContent(existingNodeId, restartContent, true);
-            this.graph.updateNode(existingNodeId, { content: restartContent });
+            this.graph.updateNode(existingNodeId, {
+                content: restartContent,
+                researchActivityLog: '',
+                researchActivityActive: false,
+            });
         } else {
             // Create new research node
             // Get selected nodes for positioning (optional)
@@ -387,24 +439,28 @@ class ResearchFeature extends FeaturePlugin {
             }
             let reportContent = reportHeader;
             let sources = [];
-            let lastStatus = '';
-            let ddgSourcesMd = '';
-            let ddgSourceCount = 0;
             let ddgFinalReport = '';
+
+            // While streaming: keep the node body minimal (topic + short hint). Status, sources, and
+            // per-source lines live only in the activity drawer — avoids duplicating the same text.
+            const streamingPlaceholderBody = `${reportHeader}\n\n*In progress…*`;
+
+            this.graph.updateNode(nodeId, {
+                researchActivityActive: true,
+                researchActivityLog: appendResearchActivityLine('', 'Starting research…'),
+                content: streamingPlaceholderBody,
+            });
+            this.canvas.updateNodeContent(nodeId, streamingPlaceholderBody, true);
+            this._refreshResearchActivityPanel(nodeId);
 
             await readSSEStream(response, {
                 onEvent: (eventType, data) => {
                     if (eventType === 'status') {
-                        lastStatus = data.trim();
-                        if (!hasExa) {
-                            const sourcesBlock =
-                                ddgSourceCount > 0 ? `## Sources (${ddgSourceCount})\n\n${ddgSourcesMd}` : '';
-                            const statusContent = `${reportHeader}*${lastStatus}*\n\n${sourcesBlock}`.trim();
-                            this.canvas.updateNodeContent(nodeId, statusContent, true);
-                        } else {
-                            const statusContent = `${reportHeader}*${lastStatus}*`;
-                            this.canvas.updateNodeContent(nodeId, statusContent, true);
-                        }
+                        const line = data.trim();
+                        const n = this.graph.getNode(nodeId);
+                        const nextLog = appendResearchActivityLine(n?.researchActivityLog || '', line);
+                        this.graph.updateNode(nodeId, { researchActivityLog: nextLog });
+                        this._refreshResearchActivityPanel(nodeId);
                     } else if (eventType === 'content') {
                         if (!hasExa) {
                             // DDG fallback sends the final report as one payload
@@ -422,24 +478,16 @@ class ResearchFeature extends FeaturePlugin {
                             this.graph.updateNode(nodeId, { content: reportContent });
                         }
                     } else if (eventType === 'source') {
-                        // DDG fallback emits individual sources as JSON
+                        // DDG fallback emits individual sources as JSON (activity log only; not the node body)
                         try {
                             const source = JSON.parse(data);
-                            ddgSourceCount += 1;
-
                             const title = source.title || 'Untitled';
                             const url = source.url || '';
-                            const summary = source.summary || '';
-                            const query = source.query ? `\n\n*Query:* \`${source.query}\`` : '';
-
-                            ddgSourcesMd += `### [${title}](${url})${query}\n\n${summary}\n\n---\n\n`;
-
-                            // While the loop runs, show status + growing sources list
-                            const sourcesBlock = `## Sources (${ddgSourceCount})\n\n${ddgSourcesMd}`;
-                            const statusBlock = lastStatus ? `*${lastStatus}*\n\n` : '';
-                            const content = `${reportHeader}${statusBlock}${sourcesBlock}`;
-                            this.canvas.updateNodeContent(nodeId, content, true);
-                            this.graph.updateNode(nodeId, { content: content });
+                            const srcLine = `Source: ${title}${url ? ` — ${truncateForActivityLog(url)}` : ''}`;
+                            const nSrc = this.graph.getNode(nodeId);
+                            const logAfterSrc = appendResearchActivityLine(nSrc?.researchActivityLog || '', srcLine);
+                            this.graph.updateNode(nodeId, { researchActivityLog: logAfterSrc });
+                            this._refreshResearchActivityPanel(nodeId);
                         } catch (e) {
                             console.error('Failed to parse DDG source event:', e);
                         }
@@ -454,6 +502,9 @@ class ResearchFeature extends FeaturePlugin {
                 onDone: () => {
                     // Clean up streaming state
                     this.streamingManager.unregister(nodeId);
+
+                    this.graph.updateNode(nodeId, { researchActivityActive: false });
+                    this._refreshResearchActivityPanel(nodeId);
 
                     if (!hasExa && ddgFinalReport) {
                         reportContent = reportHeader + ddgFinalReport;
@@ -479,10 +530,14 @@ class ResearchFeature extends FeaturePlugin {
                     // Clean up streaming state on error
                     this.streamingManager.unregister(nodeId);
 
-                    // Re-throw if not an abort error
-                    if (err.name !== 'AbortError') {
-                        throw err;
+                    if (err.name === 'AbortError') {
+                        const n = this.graph.getNode(nodeId);
+                        const log = appendResearchActivityLine(n?.researchActivityLog || '', 'Stopped.');
+                        this.graph.updateNode(nodeId, { researchActivityLog: log, researchActivityActive: false });
+                        this._refreshResearchActivityPanel(nodeId);
+                        return;
                     }
+                    throw err;
                 },
             });
 
@@ -494,11 +549,19 @@ class ResearchFeature extends FeaturePlugin {
             // Check if it was aborted (user clicked stop)
             // StreamingManager handles stopped indicator via default onStop behavior
             if (err.name === 'AbortError') {
+                const n = this.graph.getNode(nodeId);
+                const log = appendResearchActivityLine(n?.researchActivityLog || '', 'Stopped.');
+                this.graph.updateNode(nodeId, { researchActivityLog: log, researchActivityActive: false });
+                this._refreshResearchActivityPanel(nodeId);
                 this.saveSession();
                 return;
             }
 
             // Other errors - use captured instructions to avoid closure issues
+            const nErr = this.graph.getNode(nodeId);
+            const logErr = appendResearchActivityLine(nErr?.researchActivityLog || '', `Error: ${err.message}`);
+            this.graph.updateNode(nodeId, { researchActivityLog: logErr, researchActivityActive: false });
+            this._refreshResearchActivityPanel(nodeId);
             const errorContent = `**Research${providerLabel}:** ${instructions}\n\n*Error: ${err.message}*`;
             this.canvas.updateNodeContent(nodeId, errorContent, false);
             this.graph.updateNode(nodeId, { content: errorContent });

@@ -596,6 +596,45 @@ test('renderContent: MatrixNode returns full HTML structure', () => {
 });
 
 // ============================================================
+// ResearchNode output panel
+// ============================================================
+
+test('ResearchNode: hasOutput is false without activity log', () => {
+    const node = { type: NodeType.RESEARCH, id: 'r1', content: 'x' };
+    const wrapped = wrapNode(node);
+    assertTrue(!wrapped.hasOutput());
+});
+
+test('ResearchNode: hasOutput and renderOutputPanel when activity log present', () => {
+    const node = {
+        type: NodeType.RESEARCH,
+        id: 'r1',
+        content: 'x',
+        researchActivityLog: 'Searching…',
+        researchActivityActive: true,
+    };
+    const wrapped = wrapNode(node);
+    assertTrue(wrapped.hasOutput());
+    const html = wrapped.renderOutputPanel(mockCanvas);
+    assertTrue(html.includes('aria-label="Research activity"'));
+    assertTrue(html.includes('Searching'));
+    assertTrue(html.includes('Running'));
+});
+
+test('ResearchNode: renderOutputPanel escapes HTML in log', () => {
+    const node = {
+        type: NodeType.RESEARCH,
+        id: 'r1',
+        researchActivityLog: '<script>x</script>',
+        researchActivityActive: false,
+    };
+    const wrapped = wrapNode(node);
+    const html = wrapped.renderOutputPanel(mockCanvas);
+    assertTrue(!html.includes('<script>'));
+    assertTrue(html.includes('&lt;script&gt;'));
+});
+
+// ============================================================
 // CodeNode Tests (Modal-based editing)
 // ============================================================
 

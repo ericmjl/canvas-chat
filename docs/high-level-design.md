@@ -4,12 +4,13 @@
 **Issue:** N/A (comprehensive HLD for entire application)
 **Status:** Draft
 **Created:** 2026-03-16
-**Updated:** 2026-03-17 (added build pipeline, Modal deployment, pip distribution); 2026-03-28 (linked LLM backend LLD/EARS)
+**Updated:** 2026-03-17 (added build pipeline, Modal deployment, pip distribution); 2026-03-28 (linked LLM backend LLD/EARS; research activity output panel and arrow-of-intent links to NODE-REQ-019 / RSCH-REQ-005)
 
 ## Related design documents
 
 - **[LLM backend (llamabot)](./designs/llamabot-backend-proxy/LLD.md)** — Low-level design for migrating text completions to llamabot while keeping API contracts stable.
 - **[LLM proxy EARS](./designs/llamabot-backend-proxy/llm-proxy-EARS.md)** — Requirements for parity, SimpleBot/StructuredBot usage, and retained LiteLLM utilities.
+- **[Research feature](./llds/research-feature.md)** — `/search` and `/research`, streaming, and the research node activity output panel.
 
 ## 1. What Is This Project?
 
@@ -95,6 +96,7 @@ All LLM responses stream in real-time.
 - See responses token-by-token as they're generated
 - Stop generation mid-stream
 - Continue stopped generations
+- **Intermediate activity** — For long-running streams (for example deep research), the UI SHOULD show what the system is doing in a dedicated place without crowding the main report. Research nodes use the same **slide-out output panel** pattern as code nodes and Git file selection: a chronological activity log (status lines and, for the DuckDuckGo fallback, per-source lines) while the node body shows the growing or final synthesized content. Requirements are specified in [NODE-REQ-019](./specs/node-types-specs.md) and [RSCH-REQ-005](./specs/feature-plugins-specs.md); design detail is in the [research LLD](./llds/research-feature.md).
 
 ### 4.5 Explicit Viewport Focus
 
@@ -166,6 +168,7 @@ Messages are the core node type, but the system supports many others:
 | **Data**      | Matrices for evaluation, tables from CSV/Excel   |
 | **Documents** | PDFs, PowerPoint, YouTube transcripts            |
 | **Code**      | Executable Python with output panels             |
+| **Research**  | Deep research reports with an optional activity log in the output panel |
 | **Multi-LLM** | Committee opinions, synthesis                    |
 
 ## 7. Edge Types

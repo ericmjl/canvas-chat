@@ -1,6 +1,7 @@
 # Node Types Specifications
 
 **Created**: 2026-03-16
+**Updated**: 2026-03-28 (NODE-REQ-019 research activity output panel)
 **Status**: Active
 **HLD**: [High-Level Design](../high-level-design.md)
 
@@ -110,9 +111,15 @@ The system MUST provide an `html_slides` node type for HTML presentations. HTML 
 
 ### [x] NODE-REQ-018: Research Node
 
-**Location**: `plugins/research.js`
+**Location**: `plugins/research.js`, `plugins/research-node.js`
 
 The system MUST provide a `research` node type for deep research. Research nodes MUST display synthesized findings and sources.
+
+### [x] NODE-REQ-019: Research activity output panel
+
+**Location**: `plugins/research-node.js`, `plugins/research.js`, `canvas.js` (`ensureOutputPanelContent`)
+
+When a research stream is active or has produced activity lines, the research node protocol MUST expose a slide-out **output panel** (same mechanism as code output panels) when `hasOutput()` is true. The panel MUST render a chronological, plain-text activity log (server `status` events and, for DuckDuckGo research, per-`source` lines) distinct from the main node body report. The log MUST be stored on the node (for example `researchActivityLog` / `researchActivityActive`) and updated as SSE events arrive. The canvas MUST create the panel on first activity via `ensureOutputPanelContent` when the node was not initially rendered with a panel.
 
 ## Edge Type Requirements
 

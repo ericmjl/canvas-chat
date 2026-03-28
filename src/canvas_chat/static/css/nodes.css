@@ -1669,6 +1669,24 @@
     display: none;
 }
 
+/* Research node: log lines use the drawer (.code-output-panel-body) as the only scroll container */
+.research-activity-log {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 0.72rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.research-activity-status {
+    margin-top: 8px;
+    font-size: 0.7rem;
+    color: var(--color-text-tertiary, #888);
+    font-style: italic;
+}
+
 .code-output-panel-content {
     min-height: 0;
 }

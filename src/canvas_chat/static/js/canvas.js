@@ -2466,6 +2466,32 @@ class Canvas {
     }
 
     /**
+     * Ensure the bottom output panel exists for this node when the node protocol's hasOutput() is true,
+     * then refresh its body. Use when activity may start before the panel was rendered (e.g. first SSE chunk).
+     * @spec NODE-REQ-019
+     * @param {string} nodeId - The node ID
+     * @param {Object} node - Current graph node (must match {@link wrapNode} data)
+     */
+    ensureOutputPanelContent(nodeId, node) {
+        const wrapped = wrapNode(node);
+        if (!wrapped.hasOutput || typeof wrapped.hasOutput !== 'function') {
+            return;
+        }
+        if (!wrapped.hasOutput()) {
+            return;
+        }
+        const wrapper = this.nodeElements.get(nodeId);
+        if (!wrapper) {
+            return;
+        }
+        if (this.outputPanels.get(nodeId)) {
+            this.updateOutputPanelContent(nodeId, node);
+        } else {
+            this.renderOutputPanel(node, wrapper);
+        }
+    }
+
+    /**
      * Update output panel toggle button state
      * @param {string} nodeId - The node ID
      * @param {boolean} expanded - Whether panel is expanded

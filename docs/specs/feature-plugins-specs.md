@@ -1,6 +1,7 @@
 # Feature Plugins Specifications
 
 **Created**: 2026-03-16
+**Updated**: 2026-03-28 (RSCH-REQ-005 research activity visibility)
 **Status**: Active
 **HLD**: [High-Level Design](../high-level-design.md)
 
@@ -61,6 +62,12 @@ The system MUST use Exa API when available, falling back to DuckDuckGo when no E
 **Location**: `research.js`
 
 When context is selected, the system MUST refine the search query using the LLM before executing the search.
+
+### [x] RSCH-REQ-005: Research activity visibility
+
+**Location**: `plugins/research.js`, `plugins/research-node.js`, `canvas.js`
+
+During `/research`, the ResearchFeature MUST append streaming **status** lines (and, for the DuckDuckGo fallback, **source** summary lines) to the research node’s activity log and MUST refresh the output panel so users see intermediate progress. While streaming, the feature MUST NOT duplicate that status or per-source detail in the main node body (the body SHOULD show at most a short in-progress placeholder until the final report). On completion, stop, or error, the feature MUST clear the running indicator while MAY retain the final log for inspection.
 
 ## Code Feature
 
