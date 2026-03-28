@@ -191,7 +191,7 @@ canvas-chat/
 | `src/canvas_chat/plugins/ddg_endpoints.py`      | DuckDuckGo search + research API   | DDG search/research endpoints (fallback when no Exa key); edit for DDG behavior |
 | `src/canvas_chat/plugins/pptx_endpoints.py`     | PPTX API endpoints                 | PPTX caption/title and narrative preset endpoints                               |
 | `src/canvas_chat/plugins/`                      | Python plugin modules              | Backend plugins (matrix_handler, code_handler, etc.)                            |
-| `modal_app.py`                                  | Modal deployment config            | Deployment settings                                                             |
+| `modal_app.py`                                  | Modal deployment config            | `pip_install` list MUST include runtime deps imported by `canvas_chat.app` (e.g. `llamabot`, matching `pyproject.toml`) |
 
 ### Key constants and their locations
 
