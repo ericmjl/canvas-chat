@@ -18,7 +18,7 @@ Bring your own API keys (configured in Settings).
 Run Canvas Chat instantly with no installation:
 
 ```bash
-uvx canvas-chat
+uvx canvas-chat launch
 ```
 
 Your browser will open automatically to the local server.
