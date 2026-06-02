@@ -40,6 +40,7 @@ This includes:
 - 2026-03-28: Pin `llamabot>=0.18.0` in `pyproject.toml` (PyPI includes `AsyncSimpleBot`/`AsyncStructuredBot`). Backend still uses sync bots + `asyncio.to_thread` until migrated.
 - 2026-06-02: Agentic mode (`/agent` slash command) — tool-using ReAct loop. Backend `/api/agent` endpoint (litellm `acompletion` + `AGENT_TOOLS`). Frontend `AgentFeature` plugin in `plugins/agent.js`. Plotly is now the default plotting library (matplotlib still works if explicitly imported). Design docs: `docs/designs/agentic-mode/`.
 - 2026-06-02: **FeaturePlugin property access** — Never use `this.context.*` in plugins. The base `FeaturePlugin` constructor copies everything to `this.*` directly (`this.canvas`, `this.modelPicker`, `this.buildLLMRequest`, etc.). The context is stored as `this._context` (private). Accessing `this.context` is `undefined` and causes runtime errors. Use `this._context` only for properties NOT copied by the base class (e.g. `pyodideRunner`).
+- 2026-06-02: **HTML node for Plotly** — Plotly figures are rendered in `html` node type (sandboxed iframe with `srcdoc`), NOT in `note` nodes. Note nodes render markdown and cannot execute `<script>` tags. The HTML node's `renderContent()` uses `<iframe sandbox="allow-scripts allow-same-origin" srcdoc="...">` so Plotly.js runs. Created by `code.js` and `agent.js` when `fig.type === 'plotly'`.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -139,6 +140,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/plugins/html-slides.js`     | HtmlSlidesFeature + HtmlSlidesNode | HTML slides output node (`/slides`), single-file presentation embed, Prev/Next nav  |
 | `src/canvas_chat/static/js/plugins/excel-node.js`      | ExcelNode + Excel upload handler   | Excel (.xlsx, .xls) upload, one node per sheet, csvData for /code                   |
 | `src/canvas_chat/static/js/plugins/prism-node.js`      | PrismNode + Prism upload handler   | Prism (.pzfx) upload, one node per table, csvData for /code                         |
+| `src/canvas_chat/static/js/plugins/html-node.js`       | HtmlNode protocol                  | Renders HTML content (Plotly, widgets) via sandboxed iframe with `srcdoc`           |
 
 #### Example plugins
 
@@ -200,7 +202,7 @@ canvas-chat/
 
 | Constant                                   | Location                                                   | Purpose                                                                         |
 | ------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `NodeType`                                 | `graph-types.js`                                           | All node type definitions (includes CSV, EXCEL, PRISM, html_slides for /slides) |
+| `NodeType`                                 | `graph-types.js`                                           | All node type definitions (includes CSV, EXCEL, PRISM, html_slides for /slides, html for Plotly/widgets) |
 | `EdgeType`                                 | `graph-types.js:82-94`                                     | All edge type definitions                                                       |
 | `DEFAULT_NODE_SIZES`                       | `graph-types.js:40-68`                                     | Default dimensions by node type                                                 |
 | `PRIORITY`                                 | `feature-registry.js:8-12`                                 | Plugin priority levels (BUILTIN > OFFICIAL > COMMUNITY)                         |

@@ -327,7 +327,7 @@ class AgentFeature extends FeaturePlugin {
                     const position = this.graph.autoPosition([nodeId]);
 
                     if (typeof fig === 'object' && fig.type === 'plotly') {
-                        const outputNode = createNode(NodeType.NOTE, '', {
+                        const outputNode = createNode(NodeType.HTML, '', {
                             position,
                             title: result.figures.length === 1 ? 'Plot' : `Plot ${i + 1}`,
                             content: fig.html,

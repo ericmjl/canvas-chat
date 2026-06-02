@@ -234,6 +234,18 @@ except ImportError:
     pass
 ```
 
+### 3.3 HTML node for Plotly output
+
+Plotly figures require `<script>` tag execution (for `plotly.js`), which `innerHTML` does not support. A dedicated `html` node type renders content via a sandboxed iframe with `srcdoc`:
+
+- **NodeType:** `html` (registered in `graph-types.js`)
+- **Protocol:** `HtmlNode` (`plugins/html-node.js`) — renders `<iframe sandbox="allow-scripts allow-same-origin" srcdoc="...">`
+- **Created by:** `code.js` and `agent.js` when `fig.type === 'plotly'`
+- **Not editable:** `isContentEditable()` returns `false` (HTML source is programmatic)
+- **Same node size:** 640×480 (matches IMAGE and NOTE defaults)
+
+This replaces the previous approach of storing Plotly HTML in NOTE nodes, which rendered raw HTML as text.
+
 ## 4. Data Models
 
 ### 4.1 AgentRequest (backend)
