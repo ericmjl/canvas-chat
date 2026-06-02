@@ -442,8 +442,18 @@ AGENT_SYSTEM_PROMPT = (
     "calls to build a visible reasoning chain.\n"
     "- Your final text response appears in the main agent node. "
     "Keep it concise — the detail lives in the linked nodes.\n"
-    "- When creating plots, prefer Plotly "
-    "(plotly.express or plotly.graph_objects) over matplotlib.\n"
+    "\n"
+    "CRITICAL Python/Plotly coding rules for execute_code:\n"
+    "- Always use SEPARATE import lines, NEVER comma-separated\n"
+    "  BAD:  import numpy as np, plotly.graph_objects as go\n"
+    "  GOOD: import numpy as np\\nimport plotly.graph_objects as go\n"
+    "- For plots, use plotly.express or plotly.graph_objects\n"
+    "- Call fig.show() to display the plot\n"
+    "- Available packages: numpy, pandas, scipy, matplotlib, "
+    "plotly, seaborn, scikit-learn, sympy, networkx\n"
+    "- Python code runs in Pyodide (browser WASM). "
+    "No file I/O, no network requests from Python.\n"
+    "- If a package fails to import, try an alternative.\n"
 )
 
 MAX_AGENT_TOOL_CALLS = 10
@@ -1842,17 +1852,18 @@ async def agent(request: AgentRequest, http_request: Request):
                     AuthenticationError,
                 ) as e:
                     error_msg = str(e)
-                    if "tool" in error_msg.lower() and (
-                        "schema" in error_msg.lower()
-                        or "validation" in error_msg.lower()
-                        or "parameter" in error_msg.lower()
-                    ):
+                    tool_related = (
+                        "tool" in error_msg.lower() or "function" in error_msg.lower()
+                    )
+                    if tool_related and tool_call_count < MAX_AGENT_TOOL_CALLS - 1:
                         tool_call_count += 1
                         error_feedback = (
-                            f"Tool call failed with error: {error_msg}\n"
-                            "Please retry with correct parameters "
-                            "matching the tool schema exactly. "
-                            "Make sure to include all required fields."
+                            f"Tool call failed: {error_msg}\n"
+                            "Please retry. Ensure:\n"
+                            "- Arguments are valid JSON\n"
+                            "- All required parameters are present\n"
+                            "- Use separate import lines in Python "
+                            "(not comma-separated)\n"
                         )
                         yield {
                             "event": "tool_result",
