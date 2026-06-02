@@ -5,6 +5,7 @@
 
 import { EventEmitter } from './event-emitter.js';
 import { CancellableEvent, CanvasEvent } from './plugin-events.js';
+import { AgentFeature } from './plugins/agent.js';
 import { CodeFeature } from './plugins/code.js';
 import { CommitteeFeature } from './plugins/committee.js';
 import { FactcheckFeature } from './plugins/factcheck.js';
@@ -210,6 +211,17 @@ class FeatureRegistry {
                 slashCommands: [
                     {
                         command: '/slides',
+                        handler: 'handleCommand',
+                    },
+                ],
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'agent',
+                feature: AgentFeature,
+                slashCommands: [
+                    {
+                        command: '/agent',
                         handler: 'handleCommand',
                     },
                 ],

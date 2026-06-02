@@ -129,7 +129,7 @@ const pyodideRunner = (function() {
      */
     const _PYODIDE_PACKAGES = new Set([
         'numpy', 'pandas', 'scipy', 'matplotlib', 'seaborn',
-        'scikit-learn', 'statsmodels', 'networkx', 'sympy',
+        'plotly', 'scikit-learn', 'statsmodels', 'networkx', 'sympy',
         'Pillow', 'lxml', 'beautifulsoup4', 'html5lib',
         'pyyaml', 'regex', 'pyparsing', 'packaging',
         'jinja2', 'markupsafe', 'certifi', 'charset-normalizer',
@@ -325,16 +325,31 @@ import numpy as np
 _stdout_capture = io.StringIO()
 sys.stdout = _stdout_capture
 
-# Track matplotlib figures
+# Track figures (Plotly + matplotlib)
 _figures = []
 
-# Set up matplotlib for non-interactive backend if used
+# Set up Plotly as default plotting library
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    import plotly.io as pio
+
+    _original_plotly_show = pio.show
+    def _capture_plotly_show(fig, *args, **kwargs):
+        _figures.append({
+            'type': 'plotly',
+            'html': fig.to_html(include_plotlyjs='cdn', full_html=False)
+        })
+    pio.show = _capture_plotly_show
+except ImportError:
+    pass
+
+# Set up matplotlib as fallback (still works if explicitly imported)
 try:
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 
-    # Patch plt.show to capture figures
     _original_show = plt.show
     def _capture_show(*args, **kwargs):
         import base64
@@ -343,7 +358,10 @@ try:
             buf = io.BytesIO()
             fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
             buf.seek(0)
-            _figures.append('data:image/png;base64,' + base64.b64encode(buf.read()).decode('utf-8'))
+            _figures.append({
+                'type': 'matplotlib',
+                'image': 'data:image/png;base64,' + base64.b64encode(buf.read()).decode('utf-8')
+            })
             plt.close(fig)
     plt.show = _capture_show
 except ImportError:
@@ -396,6 +414,13 @@ try:
     import matplotlib.pyplot as plt
     if plt.get_fignums():
         plt.show()
+except:
+    pass
+
+# Capture any pending Plotly figures (if user created fig but didn't show)
+try:
+    import plotly.io as pio
+    # plotly figures are captured on show(); nothing extra needed here
 except:
     pass
 

@@ -4,13 +4,14 @@
 **Issue:** N/A (comprehensive HLD for entire application)
 **Status:** Draft
 **Created:** 2026-03-16
-**Updated:** 2026-03-17 (added build pipeline, Modal deployment, pip distribution); 2026-03-28 (linked LLM backend LLD/EARS; research activity output panel and arrow-of-intent links to NODE-REQ-019 / RSCH-REQ-005)
+**Updated:** 2026-03-17 (added build pipeline, Modal deployment, pip distribution); 2026-03-28 (linked LLM backend LLD/EARS; research activity output panel and arrow-of-intent links to NODE-REQ-019 / RSCH-REQ-005); 2026-06-02 (added agentic mode section, Plotly default)
 
 ## Related design documents
 
 - **[LLM backend (llamabot)](./designs/llamabot-backend-proxy/LLD.md)** — Low-level design for migrating text completions to llamabot while keeping API contracts stable.
 - **[LLM proxy EARS](./designs/llamabot-backend-proxy/llm-proxy-EARS.md)** — Requirements for parity, SimpleBot/StructuredBot usage, and retained LiteLLM utilities.
 - **[Research feature](./llds/research-feature.md)** — `/search` and `/research`, streaming, and the research node activity output panel.
+- **[Agentic Mode](./designs/agentic-mode/LLD.md)** — Tool-using agent loop with viewport context, Plotly default plotting.
 
 ## 1. What Is This Project?
 
@@ -339,3 +340,30 @@ When exactly one node is selected, the app showed a two-row strip (Parents / Chi
 
 - Full tree or minimap of the graph; grandchildren-only views; keyboard-only chords dedicated to the breadcrumb (global Arrow Up/Down / j/k remain the primary keyboard navigation).
 - Replacing the node-header ↑/↓ buttons or their popover behavior beyond shared preview-on-hover for popover items.
+
+## 14. Agentic Mode
+
+**Added:** 2026-06-02
+
+### Agentic Mode — Problem
+
+The current interaction is strictly turn-based: user types, one AI node streams back. The LLM cannot take initiative — it cannot execute code, create plots, search the web, or generate images without the user manually creating the right node type and invoking the right slash command.
+
+### Agentic Mode — Goals
+
+- **Tool-using agent loop**: When the user activates agentic mode (via `/agent`), the LLM receives a set of canvas tools (`execute_code`, `generate_image`, `search_web`, `create_note`, `read_node`) and can call them autonomously in a ReAct loop until the task is done.
+- **Viewport context**: Nodes visible in the canvas viewport are serialized as context for every agent turn, so the agent knows what the user is looking at.
+- **Plotly by default**: Code cells default to Plotly for plotting (matplotlib still available if explicitly imported).
+- **Multi-node creation**: A single agent turn may create multiple nodes (code + output, notes, images) connected by edges.
+- **Text-first, voice-ready**: Designed for text input now; architecture supports voice input later.
+
+### Agentic Mode — Non-goals
+
+- Autonomous agent that runs without user prompts (user must initiate each turn).
+- Auto-joining separate conversation threads.
+- Voice input in v1.
+- Replacing the existing turn-based chat (agentic mode is opt-in).
+
+### Design
+
+See [Agentic Mode LLD](./designs/agentic-mode/LLD.md) for the full design.

@@ -38,6 +38,8 @@ This includes:
 - 2026-03-15: Always use `encoding="utf-8"` when calling `read_text()`. On Windows, the default encoding is cp1252 which causes UnicodeDecodeError when reading UTF-8 files.
 - 2026-03-28: LLM backend migration (LiteLLM → llamabot) design lives under `docs/designs/llamabot-backend-proxy/` (LLD + EARS), linked from HLD and `docs/llds/backend-llm-proxy.md`. PocketFlow is not part of that plan.
 - 2026-03-28: Pin `llamabot>=0.18.0` in `pyproject.toml` (PyPI includes `AsyncSimpleBot`/`AsyncStructuredBot`). Backend still uses sync bots + `asyncio.to_thread` until migrated.
+- 2026-06-02: Agentic mode (`/agent` slash command) — tool-using ReAct loop. Backend `/api/agent` endpoint (litellm `acompletion` + `AGENT_TOOLS`). Frontend `AgentFeature` plugin in `plugins/agent.js`. Plotly is now the default plotting library (matplotlib still works if explicitly imported). Design docs: `docs/designs/agentic-mode/`.
+- 2026-06-02: **FeaturePlugin property access** — Never use `this.context.*` in plugins. The base `FeaturePlugin` constructor copies everything to `this.*` directly (`this.canvas`, `this.modelPicker`, `this.buildLLMRequest`, etc.). The context is stored as `this._context` (private). Accessing `this.context` is `undefined` and causes runtime errors. Use `this._context` only for properties NOT copied by the base class (e.g. `pyodideRunner`).
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -127,6 +129,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/matrix.js`                  | MatrixFeature class                | Comparison matrix creation, cell filling                                            |
 | `src/canvas_chat/static/js/factcheck.js`               | FactcheckFeature class             | Claim verification, web search integration                                          |
 | `src/canvas_chat/static/js/plugins/research.js`        | ResearchFeature class              | `/research`, `/search`; DDG/Exa SSE; activity log in ResearchNode output panel       |
+| `src/canvas_chat/static/js/plugins/agent.js`           | AgentFeature class                 | `/agent` agentic mode; tool-using ReAct loop with viewport context; Plotly default   |
 | `src/canvas_chat/static/js/plugins/research-node.js`   | ResearchNode protocol              | Research node header/actions; bottom drawer shows streaming research activity lines  |
 | `src/canvas_chat/static/js/code-feature.js`            | CodeFeature class                  | Self-healing code execution                                                         |
 | `src/canvas_chat/static/js/plugins/git-repo.js`        | GitRepoFeature class               | Git repository fetching with file selection (`/git` command)                        |
@@ -180,7 +183,7 @@ canvas-chat/
 
 | File                                            | Purpose                            | Edit for...                                                                     |
 | ----------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------- |
-| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints; `run_structured_summarize` / `run_structured_string_list` + Pydantic outputs; `AsyncSimpleBot` + `_stream_text_deltas_async_simple_bot` for streams; LiteLLM for `drop_params`, token count, Copilot models, `supports_response_schema`, `aimage_generation` |
+| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints; `run_structured_summarize` / `run_structured_string_list` + Pydantic outputs; `AsyncSimpleBot` + `_stream_text_deltas_async_simple_bot` for streams; `/api/agent` endpoint with ReAct tool-calling loop (litellm `acompletion` + `AGENT_TOOLS`); LiteLLM for `drop_params`, token count, Copilot models, `supports_response_schema`, `aimage_generation` |
 | `src/canvas_chat/llm_messages.py`               | Message shape helpers              | Map OpenAI-style dicts / Pydantic messages to `(system_prompt, list[BaseMessage])` for llamabot |
 | `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode                                          |
 | `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server                                              |
@@ -272,6 +275,7 @@ Quick reference guide for finding the right documentation based on what you need
 | **Why is the plugin system designed this way?**           | [plugin-architecture.md](docs/explanation/plugin-architecture.md)       | Design rationale for three-level plugin architecture        |
 | **How does streaming work?**                              | [streaming-architecture.md](docs/explanation/streaming-architecture.md) | Server-sent events and streaming design                     |
 | **LLM backend (llamabot vs LiteLLM) — LLD + EARS**         | [LLD](docs/designs/llamabot-backend-proxy/LLD.md), [EARS](docs/designs/llamabot-backend-proxy/llm-proxy-EARS.md) | Design-driven migration: SimpleBot/StructuredBot adapter; LiteLLM for images/tokens/Copilot utilities |
+| **Agentic mode — LLD + EARS**                              | [LLD](docs/designs/agentic-mode/LLD.md), [Agent Loop](docs/designs/agentic-mode/agent-loop-EARS.md), [Tools](docs/designs/agentic-mode/tool-system-EARS.md), [Plotly](docs/designs/agentic-mode/plotly-integration-EARS.md) | Tool-using ReAct loop, viewport context, Plotly default |
 | **How does auto-layout work?**                            | [auto-layout.md](docs/explanation/auto-layout.md)                       | Node positioning and overlap resolution                     |
 | **How does the committee feature work internally?**       | [committee-architecture.md](docs/explanation/committee-architecture.md) | Multi-LLM consultation design                               |
 | **How does matrix evaluation work?**                      | [matrix-evaluation.md](docs/explanation/matrix-evaluation.md)           | Matrix cell filling and evaluation design                   |

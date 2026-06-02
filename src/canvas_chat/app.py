@@ -322,6 +322,133 @@ class SummarizeOutput(BaseModel):
     )
 
 
+class AgentViewportNode(BaseModel):
+    id: str
+    type: str
+    title: str = ""
+    content: str = ""
+
+
+class AgentRequest(BaseModel):
+    messages: list[Message]
+    viewport_context: list[AgentViewportNode] = []
+    model: str = "openai/gpt-4o-mini"
+    api_key: str | None = None
+    base_url: str | None = None
+    temperature: float = 0.7
+    max_tokens: int | None = None
+
+
+AGENT_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "execute_code",
+            "description": (
+                "Execute Python code. Use for data analysis, "
+                "calculations, and plotting. Plotly is the default "
+                "plotting library. Returns stdout, result, and figures."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "Python code to execute"},
+                    "purpose": {
+                        "type": "string",
+                        "description": ("Brief description of what this code does"),
+                    },
+                },
+                "required": ["code"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_note",
+            "description": (
+                "Create a note on the canvas. Use for saving "
+                "insights, summaries, or intermediate results."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Note title"},
+                    "content": {
+                        "type": "string",
+                        "description": ("Note content (supports markdown)"),
+                    },
+                },
+                "required": ["content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_web",
+            "description": "Search the web for current information.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_image",
+            "description": "Generate an image from a text description using DALL-E.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Image description"},
+                    "size": {
+                        "type": "string",
+                        "enum": ["1024x1024", "512x512"],
+                        "default": "1024x1024",
+                    },
+                },
+                "required": ["prompt"],
+            },
+        },
+    },
+]
+
+AGENT_SYSTEM_PROMPT = (
+    "You are a helpful AI assistant working on a visual canvas.\n"
+    "IMPORTANT: Every tool call creates a visible node on the "
+    "canvas graph. The user sees your work as nodes and edges.\n"
+    "\n"
+    "Available tools:\n"
+    "- search_web: Creates a search results node on the canvas. "
+    "Use this FIRST when you need current information.\n"
+    "- execute_code: Creates a code node on the canvas. "
+    "Plotly is the default plotting library.\n"
+    "- create_note: Creates a note node on the canvas. "
+    "Use for summaries, analysis, or intermediate findings.\n"
+    "- generate_image: Creates an image node on the canvas.\n"
+    "\n"
+    "Canvas context: The user can see nodes on their canvas. "
+    "Nodes visible in their viewport are provided as context.\n"
+    "\n"
+    "Workflow guidance:\n"
+    "- For research tasks: search first, then analyze results, "
+    "then create a summary note.\n"
+    "- Each tool call creates a linked node. Chain multiple "
+    "calls to build a visible reasoning chain.\n"
+    "- Your final text response appears in the main agent node. "
+    "Keep it concise — the detail lives in the linked nodes.\n"
+    "- When creating plots, prefer Plotly "
+    "(plotly.express or plotly.graph_objects) over matplotlib.\n"
+)
+
+MAX_AGENT_TOOL_CALLS = 10
+
+
 _SUMMARIZE_DEFAULT_SYSTEM = (
     "You are a helpful assistant that writes concise, accurate summaries."
 )
@@ -1529,6 +1656,271 @@ async def chat(request: ChatRequest, http_request: Request):
                 }
             else:
                 yield {"event": "error", "data": f"Error: {error_msg}"}
+
+    return EventSourceResponse(generate())
+
+
+async def _agent_search_web(query: str, max_results: int = 5) -> str:
+    """Search the web using DuckDuckGo."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://html.duckduckgo.com/html/",
+                params={"q": query},
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            if resp.status_code != 200:
+                return f"Search failed: HTTP {resp.status_code}"
+
+            import re
+
+            results = []
+            for match in re.finditer(
+                r'<a[^>]*class="result__a"[^>]*>(.*?)</a>.*?'
+                r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>',
+                resp.text,
+                re.DOTALL,
+            ):
+                title = re.sub(r"<[^>]+>", "", match.group(1)).strip()
+                snippet = re.sub(r"<[^>]+>", "", match.group(2)).strip()
+                if title and snippet:
+                    results.append(f"- {title}: {snippet}")
+                if len(results) >= max_results:
+                    break
+
+            if not results:
+                return "No results found."
+            return "\n".join(results)
+    except Exception as e:
+        return f"Search error: {e}"
+
+
+async def _agent_execute_tool(
+    tool_name: str, tool_args: dict, request: AgentRequest
+) -> dict:
+    """Execute a single agent tool and return the result."""
+    if tool_name == "search_web":
+        query = tool_args.get("query", "")
+        result_text = await _agent_search_web(query)
+        return {
+            "type": "search",
+            "content": result_text,
+            "node_create": {
+                "type": "search",
+                "title": f"Search: {query}",
+                "content": result_text,
+            },
+        }
+
+    elif tool_name == "generate_image":
+        prompt = tool_args.get("prompt", "")
+        size = tool_args.get("size", "1024x1024")
+        try:
+            api_key = request.api_key
+            admin_config = get_admin_config()
+            if admin_config.admin_mode and admin_config.api_key:
+                api_key = admin_config.api_key
+
+            response = await litellm.aimage_generation(
+                prompt=prompt,
+                model="dall-e-3",
+                size=size,
+                n=1,
+                api_key=api_key,
+                api_base=request.base_url,
+            )
+            image_data = response.data[0]
+            image_b64 = None
+            if image_data.url:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    img_resp = await client.get(image_data.url)
+                    img_resp.raise_for_status()
+                    image_b64 = base64.b64encode(img_resp.content).decode("utf-8")
+            elif image_data.b64_json:
+                image_b64 = image_data.b64_json
+
+            if image_b64:
+                return {
+                    "type": "image",
+                    "content": "Image generated successfully.",
+                    "image_b64": image_b64,
+                    "node_create": {
+                        "type": "image",
+                        "title": "Generated Image",
+                        "imageData": image_b64,
+                        "mimeType": "image/png",
+                    },
+                }
+            return {"type": "text", "content": "Image generation returned no data."}
+        except Exception as e:
+            return {"type": "text", "content": f"Image generation error: {e}"}
+
+    elif tool_name == "execute_code":
+        code = tool_args.get("code", "")
+        purpose = tool_args.get("purpose", "Execute code")
+        return {
+            "type": "code",
+            "content": (
+                f"Code execution request: {purpose}. Code will be executed client-side."
+            ),
+            "node_create": {
+                "type": "code",
+                "title": purpose or "Code",
+                "code": code,
+            },
+        }
+
+    elif tool_name == "create_note":
+        title = tool_args.get("title", "")
+        content = tool_args.get("content", "")
+        return {
+            "type": "note",
+            "content": f"Note created: {title or 'Untitled'}",
+            "node_create": {
+                "type": "note",
+                "title": title,
+                "content": content,
+            },
+        }
+
+    return {"type": "text", "content": f"Unknown tool: {tool_name}"}
+
+
+@app.post("/api/agent")
+async def agent(request: AgentRequest, http_request: Request):
+    """Agent endpoint with tool calling support.
+
+    Runs a ReAct-style loop: LLM call -> tool execution -> result feedback -> repeat.
+    Streams SSE events for progress, tool results, and node creation.
+    """
+    inject_admin_credentials(request)
+
+    api_key = request.api_key
+    admin_config = get_admin_config()
+    if admin_config.admin_mode and admin_config.api_key and not api_key:
+        api_key = admin_config.api_key
+
+    system_prompt = AGENT_SYSTEM_PROMPT
+    if request.viewport_context:
+        context_lines = []
+        for node in request.viewport_context:
+            label = node.title or node.type
+            content_preview = node.content[:500] if node.content else "(empty)"
+            context_lines.append(
+                f"[{node.type}] {label} (id: {node.id}):\n{content_preview}"
+            )
+        system_prompt += "\n\n## Visible Canvas Nodes\n\n" + "\n\n".join(context_lines)
+
+    litellm_messages = [{"role": "system", "content": system_prompt}]
+    for msg in request.messages:
+        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+        litellm_messages.append({"role": msg.role, "content": content})
+
+    async def generate():
+        tool_call_count = 0
+        current_messages = list(litellm_messages)
+
+        try:
+            while tool_call_count < MAX_AGENT_TOOL_CALLS:
+                kwargs = {
+                    "model": request.model,
+                    "messages": current_messages,
+                    "temperature": request.temperature,
+                    "tools": AGENT_TOOLS,
+                    "api_key": api_key,
+                }
+                if request.base_url:
+                    kwargs["api_base"] = request.base_url
+                if request.max_tokens:
+                    kwargs["max_tokens"] = request.max_tokens
+
+                response = await litellm.acompletion(**kwargs)
+                choice = response.choices[0]
+                assistant_msg = choice.message
+
+                if hasattr(assistant_msg, "tool_calls") and assistant_msg.tool_calls:
+                    current_messages.append(assistant_msg.model_dump())
+
+                    for tool_call in assistant_msg.tool_calls:
+                        tool_call_count += 1
+                        tool_name = tool_call.function.name
+                        tool_args = json.loads(tool_call.function.arguments)
+
+                        yield {
+                            "event": "tool_start",
+                            "data": json.dumps(
+                                {
+                                    "tool": tool_name,
+                                    "call_id": tool_call.id,
+                                    "purpose": tool_args.get(
+                                        "purpose",
+                                        tool_args.get(
+                                            "query",
+                                            tool_args.get("prompt", ""),
+                                        ),
+                                    ),
+                                }
+                            ),
+                        }
+
+                        result = await _agent_execute_tool(
+                            tool_name, tool_args, request
+                        )
+
+                        if "node_create" in result:
+                            yield {
+                                "event": "node_create",
+                                "data": json.dumps(result["node_create"]),
+                            }
+
+                        yield {
+                            "event": "tool_result",
+                            "data": json.dumps(
+                                {
+                                    "call_id": tool_call.id,
+                                    "tool": tool_name,
+                                    "output": result["content"],
+                                }
+                            ),
+                        }
+
+                        current_messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call.id,
+                                "content": result["content"],
+                            }
+                        )
+
+                    continue
+
+                else:
+                    text = assistant_msg.content or ""
+                    if text:
+                        yield {"event": "text", "data": text}
+
+                    break
+
+            else:
+                yield {
+                    "event": "text",
+                    "data": (
+                        "\n\n*Agent reached maximum tool call "
+                        "limit. Please continue with a new "
+                        "message if needed.*"
+                    ),
+                }
+
+            yield {"event": "done", "data": ""}
+
+        except AuthenticationError as e:
+            yield {"event": "error", "data": f"Authentication failed: {e}"}
+        except RateLimitError as e:
+            yield {"event": "error", "data": f"Rate limit exceeded: {e}"}
+        except APIError as e:
+            yield {"event": "error", "data": f"API error: {e}"}
+        except Exception as e:
+            yield {"event": "error", "data": f"Error: {e}"}
 
     return EventSourceResponse(generate())
 
