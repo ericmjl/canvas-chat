@@ -730,22 +730,37 @@ print("Hello from Pyodide!")
             // Create child nodes for figures
             if (result.figures && result.figures.length > 0) {
                 for (let i = 0; i < result.figures.length; i++) {
-                    const dataUrl = result.figures[i];
-                    const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-                    if (base64Match) {
-                        const position = this.graph.autoPosition([nodeId]);
-                        const outputNode = createNode(NodeType.IMAGE, '', {
-                            position,
-                            title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`,
-                            imageData: base64Match[2],
-                            mimeType: base64Match[1],
-                        });
+                    const fig = result.figures[i];
+                    const position = this.graph.autoPosition([nodeId]);
 
+                    if (typeof fig === 'object' && fig.type === 'plotly') {
+                        const outputNode = createNode(NodeType.NOTE, '', {
+                            position,
+                            title: result.figures.length === 1 ? 'Plot' : `Plot ${i + 1}`,
+                            content: fig.html,
+                        });
                         this.graph.addNode(outputNode);
                         this.canvas.panToNodeAnimated(outputNode.id);
                         const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
                         this.graph.addEdge(edge);
                         this.canvas.renderNode(outputNode);
+                    } else {
+                        const dataUrl = typeof fig === 'string' ? fig : fig.image;
+                        const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+                        if (base64Match) {
+                            const outputNode = createNode(NodeType.IMAGE, '', {
+                                position,
+                                title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`,
+                                imageData: base64Match[2],
+                                mimeType: base64Match[1],
+                            });
+
+                            this.graph.addNode(outputNode);
+                            this.canvas.panToNodeAnimated(outputNode.id);
+                            const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
+                            this.graph.addEdge(edge);
+                            this.canvas.renderNode(outputNode);
+                        }
                     }
                 }
             }
@@ -1059,22 +1074,37 @@ Output ONLY the corrected Python code, no explanations.`;
                 // Create child nodes for figures
                 if (result.figures && result.figures.length > 0) {
                     for (let i = 0; i < result.figures.length; i++) {
-                        const dataUrl = result.figures[i];
-                        const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-                        if (base64Match) {
-                            const position = this.graph.autoPosition([nodeId]);
-                            const outputNode = createNode(NodeType.IMAGE, '', {
-                                position,
-                                title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`,
-                                imageData: base64Match[2],
-                                mimeType: base64Match[1],
-                            });
+                        const fig = result.figures[i];
+                        const position = this.graph.autoPosition([nodeId]);
 
+                        if (typeof fig === 'object' && fig.type === 'plotly') {
+                            const outputNode = createNode(NodeType.NOTE, '', {
+                                position,
+                                title: result.figures.length === 1 ? 'Plot' : `Plot ${i + 1}`,
+                                content: fig.html,
+                            });
                             this.graph.addNode(outputNode);
                             this.canvas.panToNodeAnimated(outputNode.id);
                             const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
                             this.graph.addEdge(edge);
                             this.canvas.renderNode(outputNode);
+                        } else {
+                            const dataUrl = typeof fig === 'string' ? fig : fig.image;
+                            const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+                            if (base64Match) {
+                                const outputNode = createNode(NodeType.IMAGE, '', {
+                                    position,
+                                    title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`,
+                                    imageData: base64Match[2],
+                                    mimeType: base64Match[1],
+                                });
+
+                                this.graph.addNode(outputNode);
+                                this.canvas.panToNodeAnimated(outputNode.id);
+                                const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
+                                this.graph.addEdge(edge);
+                                this.canvas.renderNode(outputNode);
+                            }
                         }
                     }
                 }
