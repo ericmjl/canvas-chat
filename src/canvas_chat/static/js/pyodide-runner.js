@@ -104,6 +104,10 @@ const pyodideRunner = (function() {
         'cv2': 'opencv-python',
         'PIL': 'Pillow',
         'bs4': 'beautifulsoup4',
+        'plotly': 'plotly',
+        'plotly.express': 'plotly',
+        'plotly.graph_objects': 'plotly',
+        'plotly.io': 'plotly',
     };
 
     /**
