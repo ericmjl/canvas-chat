@@ -24,15 +24,15 @@ The Pyodide setup code SHALL import `plotly.express` and `plotly.graph_objects` 
 ## PLOTLY-REQ-002: Plotly HTML output rendering
 
 **Type:** Ubiquitous
-**Summary:** Plotly figures SHALL be rendered as interactive HTML in the code output panel.
+**Summary:** Plotly figures SHALL be rendered as interactive HTML in dedicated HTML nodes.
 
 When a Plotly figure is captured, the system SHALL:
 
 1. Export the figure as HTML via `fig.to_html(include_plotlyjs='cdn', full_html=False)`
 2. Store the HTML in `_figures` as `{ type: 'plotly', html: '...' }`
-3. Render the HTML in the code output panel using a sandboxed approach
+3. Create an `html` node type (sandboxed iframe via `srcdoc`) to render the HTML, allowing `<script>` tags to execute for interactive Plotly charts
 
-**Location:** `src/canvas_chat/static/js/pyodide-runner.js` — figure capture; `src/canvas_chat/static/js/plugins/code.js` — output rendering
+**Location:** `src/canvas_chat/static/js/pyodide-runner.js` — figure capture; `src/canvas_chat/static/js/plugins/html-node.js` — HTML node protocol; `src/canvas_chat/static/js/plugins/code.js` — node creation; `src/canvas_chat/static/js/plugins/agent.js` — node creation
 
 ---
 

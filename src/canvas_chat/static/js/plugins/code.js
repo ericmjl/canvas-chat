@@ -734,7 +734,7 @@ print("Hello from Pyodide!")
                     const position = this.graph.autoPosition([nodeId]);
 
                     if (typeof fig === 'object' && fig.type === 'plotly') {
-                        const outputNode = createNode(NodeType.NOTE, '', {
+                        const outputNode = createNode(NodeType.HTML, '', {
                             position,
                             title: result.figures.length === 1 ? 'Plot' : `Plot ${i + 1}`,
                             content: fig.html,
@@ -1077,18 +1077,18 @@ Output ONLY the corrected Python code, no explanations.`;
                         const fig = result.figures[i];
                         const position = this.graph.autoPosition([nodeId]);
 
-                        if (typeof fig === 'object' && fig.type === 'plotly') {
-                            const outputNode = createNode(NodeType.NOTE, '', {
-                                position,
-                                title: result.figures.length === 1 ? 'Plot' : `Plot ${i + 1}`,
-                                content: fig.html,
-                            });
-                            this.graph.addNode(outputNode);
-                            this.canvas.panToNodeAnimated(outputNode.id);
-                            const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
-                            this.graph.addEdge(edge);
-                            this.canvas.renderNode(outputNode);
-                        } else {
+                    if (typeof fig === 'object' && fig.type === 'plotly') {
+                        const outputNode = createNode(NodeType.HTML, '', {
+                            position,
+                            title: result.figures.length === 1 ? 'Plot' : `Plot ${i + 1}`,
+                            content: fig.html,
+                        });
+                        this.graph.addNode(outputNode);
+                        this.canvas.panToNodeAnimated(outputNode.id);
+                        const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
+                        this.graph.addEdge(edge);
+                        this.canvas.renderNode(outputNode);
+                    } else {
                             const dataUrl = typeof fig === 'string' ? fig : fig.image;
                             const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
                             if (base64Match) {
