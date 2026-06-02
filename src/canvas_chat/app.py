@@ -1834,7 +1834,62 @@ async def agent(request: AgentRequest, http_request: Request):
                 if request.max_tokens:
                     kwargs["max_tokens"] = request.max_tokens
 
-                response = await litellm.acompletion(**kwargs)
+                try:
+                    response = await litellm.acompletion(**kwargs)
+                except (
+                    APIError,
+                    RateLimitError,
+                    AuthenticationError,
+                ) as e:
+                    error_msg = str(e)
+                    if "tool" in error_msg.lower() and (
+                        "schema" in error_msg.lower()
+                        or "validation" in error_msg.lower()
+                        or "parameter" in error_msg.lower()
+                    ):
+                        tool_call_count += 1
+                        error_feedback = (
+                            f"Tool call failed with error: {error_msg}\n"
+                            "Please retry with correct parameters "
+                            "matching the tool schema exactly. "
+                            "Make sure to include all required fields."
+                        )
+                        yield {
+                            "event": "tool_result",
+                            "data": json.dumps(
+                                {
+                                    "call_id": "retry",
+                                    "tool": "error",
+                                    "output": error_feedback,
+                                }
+                            ),
+                        }
+                        current_messages.append(
+                            {
+                                "role": "assistant",
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": "retry",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "retry",
+                                            "arguments": "{}",
+                                        },
+                                    }
+                                ],
+                            }
+                        )
+                        current_messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": "retry",
+                                "content": error_feedback,
+                            }
+                        )
+                        continue
+                    raise
+
                 choice = response.choices[0]
                 assistant_msg = choice.message
 
@@ -1844,7 +1899,10 @@ async def agent(request: AgentRequest, http_request: Request):
                     for tool_call in assistant_msg.tool_calls:
                         tool_call_count += 1
                         tool_name = tool_call.function.name
-                        tool_args = json.loads(tool_call.function.arguments)
+                        try:
+                            tool_args = json.loads(tool_call.function.arguments)
+                        except json.JSONDecodeError:
+                            tool_args = {}
 
                         yield {
                             "event": "tool_start",
@@ -1863,11 +1921,21 @@ async def agent(request: AgentRequest, http_request: Request):
                             ),
                         }
 
-                        result = await _agent_execute_tool(
-                            tool_name, tool_args, request
-                        )
+                        try:
+                            result = await _agent_execute_tool(
+                                tool_name, tool_args, request
+                            )
+                        except Exception as tool_err:
+                            result = {
+                                "type": "error",
+                                "content": (
+                                    f"Tool execution error: {tool_err}. "
+                                    "Please retry with different "
+                                    "parameters."
+                                ),
+                            }
 
-                        if "node_create" in result:
+                        if "node_create" in result and result.get("type") != "error":
                             yield {
                                 "event": "node_create",
                                 "data": json.dumps(result["node_create"]),
