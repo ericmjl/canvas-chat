@@ -368,7 +368,9 @@ AGENT_TOOLS = [
             "name": "create_note",
             "description": (
                 "Create a note on the canvas. Use for saving "
-                "insights, summaries, or intermediate results."
+                "insights, summaries, or intermediate results. "
+                "Use link_from to specify which search result refs "
+                "this note synthesizes (creates merge edges)."
             ),
             "parameters": {
                 "type": "object",
@@ -377,6 +379,16 @@ AGENT_TOOLS = [
                     "content": {
                         "type": "string",
                         "description": ("Note content (supports markdown)"),
+                    },
+                    "link_from": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Refs of search results this note synthesizes "
+                            "(e.g. ['ref-0', 'ref-2']). Creates merge edges "
+                            "from those nodes. Use this when synthesizing "
+                            "from specific search results."
+                        ),
                     },
                 },
                 "required": ["content"],
@@ -424,12 +436,13 @@ AGENT_SYSTEM_PROMPT = (
     "canvas graph. The user sees your work as nodes and edges.\n"
     "\n"
     "Available tools:\n"
-    "- search_web: Creates a search results node on the canvas. "
-    "Use this FIRST when you need current information.\n"
+    "- search_web: Creates a search node + reference result nodes. "
+    "Each result has a ref label (e.g. ref-0, ref-1).\n"
     "- execute_code: Creates a code node on the canvas. "
     "Plotly is the default plotting library.\n"
     "- create_note: Creates a note node on the canvas. "
-    "Use for summaries, analysis, or intermediate findings.\n"
+    "Use link_from to specify which search result refs "
+    "this note synthesizes (e.g. link_from: ['ref-0', 'ref-2']).\n"
     "- generate_image: Creates an image node on the canvas.\n"
     "\n"
     "Canvas context: The user can see nodes on their canvas. "
@@ -438,6 +451,16 @@ AGENT_SYSTEM_PROMPT = (
     "Workflow guidance:\n"
     "- For research tasks: search first, then analyze results, "
     "then create a summary note.\n"
+    "- CRITICAL: When creating a note that synthesizes search "
+    "results, you MUST use the link_from parameter with the "
+    "REFERENCE node refs (ref-0, ref-1, etc.) — NOT the search "
+    "node ref. This shows which specific sources you used.\n"
+    "  CORRECT: create_note(content='summary...', "
+    "link_from=['ref-0', 'ref-2'])\n"
+    "  WRONG: linking from the search node or omitting link_from\n"
+    "- The link_from refs come from the search results returned "
+    "by search_web. Each result has a [ref-N] label. Use these "
+    "exact labels in link_from.\n"
     "- Combine related computation and plotting into a SINGLE "
     "execute_code call. Do NOT split calculation and "
     "visualization into separate calls.\n"
@@ -1673,39 +1696,74 @@ async def chat(request: ChatRequest, http_request: Request):
     return EventSourceResponse(generate())
 
 
-async def _agent_search_web(query: str, max_results: int = 5) -> str:
-    """Search the web using DuckDuckGo."""
+async def _agent_search_web(query: str, max_results: int = 5) -> list[dict]:
+    """Search the web using DuckDuckGo (same DDGS library as /api/ddg/search)."""
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                "https://html.duckduckgo.com/html/",
-                params={"q": query},
-                headers={"User-Agent": "Mozilla/5.0"},
-            )
-            if resp.status_code != 200:
-                return f"Search failed: HTTP {resp.status_code}"
+        from ddgs import DDGS
 
-            import re
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=max_results))
 
-            results = []
-            for match in re.finditer(
-                r'<a[^>]*class="result__a"[^>]*>(.*?)</a>.*?'
-                r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>',
-                resp.text,
-                re.DOTALL,
-            ):
-                title = re.sub(r"<[^>]+>", "", match.group(1)).strip()
-                snippet = re.sub(r"<[^>]+>", "", match.group(2)).strip()
-                if title and snippet:
-                    results.append(f"- {title}: {snippet}")
-                if len(results) >= max_results:
-                    break
-
-            if not results:
-                return "No results found."
-            return "\n".join(results)
+        formatted = []
+        for r in results:
+            title = r.get("title", "Untitled")
+            url = r.get("href", "")
+            snippet = r.get("body", "")
+            if title and snippet:
+                formatted.append({"title": title, "url": url, "snippet": snippet})
+        return formatted
     except Exception as e:
-        return f"Search error: {e}"
+        return [{"title": "Search error", "url": "", "snippet": str(e)}]
+
+
+_AGENT_ROUTE_PARENTS_SYSTEM = (
+    "You are a canvas routing assistant. Given a user's message and "
+    "a list of visible canvas nodes (each with an id, type, and title), "
+    "return the IDs of nodes that are directly relevant as context or "
+    "parents for the message.\n\n"
+    "Rules:\n"
+    "- Output ONLY a JSON array of node ID strings.\n"
+    "- Return at most 5 IDs.\n"
+    "- If no nodes are relevant, return an empty array: []\n"
+    "- Prefer nodes whose topic directly relates to the message.\n"
+    "- Ignore nodes that are only tangentially related.\n"
+)
+
+
+async def _agent_route_parents(
+    message: str,
+    viewport_context: list[dict],
+    *,
+    model: str,
+    api_key: str | None,
+    base_url: str | None,
+) -> list[str]:
+    """Use a fast LLM call to pick relevant parent node IDs from the viewport."""
+    if not viewport_context:
+        return []
+
+    node_list = "\n".join(
+        f"- id: {n['id']}, type: {n['type']}, title: {n['title']}"
+        for n in viewport_context
+        if n.get("id")
+    )
+    user_prompt = (
+        f"User message:\n{message}\n\n"
+        f"Visible canvas nodes:\n{node_list}\n\n"
+        "Return JSON array of relevant node IDs."
+    )
+    try:
+        return await run_structured_string_list(
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            system_prompt=_AGENT_ROUTE_PARENTS_SYSTEM,
+            user_prompt=user_prompt,
+            temperature=0.1,
+            max_tokens=150,
+        )
+    except Exception:
+        return []
 
 
 async def _agent_execute_tool(
@@ -1714,15 +1772,54 @@ async def _agent_execute_tool(
     """Execute a single agent tool and return the result."""
     if tool_name == "search_web":
         query = tool_args.get("query", "")
-        result_text = await _agent_search_web(query)
+        search_results = await _agent_search_web(query)
+        provider = "DuckDuckGo"
+
+        search_content = (
+            f'**Search ({provider}):** "{query}"\n\n'
+            f"*Found {len(search_results)} results*"
+        )
+
+        search_ref = "search-latest"
+        nodes = [
+            {
+                "type": "search",
+                "ref": search_ref,
+                "title": f"Search: {query}",
+                "content": search_content,
+            }
+        ]
+
+        llm_lines = []
+        for i, r in enumerate(search_results):
+            ref_id = f"ref-{i}"
+            ref_content = f"**[{r['title']}]({r['url']})**\n\n{r['snippet']}"
+            nodes.append(
+                {
+                    "type": "reference",
+                    "ref": ref_id,
+                    "title": r["title"],
+                    "content": ref_content,
+                    "url": r["url"],
+                }
+            )
+            llm_lines.append(
+                f"[{ref_id}] {r['title']}\n  URL: {r['url']}\n  {r['snippet']}"
+            )
+
+        llm_content = "\n\n".join(llm_lines)
+        if llm_lines:
+            llm_content += (
+                "\n\nWhen you create a synthesis note based on these "
+                "results, use their ref labels in the link_from parameter. "
+                "Example: create_note(content='summary...', "
+                "link_from=['ref-0', 'ref-1'])"
+            )
+
         return {
             "type": "search",
-            "content": result_text,
-            "node_create": {
-                "type": "search",
-                "title": f"Search: {query}",
-                "content": result_text,
-            },
+            "content": llm_content,
+            "nodes_create": nodes,
         }
 
     elif tool_name == "generate_image":
@@ -1786,14 +1883,18 @@ async def _agent_execute_tool(
     elif tool_name == "create_note":
         title = tool_args.get("title", "")
         content = tool_args.get("content", "")
+        link_from = tool_args.get("link_from") or []
+        node_data = {
+            "type": "note",
+            "title": title,
+            "content": content,
+        }
+        if link_from:
+            node_data["link_from_refs"] = link_from
         return {
             "type": "note",
             "content": f"Note created: {title or 'Untitled'}",
-            "node_create": {
-                "type": "note",
-                "title": title,
-                "content": content,
-            },
+            "node_create": node_data,
         }
 
     return {"type": "text", "content": f"Unknown tool: {tool_name}"}
@@ -1830,6 +1931,34 @@ async def agent(request: AgentRequest, http_request: Request):
         litellm_messages.append({"role": msg.role, "content": content})
 
     async def generate():
+        # Route to relevant canvas nodes before starting the agent loop
+        if request.viewport_context and request.messages:
+            last_user_msg = ""
+            for msg in reversed(request.messages):
+                if msg.role == "user":
+                    last_user_msg = (
+                        msg.content
+                        if isinstance(msg.content, str)
+                        else str(msg.content)
+                    )
+                    break
+            if last_user_msg:
+                try:
+                    parent_ids = await _agent_route_parents(
+                        last_user_msg,
+                        request.viewport_context,
+                        model=request.model,
+                        api_key=api_key,
+                        base_url=request.base_url,
+                    )
+                    if parent_ids:
+                        yield {
+                            "event": "set_parents",
+                            "data": json.dumps(parent_ids),
+                        }
+                except Exception:
+                    pass
+
         tool_call_count = 0
         current_messages = list(litellm_messages)
 
@@ -1949,7 +2078,13 @@ async def agent(request: AgentRequest, http_request: Request):
                                 ),
                             }
 
-                        if "node_create" in result and result.get("type") != "error":
+                        if "nodes_create" in result and result.get("type") != "error":
+                            for node_data in result["nodes_create"]:
+                                yield {
+                                    "event": "node_create",
+                                    "data": json.dumps(node_data),
+                                }
+                        elif "node_create" in result and result.get("type") != "error":
                             yield {
                                 "event": "node_create",
                                 "data": json.dumps(result["node_create"]),
