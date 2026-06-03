@@ -16,12 +16,28 @@
 
 Agentic mode replaces the single-turn "user types → one AI node streams back" flow with a ReAct-style agent loop. The LLM receives tool definitions, calls tools as needed, and the system executes them and feeds results back until the LLM produces a final text response.
 
+### Design Principle: Agent Mimics Human Behavior
+
+**The agent MUST NOT define its own parallel pipelines for operations that already exist as user-facing features.** Instead, the agent orchestrates the exact same steps a human user would perform manually:
+
+1. **Reuse existing node types and creation flows** — When the agent searches, it creates the same SEARCH node + REFERENCE nodes + SEARCH_RESULT edges that `/search` produces. When the agent runs code, it creates the same CODE node that `/code` produces. No special "agent-only" node variants.
+
+2. **Reuse existing APIs** — The agent calls the same backend endpoints (`/api/ddg/search`, `/api/exa/search`) that the existing features use, not custom agent-only endpoints that duplicate functionality.
+
+3. **Compose multi-step workflows** — After search, the agent selects all reference nodes, reads them, then creates a summary — just as a human would. The agent is an orchestrator, not a separate system.
+
+4. **Preserve data fidelity** — Search results include full URLs (as markdown links), publication dates, and all metadata. The agent must not strip or lose information that the normal flow provides.
+
+**Why:** If the agent has its own search implementation, it drifts from the user-facing behavior. Bugs get fixed in one path but not the other. Features (URLs, reference nodes, edge types) are missing from the agent path. By making the agent reuse the exact same code paths, any improvement to the base feature automatically benefits the agent.
+
 **Key components:**
 
 1. **AgentFeature** — Frontend plugin (`plugins/agent.js`) implementing FeaturePlugin with `/agent` slash command
-2. **Backend `/api/agent` endpoint** — Handles tool-calling loop with LLM, returns streaming SSE events
-3. **Viewport context gatherer** — Serializes visible nodes into the agent's context
-4. **Plotly integration** — Updated Pyodide setup code for Plotly default
+2. **Backend `/api/agent` endpoint** — Handles parent routing + tool-calling loop with LLM, returns streaming SSE events
+3. **Parent routing** — Fast LLM call that selects relevant canvas nodes as parents for the agent node
+4. **Viewport context gatherer** — Serializes visible nodes into the agent's context
+5. **Ref system** — LLM-controlled graph structure via stable ref labels
+6. **Plotly integration** — Updated Pyodide setup code for Plotly default
 
 ## 2. Architecture
 
@@ -33,20 +49,26 @@ User types message
         ▼
 AgentFeature.handleCommand('/agent', args)
         │
+        ├── Create agent node on canvas (no HUMAN node)
         ├── Gather viewport context (visible nodes → serialized text)
-        ├── Create human node on canvas
-        ├── Create agent node (streaming placeholder)
         │
         └── POST /api/agent (SSE stream)
                 │
-                ├── LLM call with tools + viewport context
+                ├── Parent routing: fast LLM call picks relevant
+                │   canvas nodes from viewport context
+                │       │
+                │       └── Send SSE event: set_parents [nodeIds]
+                │           (frontend creates REPLY/MERGE edges)
+                │
+                ├── Main LLM call with tools + viewport context
                 │       │
                 │       ├── LLM returns text → stream to agent node (done)
                 │       │
                 │       └── LLM returns tool_calls → for each:
                 │               │
                 │               ├── Send SSE event: { type: "tool_start", tool, call_id }
-                │               ├── Execute tool (frontend or backend)
+                │               ├── Execute tool (backend)
+                │               ├── Send SSE event: { type: "node_create", ... }
                 │               ├── Send SSE event: { type: "tool_result", call_id, result }
                 │               └── Feed result back to LLM → repeat loop
                 │
@@ -102,12 +124,17 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "create_note",
-            "description": "Create a note node on the canvas with text content.",
+            "description": "Create a note node on the canvas with text content. Use link_from to specify which search result refs this note synthesizes.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "title": {"type": "string"},
-                    "content": {"type": "string"}
+                    "content": {"type": "string"},
+                    "link_from": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Refs of search results to link from (e.g. ['ref-0', 'ref-2']). Creates merge edges."
+                    }
                 },
                 "required": ["content"]
             }
@@ -117,7 +144,7 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "search_web",
-            "description": "Search the web for information.",
+            "description": "Search the web for information. Returns results with ref labels (ref-0, ref-1, ...).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -145,22 +172,85 @@ AGENT_TOOLS = [
 ]
 ```
 
-### 2.4 SSE Event Protocol
+### 2.4 Ref System: LLM-Controlled Graph Structure
+
+The agent controls the graph topology through a **ref system**. The backend assigns stable ref labels to nodes it creates, exposes them in the tool_result text, and the LLM uses them in subsequent tool calls to specify edge relationships.
+
+**Why refs instead of auto-linking:** Hardcoded sequential linking (each new node links to the previous) forces a linear chain that doesn't match how a human uses the canvas. A human selects specific nodes to reply from. The ref system lets the LLM do the same — it reads search results, decides which are relevant, and explicitly says "this note synthesizes from ref-0 and ref-3."
+
+**Flow:**
+
+```text
+1. LLM calls search_web("query")
+2. Backend creates search + reference nodes, assigns refs:
+   node_create: { type: "search", ref: "search-latest", ... }
+   node_create: { type: "reference", ref: "ref-0", ... }
+   node_create: { type: "reference", ref: "ref-1", ... }
+   node_create: { type: "reference", ref: "ref-2", ... }
+3. Tool result text includes ref labels:
+   [ref-0] Title...
+   [ref-1] Title...
+   [ref-2] Title...
+4. LLM reads results, decides ref-0 and ref-2 are relevant
+5. LLM calls create_note(link_from=["ref-0", "ref-2"])
+6. Backend emits node_create with link_from_refs:
+   node_create: { type: "note", link_from_refs: ["ref-0", "ref-2"], ... }
+7. Frontend resolves refs → node IDs, creates MERGE edges
+```
+
+**Frontend mapping:** The frontend maintains a `Map<ref, nodeId>` (`refToNodeId`). When a `node_create` event arrives with a `ref`, it's stored. When a `link_from_refs` array is present, the frontend resolves each ref to a node ID and creates MERGE edges. If no refs resolve (e.g., the LLM hallucinated a ref), it falls back to a single GENERATES edge from the default parent.
+
+**Ref stability:** Refs are scoped to the current agent session. The `search-latest` ref is reused for each search (overwrites). Individual result refs (`ref-0`, `ref-1`, ...) are cumulative across searches within a session.
+
+### 2.5 Parent Routing
+
+Before the main agent loop starts, the backend performs a **parent routing** step that determines which existing canvas nodes the agent node should link from. This replaces the old pattern of requiring the user to manually select nodes or always creating a disconnected HUMAN node.
+
+**Why no HUMAN node:** In `/agent` mode, the agent IS the response. Creating a separate HUMAN node adds visual clutter. Instead, the agent node itself links directly to relevant canvas nodes — just like a human user would select nodes and type a reply.
+
+**Routing flow:**
+
+```text
+1. Frontend creates agent node (unconnected, "Working...")
+2. Frontend sends viewport context + user message to /api/agent
+3. Backend runs _agent_route_parents():
+   - Fast LLM call with the user's message + viewport node list
+   - System prompt: "Which of these nodes are relevant context?"
+   - Returns JSON array of node IDs (or empty array)
+4. Backend emits set_parents SSE event with the chosen IDs
+5. Frontend receives set_parents:
+   - Creates REPLY edge (1 parent) or MERGE edges (multiple parents)
+   - If empty array or routing fails: agent node stays unconnected
+6. Main agent loop proceeds normally
+```
+
+**Routing parameters:**
+
+- Uses `run_structured_string_list` with temperature 0.1 (deterministic)
+- Max 5 parent nodes
+- Falls back to empty list on any error (agent starts unconnected)
+
+**Location:** `src/canvas_chat/app.py` — `_agent_route_parents()`, agent endpoint `generate()`
+
+### 2.6 SSE Event Protocol
 
 The `/api/agent` endpoint emits these SSE events:
 
 ```text
-event: text          data: "chunk of response text"     # Streaming final text
+event: set_parents   data: ["node-id-1", "node-id-2"]       # Parent routing (first event)
+event: text          data: "chunk of response text"          # Streaming final text
 event: tool_start    data: {"tool": "execute_code", "call_id": "...", "purpose": "..."}
 event: tool_result   data: {"call_id": "...", "output": "...", "images": [...], "nodes": [...]}
-event: node_create   data: {"type": "code", "title": "...", "code": "...", "output": "...", "parent_id": "..."}
-event: node_create   data: {"type": "note", "title": "...", "content": "...", "parent_id": "..."}
-event: node_create   data: {"type": "image", "image_url": "...", "parent_id": "..."}
+event: node_create   data: {"type": "search", "ref": "search-latest", "title": "...", "content": "..."}
+event: node_create   data: {"type": "reference", "ref": "ref-0", "title": "...", "content": "..."}
+event: node_create   data: {"type": "note", "title": "...", "content": "...", "link_from_refs": ["ref-0", "ref-2"]}
+event: node_create   data: {"type": "code", "title": "...", "code": "..."}
+event: node_create   data: {"type": "image", "image_url": "..."}
 event: done          data: ""
 event: error         data: "error message"
 ```
 
-### 2.5 Viewport Context Gathering
+### 2.7 Viewport Context Gathering
 
 The frontend gathers viewport context before each agent request:
 

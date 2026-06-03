@@ -68,27 +68,14 @@ class AgentFeature extends FeaturePlugin {
      * @returns {Promise<void>}
      */
     async runAgent(message) {
-        const parentIds = this.canvas.getSelectedNodeIds();
+        const model = this.modelPicker.value;
 
         const humanNode = createNode(NodeType.HUMAN, message, {
-            position: this.graph.autoPosition(parentIds.length > 0 ? parentIds : []),
+            position: this.graph.autoPosition([]),
         });
         this.graph.addNode(humanNode);
         this.canvas.zoomToSelectionAnimated([humanNode.id], 0.8, 300);
 
-        if (parentIds.length > 0) {
-            for (const parentId of parentIds) {
-                const edge = createEdge(
-                    parentId,
-                    humanNode.id,
-                    parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY
-                );
-                this.graph.addEdge(edge);
-                this.updateCollapseButtonForNode(parentId);
-            }
-        }
-
-        const model = this.modelPicker.value;
         const agentNode = createNode(NodeType.AI, 'Working...', {
             position: this.graph.autoPosition([humanNode.id]),
             model: model.split('/').pop(),
@@ -100,20 +87,16 @@ class AgentFeature extends FeaturePlugin {
         this.graph.addEdge(agentEdge);
         this.updateCollapseButtonForNode(humanNode.id);
 
-        const conversationMessages = this.graph.resolveContext([humanNode.id]);
         const viewportContext = this.gatherViewportContext();
 
-        const apiMessages = conversationMessages.map((m) => ({
-            role: m.role,
-            content: m.content || '',
-        }));
+        const apiMessages = [{ role: 'user', content: message }];
 
         const abortController = new AbortController();
 
         this.streamingManager.register(agentNode.id, {
             abortController,
             featureId: 'agent',
-            context: { messages: apiMessages, model, humanNodeId: humanNode.id },
+            context: { messages: apiMessages, model, agentNodeId: agentNode.id },
             onContinue: async () => {
                 await this.runAgent('continue');
             },
@@ -121,6 +104,9 @@ class AgentFeature extends FeaturePlugin {
 
         let fullContent = '';
         const lastToolParentId = { value: agentNode.id };
+        const lastSearchNodeId = { value: null };
+        let referenceOffsetY = 0;
+        const refToNodeId = new Map();
 
         try {
             const llmRequest = this.buildLLMRequest({});
@@ -146,19 +132,54 @@ class AgentFeature extends FeaturePlugin {
 
             await readSSEStream(response, {
                 onEvent: (eventType, data) => {
-                    if (eventType === 'text') {
+                    if (eventType === 'set_parents') {
+                        try {
+                            const parentIds = JSON.parse(data);
+                            if (Array.isArray(parentIds) && parentIds.length > 0) {
+                                for (const pid of parentIds) {
+                                    const node = this.graph.getNode(pid);
+                                    if (node) {
+                                        const edgeType = parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY;
+                                        const edge = createEdge(pid, humanNode.id, edgeType);
+                                        this.graph.addEdge(edge);
+                                        this.updateCollapseButtonForNode(pid);
+                                    }
+                                }
+                                this.canvas.updateAllEdges(this.graph);
+                                this.canvas.renderNode(this.graph.getNode(humanNode.id));
+                            }
+                        } catch (e) {
+                            console.warn('[Agent] Failed to parse set_parents:', e);
+                        }
+                    } else if (eventType === 'text') {
                         fullContent += data;
                         this.canvas.updateNodeContent(agentNode.id, fullContent, true);
                         this.graph.updateNode(agentNode.id, { content: fullContent });
                     } else if (eventType === 'node_create') {
                         try {
                             const instruction = JSON.parse(data);
+                            if (instruction.type === 'search') {
+                                referenceOffsetY = 0;
+                            }
                             const newNodeId = this.createNodeFromInstruction(
                                 instruction,
-                                lastToolParentId.value
+                                lastToolParentId.value,
+                                lastSearchNodeId,
+                                referenceOffsetY,
+                                refToNodeId
                             );
                             if (newNodeId) {
-                                lastToolParentId.value = newNodeId;
+                                if (instruction.ref) {
+                                    refToNodeId.set(instruction.ref, newNodeId);
+                                }
+                                if (instruction.type === 'search') {
+                                    lastToolParentId.value = newNodeId;
+                                    lastSearchNodeId.value = newNodeId;
+                                } else if (instruction.type === 'reference') {
+                                    referenceOffsetY += 200;
+                                } else {
+                                    lastToolParentId.value = newNodeId;
+                                }
                             }
                         } catch (e) {
                             console.warn('[Agent] Failed to parse node_create:', e);
@@ -227,21 +248,39 @@ class AgentFeature extends FeaturePlugin {
 
     /**
      * @param {Object} instruction - Node creation instruction from backend
-     * @param {string} parentId - Parent node ID to link from
+     * @param {string} parentId - Default parent node ID to link from
+     * @param {Object} lastSearchNodeId - { value: string|null } tracks last search node for reference linking
+     * @param {number} referenceOffsetY - Vertical offset for stacking reference nodes
+     * @param {Map} refToNodeId - Map from backend ref labels to frontend node IDs
      * @returns {string|null} New node ID, or null on failure
      */
-    createNodeFromInstruction(instruction, parentId) {
+    createNodeFromInstruction(instruction, parentId, lastSearchNodeId, referenceOffsetY, refToNodeId) {
         let nodeType;
-        let nodeData = {
-            position: this.graph.autoPosition([parentId]),
-        };
+        let nodeData = {};
+        let edgeType = EdgeType.GENERATES;
+        let linkFromRefs = instruction.link_from_refs || null;
 
         switch (instruction.type) {
-            case 'search':
+            case 'search': {
                 nodeType = NodeType.SEARCH;
                 nodeData.content = instruction.content || '';
                 nodeData.title = instruction.title || 'Search';
+                nodeData.position = this.graph.autoPosition([parentId]);
                 break;
+            }
+            case 'reference': {
+                nodeType = NodeType.REFERENCE;
+                nodeData.content = instruction.content || '';
+                nodeData.title = instruction.title || '';
+                const searchId = lastSearchNodeId?.value || parentId;
+                const searchNode = this.graph.getNode(searchId);
+                nodeData.position = searchNode
+                    ? { x: searchNode.position.x + 400, y: searchNode.position.y + referenceOffsetY }
+                    : this.graph.autoPosition([parentId]);
+                parentId = searchId;
+                edgeType = EdgeType.SEARCH_RESULT;
+                break;
+            }
             case 'code':
                 nodeType = NodeType.CODE;
                 nodeData.code = instruction.code || '';
@@ -264,12 +303,32 @@ class AgentFeature extends FeaturePlugin {
                 return null;
         }
 
+        if (!nodeData.position) {
+            nodeData.position = this.graph.autoPosition([parentId]);
+        }
+
         const newNode = createNode(nodeType, nodeData.content || '', nodeData);
         this.graph.addNode(newNode);
         this.canvas.zoomToSelectionAnimated([newNode.id], 0.8, 300);
 
-        const edge = createEdge(parentId, newNode.id, EdgeType.GENERATES);
-        this.graph.addEdge(edge);
+        if (linkFromRefs && refToNodeId) {
+            const resolvedIds = linkFromRefs
+                .map((ref) => refToNodeId.get(ref))
+                .filter((id) => id);
+            if (resolvedIds.length > 0) {
+                for (const srcId of resolvedIds) {
+                    const edge = createEdge(srcId, newNode.id, EdgeType.MERGE);
+                    this.graph.addEdge(edge);
+                }
+            } else {
+                const edge = createEdge(parentId, newNode.id, edgeType);
+                this.graph.addEdge(edge);
+            }
+        } else {
+            const edge = createEdge(parentId, newNode.id, edgeType);
+            this.graph.addEdge(edge);
+        }
+
         this.canvas.renderNode(newNode);
         this.canvas.updateAllEdges(this.graph);
 

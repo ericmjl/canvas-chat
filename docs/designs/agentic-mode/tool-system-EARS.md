@@ -33,15 +33,25 @@ When the agent calls `execute_code`, the system SHALL:
 ## TOOL-REQ-002: Web search tool
 
 **Type:** Ubiquitous
-**Summary:** The agent SHALL have access to a `search_web` tool.
+**Summary:** The agent SHALL have access to a `search_web` tool that produces the same node structure as `/search` and exposes ref labels for the LLM.
 
 When the agent calls `search_web`, the system SHALL:
 
-1. Execute a web search using DDG or Exa (whichever is configured)
-2. Return the top results as structured text (title, URL, snippet)
-3. Results are returned as a tool result, not as a node
+1. Execute a web search using the same DDGS library as `/api/ddg/search`
+2. Create a SEARCH node on the canvas (identical to `ResearchFeature.handleSearch()`)
+3. Create REFERENCE nodes for each result with full markdown: `**[title](url)**\n\nsnippet` (including URLs as clickable links)
+4. Create SEARCH_RESULT edges from the search node to each reference node
+5. Assign stable ref labels to each node (`ref: "search-latest"` for search, `ref: "ref-0"`, `ref: "ref-1"`, ... for references)
+6. Return the structured results to the LLM as a tool result with ref labels in the text (e.g., `[ref-0] Title\n  URL: ...\n  Snippet...`)
 
-**Location:** `src/canvas_chat/app.py` — agent tool handler; `src/canvas_chat/plugins/ddg_endpoints.py`
+**The search tool MUST NOT:**
+
+- Strip URLs from results
+- Dump all results as plain text into a single node
+- Create a different node structure than what `/search` produces
+- Use a separate search endpoint that duplicates the existing search logic
+
+**Location:** `src/canvas_chat/app.py` — `_agent_execute_tool()` for `search_web`, `_agent_search_web()`; `src/canvas_chat/static/js/plugins/research.js` — `handleSearch()` (reference implementation)
 
 ---
 
@@ -62,11 +72,18 @@ When the agent calls `generate_image`, the system SHALL:
 ## TOOL-REQ-004: Note creation tool
 
 **Type:** Ubiquitous
-**Summary:** The agent SHALL have access to a `create_note` tool.
+**Summary:** The agent SHALL have access to a `create_note` tool that supports LLM-controlled graph linking via refs.
 
-When the agent calls `create_note`, the system SHALL emit a `node_create` SSE event with type `note`, the provided title and content, and the agent node as parent. The frontend creates the note node on the canvas.
+When the agent calls `create_note`, the system SHALL:
 
-**Location:** `src/canvas_chat/app.py` — agent tool handler
+1. Emit a `node_create` SSE event with type `note`, the provided title and content
+2. If the `link_from` parameter is provided (array of ref labels), include `link_from_refs` in the `node_create` event
+3. The frontend SHALL resolve ref labels to node IDs using the `refToNodeId` map and create MERGE edges from each resolved node
+4. If no refs resolve, fall back to a single GENERATES edge from the default parent
+
+**The LLM controls the graph structure.** The frontend MUST NOT auto-link notes to all search results. The LLM reads the tool_result, decides which results are relevant, and explicitly specifies them via `link_from`.
+
+**Location:** `src/canvas_chat/app.py` — `_agent_execute_tool()` for `create_note`; `src/canvas_chat/static/js/plugins/agent.js` — `createNodeFromInstruction()`
 
 ---
 
@@ -75,6 +92,25 @@ When the agent calls `create_note`, the system SHALL emit a `node_create` SSE ev
 **Type:** Ubiquitous
 **Summary:** The system SHALL send standard OpenAI-format tool definitions with each agent LLM call.
 
-The tools SHALL be: `execute_code`, `search_web`, `generate_image`, `create_note`. Each tool definition follows the OpenAI function calling format with `name`, `description`, and `parameters` JSON Schema.
+The tools SHALL be: `execute_code`, `search_web`, `generate_image`, `create_note`. Each tool definition follows the OpenAI function calling format with `name`, `description`, and `parameters` JSON Schema. The `create_note` tool SHALL include an optional `link_from` parameter (array of strings) for specifying ref labels.
 
 **Location:** `src/canvas_chat/app.py` — `AGENT_TOOLS` constant
+
+---
+
+## TOOL-REQ-006: Ref system for LLM-controlled graph structure
+
+**Type:** Ubiquitous
+**Summary:** The system SHALL use a ref system so the LLM can control which nodes link to which.
+
+The ref system SHALL:
+
+1. Assign a `ref` field to each `node_create` SSE event (e.g., `"search-latest"`, `"ref-0"`, `"ref-1"`)
+2. Expose ref labels in the tool_result text so the LLM can reference specific results (e.g., `[ref-0] Title\n  URL: ...\n  Snippet...`)
+3. The `create_note` tool accepts an optional `link_from` parameter (array of ref strings)
+4. The frontend maintains a `Map<ref, nodeId>` (`refToNodeId`) to resolve refs to actual canvas node IDs
+5. When a `node_create` event contains `link_from_refs`, the frontend creates MERGE edges from each resolved ref's node
+
+**Fallback:** If `link_from_refs` contains refs that don't resolve (e.g., the LLM hallucinated a ref), the frontend SHALL fall back to a single GENERATES edge from the default parent node.
+
+**Location:** `src/canvas_chat/app.py` — `_agent_execute_tool()`, AGENT_SYSTEM_PROMPT; `src/canvas_chat/static/js/plugins/agent.js` — SSE event handler, `createNodeFromInstruction()`

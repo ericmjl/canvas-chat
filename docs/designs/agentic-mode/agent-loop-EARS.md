@@ -17,9 +17,9 @@
 
 When the user invokes `/agent <message>`, the system SHALL:
 
-1. Create a HUMAN node with the user's message
-2. Create an AI node (streaming placeholder)
-3. Start the agent loop by sending the message + viewport context + tool definitions to the `/api/agent` endpoint
+1. Create an AI node (streaming placeholder, initially unconnected)
+2. Start the agent loop by sending the message + viewport context + tool definitions to the `/api/agent` endpoint
+3. The agent node SHALL NOT have a corresponding HUMAN node — the agent IS the response
 
 **Location:** `src/canvas_chat/static/js/plugins/agent.js` — `AgentFeature.handleCommand()`
 
@@ -104,3 +104,46 @@ When the `/api/agent` endpoint detects that the model does not support function/
 While the agent loop is running, the AI node SHALL display a Stop button. When the user clicks Stop, the frontend SHALL abort the SSE connection. Any partially created nodes remain on the canvas. The agent node content is preserved up to the point of interruption.
 
 **Location:** `src/canvas_chat/static/js/plugins/agent.js` — uses `StreamingManager` for stop button
+
+---
+
+## AGENT-REQ-009: Parent routing
+
+**Type:** Ubiquitous
+**Summary:** The agent SHALL automatically determine which existing canvas nodes are relevant context and link from them.
+
+When the agent loop starts, the backend SHALL:
+
+1. Extract the user's message and viewport context (node IDs, types, titles)
+2. Perform a fast LLM routing call that selects at most 5 relevant parent node IDs
+3. Emit a `set_parents` SSE event with the chosen node IDs
+4. The frontend SHALL create REPLY edges (1 parent) or MERGE edges (multiple parents) from those nodes to the agent node
+5. If no nodes are relevant, the agent node SHALL remain unconnected
+
+**The routing call SHALL:**
+
+- Use `run_structured_string_list` with temperature 0.1 for deterministic results
+- Complete before the main agent loop starts (adds ~1-2s latency)
+- Gracefully fall back to no parents on any error
+
+**Location:** `src/canvas_chat/app.py` — `_agent_route_parents()`, agent endpoint `generate()`; `src/canvas_chat/static/js/plugins/agent.js` — `set_parents` handler
+
+---
+
+## AGENT-REQ-010: Agent mimics human behavior
+
+**Type:** Ubiquitous
+**Summary:** The agent SHALL reuse existing feature implementations and let the LLM control graph structure via the ref system.
+
+For every tool that corresponds to an existing user-facing feature, the agent SHALL produce the same canvas artifacts (nodes, edges, data structures) that the feature produces when a human user invokes it directly:
+
+1. **Search** — `search_web` SHALL create SEARCH node + REFERENCE nodes + SEARCH_RESULT edges, identical to `/search`. Results MUST include URLs as markdown links. Each node gets a ref label. See TOOL-REQ-002.
+2. **Code** — `execute_code` SHALL create CODE nodes identical to `/code`. See TOOL-REQ-001.
+3. **Notes** — `create_note` SHALL create NOTE nodes. The LLM controls which nodes the note links from via the `link_from` parameter (ref labels), creating MERGE edges. See TOOL-REQ-004, TOOL-REQ-006.
+4. **Graph structure** — The LLM decides which search results are relevant and explicitly specifies them in `link_from`. The frontend MUST NOT auto-link notes to all results. See TOOL-REQ-006.
+
+**The agent MUST NOT introduce new node types, edge types, data formats, or API endpoints for operations that already exist.** The agent is an orchestrator that calls existing features in sequence, not a separate system.
+
+**Rationale:** Separate pipelines drift from user-facing behavior (missing URLs, different node structures, lost metadata). Auto-linking forces a linear chain that doesn't match human canvas usage. The ref system lets the LLM choose its sources, just like a human selects nodes before replying.
+
+**Location:** `src/canvas_chat/static/js/plugins/agent.js` — `AgentFeature`; `src/canvas_chat/app.py` — `_agent_execute_tool()`
