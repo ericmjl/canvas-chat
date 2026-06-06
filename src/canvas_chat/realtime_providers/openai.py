@@ -68,17 +68,23 @@ class OpenAIRealtimeBridge(RealtimeProviderBridge):
             "type": "session.update",
             "session": {
                 "type": "realtime",
-                "modalities": ["text"],
+                "output_modalities": ["text"],
                 "instructions": system_prompt,
                 "tools": openai_tools,
                 "tool_choice": "auto",
-                "input_audio_format": "pcm16",
-                "output_audio_format": "pcm16",
-                "turn_detection": {
-                    "type": "server_vad",
-                    "threshold": 0.5,
-                    "prefix_padding_ms": 300,
-                    "silence_duration_ms": 500,
+                "audio": {
+                    "input": {
+                        "format": {"type": "audio/pcm", "rate": 24000},
+                        "turn_detection": {
+                            "type": "server_vad",
+                            "threshold": 0.5,
+                            "prefix_padding_ms": 300,
+                            "silence_duration_ms": 500,
+                        },
+                    },
+                    "output": {
+                        "format": {"type": "audio/pcm", "rate": 24000},
+                    },
                 },
             },
         }
