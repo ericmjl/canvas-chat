@@ -67,7 +67,7 @@ class OpenAIRealtimeBridge(RealtimeProviderBridge):
         session_config = {
             "type": "session.update",
             "session": {
-                "type": "conversation",
+                "type": "realtime",
                 "modalities": ["text"],
                 "instructions": system_prompt,
                 "tools": openai_tools,
