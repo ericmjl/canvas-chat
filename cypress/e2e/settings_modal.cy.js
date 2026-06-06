@@ -142,4 +142,30 @@ describe('Settings Modal', () => {
         cy.get('#shortcuts-list .shortcuts-row').contains('Show help').parents('.shortcuts-row').find('.shortcuts-key').should('not.contain', 'h');
         cy.get('#save-settings-btn').click();
     });
+
+    it('save settings from LLM panel does not throw', () => {
+        cy.get('#settings-btn').click();
+        cy.get('#settings-modal').should('be.visible');
+        cy.get('#save-settings-btn').click();
+        cy.get('#settings-modal').should('not.be.visible');
+
+        cy.window().then((win) => {
+            assert.isUndefined(win.__settingsError, 'saveSettings should not throw');
+        });
+    });
+
+    it('save and re-open persists voice provider', () => {
+        cy.get('#settings-btn').click();
+        cy.get('#settings-modal').should('be.visible');
+
+        cy.get('#voice-provider').select('gemini');
+        cy.get('#save-settings-btn').click();
+        cy.get('#settings-modal').should('not.be.visible');
+
+        cy.get('#settings-btn').click();
+        cy.get('#voice-provider').should('have.value', 'gemini');
+
+        cy.get('#voice-provider').select('auto');
+        cy.get('#save-settings-btn').click();
+    });
 });
