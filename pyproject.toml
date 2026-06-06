@@ -19,6 +19,9 @@ dependencies = [
     "python-pptx>=1.0.0",
     "python-slugify",
     "defusedxml",
+    "websockets>=13.0",
+    "google-genai>=1.0.0",
+    "openai>=1.0.0",
 ]
 
 [project.optional-dependencies]

@@ -6,6 +6,7 @@
 import { EventEmitter } from './event-emitter.js';
 import { CancellableEvent, CanvasEvent } from './plugin-events.js';
 import { AgentFeature } from './plugins/agent.js';
+import { RealtimeAgentPlugin } from './plugins/realtime-agent.js';
 import { CodeFeature } from './plugins/code.js';
 import { CommitteeFeature } from './plugins/committee.js';
 import { FactcheckFeature } from './plugins/factcheck.js';
@@ -225,6 +226,12 @@ class FeatureRegistry {
                         handler: 'handleCommand',
                     },
                 ],
+                priority: PRIORITY.BUILTIN,
+            },
+            {
+                id: 'realtime-agent',
+                feature: RealtimeAgentPlugin,
+                slashCommands: [],
                 priority: PRIORITY.BUILTIN,
             },
         ];

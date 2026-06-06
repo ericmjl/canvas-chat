@@ -12,9 +12,14 @@
  */
 
 import { FeaturePlugin } from '../feature-plugin.js';
-import { EdgeType, NodeType, createEdge, createNode, getDefaultNodeSize } from '../graph-types.js';
+import { EdgeType, NodeType, createEdge, createNode } from '../graph-types.js';
 import { apiUrl } from '../utils.js';
 import { readSSEStream } from '../sse.js';
+import {
+    createNodeFromInstruction as _createNodeFromInstruction,
+    executeCodeOnNode as _executeCodeOnNode,
+    gatherViewportContext as _gatherViewportContext,
+} from '../agent-utils.js';
 
 /**
  *
@@ -221,29 +226,7 @@ class AgentFeature extends FeaturePlugin {
      * @returns {Array<Object>}
      */
     gatherViewportContext() {
-        const viewBox = this.canvas.viewBox;
-        if (!viewBox) return [];
-
-        const allNodes = this.graph.getAllNodes();
-        const visible = allNodes.filter((node) => {
-            if (!this.graph.isNodeVisible(node.id)) return false;
-            const pos = node.position;
-            if (!pos) return false;
-            const size = getDefaultNodeSize(node.type);
-            return (
-                pos.x + size.width > viewBox.x &&
-                pos.x < viewBox.x + viewBox.width &&
-                pos.y + size.height > viewBox.y &&
-                pos.y < viewBox.y + viewBox.height
-            );
-        });
-
-        return visible.map((node) => ({
-            id: node.id,
-            type: node.type,
-            title: node.title || '',
-            content: (node.content || '').substring(0, 2000),
-        }));
+        return _gatherViewportContext(this.graph, this.canvas);
     }
 
     /**
@@ -255,88 +238,12 @@ class AgentFeature extends FeaturePlugin {
      * @returns {string|null} New node ID, or null on failure
      */
     createNodeFromInstruction(instruction, parentId, lastSearchNodeId, referenceOffsetY, refToNodeId) {
-        let nodeType;
-        let nodeData = {};
-        let edgeType = EdgeType.GENERATES;
-        let linkFromRefs = instruction.link_from_refs || null;
-
-        switch (instruction.type) {
-            case 'search': {
-                nodeType = NodeType.SEARCH;
-                nodeData.content = instruction.content || '';
-                nodeData.title = instruction.title || 'Search';
-                nodeData.position = this.graph.autoPosition([parentId]);
-                break;
-            }
-            case 'reference': {
-                nodeType = NodeType.REFERENCE;
-                nodeData.content = instruction.content || '';
-                nodeData.title = instruction.title || '';
-                const searchId = lastSearchNodeId?.value || parentId;
-                const searchNode = this.graph.getNode(searchId);
-                nodeData.position = searchNode
-                    ? { x: searchNode.position.x + 400, y: searchNode.position.y + referenceOffsetY }
-                    : this.graph.autoPosition([parentId]);
-                parentId = searchId;
-                edgeType = EdgeType.SEARCH_RESULT;
-                break;
-            }
-            case 'code':
-                nodeType = NodeType.CODE;
-                nodeData.code = instruction.code || '';
-                nodeData.content = instruction.code || '';
-                nodeData.title = instruction.title || 'Code';
-                break;
-            case 'note':
-                nodeType = NodeType.NOTE;
-                nodeData.content = instruction.content || '';
-                nodeData.title = instruction.title || 'Note';
-                break;
-            case 'image':
-                nodeType = NodeType.IMAGE;
-                nodeData.imageData = instruction.imageData || '';
-                nodeData.mimeType = instruction.mimeType || 'image/png';
-                nodeData.title = instruction.title || 'Image';
-                break;
-            default:
-                console.warn('[Agent] Unknown node type:', instruction.type);
-                return null;
-        }
-
-        if (!nodeData.position) {
-            nodeData.position = this.graph.autoPosition([parentId]);
-        }
-
-        const newNode = createNode(nodeType, nodeData.content || '', nodeData);
-        this.graph.addNode(newNode);
-        this.canvas.zoomToSelectionAnimated([newNode.id], 0.8, 300);
-
-        if (linkFromRefs && refToNodeId) {
-            const resolvedIds = linkFromRefs
-                .map((ref) => refToNodeId.get(ref))
-                .filter((id) => id);
-            if (resolvedIds.length > 0) {
-                for (const srcId of resolvedIds) {
-                    const edge = createEdge(srcId, newNode.id, EdgeType.MERGE);
-                    this.graph.addEdge(edge);
-                }
-            } else {
-                const edge = createEdge(parentId, newNode.id, edgeType);
-                this.graph.addEdge(edge);
-            }
-        } else {
-            const edge = createEdge(parentId, newNode.id, edgeType);
-            this.graph.addEdge(edge);
-        }
-
-        this.canvas.renderNode(newNode);
-        this.canvas.updateAllEdges(this.graph);
-
-        if (nodeType === NodeType.CODE && instruction.code) {
-            this.executeCodeOnNode(newNode.id, instruction.code);
-        }
-
-        return newNode.id;
+        return _createNodeFromInstruction(
+            instruction, parentId, lastSearchNodeId, referenceOffsetY, refToNodeId,
+            this.graph, this.canvas, createNode, createEdge, NodeType, EdgeType,
+            () => this.saveSession(),
+            (nodeId, code) => this.executeCodeOnNode(nodeId, code)
+        );
     }
 
     /**
@@ -345,88 +252,13 @@ class AgentFeature extends FeaturePlugin {
      * @returns {Promise<void>}
      */
     async executeCodeOnNode(nodeId, code) {
-        const pyodideRunner = this._context.pyodideRunner;
-        if (!pyodideRunner) {
-            console.warn('[Agent] Pyodide not available for code execution');
-            return;
-        }
-
-        this.graph.updateNode(nodeId, {
-            executionState: 'running',
-            code,
-        });
-        this.canvas.renderNode(this.graph.getNode(nodeId));
-
-        try {
-            const csvDataMap = {};
-            const csvNodeIds = this.graph.getNode(nodeId)?.csvNodeIds || [];
-            for (const csvId of csvNodeIds) {
-                const csvNode = this.graph.getNode(csvId);
-                if (csvNode && csvNode.csvData) {
-                    const varName = `df${csvNodeIds.indexOf(csvId) + 1}`;
-                    csvDataMap[varName] = csvNode.csvData;
-                }
-            }
-
-            const result = await pyodideRunner.run(code, csvDataMap, (msg) => {
-                console.log('[Agent] Pyodide:', msg);
-            });
-
-            this.graph.updateNode(nodeId, {
-                executionState: 'idle',
-                lastError: null,
-                outputStdout: result.stdout || null,
-                outputHtml: result.resultHtml || null,
-                outputText: result.resultText || null,
-            });
-
-            if (result.figures && result.figures.length > 0) {
-                for (let i = 0; i < result.figures.length; i++) {
-                    const fig = result.figures[i];
-                    const position = this.graph.autoPosition([nodeId]);
-
-                    if (typeof fig === 'object' && fig.type === 'plotly') {
-                        const outputNode = createNode(NodeType.HTML, '', {
-                            position,
-                            title: result.figures.length === 1 ? 'Plot' : `Plot ${i + 1}`,
-                            content: fig.html,
-                        });
-                        this.graph.addNode(outputNode);
-                        this.canvas.panToNodeAnimated(outputNode.id);
-                        const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
-                        this.graph.addEdge(edge);
-                        this.canvas.renderNode(outputNode);
-                    } else {
-                        const dataUrl = typeof fig === 'string' ? fig : fig.image;
-                        const base64Match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-                        if (base64Match) {
-                            const outputNode = createNode(NodeType.IMAGE, '', {
-                                position,
-                                title: result.figures.length === 1 ? 'Figure' : `Figure ${i + 1}`,
-                                imageData: base64Match[2],
-                                mimeType: base64Match[1],
-                            });
-                            this.graph.addNode(outputNode);
-                            this.canvas.panToNodeAnimated(outputNode.id);
-                            const edge = createEdge(nodeId, outputNode.id, EdgeType.GENERATES);
-                            this.graph.addEdge(edge);
-                            this.canvas.renderNode(outputNode);
-                        }
-                    }
-                }
-            }
-
-            this.canvas.renderNode(this.graph.getNode(nodeId));
-            this.canvas.updateAllEdges(this.graph);
-            this.saveSession();
-        } catch (error) {
-            this.graph.updateNode(nodeId, {
-                executionState: 'error',
-                lastError: error.message || 'Unknown error',
-            });
-            this.canvas.renderNode(this.graph.getNode(nodeId));
-            this.saveSession();
-        }
+        return _executeCodeOnNode(
+            nodeId, code,
+            this.graph, this.canvas,
+            this._context.pyodideRunner,
+            () => this.saveSession(),
+            createNode, createEdge, NodeType, EdgeType
+        );
     }
 }
 
