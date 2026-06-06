@@ -124,7 +124,13 @@ class RealtimeAgentPlugin extends FeaturePlugin {
                 flex-shrink: 0;
             }
             .realtime-status .status-provider {
-                font-weight: 500;
+                cursor: pointer;
+                font-weight: 600;
+                text-decoration: underline dotted;
+                text-underline-offset: 2px;
+            }
+            .realtime-status .status-provider:hover {
+                color: #3b82f6;
             }
             .realtime-status .transcription {
                 font-style: italic;
@@ -164,6 +170,11 @@ class RealtimeAgentPlugin extends FeaturePlugin {
         container.insertBefore(statusEl, wrapper);
         this.statusEl = statusEl;
 
+        const providerEl = statusEl.querySelector('.status-provider');
+        if (providerEl) {
+            providerEl.title = 'Click to switch voice provider';
+            providerEl.addEventListener('click', () => this.switchProvider());
+        }
     }
 
     /**
@@ -216,11 +227,13 @@ class RealtimeAgentPlugin extends FeaturePlugin {
         this.ws.onopen = () => {
             const viewportContext = gatherViewportContext(this.graph, this.canvas);
             const openaiBaseUrl = this.storage?.getBaseUrl() || null;
+            const voiceProvider = this.storage?.getVoiceProvider() || 'auto';
             this.ws.send(JSON.stringify({
                 type: 'session_start',
                 openai_api_key: openaiApiKey,
                 gemini_api_key: geminiApiKey,
                 openai_base_url: openaiBaseUrl,
+                voice_provider: voiceProvider,
                 viewport_context: viewportContext,
             }));
         };
@@ -538,6 +551,16 @@ class RealtimeAgentPlugin extends FeaturePlugin {
         if (providerEl) providerEl.textContent = provider;
         const transcriptionEl = this.statusEl.querySelector('.transcription');
         if (transcriptionEl) transcriptionEl.textContent = '';
+    }
+
+    /**
+     *
+     */
+    switchProvider() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        const current = this.statusEl?.querySelector('.status-provider')?.textContent || '';
+        const next = current === 'openai' ? 'gemini' : 'openai';
+        this.ws.send(JSON.stringify({ type: 'switch_provider', provider: next }));
     }
 
     /**

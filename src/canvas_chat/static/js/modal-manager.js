@@ -443,6 +443,11 @@ class ModalManager {
         // Load flashcard strictness
         document.getElementById('flashcard-strictness').value = storage.getFlashcardStrictness();
 
+        const voiceProviderEl = document.getElementById('voice-provider');
+        if (voiceProviderEl) {
+            voiceProviderEl.value = storage.getVoiceProvider();
+        }
+
         const zoomSensEl = document.getElementById('zoom-wheel-sensitivity');
         if (zoomSensEl) {
             const zs = storage.getZoomWheelSensitivity();

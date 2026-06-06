@@ -533,6 +533,54 @@ def test_routing_no_key_returns_none():
     assert provider is None
 
 
+def test_routing_voice_provider_openai():
+    from canvas_chat.app import _create_realtime_bridge
+
+    bridge, model, provider = _create_realtime_bridge(
+        openai_api_key="sk-test",
+        gemini_api_key="gem-key",
+        voice_provider="openai",
+    )
+    assert isinstance(bridge, OpenAIRealtimeBridge)
+    assert provider == "openai"
+
+
+def test_routing_voice_provider_gemini():
+    from canvas_chat.app import _create_realtime_bridge
+
+    bridge, model, provider = _create_realtime_bridge(
+        openai_api_key="sk-test",
+        gemini_api_key="gem-key",
+        voice_provider="gemini",
+    )
+    assert isinstance(bridge, GeminiRealtimeBridge)
+    assert provider == "gemini"
+
+
+def test_routing_voice_provider_gemini_no_key():
+    from canvas_chat.app import _create_realtime_bridge
+
+    bridge, model, provider = _create_realtime_bridge(
+        openai_api_key="sk-test",
+        gemini_api_key=None,
+        voice_provider="gemini",
+    )
+    assert isinstance(bridge, OpenAIRealtimeBridge)
+    assert provider == "openai"
+
+
+def test_routing_voice_provider_auto():
+    from canvas_chat.app import _create_realtime_bridge
+
+    bridge, model, provider = _create_realtime_bridge(
+        openai_api_key="sk-test",
+        gemini_api_key="gem-key",
+        voice_provider="auto",
+    )
+    assert isinstance(bridge, OpenAIRealtimeBridge)
+    assert provider == "openai"
+
+
 # --- Connect error wrapping ---
 
 

@@ -4384,6 +4384,11 @@ class App {
         const strictness = document.getElementById('flashcard-strictness').value;
         storage.setFlashcardStrictness(strictness);
 
+        const voiceProviderEl = document.getElementById('voice-provider');
+        if (voiceProviderEl) {
+            storage.setVoiceProvider(voiceProviderEl.value);
+        }
+
         const zoomSensEl = document.getElementById('zoom-wheel-sensitivity');
         if (zoomSensEl) {
             storage.setZoomWheelSensitivity(zoomSensEl.value);
