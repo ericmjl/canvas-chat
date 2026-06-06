@@ -286,6 +286,15 @@
                                     <code>github_copilot/gpt-4</code>.
                                 </small>
                             </div>
+                            <div class="api-key-group">
+                                <label for="voice-provider">Voice provider</label>
+                                <select id="voice-provider">
+                                    <option value="auto">Auto (first available key)</option>
+                                    <option value="openai">OpenAI (gpt-realtime-2)</option>
+                                    <option value="gemini">Gemini (gemini-3.1-flash-live-preview)</option>
+                                </select>
+                                <small class="key-hint">Provider for /mic voice sessions. Switch mid-session from the status bar.</small>
+                            </div>
                         </div>
 
                         <!-- Search (hidden in admin mode) -->

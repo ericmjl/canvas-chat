@@ -1904,12 +1904,24 @@ async def _agent_execute_tool(
 
 # @spec RT-PROV-004
 def _create_realtime_bridge(
-    openai_api_key: str | None = None, gemini_api_key: str | None = None
+    openai_api_key: str | None = None,
+    gemini_api_key: str | None = None,
+    voice_provider: str | None = None,
 ):
-    """Determine provider based on available API keys."""
+    """Determine provider based on voice_provider setting and available keys."""
+    want_openai = voice_provider == "openai" or (
+        voice_provider != "gemini" and openai_api_key
+    )
+    want_gemini = voice_provider == "gemini" or (
+        voice_provider != "openai" and not openai_api_key
+    )
+    if want_openai and openai_api_key:
+        return OpenAIRealtimeBridge(), "gpt-realtime-2", "openai"
+    if want_gemini and gemini_api_key:
+        return GeminiRealtimeBridge(), "gemini-3.1-flash-live-preview", "gemini"
     if openai_api_key:
         return OpenAIRealtimeBridge(), "gpt-realtime-2", "openai"
-    elif gemini_api_key:
+    if gemini_api_key:
         return GeminiRealtimeBridge(), "gemini-3.1-flash-live-preview", "gemini"
     return None, None, None
 
@@ -2187,6 +2199,7 @@ async def ws_agent(websocket: WebSocket):
 
     openai_api_key = start_msg.get("openai_api_key")
     gemini_api_key = start_msg.get("gemini_api_key")
+    voice_provider = start_msg.get("voice_provider", "auto")
     admin_config = get_admin_config()
     if admin_config.admin_mode and admin_config.api_key:
         if not openai_api_key:
@@ -2195,7 +2208,9 @@ async def ws_agent(websocket: WebSocket):
     viewport_context_raw = start_msg.get("viewport_context", [])
 
     bridge, model, provider_name = _create_realtime_bridge(
-        openai_api_key=openai_api_key, gemini_api_key=gemini_api_key
+        openai_api_key=openai_api_key,
+        gemini_api_key=gemini_api_key,
+        voice_provider=voice_provider,
     )
     if bridge is None:
         await websocket.send_json(
@@ -2318,7 +2333,7 @@ async def ws_agent(websocket: WebSocket):
 
     # @spec RT-SESSION-008
     async def forward_client_to_provider():
-        nonlocal last_activity
+        nonlocal last_activity, bridge, provider_name, model
         try:
             while True:
                 raw = await websocket.receive_text()
@@ -2336,6 +2351,53 @@ async def ws_agent(websocket: WebSocket):
                     await bridge.send_input_end()
                 elif msg_type == "ping":
                     await websocket.send_json({"type": "pong"})
+                elif msg_type == "switch_provider":
+                    new_provider = msg.get("provider", "")
+                    new_key = (
+                        openai_api_key if new_provider == "openai" else gemini_api_key
+                    )
+                    new_bridge, new_model, new_name = _create_realtime_bridge(
+                        openai_api_key=(new_key if new_provider == "openai" else None),
+                        gemini_api_key=(new_key if new_provider == "gemini" else None),
+                    )
+                    if new_bridge and new_key:
+                        await bridge.close()
+                        try:
+                            await new_bridge.connect(
+                                new_key,
+                                new_model,
+                                AGENT_TOOLS,
+                                system_prompt,
+                            )
+                            bridge = new_bridge
+                            provider_name = new_name
+                            model = new_model
+                            await websocket.send_json(
+                                {
+                                    "type": "session_ready",
+                                    "data": {"provider": provider_name},
+                                }
+                            )
+                        except Exception as e:
+                            await websocket.send_json(
+                                {
+                                    "type": "error",
+                                    "data": {
+                                        "message": (
+                                            f"Switch to {new_provider} failed: {e}"
+                                        )
+                                    },
+                                }
+                            )
+                    else:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "data": {
+                                    "message": (f"No {new_provider} API key available")
+                                },
+                            }
+                        )
                 elif msg_type == "close":
                     return
         except WebSocketDisconnect:

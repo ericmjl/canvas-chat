@@ -616,6 +616,20 @@ class Storage {
     }
 
     /**
+     * @returns {string} 'auto', 'openai', or 'gemini'
+     */
+    getVoiceProvider() {
+        return localStorage.getItem('canvas-chat-voice-provider') || 'auto';
+    }
+
+    /**
+     * @param {string} value - 'auto', 'openai', or 'gemini'
+     */
+    setVoiceProvider(value) {
+        localStorage.setItem('canvas-chat-voice-provider', value);
+    }
+
+    /**
      * Get Ctrl+scroll / pinch zoom sensitivity (Settings slider 0–100, default 50).
      * @returns {number}
      */
