@@ -11,6 +11,7 @@
 - [Agent Loop EARS](./agent-loop-EARS.md)
 - [Tool System EARS](./tool-system-EARS.md)
 - [Plotly Integration EARS](./plotly-integration-EARS.md)
+- [Realtime Voice Agent LLD](../realtime-voice-agent/LLD.md) — Voice input + WebSocket transport extending this agent loop
 
 ## 1. Overview
 

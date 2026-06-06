@@ -77,6 +77,8 @@ from canvas_chat.plugins import (
     youtube_handler,  # noqa: F401
 )
 from canvas_chat.plugins.pdf_handler import MAX_PDF_SIZE
+from canvas_chat.realtime_providers.gemini import GeminiRealtimeBridge
+from canvas_chat.realtime_providers.openai import OpenAIRealtimeBridge
 from canvas_chat.url_fetch_registry import UrlFetchRegistry
 
 # LiteLLM: patch before StructuredBot uses ``get_supported_openai_params`` (see below).
@@ -1900,6 +1902,18 @@ async def _agent_execute_tool(
     return {"type": "text", "content": f"Unknown tool: {tool_name}"}
 
 
+# @spec RT-PROV-004
+def _create_realtime_bridge(
+    openai_api_key: str | None = None, gemini_api_key: str | None = None
+):
+    """Determine provider based on available API keys."""
+    if openai_api_key:
+        return OpenAIRealtimeBridge(), "gpt-realtime-2", "openai"
+    elif gemini_api_key:
+        return GeminiRealtimeBridge(), "gemini-3.1-flash-live-preview", "gemini"
+    return None, None, None
+
+
 @app.post("/api/agent")
 async def agent(request: AgentRequest, http_request: Request):
     """Agent endpoint with tool calling support.
@@ -2140,6 +2154,256 @@ async def agent(request: AgentRequest, http_request: Request):
             yield {"event": "error", "data": f"Error: {e}"}
 
     return EventSourceResponse(generate())
+
+
+# @spec RT-SESSION-001, RT-SESSION-002, RT-SESSION-003, RT-SESSION-004
+@app.websocket("/ws/agent")
+async def ws_agent(websocket: WebSocket):
+    """WebSocket endpoint for realtime voice agent sessions.
+
+    Protocol:
+    1. Client sends session_start with model/api_key/viewport_context
+    2. Server routes to provider bridge and confirms session_ready
+    3. Two concurrent loops: forward client->provider, process provider->client
+    4. Tool calls are executed server-side using _agent_execute_tool
+    """
+    await websocket.accept()
+
+    try:
+        start_msg = json.loads(await websocket.receive_text())
+    except Exception:
+        await websocket.send_json(
+            {"type": "error", "data": {"message": "Failed to read session_start"}}
+        )
+        await websocket.close()
+        return
+
+    if start_msg.get("type") != "session_start":
+        await websocket.send_json(
+            {"type": "error", "data": {"message": "Expected session_start"}}
+        )
+        await websocket.close()
+        return
+
+    openai_api_key = start_msg.get("openai_api_key")
+    gemini_api_key = start_msg.get("gemini_api_key")
+    admin_config = get_admin_config()
+    if admin_config.admin_mode and admin_config.api_key:
+        if not openai_api_key:
+            openai_api_key = admin_config.api_key
+    openai_base_url = start_msg.get("openai_base_url")
+    viewport_context_raw = start_msg.get("viewport_context", [])
+
+    bridge, model, provider_name = _create_realtime_bridge(
+        openai_api_key=openai_api_key, gemini_api_key=gemini_api_key
+    )
+    if bridge is None:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "data": {
+                    "message": "No OpenAI or Gemini API key provided for voice input"
+                },
+            }
+        )
+        await websocket.close()
+        return
+
+    system_prompt = AGENT_SYSTEM_PROMPT
+    if viewport_context_raw:
+        context_lines = []
+        for node in viewport_context_raw:
+            label = node.get("title", "") or node.get("type", "")
+            content_preview = (node.get("content", "") or "")[:500]
+            context_lines.append(
+                f"[{node.get('type')}] {label} "
+                f"(id: {node.get('id')}):\n{content_preview}"
+            )
+        system_prompt += "\n\n## Visible Canvas Nodes\n\n" + "\n\n".join(context_lines)
+
+    try:
+        api_key = openai_api_key or gemini_api_key or ""
+        await bridge.connect(api_key, model, AGENT_TOOLS, system_prompt)
+    except Exception as e:
+        await websocket.send_json(
+            {"type": "error", "data": {"message": f"Provider connection failed: {e}"}}
+        )
+        await websocket.close()
+        return
+
+    await websocket.send_json(
+        {"type": "session_ready", "data": {"provider": provider_name}}
+    )
+
+    tool_call_count = 0
+    last_activity = time.time()
+    tool_executing = False
+
+    # @spec RT-SESSION-005
+    async def send_event(event_type: str, data: dict | None = None):
+        msg = {"type": event_type}
+        if data is not None:
+            msg["data"] = data
+        await websocket.send_json(msg)
+
+    # @spec RT-SESSION-006
+    async def inactivity_watchdog():
+        nonlocal last_activity, tool_executing
+        warning_sent = False
+        while True:
+            await asyncio.sleep(2)
+            if tool_executing:
+                continue
+            elapsed = time.time() - last_activity
+            if elapsed >= 20 and not warning_sent:
+                warning_sent = True
+                await send_event("timeout_warning", {"seconds_remaining": 10})
+            elif elapsed >= 30:
+                await send_event("session_closed", {"reason": "timeout"})
+                return
+
+    # @spec RT-SESSION-007
+    async def execute_tool(tool_name: str, tool_args: dict, call_id: str) -> str:
+        nonlocal tool_call_count, tool_executing
+        tool_call_count += 1
+        tool_executing = True
+
+        try:
+            await send_event(
+                "tool_start",
+                {
+                    "tool": tool_name,
+                    "call_id": call_id,
+                    "purpose": tool_args.get("purpose", ""),
+                },
+            )
+
+            try:
+                request = AgentRequest(
+                    messages=[],
+                    viewport_context=[],
+                    model=model,
+                    api_key=api_key,
+                    base_url=openai_base_url,
+                )
+                result = await asyncio.wait_for(
+                    _agent_execute_tool(tool_name, tool_args, request),
+                    timeout=60.0,
+                )
+            except TimeoutError:
+                result = {
+                    "type": "error",
+                    "content": "Tool execution timed out after 60s",
+                }
+            except Exception as e:
+                result = {"type": "error", "content": f"Tool error: {e}"}
+
+            if "nodes_create" in result and result.get("type") != "error":
+                for node_data in result["nodes_create"]:
+                    await send_event("node_create", node_data)
+            elif "node_create" in result and result.get("type") != "error":
+                await send_event("node_create", result["node_create"])
+
+            await send_event(
+                "tool_result",
+                {
+                    "call_id": call_id,
+                    "tool": tool_name,
+                    "output": result.get("content", ""),
+                },
+            )
+            return result.get("content", "")
+        finally:
+            tool_executing = False
+
+    # @spec RT-SESSION-008
+    async def forward_client_to_provider():
+        nonlocal last_activity
+        try:
+            while True:
+                raw = await websocket.receive_text()
+                msg = json.loads(raw)
+                msg_type = msg.get("type", "")
+
+                last_activity = time.time()
+
+                if msg_type == "audio":
+                    pcm_data = base64.b64decode(msg["data"])
+                    await bridge.send_audio(pcm_data)
+                elif msg_type == "text":
+                    await bridge.send_text(msg["content"])
+                elif msg_type == "input_end":
+                    await bridge.send_input_end()
+                elif msg_type == "ping":
+                    await websocket.send_json({"type": "pong"})
+                elif msg_type == "close":
+                    return
+        except WebSocketDisconnect:
+            pass
+        except Exception:
+            pass
+
+    # @spec RT-SESSION-009
+    async def process_provider_events():
+        nonlocal tool_call_count, last_activity, tool_executing
+        try:
+            async for event in bridge.receive_events():
+                last_activity = time.time()
+
+                if event.event_type == "tool_call":
+                    if tool_call_count >= MAX_AGENT_TOOL_CALLS:
+                        await send_event("error", {"message": "Max tool calls reached"})
+                        await bridge.close()
+                        return
+
+                    result_text = await execute_tool(
+                        event.tool_name, event.tool_args or {}, event.tool_call_id or ""
+                    )
+                    await bridge.send_tool_result(
+                        event.tool_call_id or "", event.tool_name or "", result_text
+                    )
+
+                elif event.event_type == "text_delta":
+                    await send_event("text", {"content": event.text or ""})
+
+                elif event.event_type == "speech_started":
+                    await send_event("listening", {"status": "active"})
+
+                elif event.event_type == "speech_stopped":
+                    await send_event("processing", {"status": "thinking"})
+
+                elif event.event_type == "transcription":
+                    await send_event("transcription", {"text": event.text})
+
+                elif event.event_type == "error":
+                    await send_event("error", {"message": event.error_message})
+                    if "rate" in (event.error_message or "").lower():
+                        return
+        except Exception as e:
+            logger.exception("Error processing provider events: %s", e)
+            await send_event("error", {"message": f"Provider event loop error: {e}"})
+
+    try:
+        task_client = asyncio.create_task(forward_client_to_provider())
+        task_provider = asyncio.create_task(process_provider_events())
+        task_watchdog = asyncio.create_task(inactivity_watchdog())
+
+        done, pending = await asyncio.wait(
+            [task_client, task_provider, task_watchdog],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for t in pending:
+            t.cancel()
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
+    finally:
+        await bridge.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 @app.post("/api/summarize")

@@ -1576,6 +1576,15 @@ class App {
         const content = this.chatInput.value.trim();
         if (!content) return;
 
+        // RT-AUDIO-012: text input via WebSocket during active realtime session
+        const realtimeFeature = this.featureRegistry?.getFeature('realtime-agent');
+        if (realtimeFeature && realtimeFeature.sessionActive) {
+            realtimeFeature.sendText(content);
+            this.chatInput.value = '';
+            this.chatInput.style.height = 'auto';
+            return;
+        }
+
         // Try slash commands first, with context from selected nodes OR text selection
         const selectedIds = this.canvas.getSelectedNodeIds();
         let slashContext = null;
@@ -1609,95 +1618,79 @@ class App {
             this.chatInput.style.height = 'auto';
         }
 
+        // @spec RT-SESSION-024
         if (await this.tryHandleSlashCommand(content, slashContext)) {
             return;
         }
 
-        // Get selected nodes - if none selected, create a new root node
-        let parentIds = this.canvas.getSelectedNodeIds();
-
-        // @spec CHAT-REQ-012
-        // Create human node
-        const humanNode = createNode(NodeType.HUMAN, content, {
-            position: this.graph.autoPosition(parentIds.length > 0 ? parentIds : []),
-        });
-
-        this.addUserNode(humanNode);
-
-        // Create edges from parents (only if nodes are selected)
-        if (parentIds.length > 0) {
-            for (const parentId of parentIds) {
-                const edge = createEdge(parentId, humanNode.id, parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY);
-                this.graph.addEdge(edge);
-
-                // Update collapse button for parent (now has children)
-                this.updateCollapseButtonForNode(parentId);
-            }
-        }
-        // If no parentIds, humanNode is a root node (no edges created)
-
-        // Clear input and selection
+        // @spec RT-SESSION-023 — route non-slash text through agent loop
         this.chatInput.value = '';
+        this.chatInput.style.height = 'auto';
         this.canvas.clearSelection();
 
-        // Create AI response node and stream response
+        const agentFeature = this.featureRegistry?.getFeature('agent');
+        if (agentFeature) {
+            await agentFeature.runAgent(content);
+        } else {
+            // Fallback: single-turn chat if agent plugin unavailable
+            this.sendChatMessage(content);
+        }
+    }
+
+    /**
+     * Fallback single-turn chat flow (used when agent plugin is unavailable).
+     * @param {string} content - The user's message
+     */
+    async sendChatMessage(content) {
+        const parentIds = [];
+
+        const humanNode = createNode(NodeType.HUMAN, content, {
+            position: this.graph.autoPosition(parentIds),
+        });
+        this.addUserNode(humanNode);
+
         const model = this.modelPicker.value;
         const aiNode = createNode(NodeType.AI, '', {
             position: this.graph.autoPosition([humanNode.id]),
             model: model.split('/').pop(),
         });
-
         this.addUserNode(aiNode);
 
         const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
         this.graph.addEdge(aiEdge);
-
-        // Update collapse button for human node (now has AI child)
         this.updateCollapseButtonForNode(humanNode.id);
 
-        // Build context and stream LLM response
         const context = this.graph.resolveContext([humanNode.id]);
         const messages = buildMessagesForApi(context);
-
-        // Create AbortController for this stream
         const abortController = new AbortController();
 
-        // Register with StreamingManager (auto-shows stop button)
         this.streamingManager.register(aiNode.id, {
             abortController,
             featureId: 'ai',
             context: { messages, model, humanNodeId: humanNode.id },
             onContinue: async (nodeId, state) => {
-                // Resume streaming from where we left off
                 await this.continueAIResponse(nodeId, state.context);
             },
         });
 
-        // Stream response using streamWithAbort
         this.streamWithAbort(
             aiNode.id,
             abortController,
             messages,
             model,
-            // onChunk
-            // @spec CHAT-REQ-014
             (chunk, fullContent) => {
                 this.canvas.updateNodeContent(aiNode.id, fullContent, true);
                 this.graph.updateNode(aiNode.id, { content: fullContent });
             },
-            // onDone
             (fullContent) => {
-                this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
+                this.streamingManager.unregister(aiNode.id);
                 this.canvas.updateNodeContent(aiNode.id, fullContent, false);
                 this.graph.updateNode(aiNode.id, { content: fullContent });
                 this.saveSession();
                 this.generateNodeSummary(aiNode.id);
             },
-            // onError
             (err) => {
-                this.streamingManager.unregister(aiNode.id); // Auto-hides stop button
-
-                // Format and display user-friendly error
+                this.streamingManager.unregister(aiNode.id);
                 const errorInfo = formatUserError(err);
                 this.showNodeError(aiNode.id, errorInfo, {
                     type: 'chat',
