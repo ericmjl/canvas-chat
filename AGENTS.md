@@ -43,6 +43,11 @@ This includes:
 - 2026-06-02: **HTML node for Plotly** — Plotly figures are rendered in `html` node type (sandboxed iframe with `srcdoc`), NOT in `note` nodes. Note nodes render markdown and cannot execute `<script>` tags. The HTML node's `renderContent()` uses `<iframe sandbox="allow-scripts allow-same-origin" srcdoc="...">` so Plotly.js runs. Created by `code.js` and `agent.js` when `fig.type === 'plotly'`.
 - 2026-06-02: **Agent mimics human behavior** — The `/agent` mode MUST reuse existing feature implementations, not build parallel pipelines. When the agent searches, it MUST produce the same SEARCH node + REFERENCE nodes + SEARCH_RESULT edges as `/search` (with URLs). When the agent runs code, it MUST produce the same CODE node as `/code`. The agent is an orchestrator that chains existing features, not a separate system. See AGENT-REQ-010 in `docs/designs/agentic-mode/agent-loop-EARS.md` and TOOL-REQ-002 in `docs/designs/agentic-mode/tool-system-EARS.md`.
 - 2026-06-02: **Agent parent routing** — `/agent` does NOT create a HUMAN node. The agent node itself links to relevant existing canvas nodes via a fast LLM routing call (`set_parents` SSE event). The LLM also controls graph structure through the ref system — search results get ref labels, and `create_note` accepts `link_from` to specify which results the note synthesizes. See AGENT-REQ-009 in `docs/designs/agentic-mode/agent-loop-EARS.md` and TOOL-REQ-006 in `docs/designs/agentic-mode/tool-system-EARS.md`.
+- 2026-06-06: **SDK async context managers** — Both `openai` (`AsyncOpenAI.realtime.connect()`) and `google-genai` (`client.aio.live.connect()`) return async context managers (`_AsyncGeneratorContextManager` / `AsyncRealtimeConnectionManager`), NOT awaitables. Awaiting them directly causes `TypeError: _AsyncGeneratorContextManager cannot be awaited`. Use `manager = client.aio.live.connect(...)` then `session = await manager.__aenter__()` / `await manager.__aexit__(None, None, None)`. For OpenAI, `manager.enter()` is an alias for `__aenter__()`.
+- 2026-06-06: **Gemini Live model names** — Only Live-specific model names work with `bidiGenerateContent`. Standard chat models (e.g., `gemini-2.5-flash-preview`) are rejected with error 1008. Use `gemini-3.1-flash-live-preview` (validated against yarnsmith reference). Do NOT use `gemini-2.5-flash-preview-native-audio` — that model doesn't exist for the Live API.
+- 2026-06-06: **Gemini Live AUDIO modality** — Gemini Live models only support `response_modalities: ["AUDIO"]`, NOT `["TEXT"]`. Requesting TEXT causes error 1007. Tool calls still work in AUDIO mode — audio output and tool calls are not mutually exclusive (confirmed in yarnsmith `gemini-provider.ts:166-182`). Audio output is discarded; use `output_audio_transcription` config to get the text of what the model said.
+- 2026-06-06: **Gemini Live `send_realtime_input` deprecation** — The `media=` parameter is deprecated (error 1007: "realtime_input.media_chunks is deprecated"). Use `audio=types.Blob(...)` instead. See yarnsmith `gemini-provider.ts:382` for reference.
+- 2026-06-06: **Realtime provider routing** — Voice mode is decoupled from the text model picker. `_create_realtime_bridge()` in `app.py` selects provider by key presence: Gemini key → `gemini-3.1-flash-live-preview`, OpenAI key → `gpt-realtime-2`. Do not add model-name-based matching.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -143,6 +148,8 @@ canvas-chat/
 | `src/canvas_chat/static/js/plugins/excel-node.js`      | ExcelNode + Excel upload handler   | Excel (.xlsx, .xls) upload, one node per sheet, csvData for /code                   |
 | `src/canvas_chat/static/js/plugins/prism-node.js`      | PrismNode + Prism upload handler   | Prism (.pzfx) upload, one node per table, csvData for /code                         |
 | `src/canvas_chat/static/js/plugins/html-node.js`       | HtmlNode protocol                  | Renders HTML content (Plotly, widgets) via sandboxed iframe with `srcdoc`           |
+| `src/canvas_chat/static/js/plugins/realtime-agent.js`  | RealtimeAgentPlugin class          | `/mic` voice session; WebSocket bidirectional; mic button, status bar, tool events  |
+| `src/canvas_chat/static/js/agent-utils.js`             | Shared agent utilities             | `createNodeFromInstruction`, `gatherViewportContext` (shared by agent.js + realtime) |
 
 #### Example plugins
 
@@ -167,6 +174,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/scroll-utils.js`        | Scroll container detection            | Scroll event handling, DOM traversal                          |
 | `src/canvas_chat/static/js/plugins/pdf-viewer.js`  | PDF.js viewer + text extraction       | PDF worker config, load/render/extract, IndexedDB for uploads |
 | `src/canvas_chat/static/js/event-emitter.js`       | Event emitter pattern                 | Event-driven architecture                                     |
+| `src/canvas_chat/static/js/realtime-audio-worklet.js` | Audio worklet for voice capture    | PCM16 capture, 48→24kHz downsampling, ~100ms chunks           |
 
 ### Frontend (HTML/CSS)
 
@@ -187,7 +195,7 @@ canvas-chat/
 
 | File                                            | Purpose                            | Edit for...                                                                     |
 | ----------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------- |
-| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints; `run_structured_summarize` / `run_structured_string_list` + Pydantic outputs; `AsyncSimpleBot` + `_stream_text_deltas_async_simple_bot` for streams; `/api/agent` endpoint with ReAct tool-calling loop (litellm `acompletion` + `AGENT_TOOLS`); LiteLLM for `drop_params`, token count, Copilot models, `supports_response_schema`, `aimage_generation` |
+| `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints; `run_structured_summarize` / `run_structured_string_list` + Pydantic outputs; `AsyncSimpleBot` + `_stream_text_deltas_async_simple_bot` for streams; `/api/agent` endpoint with ReAct tool-calling loop (litellm `acompletion` + `AGENT_TOOLS`); `/ws/agent` WebSocket endpoint for realtime voice; LiteLLM for `drop_params`, token count, Copilot models, `supports_response_schema`, `aimage_generation` |
 | `src/canvas_chat/llm_messages.py`               | Message shape helpers              | Map OpenAI-style dicts / Pydantic messages to `(system_prompt, list[BaseMessage])` for llamabot |
 | `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode                                          |
 | `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server                                              |
@@ -198,6 +206,9 @@ canvas-chat/
 | `src/canvas_chat/plugins/ddg_endpoints.py`      | DuckDuckGo search + research API   | DDG search/research endpoints (fallback when no Exa key); edit for DDG behavior |
 | `src/canvas_chat/plugins/pptx_endpoints.py`     | PPTX API endpoints                 | PPTX caption/title and narrative preset endpoints                               |
 | `src/canvas_chat/plugins/`                      | Python plugin modules              | Backend plugins (matrix_handler, code_handler, etc.)                            |
+| `src/canvas_chat/realtime_providers/__init__.py` | Provider bridge ABC + ProviderEvent | RealtimeProviderBridge base class, ProviderEvent dataclass                     |
+| `src/canvas_chat/realtime_providers/openai.py`   | OpenAI Realtime 2 bridge           | OpenAI WebSocket connection, event mapping, tool format conversion             |
+| `src/canvas_chat/realtime_providers/gemini.py`   | Gemini Live API 3.1 bridge         | Gemini WebSocket connection, event mapping, tool format conversion             |
 | `modal_app.py`                                  | Modal deployment config            | `pip_install` list MUST include runtime deps imported by `canvas_chat.app` (e.g. `llamabot`, matching `pyproject.toml`) |
 
 ### Key constants and their locations
@@ -280,6 +291,7 @@ Quick reference guide for finding the right documentation based on what you need
 | **How does streaming work?**                              | [streaming-architecture.md](docs/explanation/streaming-architecture.md) | Server-sent events and streaming design                     |
 | **LLM backend (llamabot vs LiteLLM) — LLD + EARS**         | [LLD](docs/designs/llamabot-backend-proxy/LLD.md), [EARS](docs/designs/llamabot-backend-proxy/llm-proxy-EARS.md) | Design-driven migration: SimpleBot/StructuredBot adapter; LiteLLM for images/tokens/Copilot utilities |
 | **Agentic mode — LLD + EARS**                              | [LLD](docs/designs/agentic-mode/LLD.md), [Agent Loop](docs/designs/agentic-mode/agent-loop-EARS.md), [Tools](docs/designs/agentic-mode/tool-system-EARS.md), [Plotly](docs/designs/agentic-mode/plotly-integration-EARS.md) | Tool-using ReAct loop, viewport context, Plotly default |
+| **Realtime voice agent — LLD + EARS**                      | [LLD](docs/designs/realtime-voice-agent/LLD.md), [Session](docs/designs/realtime-voice-agent/session-management-EARS.md), [Audio](docs/designs/realtime-voice-agent/audio-capture-EARS.md), [Provider](docs/designs/realtime-voice-agent/provider-abstraction-EARS.md) | WebSocket voice sessions, provider bridges, mic button UI |
 | **How does auto-layout work?**                            | [auto-layout.md](docs/explanation/auto-layout.md)                       | Node positioning and overlap resolution                     |
 | **How does the committee feature work internally?**       | [committee-architecture.md](docs/explanation/committee-architecture.md) | Multi-LLM consultation design                               |
 | **How does matrix evaluation work?**                      | [matrix-evaluation.md](docs/explanation/matrix-evaluation.md)           | Matrix cell filling and evaluation design                   |
@@ -882,6 +894,7 @@ Write unit tests for logic that does not require API calls:
 - `tests/test_html_slides.js` - HTML slides helpers (isPastedHtml, stripMarkdownHtmlWrapper)
 - `tests/test_matrix_plugin.js` - MatrixFeature plugin tests
 - `tests/test_research_plugin.js` - ResearchFeature plugin tests
+- `tests/test_realtime_providers.py` - Realtime provider bridges (ProviderEvent, OpenAI/Gemini event parsing, tool format conversion, routing)
 
 Do not write tests that require external API calls (LLM, Exa, etc.) - these are tested manually.
 
