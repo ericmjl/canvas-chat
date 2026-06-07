@@ -16,6 +16,7 @@ import { EdgeType, NodeType, createEdge, createNode } from '../graph-types.js';
 import { apiUrl } from '../utils.js';
 import { readSSEStream } from '../sse.js';
 import {
+    applyTagUpdate as _applyTagUpdate,
     createNodeFromInstruction as _createNodeFromInstruction,
     executeCodeOnNode as _executeCodeOnNode,
     gatherViewportContext as _gatherViewportContext,
@@ -92,7 +93,7 @@ class AgentFeature extends FeaturePlugin {
         this.graph.addEdge(agentEdge);
         this.updateCollapseButtonForNode(humanNode.id);
 
-        const viewportContext = this.gatherViewportContext();
+        const ctx = this.gatherViewportContext();
 
         const apiMessages = [{ role: 'user', content: message }];
 
@@ -121,7 +122,7 @@ class AgentFeature extends FeaturePlugin {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     messages: apiMessages,
-                    viewport_context: viewportContext,
+                    viewport_context: ctx.nodes || ctx,
                     model: llmRequest.model,
                     api_key: llmRequest.api_key || null,
                     base_url: llmRequest.base_url || null,
@@ -189,6 +190,19 @@ class AgentFeature extends FeaturePlugin {
                         } catch (e) {
                             console.warn('[Agent] Failed to parse node_create:', e);
                         }
+                    } else if (eventType === 'tag_update') {
+                        try {
+                            const tagInstruction = JSON.parse(data);
+                            _applyTagUpdate(
+                                tagInstruction,
+                                this.graph,
+                                this.canvas,
+                                () => this.saveSession(),
+                                (msg) => this.showToast(msg)
+                            );
+                        } catch (e) {
+                            console.warn('[Agent] Failed to parse tag_update:', e);
+                        }
                     }
                 },
                 onDone: () => {
@@ -223,7 +237,7 @@ class AgentFeature extends FeaturePlugin {
     }
 
     /**
-     * @returns {Array<Object>}
+     * @returns {Object}
      */
     gatherViewportContext() {
         return _gatherViewportContext(this.graph, this.canvas);

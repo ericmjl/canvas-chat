@@ -329,6 +329,7 @@ class AgentViewportNode(BaseModel):
     type: str
     title: str = ""
     content: str = ""
+    tags: list[str] = []
 
 
 class AgentRequest(BaseModel):
@@ -430,6 +431,67 @@ AGENT_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "tag_node",
+            "description": (
+                "Add, remove, create, or rename tags on canvas nodes. "
+                "Tags are color-coded labels that help organize nodes. "
+                "Use action='add' to apply an existing tag to nodes, "
+                "action='remove' to remove a tag from nodes, "
+                "action='create' to create a new tag "
+                "(optionally applying it to nodes), "
+                "action='rename' to assign or change a tag's "
+                "display name by its color."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["add", "remove", "create", "rename"],
+                        "description": (
+                            "The tag operation: "
+                            "'add' = apply existing tag to nodes, "
+                            "'remove' = remove tag from nodes, "
+                            "'create' = create a new tag "
+                            "(optionally applying to nodes), "
+                            "'rename' = assign or change a tag's "
+                            "display name by its color"
+                        ),
+                    },
+                    "tag_name": {
+                        "type": "string",
+                        "description": (
+                            "Tag name. For add/remove: must match "
+                            "an existing tag name. For create/rename: "
+                            "the new display name for the tag."
+                        ),
+                    },
+                    "tag_color_name": {
+                        "type": "string",
+                        "description": (
+                            "Color name for identifying a tag slot "
+                            "(e.g. 'red', 'green', 'blue'). "
+                            "Used with 'rename' to specify which "
+                            "color slot to name. The system maps "
+                            "common color names to hex values."
+                        ),
+                    },
+                    "node_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Node IDs to apply the tag to. "
+                            "Required for add/remove. Optional for create."
+                        ),
+                    },
+                },
+                "required": ["action", "tag_name"],
+            },
+        },
+    },
 ]
 
 AGENT_SYSTEM_PROMPT = (
@@ -446,6 +508,15 @@ AGENT_SYSTEM_PROMPT = (
     "Use link_from to specify which search result refs "
     "this note synthesizes (e.g. link_from: ['ref-0', 'ref-2']).\n"
     "- generate_image: Creates an image node on the canvas.\n"
+    "- tag_node: Add, remove, create, or rename tags on canvas nodes.\n"
+    "  Tags are color-coded labels that help organize nodes.\n"
+    "  Use action='add' with node_ids to tag nodes,\n"
+    "  action='remove' to untag, action='create' to make a new tag,\n"
+    "  action='rename' with tag_color_name to name/rename a tag by its color.\n"
+    "  When the user refers to a tag by color (e.g. 'the green tag'), "
+    "use tag_color_name.\n"
+    "  When the user refers to a tag by name (e.g. 'Important'), "
+    "use tag_name.\n"
     "\n"
     "Canvas context: The user can see nodes on their canvas. "
     "Nodes visible in their viewport are provided as context.\n"
@@ -1899,6 +1970,36 @@ async def _agent_execute_tool(
             "node_create": node_data,
         }
 
+    elif tool_name == "tag_node":
+        action = tool_args.get("action", "")
+        tag_name = tool_args.get("tag_name", "")
+        tag_color_name = tool_args.get("tag_color_name", "")
+        node_ids = tool_args.get("node_ids", [])
+
+        if not tag_name:
+            return {
+                "type": "error",
+                "content": "tag_name is required",
+            }
+
+        if action in ("add", "remove") and not node_ids:
+            return {
+                "type": "error",
+                "content": "node_ids is required for add/remove actions",
+            }
+
+        desc = f"{len(node_ids)} node(s)" if node_ids else "tag"
+        return {
+            "type": "tag",
+            "content": f"Tag '{tag_name}' {action} applied to {desc}",
+            "tag_update": {
+                "action": action,
+                "tag_name": tag_name,
+                "tag_color_name": tag_color_name,
+                "node_ids": node_ids,
+            },
+        }
+
     return {"type": "text", "content": f"Unknown tool: {tool_name}"}
 
 
@@ -1946,8 +2047,9 @@ async def agent(request: AgentRequest, http_request: Request):
         for node in request.viewport_context:
             label = node.title or node.type
             content_preview = node.content[:500] if node.content else "(empty)"
+            tag_str = f" [tags: {', '.join(node.tags)}]" if node.tags else ""
             context_lines.append(
-                f"[{node.type}] {label} (id: {node.id}):\n{content_preview}"
+                f"[{node.type}] {label} (id: {node.id}){tag_str}:\n{content_preview}"
             )
         system_prompt += "\n\n## Visible Canvas Nodes\n\n" + "\n\n".join(context_lines)
 
@@ -2116,6 +2218,12 @@ async def agent(request: AgentRequest, http_request: Request):
                                 "data": json.dumps(result["node_create"]),
                             }
 
+                        if "tag_update" in result and result.get("type") != "error":
+                            yield {
+                                "event": "tag_update",
+                                "data": json.dumps(result["tag_update"]),
+                            }
+
                         yield {
                             "event": "tool_result",
                             "data": json.dumps(
@@ -2230,11 +2338,35 @@ async def ws_agent(websocket: WebSocket):
         for node in viewport_context_raw:
             label = node.get("title", "") or node.get("type", "")
             content_preview = (node.get("content", "") or "")[:500]
+            node_tags = node.get("tags", [])
+            tag_str = f" [tags: {', '.join(node_tags)}]" if node_tags else ""
             context_lines.append(
                 f"[{node.get('type')}] {label} "
-                f"(id: {node.get('id')}):\n{content_preview}"
+                f"(id: {node.get('id')}){tag_str}:\n{content_preview}"
             )
         system_prompt += "\n\n## Visible Canvas Nodes\n\n" + "\n\n".join(context_lines)
+
+    available_tags = start_msg.get("available_tags", [])
+    if available_tags:
+        tag_lines = [f"- {t['name']} (color: {t['color']})" for t in available_tags]
+        system_prompt += "\n\n## Available Tags\n\n" + "\n".join(tag_lines)
+
+    free_colors = start_msg.get("available_colors", [])
+    if free_colors:
+        system_prompt += (
+            f"\n\nFree tag colors for creating new tags: {len(free_colors)} available"
+        )
+    else:
+        system_prompt += (
+            "\n\nAll 8 tag slots are in use. Remove a tag before creating a new one."
+        )
+
+    system_prompt += (
+        "\n\nTag color names: red=#ffc9c9, orange=#ffd8a8, yellow=#fff3bf, "
+        "green=#c0eb75, blue=#a5d8ff, purple=#d0bfff, pink=#fcc2d7, "
+        "gray=#e9ecef. When the user says 'the green tag', "
+        "use tag_color_name='green'."
+    )
 
     try:
         api_key = openai_api_key or gemini_api_key or ""
@@ -2318,6 +2450,9 @@ async def ws_agent(websocket: WebSocket):
                     await send_event("node_create", node_data)
             elif "node_create" in result and result.get("type") != "error":
                 await send_event("node_create", result["node_create"])
+
+            if "tag_update" in result and result.get("type") != "error":
+                await send_event("tag_update", result["tag_update"])
 
             await send_event(
                 "tool_result",
