@@ -11,7 +11,7 @@
 
 import { FeaturePlugin } from '../feature-plugin.js';
 import { EdgeType, NodeType, createEdge, createNode } from '../graph-types.js';
-import { createNodeFromInstruction, gatherViewportContext } from '../agent-utils.js';
+import { applyTagUpdate, createNodeFromInstruction, gatherViewportContext } from '../agent-utils.js';
 
 /**
  *
@@ -222,7 +222,7 @@ class RealtimeAgentPlugin extends FeaturePlugin {
         this.agentNodeId = agentNode.id;
 
         this.ws.onopen = () => {
-            const viewportContext = gatherViewportContext(this.graph, this.canvas);
+            const ctx = gatherViewportContext(this.graph, this.canvas);
             const openaiBaseUrl = this.storage?.getBaseUrl() || null;
             const voiceProvider = this.storage?.getVoiceProvider() || 'auto';
             this.ws.send(JSON.stringify({
@@ -231,7 +231,9 @@ class RealtimeAgentPlugin extends FeaturePlugin {
                 gemini_api_key: geminiApiKey,
                 openai_base_url: openaiBaseUrl,
                 voice_provider: voiceProvider,
-                viewport_context: viewportContext,
+                viewport_context: ctx.nodes || ctx,
+                available_tags: ctx.available_tags || [],
+                available_colors: ctx.available_colors || [],
             }));
         };
 
@@ -308,6 +310,18 @@ class RealtimeAgentPlugin extends FeaturePlugin {
                     if (instruction.ref) this.refToNodeId.set(instruction.ref, newId);
                     lastToolParentId.value = newId;
                 }
+                break;
+            }
+
+            case 'tag_update': {
+                const tagInstruction = typeof data === 'string' ? JSON.parse(data) : data;
+                applyTagUpdate(
+                    tagInstruction,
+                    this.graph,
+                    this.canvas,
+                    () => this.saveSession?.(),
+                    (msg) => this.showToast?.(msg)
+                );
                 break;
             }
 

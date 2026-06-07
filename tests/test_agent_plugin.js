@@ -156,7 +156,12 @@ await asyncTest('AgentFeature.gatherViewportContext returns empty with no canvas
     });
     const feature = harness.registry.getFeature('agent');
     const ctx = feature.gatherViewportContext();
-    assertTrue(Array.isArray(ctx), 'Should return an array');
+    assertTrue(typeof ctx === 'object', 'Should return an object');
+    assertTrue(Array.isArray(ctx.nodes), 'Should have a nodes array');
+    assertTrue(Array.isArray(ctx.available_tags), 'Should have an available_tags array');
+    assertTrue(Array.isArray(ctx.available_colors), 'Should have an available_colors array');
+    const toolNames = feature.buildAgentTools().map((tool) => tool.function.name);
+    assertTrue(toolNames.includes('tag_node'), 'Agent tools should include tag_node');
 });
 
 console.log('\n=== All Agent Feature tests passed ===\n');
