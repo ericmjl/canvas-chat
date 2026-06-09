@@ -6,18 +6,30 @@
  * and code execution logic without duplicating code.
  */
 
-import { getDefaultNodeSize } from './graph-types.js';
+import { getDefaultNodeSize, TAG_COLORS } from './graph-types.js';
+
+const COLOR_NAME_MAP = {
+    'red': '#ffc9c9',
+    'orange': '#ffd8a8',
+    'yellow': '#fff3bf',
+    'green': '#c0eb75',
+    'blue': '#a5d8ff',
+    'purple': '#d0bfff',
+    'pink': '#fcc2d7',
+    'gray': '#e9ecef',
+    'grey': '#e9ecef',
+};
 
 /**
  * Gather visible viewport context for LLM awareness.
  *
  * @param {Object} graph - CRDTGraph instance
  * @param {Object} canvas - Canvas instance
- * @returns {Array<Object>} Array of visible node summaries
+ * @returns {Object} { nodes: Array, available_tags: Array, available_colors: Array }
  */
 function gatherViewportContext(graph, canvas) {
     const viewBox = canvas.viewBox;
-    if (!viewBox) return [];
+    if (!viewBox) return { nodes: [], available_tags: [], available_colors: [] };
 
     const allNodes = graph.getAllNodes();
     const visible = allNodes.filter((node) => {
@@ -33,12 +45,32 @@ function gatherViewportContext(graph, canvas) {
         );
     });
 
-    return visible.map((node) => ({
-        id: node.id,
-        type: node.type,
-        title: node.title || '',
-        content: (node.content || '').substring(0, 2000),
+    const allTags = graph.getAllTags ? graph.getAllTags() : {};
+    const availableTags = Object.values(allTags).map((t) => ({
+        name: t.name,
+        color: t.color,
     }));
+    const usedColors = new Set(Object.keys(allTags));
+    const availableColors = TAG_COLORS.filter((c) => !usedColors.has(c));
+
+    const nodes = visible.map((node) => {
+        const nodeTagColors = node.tags || [];
+        const nodeTagNames = nodeTagColors
+            .map((color) => {
+                const tag = allTags[color];
+                return tag ? tag.name : null;
+            })
+            .filter(Boolean);
+        return {
+            id: node.id,
+            type: node.type,
+            title: node.title || '',
+            content: (node.content || '').substring(0, 2000),
+            tags: nodeTagNames,
+        };
+    });
+
+    return { nodes, available_tags: availableTags, available_colors: availableColors };
 }
 
 /**
@@ -271,4 +303,96 @@ async function executeCodeOnNode(
     }
 }
 
-export { createNodeFromInstruction, executeCodeOnNode, gatherViewportContext };
+/**
+ * Apply a tag update instruction from the backend agent tool.
+ *
+ * Handles add, remove, create, and rename tag operations
+ * by resolving tag names to colors and mutating the graph.
+ *
+ * @param {Object} instruction - { action, tag_name, tag_color_name, node_ids }
+ * @param {Object} graph - CRDTGraph instance
+ * @param {Object} canvas - Canvas instance
+ * @param {Function} saveSession - Save session callback
+ * @param {Function} showToast - Toast notification callback
+ */
+function applyTagUpdate(instruction, graph, canvas, saveSession, showToast) {
+    const action = instruction.action;
+    const tagName = instruction.tag_name;
+    const tagColorName = instruction.tag_color_name || '';
+    const nodeIds = instruction.node_ids || [];
+
+    if (action === 'rename') {
+        const color =
+            COLOR_NAME_MAP[tagColorName.toLowerCase()] || tagColorName;
+        const existingTag = graph.getTag ? graph.getTag(color) : null;
+        if (existingTag) {
+            graph.updateTag(color, tagName);
+        } else {
+            graph.createTag(color, tagName);
+        }
+        canvas.renderGraph();
+        saveSession();
+        return;
+    }
+
+    if (action === 'create') {
+        const existingTags = graph.getAllTags ? graph.getAllTags() : {};
+        const usedColors = new Set(Object.keys(existingTags));
+        const freeColor = TAG_COLORS.find((c) => !usedColors.has(c));
+
+        if (!freeColor) {
+            if (showToast) showToast('All 8 tag slots are in use');
+            return;
+        }
+
+        graph.createTag(freeColor, tagName);
+
+        if (nodeIds.length > 0) {
+            for (const nodeId of nodeIds) {
+                graph.addTagToNode(nodeId, freeColor);
+            }
+        }
+
+        canvas.renderGraph();
+        saveSession();
+        return;
+    }
+
+    const allTags = graph.getAllTags ? graph.getAllTags() : {};
+    const tagEntry = Object.entries(allTags).find(
+        ([_, t]) => t.name.toLowerCase() === tagName.toLowerCase()
+    );
+
+    if (!tagEntry) {
+        const available = Object.values(allTags)
+            .map((t) => t.name)
+            .join(', ');
+        if (showToast)
+            showToast(`Tag "${tagName}" not found. Available: ${available}`);
+        return;
+    }
+
+    const [color] = tagEntry;
+
+    for (const nodeId of nodeIds) {
+        const node = graph.getNode(nodeId);
+        if (!node) continue;
+
+        if (action === 'add') {
+            graph.addTagToNode(nodeId, color);
+        } else if (action === 'remove') {
+            graph.removeTagFromNode(nodeId, color);
+        }
+    }
+
+    canvas.renderGraph();
+    saveSession();
+}
+
+export {
+    applyTagUpdate,
+    COLOR_NAME_MAP,
+    createNodeFromInstruction,
+    executeCodeOnNode,
+    gatherViewportContext,
+};
