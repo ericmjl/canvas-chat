@@ -14,7 +14,7 @@
         "cy:run": "cypress run"
     },
     "devDependencies": {
-        "cypress": "^15.9.0",
+        "cypress": "^15.16.0",
         "eslint": "^8.57.0",
         "eslint-plugin-jsdoc": "^48.11.0",
         "jsdom": "^24.0.0",
