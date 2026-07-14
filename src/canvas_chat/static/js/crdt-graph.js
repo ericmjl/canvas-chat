@@ -2096,6 +2096,241 @@ class CRDTGraph extends EventEmitter {
     }
 
     /**
+     * Focus-centric layout: rearrange nodes relative to a focus node.
+     *
+     * The focus node stays at its current position. Parents are centered above,
+     * children centered below. Distant nodes blend partially (subtle adjustment).
+     *
+     * Y = BFS distance from focus (negative = above, positive = below).
+     * X = centered relative to parent/child in adjacent layer.
+     *
+     * @param {string} focusNodeId - The node to center the layout around
+     * @param {Map} dimensions - Map of nodeId -> { width, height }
+     */
+    focusCentricLayout(focusNodeId, dimensions = new Map()) {
+        const DEFAULT_WIDTH = 420;
+        const DEFAULT_HEIGHT = 220;
+        const VERTICAL_GAP = 60;
+        const HORIZONTAL_GAP = 50;
+        const START_X = 100;
+
+        const focusNode = this.getNode(focusNodeId);
+        if (!focusNode) return;
+
+        const allNodes = this.getAllNodes();
+        if (allNodes.length <= 1) return;
+
+        const getNodeSize = (node) => {
+            const dim = dimensions.get(node.id);
+            if (dim) return { width: dim.width, height: dim.height };
+            return { width: node.width || DEFAULT_WIDTH, height: node.height || DEFAULT_HEIGHT };
+        };
+
+        const focusSize = getNodeSize(focusNode);
+        const centerX = (wn) => wn.position.x + wn.width / 2;
+
+        // Step 1: Bidirectional BFS to assign layers
+        // Upward BFS (parents = negative layers)
+        // Downward BFS (children = positive layers)
+        const layers = new Map();
+        layers.set(focusNodeId, 0);
+
+        // Upward BFS
+        let frontier = [focusNodeId];
+        let dist = 0;
+        while (frontier.length > 0) {
+            dist++;
+            const next = [];
+            for (const id of frontier) {
+                for (const parent of this.getParents(id)) {
+                    if (!layers.has(parent.id)) {
+                        layers.set(parent.id, -dist);
+                        next.push(parent.id);
+                    }
+                }
+            }
+            frontier = next;
+        }
+
+        // Downward BFS
+        frontier = [focusNodeId];
+        dist = 0;
+        while (frontier.length > 0) {
+            dist++;
+            const next = [];
+            for (const id of frontier) {
+                for (const child of this.getChildren(id)) {
+                    if (!layers.has(child.id)) {
+                        layers.set(child.id, dist);
+                        next.push(child.id);
+                    }
+                }
+            }
+            frontier = next;
+        }
+
+        // Step 2: Group nodes by layer, compute Y
+        const layerNodes = new Map();
+        for (const [nodeId, layer] of layers) {
+            if (!layerNodes.has(layer)) layerNodes.set(layer, []);
+            layerNodes.get(layer).push(nodeId);
+        }
+
+        const minLayer = Math.min(...layers.values());
+        const maxLayer = Math.max(...layers.values());
+
+        // Y: focus stays at current Y. Other layers offset from it.
+        const focusY = focusNode.position?.y ?? 100;
+        const layerY = new Map();
+        layerY.set(0, focusY);
+
+        // Upward Y
+        for (let l = -1; l >= minLayer; l--) {
+            let maxHeight = DEFAULT_HEIGHT;
+            for (const nodeId of layerNodes.get(l) || []) {
+                const node = this.getNode(nodeId);
+                if (node) maxHeight = Math.max(maxHeight, getNodeSize(node).height);
+            }
+            const belowY = layerY.get(l + 1);
+            layerY.set(l, belowY - maxHeight - VERTICAL_GAP);
+        }
+
+        // Downward Y
+        for (let l = 1; l <= maxLayer; l++) {
+            let maxHeight = DEFAULT_HEIGHT;
+            for (const nodeId of layerNodes.get(l) || []) {
+                const node = this.getNode(nodeId);
+                if (node) maxHeight = Math.max(maxHeight, getNodeSize(node).height);
+            }
+            const aboveY = layerY.get(l - 1);
+            layerY.set(l, aboveY + maxHeight + VERTICAL_GAP);
+        }
+
+        // Step 3: Create work nodes with blended positions
+        const focusX = focusNode.position?.x ?? START_X;
+        const blendWeight = (layer) => {
+            const d = Math.abs(layer);
+            if (d <= 1) return 1.0;
+            if (d === 2) return 0.6;
+            return 0.2;
+        };
+
+        // Compute ideal X positions for each layer.
+        // Upward pass first (parents centered relative to children in adjacent layer).
+        // Then downward pass (children centered relative to parents in adjacent layer).
+        // Only consider parents/children in the IMMEDIATELY adjacent layer
+        // to avoid cross-reference issues with multi-parent DAGs.
+        const idealX = new Map();
+        idealX.set(focusNodeId, focusX);
+
+        // Upward X (layer -1, -2, ... : centered relative to children at layer+1)
+        for (let l = -1; l >= minLayer; l--) {
+            for (const nodeId of layerNodes.get(l) || []) {
+                const node = this.getNode(nodeId);
+                if (!node) continue;
+                // Only children in the adjacent layer toward focus
+                const children = this.getChildren(nodeId).filter((c) => layers.get(c.id) === l + 1);
+                if (children.length === 0) continue;
+                const childCenters = children.map((c) => {
+                    const cx = idealX.get(c.id);
+                    const cSize = getNodeSize(c);
+                    return cx !== undefined ? cx + cSize.width / 2 : focusX + focusSize.width / 2;
+                });
+                const avg = childCenters.reduce((s, x) => s + x, 0) / childCenters.length;
+                const size = getNodeSize(node);
+                idealX.set(nodeId, avg - size.width / 2);
+            }
+            // Resolve overlaps in this layer
+            const layerIds = layerNodes.get(l) || [];
+            const layerWork = layerIds.map((id) => {
+                const node = this.getNode(id);
+                if (!node) return null;
+                return { position: { x: idealX.get(id) ?? focusX }, width: getNodeSize(node).width };
+            }).filter(Boolean);
+            resolveHorizontalOverlaps(layerWork, HORIZONTAL_GAP, dimensions);
+            layerIds.forEach((id, i) => { if (layerWork[i]) idealX.set(id, layerWork[i].position.x); });
+        }
+
+        // Downward X (layer +1, +2, ... : centered relative to parents at layer-1)
+        for (let l = 1; l <= maxLayer; l++) {
+            for (const nodeId of layerNodes.get(l) || []) {
+                const node = this.getNode(nodeId);
+                if (!node) continue;
+                // Only parents in the adjacent layer toward focus
+                const parents = this.getParents(nodeId).filter((p) => layers.get(p.id) === l - 1);
+                if (parents.length === 0) continue;
+                const parentCenters = parents.map((p) => {
+                    const px = idealX.get(p.id);
+                    const pSize = getNodeSize(p);
+                    return px !== undefined ? px + pSize.width / 2 : focusX + focusSize.width / 2;
+                });
+                const avg = parentCenters.reduce((s, x) => s + x, 0) / parentCenters.length;
+                const size = getNodeSize(node);
+                idealX.set(nodeId, avg - size.width / 2);
+            }
+            // Resolve overlaps
+            const layerIds = layerNodes.get(l) || [];
+            const layerWork = layerIds.map((id) => {
+                const node = this.getNode(id);
+                if (!node) return null;
+                return { position: { x: idealX.get(id) ?? focusX }, width: getNodeSize(node).width };
+            }).filter(Boolean);
+            resolveHorizontalOverlaps(layerWork, HORIZONTAL_GAP, dimensions);
+            layerIds.forEach((id, i) => { if (layerWork[i]) idealX.set(id, layerWork[i].position.x); });
+        }
+
+        // Step 3b: Re-center immediate neighbor layers (±1) so their group
+        // centroid matches the focus node's center. This ensures parents are
+        // "vertically centered as a unit relative to" the focus, as the user
+        // described — even after overlap resolution pushes siblings apart.
+        const focusCenter = focusX + focusSize.width / 2;
+        for (const layer of [-1, 1]) {
+            const layerIds = layerNodes.get(layer) || [];
+            if (layerIds.length <= 1) continue;
+
+            let centroid = 0;
+            for (const id of layerIds) {
+                const node = this.getNode(id);
+                if (!node) continue;
+                const x = idealX.get(id) ?? START_X;
+                const size = getNodeSize(node);
+                centroid += x + size.width / 2;
+            }
+            centroid /= layerIds.length;
+
+            const shift = focusCenter - centroid;
+            for (const id of layerIds) {
+                idealX.set(id, (idealX.get(id) ?? START_X) + shift);
+            }
+        }
+
+        // Step 4: Blend with existing positions and write to CRDT
+        for (const [nodeId, layer] of layers) {
+            const node = this.getNode(nodeId);
+            if (!node) continue;
+
+            const size = getNodeSize(node);
+            const w = blendWeight(layer);
+
+            const idealXVal = idealX.get(nodeId) ?? node.position?.x ?? START_X;
+            const idealYVal = layerY.get(layer) ?? node.position?.y ?? 100;
+
+            const currentX = node.position?.x ?? START_X;
+            const currentY = node.position?.y ?? 100;
+
+            const blendedX = currentX * (1 - w) + idealXVal * w;
+            const blendedY = currentY * (1 - w) + idealYVal * w;
+
+            this.updateNode(nodeId, {
+                position: {
+                    x: blendedX,
+                    y: blendedY,
+                },
+            });
+        }
+    }
+
+    /**
      * Force-directed layout
      * @param dimensions
      */

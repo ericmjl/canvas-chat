@@ -1943,6 +1943,19 @@ class App {
         this.canvas.clearSelection();
         this.canvas.selectNode(targetNodeId);
 
+        // Focus-centric layout: rearrange neighborhood relative to focus node
+        const layoutPicker = document.getElementById('layout-picker');
+        const algorithm = layoutPicker ? layoutPicker.value : 'vertical';
+        if (algorithm === 'vertical') {
+            const dimensions = this.canvas.getNodeDimensions();
+            this.graph.focusCentricLayout(targetNodeId, dimensions);
+            this.canvas.animateToLayout(this.graph, {
+                duration: 300,
+                keepViewport: true,
+                onEdgeUpdate: () => this.updateEdgesWithCollapseState(),
+            });
+        }
+
         // Center on the node with animation
         const width = node.width || 420;
         const height = node.height || 200;
