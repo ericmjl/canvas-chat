@@ -214,11 +214,38 @@ function resolveOverlaps(nodes, padding = DEFAULT_PADDING, maxIterations = 50, d
     }
 }
 
+/**
+ * Resolve horizontal overlaps within a group of nodes.
+ * Only pushes nodes apart on the X axis — does not change Y.
+ * Sorts by X, then left-to-right sweep pushing nodes right
+ * if they would overlap the previous node.
+ * Mutates node positions in place.
+ * @param {Array.<Node>} nodes - Array of nodes (with position, optional width/height)
+ * @param {number} minGap - Minimum horizontal gap between nodes (default: 50)
+ * @param {DimensionsMap|null} dimensions - Optional map of nodeId -> { width, height }
+ */
+function resolveHorizontalOverlaps(nodes, minGap = 50, dimensions = null) {
+    if (nodes.length <= 1) return;
+
+    const sorted = [...nodes].sort((a, b) => a.position.x - b.position.x);
+
+    for (let i = 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1];
+        const curr = sorted[i];
+        const prevSize = getNodeSize(prev, dimensions);
+        const prevRight = prev.position.x + prevSize.width + minGap;
+        if (curr.position.x < prevRight) {
+            curr.position.x = prevRight;
+        }
+    }
+}
+
 export {
     wouldOverlapNodes,
     getOverlap,
     hasAnyOverlap,
     resolveOverlaps,
+    resolveHorizontalOverlaps,
     getNodeSize,
     DEFAULT_WIDTH,
     DEFAULT_HEIGHT,
