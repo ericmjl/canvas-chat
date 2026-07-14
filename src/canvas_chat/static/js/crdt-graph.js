@@ -12,8 +12,8 @@
  */
 
 import { EventEmitter } from './event-emitter.js';
-import { NodeType, TAG_COLORS } from './graph-types.js';
-import { resolveOverlaps, wouldOverlapNodes } from './layout.js';
+import { NodeType, TAG_COLORS, createNode, createEdge, EdgeType, getDefaultNodeSize } from './graph-types.js';
+import { resolveOverlaps, resolveHorizontalOverlaps, wouldOverlapNodes } from './layout.js';
 
 // =============================================================================
 // Type Imports (JSDoc)
@@ -1666,15 +1666,50 @@ class CRDTGraph extends EventEmitter {
     // =========================================================================
 
     /**
-     * Auto-position a new node relative to its parents, avoiding overlaps
+     * Create a node, position it relative to parents, and link it with edges.
+     *
+     * This is the canonical way to create a node that should be connected to
+     * parent nodes. It guarantees that edges are always created — you cannot
+     * forget the linking step.
+     *
+     * @param {string} type - Node type (NodeType enum)
+     * @param {string} content - Node content
+     * @param {string[]} parentIds - IDs of parent nodes to link from
+     * @param {Object} [options={}] - Additional node properties (model, title, etc.)
+     * @returns {Object} The created node
+     */
+    createLinkedNode(type, content, parentIds, options = {}) {
+        const node = createNode(type, content, {
+            position: this.autoPosition(parentIds, type),
+            ...options,
+        });
+        this.addNode(node);
+        for (const parentId of parentIds) {
+            this.addEdge(
+                createEdge(
+                    parentId,
+                    node.id,
+                    parentIds.length > 1 ? EdgeType.MERGE : EdgeType.REPLY,
+                ),
+            );
+        }
+        this.emit('linkedNodeCreated');
+        return node;
+    }
+
+    /**
+     * Auto-position a new node relative to its parents, avoiding overlaps.
+     * Uses the node type to look up correct dimensions for centering.
      * @param {string[]} parentIds
+     * @param {string} [nodeType=null] - Node type for dimension lookup
      * @returns {Object}
      */
-    autoPosition(parentIds) {
-        const NODE_WIDTH = 420;
-        const NODE_HEIGHT = 200;
-        const HORIZONTAL_GAP = 80;
-        const VERTICAL_GAP = 30;
+    autoPosition(parentIds, nodeType = null) {
+        const defaultSize = nodeType ? getDefaultNodeSize(nodeType) : { width: 420, height: 220 };
+        const NODE_WIDTH = defaultSize.width;
+        const NODE_HEIGHT = defaultSize.height;
+        const HORIZONTAL_GAP = 50;
+        const VERTICAL_GAP = 60;
 
         let initialX, initialY;
 
@@ -1687,18 +1722,22 @@ class CRDTGraph extends EventEmitter {
             if (parents.length === 1) {
                 const parent = parents[0];
                 const parentWidth = parent.width || NODE_WIDTH;
-                initialX = parent.position.x + parentWidth + HORIZONTAL_GAP;
-                initialY = parent.position.y;
+                const parentHeight = parent.height || NODE_HEIGHT;
+                initialX = parent.position.x + parentWidth / 2 - NODE_WIDTH / 2;
+                initialY = parent.position.y + parentHeight + VERTICAL_GAP;
             } else {
-                const rightmost = parents.reduce((max, p) => {
-                    const pRight = p.position.x + (p.width || NODE_WIDTH);
-                    const maxRight = max.position.x + (max.width || NODE_WIDTH);
-                    return pRight > maxRight ? p : max;
-                }, parents[0]);
-                const avgY = parents.reduce((sum, p) => sum + p.position.y, 0) / parents.length;
+                const avgCenter = parents.reduce((sum, p) => {
+                    const pWidth = p.width || NODE_WIDTH;
+                    return sum + p.position.x + pWidth / 2;
+                }, 0) / parents.length;
+                initialX = avgCenter - NODE_WIDTH / 2;
 
-                initialX = rightmost.position.x + (rightmost.width || NODE_WIDTH) + HORIZONTAL_GAP;
-                initialY = avgY;
+                const deepest = parents.reduce((max, p) => {
+                    const pBottom = p.position.y + (p.height || NODE_HEIGHT);
+                    const maxBottom = max.position.y + (max.height || NODE_HEIGHT);
+                    return pBottom > maxBottom ? p : max;
+                }, parents[0]);
+                initialY = deepest.position.y + (deepest.height || NODE_HEIGHT) + VERTICAL_GAP;
             }
         }
 
@@ -1707,22 +1746,17 @@ class CRDTGraph extends EventEmitter {
 
         let attempts = 0;
         const maxAttempts = 20;
+        const shiftStep = NODE_WIDTH + HORIZONTAL_GAP;
 
         while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
-            candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
+            const direction = attempts % 2 === 0 ? 1 : -1;
+            const magnitude = Math.ceil((attempts + 1) / 2);
+            candidatePos.x = initialX + direction * magnitude * shiftStep;
             attempts++;
         }
 
-        if (wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
-            candidatePos.x += NODE_WIDTH + HORIZONTAL_GAP;
-            candidatePos.y = initialY;
-
-            attempts = 0;
-            while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
-                candidatePos.y += NODE_HEIGHT + VERTICAL_GAP;
-                attempts++;
-            }
-        }
+        if (candidatePos.x < 100) candidatePos.x = 100;
+        if (candidatePos.y < 100) candidatePos.y = 100;
 
         return candidatePos;
     }
@@ -1900,6 +1934,164 @@ class CRDTGraph extends EventEmitter {
             // Update node position in CRDT
             this.updateNode(node.id, { position: { x, y } });
             positioned.push({ x, y, width: nodeWidth, height: nodeHeight });
+        }
+    }
+
+    /**
+     * Vertical top-to-bottom tree layout (Sugiyama-lite for DAGs).
+     *
+     * Layers: Y = depth in the graph. Parents above, children below.
+     * Horizontal: X spread across each layer, centered relative to
+     * parents (top-down) and children (bottom-up centering pass).
+     *
+     * Iterates bottom-up centering + top-down re-adjustment + per-layer
+     * horizontal overlap resolution for convergence.
+     *
+     * @param {Map} dimensions - Map of nodeId -> { width, height }
+     */
+    verticalTreeLayout(dimensions = new Map()) {
+        const DEFAULT_WIDTH = 420;
+        const DEFAULT_HEIGHT = 220;
+        const VERTICAL_GAP = 60;
+        const HORIZONTAL_GAP = 50;
+        const START_X = 100;
+        const START_Y = 100;
+        const ITERATIONS = 3;
+
+        const allNodes = this.getAllNodes();
+        if (allNodes.length === 0) return;
+
+        const getNodeSize = (node) => {
+            const dim = dimensions.get(node.id);
+            if (dim) return { width: dim.width, height: dim.height };
+            return { width: node.width || DEFAULT_WIDTH, height: node.height || DEFAULT_HEIGHT };
+        };
+
+        // Step 1: Layer assignment (depth)
+        const sorted = this.topologicalSort();
+        const layers = new Map();
+        for (const node of sorted) {
+            const parents = this.getParents(node.id);
+            if (parents.length === 0) {
+                layers.set(node.id, 0);
+            } else {
+                const maxParentLayer = Math.max(...parents.map((p) => layers.get(p.id) || 0));
+                layers.set(node.id, maxParentLayer + 1);
+            }
+        }
+
+        const maxLayer = Math.max(...layers.values());
+
+        // Group nodes by layer
+        const layerNodes = new Map();
+        for (const node of sorted) {
+            const layer = layers.get(node.id);
+            if (!layerNodes.has(layer)) layerNodes.set(layer, []);
+            layerNodes.get(layer).push(node.id);
+        }
+
+        // Compute Y for each layer based on max height per layer
+        const layerY = new Map();
+        let currentY = START_Y;
+        for (let l = 0; l <= maxLayer; l++) {
+            let maxHeight = DEFAULT_HEIGHT;
+            for (const nodeId of layerNodes.get(l) || []) {
+                const node = this.getNode(nodeId);
+                if (node) {
+                    const { height } = getNodeSize(node);
+                    maxHeight = Math.max(maxHeight, height);
+                }
+            }
+            layerY.set(l, currentY);
+            currentY += maxHeight + VERTICAL_GAP;
+        }
+
+        // Create working node objects (temporary, mutable positions)
+        // Record old center of mass before layout so we can preserve it
+        let oldCenterSum = 0;
+        const workNodes = new Map();
+        for (const node of allNodes) {
+            const { width, height } = getNodeSize(node);
+            const oldX = node.position?.x ?? START_X;
+            oldCenterSum += oldX + width / 2;
+            workNodes.set(node.id, {
+                id: node.id,
+                position: {
+                    x: oldX,
+                    y: layerY.get(layers.get(node.id)) ?? START_Y,
+                },
+                width,
+                height,
+            });
+        }
+
+        // Helper: get center X of a work node
+        const centerX = (wn) => wn.position.x + wn.width / 2;
+
+        // Step 2: Top-down X positioning.
+        // Roots keep their existing X (anchors the tree).
+        // Each child is centered under its parent(s), then overlaps resolved per layer.
+        // No bottom-up pass — we never move parents. This keeps the root stable
+        // and produces straight vertical edges for chains (the common case).
+        for (let l = 0; l <= maxLayer; l++) {
+            const layerIds = layerNodes.get(l) || [];
+
+            for (const nodeId of layerIds) {
+                const wn = workNodes.get(nodeId);
+                if (!wn) continue;
+                const parents = this.getParents(nodeId);
+
+                if (parents.length === 0) {
+                    const existingX = allNodes.find((n) => n.id === nodeId)?.position?.x;
+                    wn.position.x = Math.max(START_X, existingX ?? START_X);
+                } else {
+                    const parentCenters = parents.map((p) => {
+                        const pwn = workNodes.get(p.id);
+                        return pwn ? centerX(pwn) : START_X;
+                    });
+                    const avg = parentCenters.reduce((s, x) => s + x, 0) / parentCenters.length;
+                    wn.position.x = avg - wn.width / 2;
+                }
+            }
+
+            // Resolve horizontal overlaps within this layer
+            const layerWorkNodes = layerIds
+                .map((id) => workNodes.get(id))
+                .filter(Boolean);
+            resolveHorizontalOverlaps(layerWorkNodes, HORIZONTAL_GAP, dimensions);
+        }
+
+        // Step 3: Preserve center of mass so the tree doesn't jump sideways.
+        // (When switching from hierarchical L-to-R layout, the root is at the far left.
+        //  Without this shift, the entire vertical tree would be stuck at the left edge.)
+        let newCenterSum = 0;
+        for (const wn of workNodes.values()) {
+            newCenterSum += wn.position.x + wn.width / 2;
+        }
+        if (allNodes.length > 0) {
+            const shift = (oldCenterSum - newCenterSum) / allNodes.length;
+            for (const wn of workNodes.values()) {
+                wn.position.x = Math.max(START_X, wn.position.x + shift);
+            }
+        }
+
+        // Final overlap resolution per layer (shift + clamping may have created overlaps)
+        for (let l = 0; l <= maxLayer; l++) {
+            const layerWorkNodes = (layerNodes.get(l) || [])
+                .map((id) => workNodes.get(id))
+                .filter(Boolean);
+            resolveHorizontalOverlaps(layerWorkNodes, HORIZONTAL_GAP, dimensions);
+        }
+
+        // Step 4: Write positions to CRDT
+        for (const [nodeId, wn] of workNodes) {
+            const layer = layers.get(nodeId);
+            this.updateNode(nodeId, {
+                position: {
+                    x: Math.max(START_X, wn.position.x),
+                    y: layerY.get(layer) ?? START_Y,
+                },
+            });
         }
     }
 

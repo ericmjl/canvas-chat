@@ -64,32 +64,27 @@ class AgentFeature extends FeaturePlugin {
             this.showToast('Please provide a message for the agent.');
             return true;
         }
-        await this.runAgent(args.trim());
+        const parentIds = this.canvas.getSelectedNodeIds();
+        await this.runAgent(args.trim(), parentIds);
         return true;
     }
 
     /**
      * @param {string} message
+     * @param {string[]} [parentIds=[]] - IDs of nodes the user is replying to
      * @returns {Promise<void>}
      */
-    async runAgent(message) {
+    async runAgent(message, parentIds = []) {
         const model = this.modelPicker.value;
 
-        const humanNode = createNode(NodeType.HUMAN, message, {
-            position: this.graph.autoPosition([]),
-        });
-        this.graph.addNode(humanNode);
+        const humanNode = this.graph.createLinkedNode(NodeType.HUMAN, message, parentIds);
         this.canvas.zoomToSelectionAnimated([humanNode.id], 0.8, 300);
 
-        const agentNode = createNode(NodeType.AI, 'Working...', {
-            position: this.graph.autoPosition([humanNode.id]),
+        const agentNode = this.graph.createLinkedNode(NodeType.AI, 'Working...', [humanNode.id], {
             model: model.split('/').pop(),
         });
-        this.graph.addNode(agentNode);
         this.canvas.zoomToSelectionAnimated([agentNode.id], 0.8, 300);
 
-        const agentEdge = createEdge(humanNode.id, agentNode.id, EdgeType.REPLY);
-        this.graph.addEdge(agentEdge);
         this.updateCollapseButtonForNode(humanNode.id);
 
         const viewportContext = this.gatherViewportContext();

@@ -631,7 +631,8 @@ class App {
                 this.canvas.renderNode(node);
                 this.refreshRelationshipPanel();
             })
-            .on('tagCreated', this.handleTagCreated.bind(this));
+            .on('tagCreated', this.handleTagCreated.bind(this))
+            .on('linkedNodeCreated', () => this.scheduleAutoLayout());
     }
 
     /**
@@ -1630,34 +1631,27 @@ class App {
 
         const agentFeature = this.featureRegistry?.getFeature('agent');
         if (agentFeature) {
-            await agentFeature.runAgent(content);
+            await agentFeature.runAgent(content, selectedIds);
         } else {
             // Fallback: single-turn chat if agent plugin unavailable
-            this.sendChatMessage(content);
+            this.sendChatMessage(content, selectedIds);
         }
     }
 
     /**
      * Fallback single-turn chat flow (used when agent plugin is unavailable).
      * @param {string} content - The user's message
+     * @param {string[]} [parentIds=[]] - IDs of nodes the user is replying to
      */
-    async sendChatMessage(content) {
-        const parentIds = [];
-
-        const humanNode = createNode(NodeType.HUMAN, content, {
-            position: this.graph.autoPosition(parentIds),
-        });
-        this.addUserNode(humanNode);
+    async sendChatMessage(content, parentIds = []) {
+        const humanNode = this.graph.createLinkedNode(NodeType.HUMAN, content, parentIds);
+        this.canvas.zoomToSelectionAnimated([humanNode.id], 0.8, 300);
 
         const model = this.modelPicker.value;
-        const aiNode = createNode(NodeType.AI, '', {
-            position: this.graph.autoPosition([humanNode.id]),
+        const aiNode = this.graph.createLinkedNode(NodeType.AI, '', [humanNode.id], {
             model: model.split('/').pop(),
         });
-        this.addUserNode(aiNode);
-
-        const aiEdge = createEdge(humanNode.id, aiNode.id, EdgeType.REPLY);
-        this.graph.addEdge(aiEdge);
+        this.canvas.zoomToSelectionAnimated([aiNode.id], 0.8, 300);
         this.updateCollapseButtonForNode(humanNode.id);
 
         const context = this.graph.resolveContext([humanNode.id]);
@@ -2356,11 +2350,13 @@ class App {
 
         // Get selected layout algorithm
         const layoutPicker = document.getElementById('layout-picker');
-        const algorithm = layoutPicker ? layoutPicker.value : 'hierarchical';
+        const algorithm = layoutPicker ? layoutPicker.value : 'vertical';
 
         // Run selected layout algorithm (updates node.position in graph)
         if (algorithm === 'force') {
             this.graph.forceDirectedLayout(dimensions);
+        } else if (algorithm === 'vertical') {
+            this.graph.verticalTreeLayout(dimensions);
         } else {
             this.graph.autoLayout(dimensions);
         }
@@ -2375,6 +2371,23 @@ class App {
 
         // Save the new positions
         this.saveSession();
+    }
+
+    /**
+     * Auto-layout trigger (currently disabled).
+     *
+     * autoPosition in createLinkedNode already places new nodes correctly
+     * (centered under parent, type-aware dimensions, overlap avoidance).
+     * Running full verticalTreeLayout on every node creation was COUNTERPRODUCTIVE —
+     * it moved established nodes off-center because the bottom-up centering pass
+     * chases children centroids, pulling the root away from its original position.
+     *
+     * Full re-layout is available via the Apply Layout (🔀) button.
+     * To re-enable auto-layout, wire the 'linkedNodeCreated' event back to this method
+     * after improving verticalTreeLayout to preserve existing root positions.
+     */
+    scheduleAutoLayout() {
+        // intentionally no-op
     }
 
     /**

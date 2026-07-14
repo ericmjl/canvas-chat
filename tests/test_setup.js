@@ -9,6 +9,10 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Load Yjs globally (required by CRDTGraph)
+import * as Y from 'yjs';
+global.Y = Y;
+
 // Set up minimal browser-like environment for source files
 global.window = global;
 global.window.addEventListener = () => {}; // Mock window.addEventListener
@@ -89,6 +93,7 @@ const {
     getOverlap,
     hasAnyOverlap,
     resolveOverlaps,
+    resolveHorizontalOverlaps,
     getNodeSize,
     DEFAULT_WIDTH,
     DEFAULT_HEIGHT,
@@ -271,6 +276,7 @@ export {
     getOverlap,
     hasAnyOverlap,
     resolveOverlaps,
+    resolveHorizontalOverlaps,
     getNodeSize,
     DEFAULT_WIDTH,
     DEFAULT_HEIGHT,
