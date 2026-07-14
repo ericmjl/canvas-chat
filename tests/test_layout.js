@@ -12,6 +12,8 @@ import {
     getOverlap,
     hasAnyOverlap,
     resolveOverlaps,
+    resolveHorizontalOverlaps,
+    tests,
 } from './test_setup.js';
 
 // ============================================================
@@ -189,3 +191,92 @@ test('resolveOverlaps: handles nodes at same Y with different heights', () => {
     assertEqual(overlap.overlapX, 0);
     assertEqual(overlap.overlapY, 0);
 });
+
+// ============================================================
+// resolveHorizontalOverlaps tests
+// ============================================================
+
+test('resolveHorizontalOverlaps: no-op for single node', () => {
+    const nodes = [{ id: '1', position: { x: 100, y: 100 }, width: 100, height: 100 }];
+
+    resolveHorizontalOverlaps(nodes, 50);
+
+    assertEqual(nodes[0].position.x, 100);
+});
+
+test('resolveHorizontalOverlaps: pushes apart two overlapping nodes', () => {
+    const nodes = [
+        { id: '1', position: { x: 100, y: 100 }, width: 100, height: 100 },
+        { id: '2', position: { x: 120, y: 100 }, width: 100, height: 100 },
+    ];
+
+    resolveHorizontalOverlaps(nodes, 50);
+
+    // Node 2 should be pushed right of node 1's right edge + gap
+    // prevRight = 100 + 100 + 50 = 250
+    assertEqual(nodes[1].position.x, 250);
+});
+
+test('resolveHorizontalOverlaps: chain reaction for multiple nodes', () => {
+    const nodes = [
+        { id: '1', position: { x: 100, y: 0 }, width: 100, height: 100 },
+        { id: '2', position: { x: 110, y: 0 }, width: 100, height: 100 },
+        { id: '3', position: { x: 120, y: 0 }, width: 100, height: 100 },
+    ];
+
+    resolveHorizontalOverlaps(nodes, 50);
+
+    // Each pushed right of previous: 100, 250, 400
+    assertEqual(nodes[0].position.x, 100);
+    assertEqual(nodes[1].position.x, 250);
+    assertEqual(nodes[2].position.x, 400);
+});
+
+test('resolveHorizontalOverlaps: leaves non-overlapping nodes unchanged', () => {
+    const nodes = [
+        { id: '1', position: { x: 100, y: 0 }, width: 100, height: 100 },
+        { id: '2', position: { x: 400, y: 0 }, width: 100, height: 100 },
+    ];
+
+    resolveHorizontalOverlaps(nodes, 50);
+
+    assertEqual(nodes[0].position.x, 100);
+    assertEqual(nodes[1].position.x, 400);
+});
+
+test('resolveHorizontalOverlaps: handles unsorted input', () => {
+    const nodes = [
+        { id: '2', position: { x: 120, y: 0 }, width: 100, height: 100 },
+        { id: '1', position: { x: 100, y: 0 }, width: 100, height: 100 },
+    ];
+
+    resolveHorizontalOverlaps(nodes, 50);
+
+    // After sorting, node '1' at x=100, node '2' pushed to 250
+    const node1 = nodes.find((n) => n.id === '1');
+    const node2 = nodes.find((n) => n.id === '2');
+    assertEqual(node1.position.x, 100);
+    assertEqual(node2.position.x, 250);
+});
+
+// ============================================================
+// Runner (test_setup collects tests; run them here)
+// ============================================================
+let passed = 0;
+let failed = 0;
+for (const { name, fn } of tests) {
+    try {
+        fn();
+        console.log(`✓ ${name}`);
+        passed++;
+    } catch (err) {
+        console.log(`✗ ${name}`);
+        console.error(`  ${err.message}`);
+        failed++;
+    }
+}
+console.log(`\n========================================`);
+console.log(`Tests passed: ${passed}`);
+console.log(`Tests failed: ${failed}`);
+console.log('========================================\n');
+process.exit(failed > 0 ? 1 : 0);
