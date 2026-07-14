@@ -48,6 +48,11 @@ This includes:
 - 2026-06-06: **Gemini Live AUDIO modality** — Gemini Live models only support `response_modalities: ["AUDIO"]`, NOT `["TEXT"]`. Requesting TEXT causes error 1007. Tool calls still work in AUDIO mode — audio output and tool calls are not mutually exclusive (confirmed in yarnsmith `gemini-provider.ts:166-182`). Audio output is discarded; use `output_audio_transcription` config to get the text of what the model said.
 - 2026-06-06: **Gemini Live `send_realtime_input` deprecation** — The `media=` parameter is deprecated (error 1007: "realtime_input.media_chunks is deprecated"). Use `audio=types.Blob(...)` instead. See yarnsmith `gemini-provider.ts:382` for reference.
 - 2026-06-06: **Realtime provider routing** — Voice mode is decoupled from the text model picker. `_create_realtime_bridge()` in `app.py` selects provider by key presence: Gemini key → `gemini-3.1-flash-live-preview`, OpenAI key → `gpt-realtime-2`. Do not add model-name-based matching.
+- 2026-07-14: **Vertical tree layout** — New `verticalTreeLayout()` in `crdt-graph.js` (top-down tree, Y=depth, X=horizontal spread). Default layout algorithm. Uses top-down-only positioning (roots stay anchored, children cascade below). Center-of-mass preservation prevents left-edge drift. `resolveHorizontalOverlaps` in `layout.js` handles per-layer X overlap resolution.
+- 2026-07-14: **createLinkedNode** — The canonical way to create a node linked to parents. `graph.createLinkedNode(type, content, parentIds, options)` creates the node, positions it via `autoPosition`, and creates REPLY/MERGE edges all atomically. ALWAYS use this instead of manual `createNode + addNode + addEdge` — it's impossible to forget edges this way. Emits `'linkedNodeCreated'` event.
+- 2026-07-14: **autoPosition is type-aware** — `autoPosition(parentIds, nodeType)` now accepts the node type and uses `getDefaultNodeSize(type)` for correct centering. HUMAN nodes are 420px wide, AI nodes are 640px — using wrong dimensions causes 110px centering errors and bent edges.
+- 2026-07-14: **Auto-layout disabled** — `scheduleAutoLayout()` in `app.js` is an intentional no-op. Running full `verticalTreeLayout` on every node creation was counterproductive — the bottom-up centering pass dragged root nodes off-center. `autoPosition` in `createLinkedNode` handles incremental placement correctly. Full re-layout available via Apply Layout (🔀) button.
+- 2026-07-14: **Reply-to-selected fix** — `handleSend()` captures `selectedIds` and passes them to `sendChatMessage(content, parentIds)` and `runAgent(message, parentIds)`. Both use `createLinkedNode` to create edges from selected nodes to the new human node. The `/agent` slash command handler also passes selection.
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -105,8 +110,8 @@ canvas-chat/
 | `src/canvas_chat/static/js/app.js`         | Main application, orchestrates everything                                 | Slash commands, keyboard shortcuts, App class methods, graph breadcrumb (`getNavigableParents` / `getNavigableChildren`, `#relationship-panel` / `#relationship-breadcrumb`) |
 | `src/canvas_chat/static/js/canvas.js`      | SVG canvas, pan/zoom, node/edge rendering with defensive edge deferral    | Node appearance, drag behavior, viewport logic, node event handlers, edge rendering, deferred edge queue |
 | `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions                                        | Node types, edge types, createNode/createEdge utilities                                                  |
-| `src/canvas_chat/static/js/crdt-graph.js`  | CRDT-backed graph (Yjs), graph traversal                                  | Graph data model, node positioning, graph traversal                                                      |
-| `src/canvas_chat/static/js/layout.js`      | Pure layout functions for overlap detection                               | Overlap detection, overlap resolution, node positioning algorithms                                       |
+| `src/canvas_chat/static/js/crdt-graph.js`  | CRDT-backed graph (Yjs), graph traversal                                  | Graph data model, `createLinkedNode`, `autoPosition`, `verticalTreeLayout`, graph traversal                      |
+| `src/canvas_chat/static/js/layout.js`      | Pure layout functions for overlap detection                               | Overlap detection, overlap resolution, `resolveHorizontalOverlaps`, node positioning algorithms                                       |
 | `src/canvas_chat/static/js/chat.js`        | LLM API calls, streaming                                                  | API integration, message formatting, token estimation                                                    |
 | `src/canvas_chat/static/js/storage.js`     | localStorage persistence                                                  | Session storage, API key storage, settings                                                               |
 | `src/canvas_chat/static/js/search.js`      | Node search functionality                                                 | Search UI, filtering logic                                                                               |
@@ -848,6 +853,7 @@ pixi run npx cypress run --browser electron --headless --spec cypress/e2e/matrix
 - `cypress/e2e/undo_redo.cy.js` - Global undo/redo tests
 - `cypress/e2e/url_fetch_no_ui_break.cy.js` - URL fetch: dangerous HTML does not break UI
 - `cypress/e2e/html_slides.cy.js` - HTML slides node (/slides with pasted HTML, toolbar, blob URL iframe)
+- `cypress/e2e/reply_to_selected.cy.js` - Reply-to-selected edge creation (single + multi-parent merge)
 
 ### Unit tests
 
@@ -866,7 +872,8 @@ Write unit tests for logic that does not require API calls:
 - `tests/test_wheel_zoom.js` - Ctrl+scroll zoom math (`normalizeWheelDeltaY`, `scaleAfterWheelZoom`)
 - `tests/test_web_grounding.js` - Web grounding helper (appendWebContextToMessages)
 - `tests/test_utils_messages.js` - buildMessagesForApi edge cases
-- `tests/test_layout.js` - Layout and overlap resolution functions
+- `tests/test_layout.js` - Layout, overlap resolution, and `resolveHorizontalOverlaps` functions
+- `tests/test_vertical_layout.js` - Vertical tree layout algorithm and type-aware `autoPosition`
 - `tests/test_graph_types.js` - Node creation functions and default node sizes
 - `tests/test_crdt_graph.js` - Graph traversal and visibility functions
 - `tests/test_matrix.js` - Matrix rendering and concurrent cell updates

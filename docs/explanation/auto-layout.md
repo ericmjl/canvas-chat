@@ -1,140 +1,92 @@
 # Auto-layout algorithm
 
-This document explains the design decision for automatically arranging nodes on the canvas.
+This document explains the design decisions for automatically arranging nodes on the canvas.
 
-## Context
+## Available algorithms
 
-Canvas Chat represents conversations as a directed acyclic graph (DAG) where nodes are messages and edges represent reply relationships. As conversations grow and branch, manual positioning becomes tedious. Users need a way to quickly organize their canvas while preserving the logical structure of the conversation.
+Canvas Chat offers three layout algorithms, selectable via the layout picker dropdown:
 
-## Decision
+| Algorithm | Method | Direction | Default |
+|-----------|--------|-----------|---------|
+| **Top-Down Tree** | `verticalTreeLayout()` | Top-to-bottom (Y = depth) | Yes |
+| **Hierarchical** | `autoLayout()` | Left-to-right (X = depth) | |
+| **Force-Directed** | `forceDirectedLayout()` | Physics simulation | |
 
-We use a **topological sort + greedy placement** algorithm that:
+## Top-Down Tree (default)
 
-1. Processes nodes in dependency order (parents before children)
-2. Assigns horizontal layers based on depth from root nodes
-3. Places nodes vertically using a greedy search for non-overlapping positions
+The newest and default algorithm. Parents are vertically above, children below.
 
-## Algorithm overview
+### Design principles
 
-### Step 1: Topological sort (Kahn's algorithm)
+1. **Roots stay anchored** — root nodes keep their existing X position; the tree grows downward from them
+2. **Top-down only** — children are centered under their parents; parents are never moved by children (no bottom-up pass)
+3. **Center-of-mass preservation** — after layout, the entire tree is shifted so its horizontal center of mass matches the pre-layout center (prevents the tree from jumping to the left edge when switching from hierarchical)
+4. **Per-layer overlap resolution** — siblings that would overlap are pushed apart horizontally via `resolveHorizontalOverlaps`
 
-We first sort all nodes so that parent nodes come before their children. This ensures that when we position a child node, all of its parents have already been placed.
+### Algorithm
 
-```text
-Initialize in-degree count for each node
-Queue = nodes with in-degree 0 (root nodes)
-While queue is not empty:
-    Pop node from queue
-    Add to result
-    For each child of node:
-        Decrement child's in-degree
-        If in-degree becomes 0, add child to queue
-```
+1. **Layer assignment**: Each node's layer = `max(parent layers) + 1`. Roots = layer 0. Y = `layer * (max_height_in_layer + VERTICAL_GAP)`.
+2. **Top-down X positioning**: Process layers top to bottom. Roots keep existing X. Non-root nodes get X = `average(parent centers) - node_width / 2`.
+3. **Overlap resolution**: Within each layer, `resolveHorizontalOverlaps` sorts by X and pushes apart any overlapping siblings.
+4. **Center-of-mass shift**: Shift all nodes so the post-layout center of mass matches the pre-layout center of mass. Then a final overlap resolution pass per layer.
+5. **Write to CRDT**: Clamp all X to `>= START_X`, write positions.
 
-Nodes at the same level are sorted by creation time for consistent ordering across layout runs.
+### Why top-down only (no bottom-up pass)
 
-### Step 2: Layer assignment
+An earlier version included a bottom-up centering pass that moved parents toward their children's centroid. This was **counterproductive**: when children were pushed apart by overlap resolution (shifting the children's centroid rightward), the bottom-up pass dragged the root — and the entire tree — sideways. The top-down-only approach keeps roots stable and produces straight vertical edges for chains (the most common conversation pattern).
 
-Each node is assigned a horizontal layer based on its depth from the roots:
+## Hierarchical (left-to-right)
 
-- Root nodes (no parents) are assigned layer 0
-- All other nodes are assigned `max(parent layers) + 1`
+The original algorithm. Processes nodes in topological order, assigns horizontal layers (X = depth), and places vertically (Y) using greedy search for non-overlapping positions.
 
-This ensures parents are always positioned to the left of their children, making the conversation flow visually clear (left-to-right progression).
-
-### Step 3: Greedy Y-position placement
-
-For each node in topological order:
-
-1. **Calculate X position**: `START_X + layer * (NODE_WIDTH + HORIZONTAL_GAP)`
-2. **Calculate ideal Y position**: Average Y of parent nodes (or `START_Y` for roots)
-3. **Search for non-overlapping position**: Try the ideal Y first, then search alternating offsets up and down until a clear spot is found
-4. **Fallback**: If no position found within search range, place below all existing nodes
-
-The overlap check uses axis-aligned bounding box (AABB) collision detection with padding to ensure visual spacing.
-
-## Alternatives considered
-
-### Force-directed layout
-
-Use physics simulation where nodes repel each other and edges act as springs.
-
-**Advantages:**
-
-- Produces aesthetically pleasing, organic layouts
-- Handles complex graph structures well
-- Self-organizing
-
-**Disadvantages:**
-
-- Computationally expensive for large graphs
-- Non-deterministic (different results each run)
-- Requires iterative simulation (slower)
-- May not preserve left-to-right conversation flow
-
-### Sugiyama/hierarchical layout
-
-The classic algorithm for drawing layered DAGs with crossing minimization.
-
-**Advantages:**
-
-- Optimal edge crossing minimization
-- Well-studied algorithm with proven results
-- Produces very clean hierarchical layouts
-
-**Disadvantages:**
-
-- Complex to implement correctly
-- Crossing minimization is NP-hard (requires heuristics)
-- Overkill for our typical graph sizes (10-100 nodes)
-- Heavy library dependency for full implementation
-
-### Grid-based layout
-
-Snap nodes to a grid based on layer and creation order.
-
-**Advantages:**
-
-- Very simple to implement
-- Deterministic and fast
-- Clean, regular appearance
-
-**Disadvantages:**
-
-- Wastes vertical space when branches have different depths
-- Doesn't consider parent-child Y alignment
-- Can create unnecessarily tall layouts
-
-## Why topological + greedy
-
-This approach provides the best balance for our use case:
-
-1. **Simple implementation** - ~100 lines of straightforward code, no external dependencies
-2. **Deterministic** - Same graph always produces the same layout
-3. **Fast** - O(n + e) for topological sort, O(n^2) worst case for placement (acceptable for <1000 nodes)
-4. **Conversation-aware** - Left-to-right flow matches natural reading order; children align vertically with parents
-5. **Incremental-friendly** - Could be extended to only reposition new nodes while keeping existing positions
-
-## Implementation notes
-
-Key constants in `graph.js`:
+Key constants in `crdt-graph.js`:
 
 ```javascript
-const NODE_WIDTH = 360;      // Assumed node width for spacing
-const NODE_HEIGHT = 220;     // Assumed node height for spacing
-const HORIZONTAL_GAP = 120;  // Gap between layers
+const HORIZONTAL_GAP = 120;  // Gap between layers (columns)
 const VERTICAL_GAP = 40;     // Minimum gap between nodes vertically
 const START_X = 100;         // Left margin
 const START_Y = 100;         // Top margin
 ```
 
-The algorithm searches up to 20 offsets in each direction (40 total positions) before falling back to placing at the bottom. This covers most practical cases while keeping the search bounded.
+## Force-Directed
 
-## Future improvements
+Physics simulation with repulsion between all node pairs and spring attraction along edges. 100 iterations. Produces organic layouts but is non-deterministic.
 
-Potential enhancements if needed:
+## Incremental positioning: autoPosition
 
-- **Partial layout**: Only reposition newly added nodes, keeping user-adjusted positions
-- **Compaction**: After initial placement, shift nodes up to minimize total height
-- **Crossing reduction**: Simple heuristic to swap same-layer nodes to reduce edge crossings
-- **Animation**: Smooth transition from old positions to new positions
+When a new node is created (not via Apply Layout, but during normal conversation), `autoPosition(parentIds, nodeType)` determines its initial position:
+
+- **No parents**: `(START_X, START_Y)`
+- **One parent**: Centered horizontally under parent, placed below it (`parent.y + parent.height + VERTICAL_GAP`)
+- **Multiple parents**: X from average of parent centers, Y below the deepest parent
+- **Overlap avoidance**: If the initial position overlaps existing nodes, shifts horizontally (alternating left/right)
+
+The `nodeType` parameter is critical for correct centering — `autoPosition` uses `getDefaultNodeSize(type)` to look up the actual width. HUMAN nodes are 420px wide, AI nodes are 640px. Using wrong dimensions causes bent edges.
+
+## createLinkedNode
+
+The canonical way to create a node linked to parents. `graph.createLinkedNode(type, content, parentIds, options)` creates the node, positions it via `autoPosition(parentIds, type)`, and creates REPLY/MERGE edges — all atomically. Emits `'linkedNodeCreated'` event.
+
+This prevents the bug where node creation forgot to create edges to selected parent nodes.
+
+## Auto-layout trigger (disabled)
+
+`scheduleAutoLayout()` in `app.js` is an intentional no-op. Running full `verticalTreeLayout` on every node creation was counterproductive — it moved established nodes off-center. `autoPosition` in `createLinkedNode` handles incremental placement correctly. Full re-layout is available via the Apply Layout button.
+
+## Alternatives considered
+
+### Full Sugiyama framework
+
+The classic algorithm for drawing layered DAGs with crossing minimization.
+
+**Advantages**: Optimal edge crossing minimization, well-studied.
+
+**Disadvantages**: Complex to implement, crossing minimization is NP-hard (requires heuristics), overkill for typical graph sizes (10-100 nodes).
+
+Our top-down tree algorithm is essentially a simplified Sugiyama: layer assignment + barycenter positioning without crossing minimization. This produces good results for conversation trees where crossing minimization is rarely needed.
+
+### Grid-based layout
+
+**Advantages**: Very simple, deterministic, fast.
+
+**Disadvantages**: Wastes vertical space, doesn't consider parent-child alignment, can create unnecessarily tall layouts.
