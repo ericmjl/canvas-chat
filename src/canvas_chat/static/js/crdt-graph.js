@@ -2187,12 +2187,6 @@ class CRDTGraph extends EventEmitter {
 
         // Step 3: Create work nodes with blended positions
         const focusX = focusNode.position?.x ?? START_X;
-        const blendWeight = (layer) => {
-            const d = Math.abs(layer);
-            if (d <= 2) return 1.0;
-            if (d === 3) return 0.4;
-            return 0.15;
-        };
 
         // Compute ideal X positions for each layer.
         // Upward pass first (parents centered relative to children in adjacent layer).
@@ -2364,27 +2358,21 @@ class CRDTGraph extends EventEmitter {
             }
         }
 
-        // Step 4: Blend with existing positions and write to CRDT
+        // Step 4: Write ideal positions directly (no per-node blend).
+        // The entire neighborhood moves as a unit to its ideal layout.
+        // This guarantees all edges are straight (parent-child centers match).
+        // The animation (animateToLayout, ~300ms) provides the visual transition.
         for (const [nodeId, layer] of layers) {
             const node = this.getNode(nodeId);
             if (!node) continue;
 
-            const size = getNodeSize(node);
-            const w = blendWeight(layer);
-
             const idealXVal = idealX.get(nodeId) ?? node.position?.x ?? START_X;
             const idealYVal = layerY.get(layer) ?? node.position?.y ?? 100;
 
-            const currentX = node.position?.x ?? START_X;
-            const currentY = node.position?.y ?? 100;
-
-            const blendedX = currentX * (1 - w) + idealXVal * w;
-            const blendedY = currentY * (1 - w) + idealYVal * w;
-
             this.updateNode(nodeId, {
                 position: {
-                    x: blendedX,
-                    y: blendedY,
+                    x: idealXVal,
+                    y: idealYVal,
                 },
             });
         }
