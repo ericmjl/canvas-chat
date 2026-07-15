@@ -989,6 +989,11 @@ class App {
             this.handleAutoLayout();
         });
 
+        // Copy graph structure button
+        document.getElementById('copy-graph-btn').addEventListener('click', () => {
+            this.copyGraphStructure();
+        });
+
         // Sessions modal
         document.getElementById('sessions-btn').addEventListener('click', () => {
             this.modalManager.showSessionsModal();
@@ -2384,6 +2389,33 @@ class App {
 
         // Save the new positions
         this.saveSession();
+    }
+
+    /**
+     * Copy the graph structure as text (edges using node labels) to clipboard.
+     * Format: one edge per line, "sourceLabel -> targetLabel"
+     */
+    copyGraphStructure() {
+        const edges = this.graph.getAllEdges();
+        if (edges.length === 0) {
+            this.showToast('No edges to copy');
+            return;
+        }
+
+        const getLabel = (nodeId) => {
+            const node = this.graph.getNode(nodeId);
+            if (!node) return nodeId.slice(0, 8);
+            return node.title || node.summary || (node.content || '').substring(0, 40).trim() || nodeId.slice(0, 8);
+        };
+
+        const lines = edges
+            .map((e) => `${getLabel(e.source)} -> ${getLabel(e.target)}`)
+            .join('\n');
+
+        navigator.clipboard
+            .writeText(lines)
+            .then(() => this.showToast('Graph structure copied'))
+            .catch(() => this.showToast('Failed to copy'));
     }
 
     /**
