@@ -83,7 +83,7 @@ The layout is **tree-ish**: the main thread (focus path) forms a vertical spine,
 
 1. **Focus stays anchored** — the focused node does not move
 2. **Spine is vertical** — focus, direct parents, grandparents (following the parent chain), direct children, and grandchildren (following the child chain) are all at the same X center, producing straight vertical edges along the entire navigation path
-3. **Multiple parents/children don't overlap** — a single parent/child pins at focus.cx (straight edge); multiple are spread side by side with their centroid at focus.cx
+3. **Navigation history determines spine** — when multiple parents or children exist, the most recently visited one (from navigation history) goes on the spine. Fallback for first visit: oldest `created_at`. Other parents/children become branches spread to the sides.
 4. **No overlaps, ever** — all non-spine "branch" nodes are spread to left/right using subtree half-widths, guaranteeing sufficient repulsion
 5. **Neighborhood as a unit** — all nodes in the BFS move to ideal positions directly (no per-node blend); the animation provides the visual transition
 
@@ -96,10 +96,10 @@ The layout is **tree-ish**: the main thread (focus path) forms a vertical spine,
 **Step 3: Spine identification and pinning**:
 
 - Focus pinned at current position
-- Direct parents: single → pin at focus.cx; multiple → spread with centroid at focus.cx
-- Direct children: same logic
-- Grandparents: follow parent chain upward from first direct parent, pin each at focus.cx
-- Grandchildren: follow child chain downward from each direct child's first child, pin at focus.cx
+- Direct parents: select ONE spine parent (most recently visited from nav history; fallback: oldest `created_at`). Pin at focus.cx. Other parents become branches.
+- Direct children: same selection logic. Other children become branches.
+- Grandparents: follow the selected spine parent upward, selecting most-recently-visited at each layer. Pin each at focus.cx.
+- Grandchildren: follow the selected spine child downward. Pin at focus.cx.
 
 **Step 4: Branch spacing** — for each layer, non-spine nodes are split left/right (by current position) and packed outward from the spine using subtree half-widths. Per-layer overlap resolution as safety net.
 
