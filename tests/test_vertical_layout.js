@@ -506,6 +506,86 @@ test('focusCentricLayout: no vertical overlap when focus shorter than child', ()
     assertTrue(cTop >= bBottom, `C top (${Math.round(cTop)}) should be >= B bottom (${Math.round(bBottom)})`);
 });
 
+test('focusCentricLayout: no horizontal overlaps in complex DAG', () => {
+    // The user's 15-node graph that exposed the overlap bug
+    const graph = new TestGraph();
+    const edges = [
+        ['A','B'],['B','C'],['C','D'],['D','I'],['I','J'],
+        ['J','K'],['K','M'],['J','L'],['L','N'],
+        ['D','F'],['E','F'],['F','H'],['D','G'],['G','E'],
+    ];
+    const types = {
+        A: NodeType.HUMAN, B: NodeType.AI, C: NodeType.HUMAN, D: NodeType.AI,
+        E: NodeType.HUMAN, F: NodeType.AI, G: NodeType.HUMAN, H: NodeType.AI,
+        I: NodeType.HUMAN, J: NodeType.AI, K: NodeType.HUMAN, L: NodeType.HUMAN,
+        M: NodeType.AI, N: NodeType.AI,
+    };
+    for (const id of Object.keys(types)) {
+        graph.addNode(createTestNode(id, types[id]));
+        graph.updateNode(id, { position: { x: 500, y: 500 } });
+    }
+    for (const [s, t] of edges) graph.addEdge(createTestEdge(s, t));
+
+    // Navigate F → E (the failing scenario)
+    graph.focusCentricLayout('F');
+    graph.focusCentricLayout('E');
+
+    // Check no two nodes at the same Y layer overlap horizontally
+    const allNodes = graph.getAllNodes();
+    const byLayer = new Map();
+    for (const node of allNodes) {
+        const y = Math.round(node.position.y / 10) * 10;
+        if (!byLayer.has(y)) byLayer.set(y, []);
+        byLayer.get(y).push(node);
+    }
+
+    for (const [y, nodes] of byLayer) {
+        const sorted = [...nodes].sort((a, b) => a.position.x - b.position.x);
+        for (let i = 1; i < sorted.length; i++) {
+            const prevRight = sorted[i - 1].position.x + (sorted[i - 1].width || 420);
+            assertTrue(
+                sorted[i].position.x >= prevRight,
+                `Overlap at Y=${y}: ${sorted[i - 1].id} right=${Math.round(prevRight)} vs ${sorted[i].id} left=${Math.round(sorted[i].position.x)}`,
+            );
+        }
+    }
+});
+
+test('focusCentricLayout: subtree spreading prevents child overlaps', () => {
+    // Parent with 2 children that each have wide subtrees.
+    // Children should be spread by subtree width, not overlap.
+    const graph = new TestGraph();
+    // A → (B, C), B → D (AI 640px), C → E (AI 640px)
+    graph.addNode(createTestNode('A', NodeType.NOTE));
+    graph.updateNode('A', { position: { x: 500, y: 100 } });
+    graph.addNode(createTestNode('B', NodeType.HUMAN));
+    graph.updateNode('B', { position: { x: 300, y: 500 } });
+    graph.addNode(createTestNode('C', NodeType.HUMAN));
+    graph.updateNode('C', { position: { x: 700, y: 500 } });
+    graph.addNode(createTestNode('D', NodeType.AI));
+    graph.updateNode('D', { position: { x: 300, y: 900 } });
+    graph.addNode(createTestNode('E', NodeType.AI));
+    graph.updateNode('E', { position: { x: 700, y: 900 } });
+    graph.addEdge(createTestEdge('A', 'B'));
+    graph.addEdge(createTestEdge('A', 'C'));
+    graph.addEdge(createTestEdge('B', 'D'));
+    graph.addEdge(createTestEdge('C', 'E'));
+
+    graph.focusCentricLayout('A');
+
+    // B and C are children of A at the same layer — they must not overlap
+    const b = graph.getNode('B');
+    const c = graph.getNode('C');
+    const bw = b.width || 420;
+    const cw = c.width || 420;
+    const [left, right] = b.position.x < c.position.x ? [b, c] : [c, b];
+    const leftW = left.width || 420;
+    assertTrue(
+        right.position.x >= left.position.x + leftW,
+        `Children should not overlap: ${right.id} left=${Math.round(right.position.x)} vs ${left.id} right=${Math.round(left.position.x + leftW)}`,
+    );
+});
+
 // ============================================================
 // Runner (test_setup collects tests; run them here)
 // ============================================================
