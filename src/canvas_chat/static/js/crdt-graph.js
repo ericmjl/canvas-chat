@@ -2179,30 +2179,33 @@ class CRDTGraph extends EventEmitter {
         const maxLayer = Math.max(...layers.values());
 
         // Y: focus stays at current Y. Other layers offset from it.
+        // Each layer's Y uses the PREVIOUS (adjacent) layer's height for the gap,
+        // so a tall focus node doesn't get overlapped by a short child.
         const focusY = focusNode.position?.y ?? 100;
         const layerY = new Map();
         layerY.set(0, focusY);
 
-        // Upward Y
-        for (let l = -1; l >= minLayer; l--) {
-            let maxHeight = DEFAULT_HEIGHT;
+        // Precompute max height per layer
+        const layerMaxHeight = new Map();
+        for (let l = minLayer; l <= maxLayer; l++) {
+            let mh = DEFAULT_HEIGHT;
             for (const nodeId of layerNodes.get(l) || []) {
                 const node = this.getNode(nodeId);
-                if (node) maxHeight = Math.max(maxHeight, getNodeSize(node).height);
+                if (node) mh = Math.max(mh, getNodeSize(node).height);
             }
-            const belowY = layerY.get(l + 1);
-            layerY.set(l, belowY - maxHeight - VERTICAL_GAP);
+            layerMaxHeight.set(l, mh);
         }
 
-        // Downward Y
+        // Upward Y: parent top = child top - gap - parent height
+        for (let l = -1; l >= minLayer; l--) {
+            const belowY = layerY.get(l + 1);
+            layerY.set(l, belowY - VERTICAL_GAP - layerMaxHeight.get(l));
+        }
+
+        // Downward Y: child top = parent top + parent height + gap
         for (let l = 1; l <= maxLayer; l++) {
-            let maxHeight = DEFAULT_HEIGHT;
-            for (const nodeId of layerNodes.get(l) || []) {
-                const node = this.getNode(nodeId);
-                if (node) maxHeight = Math.max(maxHeight, getNodeSize(node).height);
-            }
             const aboveY = layerY.get(l - 1);
-            layerY.set(l, aboveY + maxHeight + VERTICAL_GAP);
+            layerY.set(l, aboveY + layerMaxHeight.get(l - 1) + VERTICAL_GAP);
         }
 
         // Step 3: Create work nodes with blended positions
