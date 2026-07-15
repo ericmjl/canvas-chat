@@ -2200,23 +2200,25 @@ class CRDTGraph extends EventEmitter {
         // Focus stays anchored — siblings make room.
         // Uses subtree-aware spacing: siblings are spaced based on their
         // subtrees' widths (widest layer below), not just node width.
-        const subtreeHalfWidth = (nodeId, layer) => {
+        const subtreeHalfWidth = (nodeId) => {
             const node = this.getNode(nodeId);
             if (!node) return DEFAULT_WIDTH / 2;
             const halfW = getNodeSize(node).width / 2;
-            const childrenAtNext = this.getChildren(nodeId).filter((c) => layers.get(c.id) === layer + 1);
-            if (childrenAtNext.length === 0) return halfW;
-            const childSpans = childrenAtNext.map((c) => subtreeHalfWidth(c.id, layer + 1));
-            if (childrenAtNext.length === 1) return Math.max(halfW, childSpans[0]);
+            // Consider ALL children in the BFS, not just adjacent-layer children.
+            // In focus-centric layout, sibling expansion can place a node's child
+            // at a non-adjacent layer (e.g., G at -1 has child E at -2).
+            const children = this.getChildren(nodeId).filter((c) => layers.has(c.id));
+            if (children.length === 0) return halfW;
+            const childSpans = children.map((c) => subtreeHalfWidth(c.id));
+            if (children.length === 1) return Math.max(halfW, childSpans[0]);
             // Multiple children: pack side by side, compute max extent from center.
-            // Each child's slot = max(node width, subtree width) to prevent overlaps.
-            const slotWidths = childrenAtNext.map((c, i) =>
+            const slotWidths = children.map((c, i) =>
                 Math.max(getNodeSize(c).width, childSpans[i] * 2)
             );
-            const totalWidth = slotWidths.reduce((s, w) => s + w, 0) + (childrenAtNext.length - 1) * HORIZONTAL_GAP;
+            const totalWidth = slotWidths.reduce((s, w) => s + w, 0) + (children.length - 1) * HORIZONTAL_GAP;
             let cursor = -totalWidth / 2;
             let maxExtent = halfW;
-            for (let i = 0; i < childrenAtNext.length; i++) {
+            for (let i = 0; i < children.length; i++) {
                 const childCenter = cursor + slotWidths[i] / 2;
                 maxExtent = Math.max(maxExtent, Math.abs(childCenter) + childSpans[i]);
                 cursor += slotWidths[i] + HORIZONTAL_GAP;
@@ -2237,7 +2239,7 @@ class CRDTGraph extends EventEmitter {
             // the right go right. This prevents the spacing code from
             // displacing the focus and breaking parent-child edges.
             const focusCx = focusX + focusSize.width / 2;
-            const focusSpan = subtreeHalfWidth(focusNodeId, 0);
+            const focusSpan = subtreeHalfWidth(focusNodeId);
 
             const leftSibs = [];
             const rightSibs = [];
@@ -2255,7 +2257,7 @@ class CRDTGraph extends EventEmitter {
             // Place left siblings
             let cursor = focusCx - focusSpan;
             for (const id of leftSibs) {
-                const span = subtreeHalfWidth(id, 0);
+                const span = subtreeHalfWidth(id);
                 const size = getNodeSize(this.getNode(id));
                 cursor -= HORIZONTAL_GAP + span;
                 idealX.set(id, cursor - size.width / 2);
@@ -2265,7 +2267,7 @@ class CRDTGraph extends EventEmitter {
             // Place right siblings
             cursor = focusCx + focusSpan;
             for (const id of rightSibs) {
-                const span = subtreeHalfWidth(id, 0);
+                const span = subtreeHalfWidth(id);
                 const size = getNodeSize(this.getNode(id));
                 cursor += HORIZONTAL_GAP + span;
                 idealX.set(id, cursor - size.width / 2);
@@ -2342,7 +2344,7 @@ class CRDTGraph extends EventEmitter {
                     idealX.set(childIds[0], parentCx - size.width / 2);
                 } else {
                     // Spread children by subtree widths
-                    const spans = childIds.map((id) => subtreeHalfWidth(id, l));
+                    const spans = childIds.map((id) => subtreeHalfWidth(id));
                     const childWidths = childIds.map((id) => getNodeSize(this.getNode(id)).width);
                     const slotWidths = childIds.map((_, i) => Math.max(childWidths[i], spans[i] * 2));
                     const totalWidth = slotWidths.reduce((s, w) => s + w, 0) + (childIds.length - 1) * HORIZONTAL_GAP;
