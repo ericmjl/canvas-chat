@@ -2322,27 +2322,28 @@ class CRDTGraph extends EventEmitter {
             layerIds.forEach((id, i) => { if (layerWork[i]) idealX.set(id, layerWork[i].position.x); });
         }
 
-        // Step 3b: Re-center parent layer (-1) so its group centroid matches
-        // the focus node's center. Parents should be "centered as a unit" above
-        // the focus. Children (+1) are NOT re-centered — each stays under its
-        // own parent for straight edges.
+        // Step 3b: Re-center DIRECT PARENTS of the focus (nodes at layer -1
+        // that have an edge INTO the focus node). Only these should be
+        // "centered as a unit" above the focus. Other layer -1 nodes (uncles,
+        // co-parents of cousins) stay centered above their own children.
         const focusCenter = focusX + focusSize.width / 2;
-        for (const layer of [-1]) {
-            const layerIds = layerNodes.get(layer) || [];
-            if (layerIds.length <= 1) continue;
-
+        const directParentIds = (layerNodes.get(-1) || []).filter((id) => {
+            const parents = this.getParents(focusNodeId);
+            return parents.some((p) => p.id === id);
+        });
+        if (directParentIds.length >= 1) {
             let centroid = 0;
-            for (const id of layerIds) {
+            for (const id of directParentIds) {
                 const node = this.getNode(id);
                 if (!node) continue;
                 const x = idealX.get(id) ?? START_X;
                 const size = getNodeSize(node);
                 centroid += x + size.width / 2;
             }
-            centroid /= layerIds.length;
+            centroid /= directParentIds.length;
 
             const shift = focusCenter - centroid;
-            for (const id of layerIds) {
+            for (const id of directParentIds) {
                 idealX.set(id, (idealX.get(id) ?? START_X) + shift);
             }
         }
