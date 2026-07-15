@@ -36,6 +36,10 @@ const DEFAULT_WIDTH = 420;
 const DEFAULT_HEIGHT = 220;
 const DEFAULT_PADDING = 40;
 
+// Shared layout positioning constants (used by verticalTreeLayout, focusCentricLayout, autoPosition)
+const LAYOUT_START_X = 100;
+const LAYOUT_START_Y = 100;
+
 /**
  * Get the size of a node, using defaults if not specified.
  * @param {Node} node - Node with optional width/height properties
@@ -250,4 +254,6 @@ export {
     DEFAULT_WIDTH,
     DEFAULT_HEIGHT,
     DEFAULT_PADDING,
+    LAYOUT_START_X,
+    LAYOUT_START_Y,
 };
