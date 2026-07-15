@@ -2358,6 +2358,27 @@ class CRDTGraph extends EventEmitter {
             }
         }
 
+        // Step 3c: Re-pin focus's direct children AND their subtrees.
+        // Overlap resolution on their layer may have pushed them away from
+        // the focus (by non-sibling nodes from other subtrees). Direct children
+        // of the focus MUST stay centered under the focus for straight edges.
+        // Cascade down through grandchildren to keep the entire focus subtree aligned.
+        const focusCenterX = focusX + focusSize.width / 2;
+        const focusChildIds = this.getChildren(focusNodeId).filter((c) => layers.get(c.id) === 1);
+        for (const child of focusChildIds) {
+            const childCx = focusCenterX;
+            const childSize = getNodeSize(child);
+            idealX.set(child.id, childCx - childSize.width / 2);
+
+            // Cascade: re-pin grandchildren under the re-pinned child
+            for (const gc of this.getChildren(child.id)) {
+                if (layers.has(gc.id) && Math.abs(layers.get(gc.id)) <= 3) {
+                    const gcSize = getNodeSize(gc);
+                    idealX.set(gc.id, childCx - gcSize.width / 2);
+                }
+            }
+        }
+
         // Step 4: Write ideal positions directly (no per-node blend).
         // The entire neighborhood moves as a unit to its ideal layout.
         // This guarantees all edges are straight (parent-child centers match).
