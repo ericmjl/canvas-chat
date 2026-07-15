@@ -2193,28 +2193,27 @@ class CRDTGraph extends EventEmitter {
         // Then downward pass (children centered relative to parents in adjacent layer).
         // Only consider parents/children in the IMMEDIATELY adjacent layer
         // to avoid cross-reference issues with multi-parent DAGs.
-        const idealX = new Map();
-        idealX.set(focusNodeId, focusX);
 
-        // Layer 0: siblings keep existing X, then resolve overlaps with focus.
-        // Focus stays anchored — siblings make room.
-        // Uses subtree-aware spacing: siblings are spaced based on their
-        // subtrees' widths (widest layer below), not just node width.
-        const subtreeHalfWidth = (nodeId) => {
+        // ===== X POSITIONING: Spine-based layout =====
+        // The "spine" is the vertical chain through the focus. All spine nodes
+        // are pinned at focus.cx for straight vertical edges. Branch nodes
+        // (siblings, cousins) are spread to the sides by subtree width.
+
+        const focusCx = focusX + focusSize.width / 2;
+        const idealX = new Map();
+
+        // Subtree half-width: considers ALL BFS children recursively.
+        const subtreeHalfWidth = (nodeId, visited = new Set()) => {
+            if (visited.has(nodeId)) return DEFAULT_WIDTH / 2;
+            visited.add(nodeId);
             const node = this.getNode(nodeId);
             if (!node) return DEFAULT_WIDTH / 2;
             const halfW = getNodeSize(node).width / 2;
-            // Consider ALL children in the BFS, not just adjacent-layer children.
-            // In focus-centric layout, sibling expansion can place a node's child
-            // at a non-adjacent layer (e.g., G at -1 has child E at -2).
-            const children = this.getChildren(nodeId).filter((c) => layers.has(c.id));
+            const children = this.getChildren(nodeId).filter((c) => layers.has(c.id) && !visited.has(c.id));
             if (children.length === 0) return halfW;
-            const childSpans = children.map((c) => subtreeHalfWidth(c.id));
+            const childSpans = children.map((c) => subtreeHalfWidth(c.id, new Set(visited)));
             if (children.length === 1) return Math.max(halfW, childSpans[0]);
-            // Multiple children: pack side by side, compute max extent from center.
-            const slotWidths = children.map((c, i) =>
-                Math.max(getNodeSize(c).width, childSpans[i] * 2)
-            );
+            const slotWidths = children.map((c, i) => Math.max(getNodeSize(c).width, childSpans[i] * 2));
             const totalWidth = slotWidths.reduce((s, w) => s + w, 0) + (children.length - 1) * HORIZONTAL_GAP;
             let cursor = -totalWidth / 2;
             let maxExtent = halfW;
@@ -2226,37 +2225,96 @@ class CRDTGraph extends EventEmitter {
             return maxExtent;
         };
 
-        const layer0Ids = layerNodes.get(0) || [];
-        for (const nodeId of layer0Ids) {
-            if (nodeId !== focusNodeId) {
-                const node = this.getNode(nodeId);
-                idealX.set(nodeId, node?.position?.x ?? focusX);
+        const pinAtFocus = (nodeId) => {
+            const size = getNodeSize(this.getNode(nodeId));
+            idealX.set(nodeId, focusCx - size.width / 2);
+        };
+
+        // Step A: Identify and pin the spine (focus path — vertical chain)
+        const spineNodes = new Set();
+        spineNodes.add(focusNodeId);
+        idealX.set(focusNodeId, focusX);
+
+        // Helper: spread N nodes centered on focusCx using subtree half-widths
+        const spreadAtFocus = (nodeIds) => {
+            if (nodeIds.length === 1) {
+                pinAtFocus(nodeIds[0]);
+                return;
+            }
+            const spans = nodeIds.map((id) => subtreeHalfWidth(id));
+            const widths = nodeIds.map((id) => getNodeSize(this.getNode(id)).width);
+            const slotWidths = nodeIds.map((_, i) => Math.max(widths[i], spans[i] * 2));
+            const totalWidth = slotWidths.reduce((s, w) => s + w, 0) + (nodeIds.length - 1) * HORIZONTAL_GAP;
+            let cursor = focusCx - totalWidth / 2;
+            for (let i = 0; i < nodeIds.length; i++) {
+                const nodeCx = cursor + slotWidths[i] / 2;
+                const size = getNodeSize(this.getNode(nodeIds[i]));
+                idealX.set(nodeIds[i], nodeCx - size.width / 2);
+                cursor += slotWidths[i] + HORIZONTAL_GAP;
+            }
+        };
+
+        // Direct parents: single → pin at focus.cx; multiple → spread, centroid at focus.cx
+        const focusParentIds = this.getParents(focusNodeId).filter((p) => layers.has(p.id)).map((p) => p.id);
+        focusParentIds.forEach((id) => spineNodes.add(id));
+        spreadAtFocus(focusParentIds);
+
+        // Direct children: single → pin at focus.cx; multiple → spread, centroid at focus.cx
+        const focusChildIds = this.getChildren(focusNodeId).filter((c) => layers.has(c.id)).map((c) => c.id);
+        focusChildIds.forEach((id) => spineNodes.add(id));
+        spreadAtFocus(focusChildIds);
+
+        // Grandparents: follow the parent chain upward from focus's first parent.
+        // This creates the vertical "spine" — H→F→D→C→B→A all at focus.cx.
+        if (focusParentIds.length > 0) {
+            let curr = focusParentIds[0];
+            while (true) {
+                const parents = this.getParents(curr).filter((p) => layers.has(p.id) && !spineNodes.has(p.id));
+                if (parents.length === 0) break;
+                spineNodes.add(parents[0].id);
+                pinAtFocus(parents[0].id);
+                curr = parents[0].id;
             }
         }
-        if (layer0Ids.length > 1) {
-            // Space siblings around the FOCUS using subtree half-widths.
-            // Focus stays pinned — siblings to the left go left, siblings to
-            // the right go right. This prevents the spacing code from
-            // displacing the focus and breaking parent-child edges.
-            const focusCx = focusX + focusSize.width / 2;
-            const focusSpan = subtreeHalfWidth(focusNodeId);
 
-            const leftSibs = [];
-            const rightSibs = [];
-            for (const id of layer0Ids) {
-                if (id === focusNodeId) continue;
-                const sibCx = (idealX.get(id) ?? focusX) + getNodeSize(this.getNode(id)).width / 2;
-                if (sibCx < focusCx) leftSibs.push(id);
-                else rightSibs.push(id);
+        // Grandchildren: follow child chain down from each direct child's first child
+        for (const childId of focusChildIds) {
+            let gcCurr = childId;
+            for (let l = layers.get(childId) + 1; l <= maxLayer; l++) {
+                const nextChildren = this.getChildren(gcCurr).filter((c) => layers.get(c.id) === l);
+                if (nextChildren.length === 0) break;
+                const next = nextChildren[0];
+                spineNodes.add(next.id); pinAtFocus(next.id);
+                gcCurr = next.id;
             }
-            // Sort left siblings right-to-left (closest to focus first)
-            leftSibs.sort((a, b) => (idealX.get(b) ?? 0) - (idealX.get(a) ?? 0));
-            // Sort right siblings left-to-right (closest to focus first)
-            rightSibs.sort((a, b) => (idealX.get(a) ?? 0) - (idealX.get(b) ?? 0));
+        }
 
-            // Place left siblings
-            let cursor = focusCx - focusSpan;
-            for (const id of leftSibs) {
+        // Step B: Space branch nodes around spine at each layer.
+        for (let l = minLayer; l <= maxLayer; l++) {
+            const layerIds = layerNodes.get(l) || [];
+            const branches = layerIds.filter((id) => !spineNodes.has(id));
+            if (branches.length === 0) continue;
+
+            // Spine span = max subtree width of spine nodes at this layer
+            let spineSpan = DEFAULT_WIDTH / 2;
+            for (const id of layerIds.filter((id) => spineNodes.has(id))) {
+                spineSpan = Math.max(spineSpan, subtreeHalfWidth(id));
+            }
+
+            // Split branches left/right by current position
+            const leftBranches = [];
+            const rightBranches = [];
+            for (const id of branches) {
+                const node = this.getNode(id);
+                const cx = (node?.position?.x ?? focusX) + getNodeSize(node).width / 2;
+                if (cx < focusCx) leftBranches.push(id);
+                else rightBranches.push(id);
+            }
+            leftBranches.sort((a, b) => (this.getNode(b)?.position?.x ?? 0) - (this.getNode(a)?.position?.x ?? 0));
+            rightBranches.sort((a, b) => (this.getNode(a)?.position?.x ?? 0) - (this.getNode(b)?.position?.x ?? 0));
+
+            let cursor = focusCx - spineSpan;
+            for (const id of leftBranches) {
                 const span = subtreeHalfWidth(id);
                 const size = getNodeSize(this.getNode(id));
                 cursor -= HORIZONTAL_GAP + span;
@@ -2264,194 +2322,20 @@ class CRDTGraph extends EventEmitter {
                 cursor -= span;
             }
 
-            // Place right siblings
-            cursor = focusCx + focusSpan;
-            for (const id of rightSibs) {
+            cursor = focusCx + spineSpan;
+            for (const id of rightBranches) {
                 const span = subtreeHalfWidth(id);
                 const size = getNodeSize(this.getNode(id));
                 cursor += HORIZONTAL_GAP + span;
                 idealX.set(id, cursor - size.width / 2);
                 cursor += span;
             }
-        }
 
-        // Upward X (layer -1, -2, ... : centered relative to children at layer+1)
-        // Prioritize the focus-path child (discoverer) for straight edges along
-        // the navigation path. Other children are secondary.
-        for (let l = -1; l >= minLayer; l--) {
-            for (const nodeId of layerNodes.get(l) || []) {
-                const node = this.getNode(nodeId);
-                if (!node) continue;
-                // Only children in the adjacent layer toward focus
-                const children = this.getChildren(nodeId).filter((c) => layers.get(c.id) === l + 1);
-                if (children.length === 0) continue;
-                const size = getNodeSize(node);
-
-                // If one child is on the focus path, center on it exclusively
-                const focusChildId = discoverer.get(nodeId);
-                const focusChild = focusChildId ? children.find((c) => c.id === focusChildId) : null;
-                if (focusChild) {
-                    const fcx = idealX.get(focusChild.id);
-                    const fSize = getNodeSize(focusChild);
-                    const center = fcx !== undefined ? fcx + fSize.width / 2 : focusX + focusSize.width / 2;
-                    idealX.set(nodeId, center - size.width / 2);
-                    continue;
-                }
-                // Fallback: average all children
-                const childCenters = children.map((c) => {
-                    const cx = idealX.get(c.id);
-                    const cSize = getNodeSize(c);
-                    return cx !== undefined ? cx + cSize.width / 2 : focusX + focusSize.width / 2;
-                });
-                const avg = childCenters.reduce((s, x) => s + x, 0) / childCenters.length;
-                idealX.set(nodeId, avg - size.width / 2);
-            }
-            // Resolve overlaps in this layer
-            const layerIds = layerNodes.get(l) || [];
+            // Safety overlap resolution within this layer
             const layerWork = layerIds.map((id) => {
                 const node = this.getNode(id);
                 if (!node) return null;
                 return { position: { x: idealX.get(id) ?? focusX }, width: getNodeSize(node).width };
-            }).filter(Boolean);
-            resolveHorizontalOverlaps(layerWork, HORIZONTAL_GAP, dimensions);
-            layerIds.forEach((id, i) => { if (layerWork[i]) idealX.set(id, layerWork[i].position.x); });
-        }
-
-        // Downward X (layer +1, +2, ... : spread children by subtree widths)
-        // Children of the same parent are placed side by side based on their
-        // subtree widths, preventing cross-subtree overlaps.
-        for (let l = 1; l <= maxLayer; l++) {
-            // Group children by their parent at the adjacent layer
-            const childrenByParent = new Map();
-            for (const nodeId of layerNodes.get(l) || []) {
-                const parents = this.getParents(nodeId).filter((p) => layers.get(p.id) === l - 1);
-                // Use first parent (primary) for positioning
-                if (parents.length > 0) {
-                    const pid = parents[0].id;
-                    if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
-                    childrenByParent.get(pid).push(nodeId);
-                }
-            }
-
-            for (const [parentId, childIds] of childrenByParent) {
-                const parentNode = this.getNode(parentId);
-                if (!parentNode) continue;
-                const parentCx = (idealX.get(parentId) ?? focusX) + getNodeSize(parentNode).width / 2;
-
-                if (childIds.length === 1) {
-                    const child = this.getNode(childIds[0]);
-                    const size = getNodeSize(child);
-                    idealX.set(childIds[0], parentCx - size.width / 2);
-                } else {
-                    // Spread children by subtree widths
-                    const spans = childIds.map((id) => subtreeHalfWidth(id));
-                    const childWidths = childIds.map((id) => getNodeSize(this.getNode(id)).width);
-                    const slotWidths = childIds.map((_, i) => Math.max(childWidths[i], spans[i] * 2));
-                    const totalWidth = slotWidths.reduce((s, w) => s + w, 0) + (childIds.length - 1) * HORIZONTAL_GAP;
-                    let cursor = parentCx - totalWidth / 2;
-                    for (let i = 0; i < childIds.length; i++) {
-                        const childCx = cursor + slotWidths[i] / 2;
-                        const childSize = getNodeSize(this.getNode(childIds[i]));
-                        idealX.set(childIds[i], childCx - childSize.width / 2);
-                        cursor += slotWidths[i] + HORIZONTAL_GAP;
-                    }
-                }
-            }
-
-            // Safety: resolve any remaining overlaps between different parents' children
-            const layerIds = layerNodes.get(l) || [];
-            const layerWork = layerIds.map((id) => {
-                const node = this.getNode(id);
-                if (!node) return null;
-                return { position: { x: idealX.get(id) ?? focusX }, width: getNodeSize(node).width };
-            }).filter(Boolean);
-            resolveHorizontalOverlaps(layerWork, HORIZONTAL_GAP, dimensions);
-            layerIds.forEach((id, i) => { if (layerWork[i]) idealX.set(id, layerWork[i].position.x); });
-        }
-
-        // Step 3b: Re-center DIRECT PARENTS of the focus (nodes at layer -1
-        // that have an edge INTO the focus node). Only these should be
-        // "centered as a unit" above the focus. Other layer -1 nodes (uncles,
-        // co-parents of cousins) stay centered above their own children.
-        const focusCenter = focusX + focusSize.width / 2;
-        const directParentIds = (layerNodes.get(-1) || []).filter((id) => {
-            const parents = this.getParents(focusNodeId);
-            return parents.some((p) => p.id === id);
-        });
-        if (directParentIds.length >= 1) {
-            let centroid = 0;
-            for (const id of directParentIds) {
-                const node = this.getNode(id);
-                if (!node) continue;
-                const x = idealX.get(id) ?? START_X;
-                const size = getNodeSize(node);
-                centroid += x + size.width / 2;
-            }
-            centroid /= directParentIds.length;
-
-            const shift = focusCenter - centroid;
-            for (const id of directParentIds) {
-                idealX.set(id, (idealX.get(id) ?? START_X) + shift);
-            }
-        }
-
-        // Step 3d: Space orphan nodes (those without idealX) relative to
-        // positioned nodes at the same layer. Orphans are typically nodes
-        // discovered through sibling expansion whose children are at non-
-        // adjacent layers — the upward/downward passes couldn't position them.
-        // Without this, they keep their old positions and can collide with
-        // focus-path nodes. Uses subtree half-widths for sufficient repulsion.
-        for (let l = minLayer; l <= maxLayer; l++) {
-            const layerIds = layerNodes.get(l) || [];
-            const orphans = layerIds.filter((id) => !idealX.has(id));
-            if (orphans.length === 0) continue;
-
-            const positioned = layerIds.filter((id) => idealX.has(id));
-            if (positioned.length === 0) {
-                for (const id of orphans) {
-                    const node = this.getNode(id);
-                    idealX.set(id, node?.position?.x ?? START_X);
-                }
-                continue;
-            }
-
-            // Space each orphan relative to nearest positioned node
-            for (const orphanId of orphans) {
-                const orphan = this.getNode(orphanId);
-                const orphanSize = getNodeSize(orphan);
-                const orphanCx = (orphan?.position?.x ?? START_X) + orphanSize.width / 2;
-                const orphanSpan = subtreeHalfWidth(orphanId);
-
-                // Find nearest positioned node by center distance
-                let nearestCx = (idealX.get(positioned[0]) ?? START_X)
-                    + getNodeSize(this.getNode(positioned[0])).width / 2;
-                let nearestDist = Math.abs(nearestCx - orphanCx);
-                for (let i = 1; i < positioned.length; i++) {
-                    const cx = (idealX.get(positioned[i]) ?? START_X)
-                        + getNodeSize(this.getNode(positioned[i])).width / 2;
-                    const d = Math.abs(cx - orphanCx);
-                    if (d < nearestDist) { nearestDist = d; nearestCx = cx; }
-                }
-
-                const nearestSpan = subtreeHalfWidth(positioned.find((pid) => {
-                    const cx = (idealX.get(pid) ?? START_X)
-                        + getNodeSize(this.getNode(pid)).width / 2;
-                    return cx === nearestCx;
-                }) ?? positioned[0]);
-                const minDist = nearestSpan + orphanSpan + HORIZONTAL_GAP;
-
-                if (orphanCx < nearestCx) {
-                    idealX.set(orphanId, nearestCx - minDist - orphanSize.width / 2);
-                } else {
-                    idealX.set(orphanId, nearestCx + minDist - orphanSize.width / 2);
-                }
-            }
-
-            // Resolve any remaining overlaps in this layer
-            const layerWork = layerIds.map((id) => {
-                const node = this.getNode(id);
-                if (!node) return null;
-                return { position: { x: idealX.get(id) ?? START_X }, width: getNodeSize(node).width };
             }).filter(Boolean);
             resolveHorizontalOverlaps(layerWork, HORIZONTAL_GAP, dimensions);
             layerIds.forEach((id, i) => { if (layerWork[i]) idealX.set(id, layerWork[i].position.x); });

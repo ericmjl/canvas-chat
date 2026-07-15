@@ -1948,11 +1948,21 @@ class App {
         this.canvas.clearSelection();
         this.canvas.selectNode(targetNodeId);
 
-        // Just pan the viewport to center the target node.
-        // Don't reorganize the graph — autoPosition already placed nodes in a
-        // tree-ish layout when they were created. Moving nodes on every navigation
-        // introduces instability (overlaps, bent edges). The "Apply Layout" button
-        // is available for full re-layout when needed.
+        // Focus-centric layout: reorganize so focus path is vertical,
+        // branches spread to sides, no overlaps.
+        const layoutPicker = document.getElementById('layout-picker');
+        const algorithm = layoutPicker ? layoutPicker.value : 'vertical';
+        if (algorithm === 'vertical') {
+            const dimensions = this.canvas.getNodeDimensions();
+            this.graph.focusCentricLayout(targetNodeId, dimensions);
+            this.canvas.animateToLayout(this.graph, {
+                duration: 300,
+                keepViewport: true,
+                onEdgeUpdate: () => this.updateEdgesWithCollapseState(),
+            });
+        }
+
+        // Center on the node with animation
         const width = node.width || 420;
         const height = node.height || 200;
         this.canvas.centerOnAnimated(node.position.x + width / 2, node.position.y + height / 2, 300);
