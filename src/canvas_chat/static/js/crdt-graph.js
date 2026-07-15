@@ -2111,7 +2111,7 @@ class CRDTGraph extends EventEmitter {
         const DEFAULT_WIDTH = 420;
         const DEFAULT_HEIGHT = 220;
         const VERTICAL_GAP = 60;
-        const HORIZONTAL_GAP = 50;
+        const HORIZONTAL_GAP = 80;
         const START_X = 100;
 
         const focusNode = this.getNode(focusNodeId);
@@ -2127,46 +2127,43 @@ class CRDTGraph extends EventEmitter {
         };
 
         const focusSize = getNodeSize(focusNode);
-        const centerX = (wn) => wn.position.x + wn.width / 2;
 
-        // Step 1: Bidirectional BFS to assign layers
-        // Upward BFS (parents = negative layers)
-        // Downward BFS (children = positive layers)
+        // Step 1: Bidirectional BFS + sibling expansion
+        // Assigns layers: focus=0, parents=negative, children=positive,
+        // siblings of any node = same layer as that node.
         const layers = new Map();
         layers.set(focusNodeId, 0);
+        const queue = [focusNodeId];
 
-        // Upward BFS
-        let frontier = [focusNodeId];
-        let dist = 0;
-        while (frontier.length > 0) {
-            dist++;
-            const next = [];
-            for (const id of frontier) {
-                for (const parent of this.getParents(id)) {
-                    if (!layers.has(parent.id)) {
-                        layers.set(parent.id, -dist);
-                        next.push(parent.id);
+        while (queue.length > 0) {
+            const id = queue.shift();
+            const layer = layers.get(id);
+
+            // Expand parents (layer - 1)
+            for (const parent of this.getParents(id)) {
+                if (!layers.has(parent.id)) {
+                    layers.set(parent.id, layer - 1);
+                    queue.push(parent.id);
+                }
+            }
+
+            // Expand children (layer + 1)
+            for (const child of this.getChildren(id)) {
+                if (!layers.has(child.id)) {
+                    layers.set(child.id, layer + 1);
+                    queue.push(child.id);
+                }
+            }
+
+            // Expand siblings (same layer) — other children of this node's parents
+            for (const parent of this.getParents(id)) {
+                for (const sibling of this.getChildren(parent.id)) {
+                    if (!layers.has(sibling.id) && sibling.id !== id) {
+                        layers.set(sibling.id, layer);
+                        queue.push(sibling.id);
                     }
                 }
             }
-            frontier = next;
-        }
-
-        // Downward BFS
-        frontier = [focusNodeId];
-        dist = 0;
-        while (frontier.length > 0) {
-            dist++;
-            const next = [];
-            for (const id of frontier) {
-                for (const child of this.getChildren(id)) {
-                    if (!layers.has(child.id)) {
-                        layers.set(child.id, dist);
-                        next.push(child.id);
-                    }
-                }
-            }
-            frontier = next;
         }
 
         // Step 2: Group nodes by layer, compute Y
@@ -2222,6 +2219,52 @@ class CRDTGraph extends EventEmitter {
         // to avoid cross-reference issues with multi-parent DAGs.
         const idealX = new Map();
         idealX.set(focusNodeId, focusX);
+
+        // Layer 0: siblings keep existing X, then resolve overlaps with focus.
+        // Focus stays anchored — siblings make room.
+        // Uses subtree-aware spacing: siblings are spaced based on their
+        // subtrees' widths (widest layer below), not just node width.
+        const subtreeHalfWidth = (nodeId, layer) => {
+            const node = this.getNode(nodeId);
+            if (!node) return DEFAULT_WIDTH / 2;
+            const halfW = getNodeSize(node).width / 2;
+            const childrenAtNext = this.getChildren(nodeId).filter((c) => layers.get(c.id) === layer + 1);
+            if (childrenAtNext.length === 0) return halfW;
+            const childSpans = childrenAtNext.map((c) => subtreeHalfWidth(c.id, layer + 1));
+            if (childrenAtNext.length === 1) return Math.max(halfW, childSpans[0]);
+            // Multiple children: their combined span
+            const totalChildSpan = childSpans.reduce((s, w) => s + w, 0) + (childrenAtNext.length - 1) * HORIZONTAL_GAP;
+            return Math.max(halfW, totalChildSpan / 2);
+        };
+
+        const layer0Ids = layerNodes.get(0) || [];
+        for (const nodeId of layer0Ids) {
+            if (nodeId !== focusNodeId) {
+                const node = this.getNode(nodeId);
+                idealX.set(nodeId, node?.position?.x ?? focusX);
+            }
+        }
+        if (layer0Ids.length > 1) {
+            // Space siblings based on subtree half-widths
+            const sortedIds = [...layer0Ids].sort((a, b) => (idealX.get(a) ?? 0) - (idealX.get(b) ?? 0));
+            for (let i = 1; i < sortedIds.length; i++) {
+                const prev = sortedIds[i - 1];
+                const curr = sortedIds[i];
+                const prevSpan = subtreeHalfWidth(prev, 0);
+                const currSpan = subtreeHalfWidth(curr, 0);
+                const minPrevRight = (idealX.get(prev) ?? 0) + getNodeSize(this.getNode(prev)).width / 2 + prevSpan - getNodeSize(this.getNode(prev)).width / 2 + HORIZONTAL_GAP;
+                const minCurrLeft = (idealX.get(curr) ?? 0) - currSpan + getNodeSize(this.getNode(curr)).width / 2;
+                // Simpler: minimum center-to-center distance
+                const minCenterDist = prevSpan + currSpan + HORIZONTAL_GAP;
+                const prevCx = (idealX.get(prev) ?? 0) + getNodeSize(this.getNode(prev)).width / 2;
+                const minCurrCx = prevCx + minCenterDist;
+                const minCurrX = minCurrCx - getNodeSize(this.getNode(curr)).width / 2;
+                if ((idealX.get(curr) ?? 0) < minCurrX) {
+                    idealX.set(curr, minCurrX);
+                }
+            }
+            // Focus stays pinned
+        }
 
         // Upward X (layer -1, -2, ... : centered relative to children at layer+1)
         for (let l = -1; l >= minLayer; l--) {
@@ -2279,12 +2322,12 @@ class CRDTGraph extends EventEmitter {
             layerIds.forEach((id, i) => { if (layerWork[i]) idealX.set(id, layerWork[i].position.x); });
         }
 
-        // Step 3b: Re-center immediate neighbor layers (±1) so their group
-        // centroid matches the focus node's center. This ensures parents are
-        // "vertically centered as a unit relative to" the focus, as the user
-        // described — even after overlap resolution pushes siblings apart.
+        // Step 3b: Re-center parent layer (-1) so its group centroid matches
+        // the focus node's center. Parents should be "centered as a unit" above
+        // the focus. Children (+1) are NOT re-centered — each stays under its
+        // own parent for straight edges.
         const focusCenter = focusX + focusSize.width / 2;
-        for (const layer of [-1, 1]) {
+        for (const layer of [-1]) {
             const layerIds = layerNodes.get(layer) || [];
             if (layerIds.length <= 1) continue;
 
