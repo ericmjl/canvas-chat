@@ -586,6 +586,109 @@ test('focusCentricLayout: subtree spreading prevents child overlaps', () => {
     );
 });
 
+test('focusCentricLayout: spine vertical alignment on 15-node DAG', () => {
+    // The user's graph: verify spine A-B-C-D-F-H is vertically aligned when navigating F→H
+    const graph = new TestGraph();
+    const edges = [
+        ['A','B'],['B','C'],['C','D'],['D','I'],['I','J'],
+        ['J','K'],['K','M'],['J','L'],['L','N'],
+        ['D','F'],['E','F'],['F','H'],['D','G'],['G','E'],
+    ];
+    const types = {
+        A: NodeType.HUMAN, B: NodeType.AI, C: NodeType.HUMAN, D: NodeType.AI,
+        E: NodeType.HUMAN, F: NodeType.AI, G: NodeType.HUMAN, H: NodeType.AI,
+        I: NodeType.HUMAN, J: NodeType.AI, K: NodeType.HUMAN, L: NodeType.HUMAN,
+        M: NodeType.AI, N: NodeType.AI,
+    };
+    for (const id of Object.keys(types)) {
+        graph.addNode(createTestNode(id, types[id]));
+        graph.updateNode(id, { position: { x: 500, y: 500 } });
+    }
+    for (const [s, t] of edges) graph.addEdge(createTestEdge(s, t));
+
+    // Navigate to F then H
+    graph.focusCentricLayout('F');
+    graph.focusCentricLayout('H');
+
+    const cx = (id) => Math.round(graph.getNode(id).position.x + (graph.getNode(id).width || 420) / 2);
+    const tol = 5;
+
+    // Spine: A-B-C-D-F-H should all have the same center X
+    const spineIds = ['A', 'B', 'C', 'D', 'F', 'H'];
+    const spineCxs = spineIds.map(cx);
+    const allAligned = spineCxs.every((c) => Math.abs(c - spineCxs[0]) < tol);
+    assertTrue(allAligned, `Spine not aligned: ${spineIds.map((id, i) => id + '=' + spineCxs[i]).join(', ')}`);
+
+    // No overlaps at any layer
+    const byY = new Map();
+    for (const id of Object.keys(types)) {
+        const y = Math.round(graph.getNode(id).position.y / 10) * 10;
+        if (!byY.has(y)) byY.set(y, []);
+        byY.get(y).push(id);
+    }
+    for (const [y, ids] of byY) {
+        if (ids.length < 2) continue;
+        const sorted = ids.map((id) => ({ id, x: graph.getNode(id).position.x, w: graph.getNode(id).width || 420 })).sort((a, b) => a.x - b.x);
+        for (let i = 1; i < sorted.length; i++) {
+            assertTrue(
+                sorted[i].x >= sorted[i - 1].x + sorted[i - 1].w,
+                `Overlap at Y=${y}: ${sorted[i - 1].id} & ${sorted[i].id}`,
+            );
+        }
+    }
+});
+
+test('focusCentricLayout: stable across repeated navigation', () => {
+    // Navigating back and forth should not accumulate drift or introduce overlaps
+    const graph = new TestGraph();
+    const edges = [
+        ['A','B'],['B','C'],['C','D'],['D','I'],['I','J'],
+        ['J','K'],['K','M'],['J','L'],['L','N'],
+        ['D','F'],['E','F'],['F','H'],['D','G'],['G','E'],
+    ];
+    const types = {
+        A: NodeType.HUMAN, B: NodeType.AI, C: NodeType.HUMAN, D: NodeType.AI,
+        E: NodeType.HUMAN, F: NodeType.AI, G: NodeType.HUMAN, H: NodeType.AI,
+        I: NodeType.HUMAN, J: NodeType.AI, K: NodeType.HUMAN, L: NodeType.HUMAN,
+        M: NodeType.AI, N: NodeType.AI,
+    };
+    for (const id of Object.keys(types)) {
+        graph.addNode(createTestNode(id, types[id]));
+        graph.updateNode(id, { position: { x: 500, y: 500 } });
+    }
+    for (const [s, t] of edges) graph.addEdge(createTestEdge(s, t));
+
+    // 3 round-trips F→H→F→H
+    for (let i = 0; i < 3; i++) {
+        graph.focusCentricLayout('F');
+        graph.focusCentricLayout('H');
+    }
+
+    const cx = (id) => Math.round(graph.getNode(id).position.x + (graph.getNode(id).width || 420) / 2);
+
+    // Spine still aligned
+    assertTrue(Math.abs(cx('F') - cx('H')) < 5, 'F→H should still be straight after round-trips');
+    assertTrue(Math.abs(cx('D') - cx('F')) < 5, 'D→F should still be straight after round-trips');
+
+    // No overlaps
+    const byY = new Map();
+    for (const id of Object.keys(types)) {
+        const y = Math.round(graph.getNode(id).position.y / 10) * 10;
+        if (!byY.has(y)) byY.set(y, []);
+        byY.get(y).push(id);
+    }
+    for (const [y, ids] of byY) {
+        if (ids.length < 2) continue;
+        const sorted = ids.map((id) => ({ id, x: graph.getNode(id).position.x, w: graph.getNode(id).width || 420 })).sort((a, b) => a.x - b.x);
+        for (let i = 1; i < sorted.length; i++) {
+            assertTrue(
+                sorted[i].x >= sorted[i - 1].x + sorted[i - 1].w,
+                `Overlap at Y=${y} after round-trips: ${sorted[i - 1].id} & ${sorted[i].id}`,
+            );
+        }
+    }
+});
+
 // ============================================================
 // Runner (test_setup collects tests; run them here)
 // ============================================================
