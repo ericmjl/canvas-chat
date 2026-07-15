@@ -148,30 +148,3 @@
 .edge-arrow {
     fill: var(--edge-color);
 }
-
-/* Copy Graph Structure Button (subtle, bottom-right) */
-.copy-graph-btn {
-    position: fixed;
-    bottom: 16px;
-    right: 16px;
-    z-index: 50;
-    width: 32px;
-    height: 32px;
-    border: 1px solid var(--border-color, #333);
-    border-radius: 6px;
-    background: var(--bg-secondary, #1a1a2e);
-    color: var(--text-muted, #666);
-    font-size: 14px;
-    cursor: pointer;
-    opacity: 0.35;
-    transition: opacity 0.2s ease, transform 0.15s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-}
-
-.copy-graph-btn:hover {
-    opacity: 1;
-    transform: scale(1.1);
-}
