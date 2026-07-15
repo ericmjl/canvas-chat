@@ -466,6 +466,46 @@ test('focusCentricLayout: single node is no-op', () => {
     assertTrue(graph.getNode('A') !== null);
 });
 
+test('focusCentricLayout: no vertical overlap when focus taller than child', () => {
+    // Regression: Y gap used child's height instead of parent's.
+    // AI (480px) focus with HUMAN (200px) child caused 220px overlap.
+    const graph = new TestGraph();
+    graph.addNode(createTestNode('A', NodeType.HUMAN));
+    graph.updateNode('A', { position: { x: 500, y: 100 } });
+    graph.addNode(createTestNode('B', NodeType.AI));
+    graph.updateNode('B', { position: { x: 500, y: 400 } });
+    graph.addNode(createTestNode('C', NodeType.HUMAN));
+    graph.updateNode('C', { position: { x: 500, y: 1000 } });
+    graph.addEdge(createTestEdge('A', 'B'));
+    graph.addEdge(createTestEdge('B', 'C'));
+
+    graph.focusCentricLayout('B');
+
+    const b = graph.getNode('B');
+    const c = graph.getNode('C');
+    const bBottom = b.position.y + (b.height || 480);
+    const cTop = c.position.y;
+    assertTrue(cTop >= bBottom, `C top (${Math.round(cTop)}) should be >= B bottom (${Math.round(bBottom)})`);
+});
+
+test('focusCentricLayout: no vertical overlap when focus shorter than child', () => {
+    // HUMAN (200px) focus with AI (480px) child
+    const graph = new TestGraph();
+    graph.addNode(createTestNode('B', NodeType.HUMAN));
+    graph.updateNode('B', { position: { x: 500, y: 500 } });
+    graph.addNode(createTestNode('C', NodeType.AI));
+    graph.updateNode('C', { position: { x: 500, y: 900 } });
+    graph.addEdge(createTestEdge('B', 'C'));
+
+    graph.focusCentricLayout('B');
+
+    const b = graph.getNode('B');
+    const c = graph.getNode('C');
+    const bBottom = b.position.y + (b.height || 200);
+    const cTop = c.position.y;
+    assertTrue(cTop >= bBottom, `C top (${Math.round(cTop)}) should be >= B bottom (${Math.round(bBottom)})`);
+});
+
 // ============================================================
 // Runner (test_setup collects tests; run them here)
 // ============================================================

@@ -13,7 +13,7 @@
 
 import { EventEmitter } from './event-emitter.js';
 import { NodeType, TAG_COLORS, createNode, createEdge, EdgeType, getDefaultNodeSize } from './graph-types.js';
-import { resolveOverlaps, resolveHorizontalOverlaps, wouldOverlapNodes } from './layout.js';
+import { resolveOverlaps, resolveHorizontalOverlaps, wouldOverlapNodes, getNodeSize as _getNodeSize, DEFAULT_WIDTH, DEFAULT_HEIGHT, LAYOUT_START_X as START_X, LAYOUT_START_Y as START_Y } from './layout.js';
 
 // =============================================================================
 // Type Imports (JSDoc)
@@ -1826,21 +1826,13 @@ class CRDTGraph extends EventEmitter {
      * @param dimensions
      */
     autoLayout(dimensions = new Map()) {
-        const DEFAULT_WIDTH = 420;
-        const DEFAULT_HEIGHT = 220;
         const HORIZONTAL_GAP = 120;
         const VERTICAL_GAP = 40;
-        const START_X = 100;
-        const START_Y = 100;
 
         const allNodes = this.getAllNodes();
         if (allNodes.length === 0) return;
 
-        const getNodeSize = (node) => {
-            const dim = dimensions.get(node.id);
-            if (dim) return { width: dim.width, height: dim.height };
-            return { width: node.width || DEFAULT_WIDTH, height: node.height || DEFAULT_HEIGHT };
-        };
+        const getNodeSize = (node) => _getNodeSize(node, dimensions);
 
         const sorted = this.topologicalSort();
 
@@ -1950,22 +1942,14 @@ class CRDTGraph extends EventEmitter {
      * @param {Map} dimensions - Map of nodeId -> { width, height }
      */
     verticalTreeLayout(dimensions = new Map()) {
-        const DEFAULT_WIDTH = 420;
-        const DEFAULT_HEIGHT = 220;
         const VERTICAL_GAP = 60;
         const HORIZONTAL_GAP = 50;
-        const START_X = 100;
-        const START_Y = 100;
         const ITERATIONS = 3;
 
         const allNodes = this.getAllNodes();
         if (allNodes.length === 0) return;
 
-        const getNodeSize = (node) => {
-            const dim = dimensions.get(node.id);
-            if (dim) return { width: dim.width, height: dim.height };
-            return { width: node.width || DEFAULT_WIDTH, height: node.height || DEFAULT_HEIGHT };
-        };
+        const getNodeSize = (node) => _getNodeSize(node, dimensions);
 
         // Step 1: Layer assignment (depth)
         const sorted = this.topologicalSort();
@@ -2108,11 +2092,8 @@ class CRDTGraph extends EventEmitter {
      * @param {Map} dimensions - Map of nodeId -> { width, height }
      */
     focusCentricLayout(focusNodeId, dimensions = new Map()) {
-        const DEFAULT_WIDTH = 420;
-        const DEFAULT_HEIGHT = 220;
         const VERTICAL_GAP = 60;
         const HORIZONTAL_GAP = 80;
-        const START_X = 100;
 
         const focusNode = this.getNode(focusNodeId);
         if (!focusNode) return;
@@ -2120,11 +2101,7 @@ class CRDTGraph extends EventEmitter {
         const allNodes = this.getAllNodes();
         if (allNodes.length <= 1) return;
 
-        const getNodeSize = (node) => {
-            const dim = dimensions.get(node.id);
-            if (dim) return { width: dim.width, height: dim.height };
-            return { width: node.width || DEFAULT_WIDTH, height: node.height || DEFAULT_HEIGHT };
-        };
+        const getNodeSize = (node) => _getNodeSize(node, dimensions);
 
         const focusSize = getNodeSize(focusNode);
 
@@ -2418,8 +2395,6 @@ class CRDTGraph extends EventEmitter {
      * @param dimensions
      */
     forceDirectedLayout(dimensions = new Map()) {
-        const DEFAULT_WIDTH = 420;
-        const DEFAULT_HEIGHT = 220;
         const ITERATIONS = 100;
         const REPULSION = 50000;
         const ATTRACTION = 0.05;
@@ -2430,11 +2405,7 @@ class CRDTGraph extends EventEmitter {
         const allNodes = this.getAllNodes();
         if (allNodes.length === 0) return;
 
-        const getNodeSize = (node) => {
-            const dim = dimensions.get(node.id);
-            if (dim) return { width: dim.width, height: dim.height };
-            return { width: node.width || DEFAULT_WIDTH, height: node.height || DEFAULT_HEIGHT };
-        };
+        const getNodeSize = (node) => _getNodeSize(node, dimensions);
 
         // Use a positions map to track positions during iterations
         // This avoids issues with getChildren/getParents returning stale positions
