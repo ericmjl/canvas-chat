@@ -75,7 +75,7 @@ This prevents the bug where node creation forgot to create edges to selected par
 
 ## Focus-centric layout (on-navigation)
 
-When the user navigates with j/k (or selects a node), `focusCentricLayout(focusNodeId)` dynamically reorganizes the graph around the focused node. This is NOT a full re-layout — it adjusts positions relative to the focus, with distant nodes blending partially.
+When the user navigates with j/k (or selects a node), `focusCentricLayout(focusNodeId)` dynamically reorganizes the graph around the focused node. The entire connected neighborhood moves as a unit to its ideal layout. The animation (animateToLayout, ~300ms) provides the visual transition.
 
 ### Key properties
 
@@ -83,8 +83,9 @@ When the user navigates with j/k (or selects a node), `focusCentricLayout(focusN
 2. **Parents above, children below** — direct parents are centered as a group above the focus; each child stays centered under its own parent for straight edges
 3. **Focus-path centering** — ancestors (grandparents etc.) center on their child that leads back to the focus (the "discoverer" from BFS), producing straight vertical edges along the entire navigation path
 4. **Sibling expansion** — siblings (other children of the same parent) join the layout at the same layer as the focus, with their subtrees included
-5. **Subtree-aware spacing** — siblings are spaced based on their subtree half-widths (widest descendant layer), preventing child overlaps that would bend edges
-6. **Distance-based blend** — layers 0-1 move fully (weight 1.0), layer 2 moves 60%, layer 3+ moves 20%. Distant nodes "subtily adjust"
+5. **Subtree-aware spacing** — siblings on layer 0 and children within each subtree are spaced based on their subtree half-widths (computed recursively), preventing cross-subtree overlaps
+6. **No overlaps** — children of the same parent are spread side by side by subtree width (tidy-tree style), guaranteeing no horizontal overlaps between any nodes at the same layer
+7. **Neighborhood as a unit** — all nodes in the BFS reach their ideal positions directly (no per-node blend). This guarantees all edges are straight. The animation handles the visual transition.
 
 ### Steps
 
@@ -94,16 +95,25 @@ When the user navigates with j/k (or selects a node), `focusCentricLayout(focusN
    - Siblings (other children of same parents) → same layer
    - Track which child discovered each node (for focus-path centering)
 
-2. **Y positioning**: focus stays at current Y. Each layer offset by `max_height_in_layer + VERTICAL_GAP`.
+2. **Y positioning**: focus stays at current Y. Each layer offset by the PREVIOUS layer's max height + `VERTICAL_GAP` (so a tall parent doesn't get overlapped by a short child).
 
 3. **X positioning**:
    - Layer 0: focus pinned at current X. Siblings placed left/right using subtree half-widths.
    - Upward (negative layers): each node centered on its focus-path child exclusively (if one exists), otherwise average of children.
-   - Downward (positive layers): each child centered under its parent.
-   - Per-layer overlap resolution via `resolveHorizontalOverlaps`.
+   - Downward (positive layers): children of the same parent SPREAD side by side by subtree width (tidy-tree style). Single child stays centered under parent. Overlap resolution as safety net.
    - Direct parents of focus re-centered as a group so their centroid matches focus center.
 
-4. **Blend**: existing positions blended with ideal positions based on BFS distance.
+4. **Write ideal positions**: all nodes move directly to their ideal positions (no blend). The animation provides the visual transition.
+
+### Subtree half-width computation
+
+The subtree half-width of a node is the maximum horizontal extent of its subtree from the node's center. Computed recursively:
+
+- Leaf node: `node.width / 2`
+- Single child: `max(node.width / 2, childSubtreeHalfWidth)`
+- Multiple children: pack children side by side (each child's slot = `max(childNodeWidth, childSubtreeWidth)`), compute each child's center offset, take `max(|offset| + childSpan)`. This correctly accounts for children being at offsets from the parent center, not just their individual subtree widths.
+
+This computation is used for both layer 0 sibling spacing and downward child spreading.
 
 ### Worked example
 
