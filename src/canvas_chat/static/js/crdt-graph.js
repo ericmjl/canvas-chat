@@ -2208,9 +2208,20 @@ class CRDTGraph extends EventEmitter {
             if (childrenAtNext.length === 0) return halfW;
             const childSpans = childrenAtNext.map((c) => subtreeHalfWidth(c.id, layer + 1));
             if (childrenAtNext.length === 1) return Math.max(halfW, childSpans[0]);
-            // Multiple children: their combined span
-            const totalChildSpan = childSpans.reduce((s, w) => s + w, 0) + (childrenAtNext.length - 1) * HORIZONTAL_GAP;
-            return Math.max(halfW, totalChildSpan / 2);
+            // Multiple children: pack side by side, compute max extent from center.
+            // Each child's slot = max(node width, subtree width) to prevent overlaps.
+            const slotWidths = childrenAtNext.map((c, i) =>
+                Math.max(getNodeSize(c).width, childSpans[i] * 2)
+            );
+            const totalWidth = slotWidths.reduce((s, w) => s + w, 0) + (childrenAtNext.length - 1) * HORIZONTAL_GAP;
+            let cursor = -totalWidth / 2;
+            let maxExtent = halfW;
+            for (let i = 0; i < childrenAtNext.length; i++) {
+                const childCenter = cursor + slotWidths[i] / 2;
+                maxExtent = Math.max(maxExtent, Math.abs(childCenter) + childSpans[i]);
+                cursor += slotWidths[i] + HORIZONTAL_GAP;
+            }
+            return maxExtent;
         };
 
         const layer0Ids = layerNodes.get(0) || [];
@@ -2304,24 +2315,48 @@ class CRDTGraph extends EventEmitter {
             layerIds.forEach((id, i) => { if (layerWork[i]) idealX.set(id, layerWork[i].position.x); });
         }
 
-        // Downward X (layer +1, +2, ... : centered relative to parents at layer-1)
+        // Downward X (layer +1, +2, ... : spread children by subtree widths)
+        // Children of the same parent are placed side by side based on their
+        // subtree widths, preventing cross-subtree overlaps.
         for (let l = 1; l <= maxLayer; l++) {
+            // Group children by their parent at the adjacent layer
+            const childrenByParent = new Map();
             for (const nodeId of layerNodes.get(l) || []) {
-                const node = this.getNode(nodeId);
-                if (!node) continue;
-                // Only parents in the adjacent layer toward focus
                 const parents = this.getParents(nodeId).filter((p) => layers.get(p.id) === l - 1);
-                if (parents.length === 0) continue;
-                const parentCenters = parents.map((p) => {
-                    const px = idealX.get(p.id);
-                    const pSize = getNodeSize(p);
-                    return px !== undefined ? px + pSize.width / 2 : focusX + focusSize.width / 2;
-                });
-                const avg = parentCenters.reduce((s, x) => s + x, 0) / parentCenters.length;
-                const size = getNodeSize(node);
-                idealX.set(nodeId, avg - size.width / 2);
+                // Use first parent (primary) for positioning
+                if (parents.length > 0) {
+                    const pid = parents[0].id;
+                    if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
+                    childrenByParent.get(pid).push(nodeId);
+                }
             }
-            // Resolve overlaps
+
+            for (const [parentId, childIds] of childrenByParent) {
+                const parentNode = this.getNode(parentId);
+                if (!parentNode) continue;
+                const parentCx = (idealX.get(parentId) ?? focusX) + getNodeSize(parentNode).width / 2;
+
+                if (childIds.length === 1) {
+                    const child = this.getNode(childIds[0]);
+                    const size = getNodeSize(child);
+                    idealX.set(childIds[0], parentCx - size.width / 2);
+                } else {
+                    // Spread children by subtree widths
+                    const spans = childIds.map((id) => subtreeHalfWidth(id, l));
+                    const childWidths = childIds.map((id) => getNodeSize(this.getNode(id)).width);
+                    const slotWidths = childIds.map((_, i) => Math.max(childWidths[i], spans[i] * 2));
+                    const totalWidth = slotWidths.reduce((s, w) => s + w, 0) + (childIds.length - 1) * HORIZONTAL_GAP;
+                    let cursor = parentCx - totalWidth / 2;
+                    for (let i = 0; i < childIds.length; i++) {
+                        const childCx = cursor + slotWidths[i] / 2;
+                        const childSize = getNodeSize(this.getNode(childIds[i]));
+                        idealX.set(childIds[i], childCx - childSize.width / 2);
+                        cursor += slotWidths[i] + HORIZONTAL_GAP;
+                    }
+                }
+            }
+
+            // Safety: resolve any remaining overlaps between different parents' children
             const layerIds = layerNodes.get(l) || [];
             const layerWork = layerIds.map((id) => {
                 const node = this.getNode(id);
@@ -2355,27 +2390,6 @@ class CRDTGraph extends EventEmitter {
             const shift = focusCenter - centroid;
             for (const id of directParentIds) {
                 idealX.set(id, (idealX.get(id) ?? START_X) + shift);
-            }
-        }
-
-        // Step 3c: Re-pin focus's direct children AND their subtrees.
-        // Overlap resolution on their layer may have pushed them away from
-        // the focus (by non-sibling nodes from other subtrees). Direct children
-        // of the focus MUST stay centered under the focus for straight edges.
-        // Cascade down through grandchildren to keep the entire focus subtree aligned.
-        const focusCenterX = focusX + focusSize.width / 2;
-        const focusChildIds = this.getChildren(focusNodeId).filter((c) => layers.get(c.id) === 1);
-        for (const child of focusChildIds) {
-            const childCx = focusCenterX;
-            const childSize = getNodeSize(child);
-            idealX.set(child.id, childCx - childSize.width / 2);
-
-            // Cascade: re-pin grandchildren under the re-pinned child
-            for (const gc of this.getChildren(child.id)) {
-                if (layers.has(gc.id) && Math.abs(layers.get(gc.id)) <= 3) {
-                    const gcSize = getNodeSize(gc);
-                    idealX.set(gc.id, childCx - gcSize.width / 2);
-                }
             }
         }
 
