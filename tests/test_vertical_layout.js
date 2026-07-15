@@ -421,7 +421,7 @@ test('focusCentricLayout: focus path A→C→E has all straight edges', () => {
     assertTrue(Math.abs(cx('B') - cx('D')) < tol, `B→D straight: ${cx('B')} vs ${cx('D')}`);
 });
 
-test('focusCentricLayout: multi-parent centroid matches focus', () => {
+test('focusCentricLayout: multi-parent — spine parent aligned, other is branch', () => {
     const graph = new TestGraph();
     // A → B, C → B (B has 2 parents)
     graph.addNode(createTestNode('A', NodeType.NOTE));
@@ -433,11 +433,22 @@ test('focusCentricLayout: multi-parent centroid matches focus', () => {
     graph.addEdge(createTestEdge('A', 'B'));
     graph.addEdge(createTestEdge('C', 'B'));
 
-    graph.focusCentricLayout('B');
+    // No nav history: A is oldest → A on spine
+    graph.focusCentricLayout('B', new Map(), []);
 
     const cx = (id) => Math.round(graph.getNode(id).position.x + (graph.getNode(id).width || 420) / 2);
-    const parentCentroid = Math.round((cx('A') + cx('C')) / 2);
-    assertTrue(Math.abs(parentCentroid - cx('B')) < 5, `Parent centroid (${parentCentroid}) should match B (${cx('B')})`);
+    const w = (id) => graph.getNode(id).width || 420;
+
+    // One parent (A, the oldest) should be aligned with B
+    assertTrue(Math.abs(cx('A') - cx('B')) < 5, `Spine parent A should match B: ${cx('A')} vs ${cx('B')}`);
+    // Other parent (C) should be offset (branch)
+    assertTrue(Math.abs(cx('C') - cx('B')) > 50, `Branch parent C should be offset from B: ${cx('C')} vs ${cx('B')}`);
+    // No overlap between A and C
+    const [left, right] = cx('A') < cx('C') ? ['A', 'C'] : ['C', 'A'];
+    assertTrue(
+        graph.getNode(right).position.x >= graph.getNode(left).position.x + w(left),
+        'Parents should not overlap',
+    );
 });
 
 test('focusCentricLayout: focus node position unchanged', () => {
@@ -636,6 +647,62 @@ test('focusCentricLayout: spine vertical alignment on 15-node DAG', () => {
             );
         }
     }
+});
+
+test('focusCentricLayout: navigation history determines spine parent', () => {
+    // (A, B) → C. Navigating C→B→C puts B on spine; C→A→C puts A on spine.
+    const graph = new TestGraph();
+    graph.addNode(createTestNode('A', NodeType.HUMAN));
+    graph.updateNode('A', { position: { x: 300, y: 100 }, created_at: 1000 });
+    graph.addNode(createTestNode('B', NodeType.HUMAN));
+    graph.updateNode('B', { position: { x: 700, y: 100 }, created_at: 2000 });
+    graph.addNode(createTestNode('C', NodeType.AI));
+    graph.updateNode('C', { position: { x: 500, y: 500 }, created_at: 3000 });
+    graph.addEdge(createTestEdge('A', 'C'));
+    graph.addEdge(createTestEdge('B', 'C'));
+
+    const cx = (id) => Math.round(graph.getNode(id).position.x + (graph.getNode(id).width || 420) / 2);
+
+    // First visit: A is oldest → A on spine
+    graph.focusCentricLayout('C', new Map(), []);
+    assertTrue(Math.abs(cx('A') - cx('C')) < 5, 'First visit: A (oldest) should be on spine');
+
+    // C→B→C: B most recently visited → B on spine
+    graph.focusCentricLayout('B', new Map(), ['C', 'B']);
+    graph.focusCentricLayout('C', new Map(), ['C', 'B', 'C']);
+    assertTrue(Math.abs(cx('B') - cx('C')) < 5, 'After C→B→C: B should be on spine');
+    assertTrue(Math.abs(cx('A') - cx('C')) > 50, 'After C→B→C: A should be a branch');
+
+    // C→A→C: A most recently visited → A on spine
+    graph.focusCentricLayout('A', new Map(), ['C', 'B', 'C', 'A']);
+    graph.focusCentricLayout('C', new Map(), ['C', 'B', 'C', 'A', 'C']);
+    assertTrue(Math.abs(cx('A') - cx('C')) < 5, 'After C→A→C: A should be on spine');
+    assertTrue(Math.abs(cx('B') - cx('C')) > 50, 'After C→A→C: B should be a branch');
+});
+
+test('focusCentricLayout: navigation history determines spine child', () => {
+    // C → (D, E). Navigating C→D→C puts D on spine; C→E→C puts E on spine.
+    const graph = new TestGraph();
+    graph.addNode(createTestNode('C', NodeType.HUMAN));
+    graph.updateNode('C', { position: { x: 500, y: 500 }, created_at: 1000 });
+    graph.addNode(createTestNode('D', NodeType.AI));
+    graph.updateNode('D', { position: { x: 300, y: 900 }, created_at: 2000 });
+    graph.addNode(createTestNode('E', NodeType.AI));
+    graph.updateNode('E', { position: { x: 700, y: 900 }, created_at: 3000 });
+    graph.addEdge(createTestEdge('C', 'D'));
+    graph.addEdge(createTestEdge('C', 'E'));
+
+    const cx = (id) => Math.round(graph.getNode(id).position.x + (graph.getNode(id).width || 420) / 2);
+
+    // First visit: D is oldest → D on spine
+    graph.focusCentricLayout('C', new Map(), []);
+    assertTrue(Math.abs(cx('D') - cx('C')) < 5, 'First visit: D (oldest) should be on spine');
+
+    // C→E→C: E most recently visited → E on spine
+    graph.focusCentricLayout('E', new Map(), ['C', 'E']);
+    graph.focusCentricLayout('C', new Map(), ['C', 'E', 'C']);
+    assertTrue(Math.abs(cx('E') - cx('C')) < 5, 'After C→E→C: E should be on spine');
+    assertTrue(Math.abs(cx('D') - cx('C')) > 50, 'After C→E→C: D should be a branch');
 });
 
 test('focusCentricLayout: stable across repeated navigation', () => {

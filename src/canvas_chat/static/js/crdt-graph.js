@@ -2090,8 +2090,9 @@ class CRDTGraph extends EventEmitter {
      *
      * @param {string} focusNodeId - The node to center the layout around
      * @param {Map} dimensions - Map of nodeId -> { width, height }
+     * @param navHistory
      */
-    focusCentricLayout(focusNodeId, dimensions = new Map()) {
+    focusCentricLayout(focusNodeId, dimensions = new Map(), navHistory = []) {
         const VERTICAL_GAP = 60;
         const HORIZONTAL_GAP = 80;
 
@@ -2235,55 +2236,60 @@ class CRDTGraph extends EventEmitter {
         spineNodes.add(focusNodeId);
         idealX.set(focusNodeId, focusX);
 
-        // Helper: spread N nodes centered on focusCx using subtree half-widths
-        const spreadAtFocus = (nodeIds) => {
-            if (nodeIds.length === 1) {
-                pinAtFocus(nodeIds[0]);
-                return;
+        // Select the spine node from candidates using navigation history.
+        // Most recently visited wins; fallback: oldest created_at (first created).
+        const selectSpineNode = (candidates) => {
+            if (candidates.length === 0) return null;
+            if (candidates.length === 1) return candidates[0];
+            let best = null;
+            let bestIdx = -1;
+            for (const c of candidates) {
+                const idx = navHistory.lastIndexOf(c.id);
+                if (idx > bestIdx) { bestIdx = idx; best = c; }
             }
-            const spans = nodeIds.map((id) => subtreeHalfWidth(id));
-            const widths = nodeIds.map((id) => getNodeSize(this.getNode(id)).width);
-            const slotWidths = nodeIds.map((_, i) => Math.max(widths[i], spans[i] * 2));
-            const totalWidth = slotWidths.reduce((s, w) => s + w, 0) + (nodeIds.length - 1) * HORIZONTAL_GAP;
-            let cursor = focusCx - totalWidth / 2;
-            for (let i = 0; i < nodeIds.length; i++) {
-                const nodeCx = cursor + slotWidths[i] / 2;
-                const size = getNodeSize(this.getNode(nodeIds[i]));
-                idealX.set(nodeIds[i], nodeCx - size.width / 2);
-                cursor += slotWidths[i] + HORIZONTAL_GAP;
-            }
+            if (best) return best;
+            return candidates.reduce((oldest, c) =>
+                (c.created_at || 0) < (oldest.created_at || 0) ? c : oldest
+            );
         };
 
-        // Direct parents: single → pin at focus.cx; multiple → spread, centroid at focus.cx
-        const focusParentIds = this.getParents(focusNodeId).filter((p) => layers.has(p.id)).map((p) => p.id);
-        focusParentIds.forEach((id) => spineNodes.add(id));
-        spreadAtFocus(focusParentIds);
+        // Direct parents: select ONE spine parent (most recently visited).
+        // Other parents become branches (handled by branch spacing).
+        const focusParents = this.getParents(focusNodeId).filter((p) => layers.has(p.id));
+        const spineParent = selectSpineNode(focusParents);
+        if (spineParent) {
+            spineNodes.add(spineParent.id);
+            pinAtFocus(spineParent.id);
+        }
 
-        // Direct children: single → pin at focus.cx; multiple → spread, centroid at focus.cx
-        const focusChildIds = this.getChildren(focusNodeId).filter((c) => layers.has(c.id)).map((c) => c.id);
-        focusChildIds.forEach((id) => spineNodes.add(id));
-        spreadAtFocus(focusChildIds);
+        // Direct children: select ONE spine child (most recently visited).
+        const focusChildren = this.getChildren(focusNodeId).filter((c) => layers.has(c.id));
+        const spineChild = selectSpineNode(focusChildren);
+        if (spineChild) {
+            spineNodes.add(spineChild.id);
+            pinAtFocus(spineChild.id);
+        }
 
-        // Grandparents: follow the parent chain upward from focus's first parent.
-        // This creates the vertical "spine" — H→F→D→C→B→A all at focus.cx.
-        if (focusParentIds.length > 0) {
-            let curr = focusParentIds[0];
+        // Grandparents: follow the SELECTED spine parent upward.
+        if (spineParent) {
+            let curr = spineParent.id;
             while (true) {
                 const parents = this.getParents(curr).filter((p) => layers.has(p.id) && !spineNodes.has(p.id));
                 if (parents.length === 0) break;
-                spineNodes.add(parents[0].id);
-                pinAtFocus(parents[0].id);
-                curr = parents[0].id;
+                const next = selectSpineNode(parents);
+                spineNodes.add(next.id);
+                pinAtFocus(next.id);
+                curr = next.id;
             }
         }
 
-        // Grandchildren: follow child chain down from each direct child's first child
-        for (const childId of focusChildIds) {
-            let gcCurr = childId;
-            for (let l = layers.get(childId) + 1; l <= maxLayer; l++) {
+        // Grandchildren: follow the SELECTED spine child downward.
+        if (spineChild) {
+            let gcCurr = spineChild.id;
+            for (let l = layers.get(spineChild.id) + 1; l <= maxLayer; l++) {
                 const nextChildren = this.getChildren(gcCurr).filter((c) => layers.get(c.id) === l);
                 if (nextChildren.length === 0) break;
-                const next = nextChildren[0];
+                const next = selectSpineNode(nextChildren);
                 spineNodes.add(next.id); pinAtFocus(next.id);
                 gcCurr = next.id;
             }

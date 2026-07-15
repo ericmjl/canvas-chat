@@ -1953,8 +1953,13 @@ class App {
         const layoutPicker = document.getElementById('layout-picker');
         const algorithm = layoutPicker ? layoutPicker.value : 'vertical';
         if (algorithm === 'vertical') {
+            // Track navigation history for spine parent/child selection
+            this._navHistory = this._navHistory || [];
+            this._navHistory.push(targetNodeId);
+            if (this._navHistory.length > 50) this._navHistory.shift();
+
             const dimensions = this.canvas.getNodeDimensions();
-            this.graph.focusCentricLayout(targetNodeId, dimensions);
+            this.graph.focusCentricLayout(targetNodeId, dimensions, this._navHistory);
             this.canvas.animateToLayout(this.graph, {
                 duration: 300,
                 keepViewport: true,
