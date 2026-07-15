@@ -2395,22 +2395,52 @@ class CRDTGraph extends EventEmitter {
             }
         }
 
-        // Step 4: Write ideal positions directly (no per-node blend).
-        // The entire neighborhood moves as a unit to its ideal layout.
-        // This guarantees all edges are straight (parent-child centers match).
-        // The animation (animateToLayout, ~300ms) provides the visual transition.
+        // Step 4: Write ideal positions, then run a global AABB overlap check.
+        // The per-layer overlap resolution handles same-layer nodes, but nodes
+        // from different layers with different heights can still overlap
+        // vertically. This safety net catches any remaining overlaps.
+        const positionedNodes = [];
         for (const [nodeId, layer] of layers) {
             const node = this.getNode(nodeId);
             if (!node) continue;
 
-            const idealXVal = idealX.get(nodeId) ?? node.position?.x ?? START_X;
-            const idealYVal = layerY.get(layer) ?? node.position?.y ?? 100;
+            const x = idealX.get(nodeId) ?? node.position?.x ?? START_X;
+            const y = layerY.get(layer) ?? node.position?.y ?? 100;
+            const size = getNodeSize(node);
+            positionedNodes.push({ id: nodeId, x, y, width: size.width, height: size.height });
+        }
 
-            this.updateNode(nodeId, {
-                position: {
-                    x: idealXVal,
-                    y: idealYVal,
-                },
+        // Global AABB overlap resolution: push apart any two nodes that overlap
+        // in BOTH X and Y. Focus node stays pinned.
+        for (let i = 0; i < positionedNodes.length; i++) {
+            for (let j = i + 1; j < positionedNodes.length; j++) {
+                const a = positionedNodes[i];
+                const b = positionedNodes[j];
+                const aRight = a.x + a.width;
+                const bRight = b.x + b.width;
+                const aBottom = a.y + a.height;
+                const bBottom = b.y + b.height;
+                const xOverlap = Math.min(aRight, bRight) - Math.max(a.x, b.x);
+                const yOverlap = Math.min(aBottom, bBottom) - Math.max(a.y, b.y);
+                if (xOverlap > 0 && yOverlap > 0) {
+                    // Push apart on X axis (don't move focus)
+                    const aIsFocus = a.id === focusNodeId;
+                    const bIsFocus = b.id === focusNodeId;
+                    if (aIsFocus) {
+                        b.x += xOverlap + HORIZONTAL_GAP;
+                    } else if (bIsFocus) {
+                        a.x -= xOverlap + HORIZONTAL_GAP;
+                    } else {
+                        a.x -= xOverlap / 2 + 1;
+                        b.x += xOverlap / 2 + 1;
+                    }
+                }
+            }
+        }
+
+        for (const pn of positionedNodes) {
+            this.updateNode(pn.id, {
+                position: { x: pn.x, y: pn.y },
             });
         }
     }
