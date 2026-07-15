@@ -2133,6 +2133,7 @@ class CRDTGraph extends EventEmitter {
         // siblings of any node = same layer as that node.
         const layers = new Map();
         layers.set(focusNodeId, 0);
+        const discoverer = new Map(); // nodeId → child that discovered it (focus path)
         const queue = [focusNodeId];
 
         while (queue.length > 0) {
@@ -2143,6 +2144,7 @@ class CRDTGraph extends EventEmitter {
             for (const parent of this.getParents(id)) {
                 if (!layers.has(parent.id)) {
                     layers.set(parent.id, layer - 1);
+                    discoverer.set(parent.id, id);
                     queue.push(parent.id);
                 }
             }
@@ -2245,28 +2247,50 @@ class CRDTGraph extends EventEmitter {
             }
         }
         if (layer0Ids.length > 1) {
-            // Space siblings based on subtree half-widths
-            const sortedIds = [...layer0Ids].sort((a, b) => (idealX.get(a) ?? 0) - (idealX.get(b) ?? 0));
-            for (let i = 1; i < sortedIds.length; i++) {
-                const prev = sortedIds[i - 1];
-                const curr = sortedIds[i];
-                const prevSpan = subtreeHalfWidth(prev, 0);
-                const currSpan = subtreeHalfWidth(curr, 0);
-                const minPrevRight = (idealX.get(prev) ?? 0) + getNodeSize(this.getNode(prev)).width / 2 + prevSpan - getNodeSize(this.getNode(prev)).width / 2 + HORIZONTAL_GAP;
-                const minCurrLeft = (idealX.get(curr) ?? 0) - currSpan + getNodeSize(this.getNode(curr)).width / 2;
-                // Simpler: minimum center-to-center distance
-                const minCenterDist = prevSpan + currSpan + HORIZONTAL_GAP;
-                const prevCx = (idealX.get(prev) ?? 0) + getNodeSize(this.getNode(prev)).width / 2;
-                const minCurrCx = prevCx + minCenterDist;
-                const minCurrX = minCurrCx - getNodeSize(this.getNode(curr)).width / 2;
-                if ((idealX.get(curr) ?? 0) < minCurrX) {
-                    idealX.set(curr, minCurrX);
-                }
+            // Space siblings around the FOCUS using subtree half-widths.
+            // Focus stays pinned — siblings to the left go left, siblings to
+            // the right go right. This prevents the spacing code from
+            // displacing the focus and breaking parent-child edges.
+            const focusCx = focusX + focusSize.width / 2;
+            const focusSpan = subtreeHalfWidth(focusNodeId, 0);
+
+            const leftSibs = [];
+            const rightSibs = [];
+            for (const id of layer0Ids) {
+                if (id === focusNodeId) continue;
+                const sibCx = (idealX.get(id) ?? focusX) + getNodeSize(this.getNode(id)).width / 2;
+                if (sibCx < focusCx) leftSibs.push(id);
+                else rightSibs.push(id);
             }
-            // Focus stays pinned
+            // Sort left siblings right-to-left (closest to focus first)
+            leftSibs.sort((a, b) => (idealX.get(b) ?? 0) - (idealX.get(a) ?? 0));
+            // Sort right siblings left-to-right (closest to focus first)
+            rightSibs.sort((a, b) => (idealX.get(a) ?? 0) - (idealX.get(b) ?? 0));
+
+            // Place left siblings
+            let cursor = focusCx - focusSpan;
+            for (const id of leftSibs) {
+                const span = subtreeHalfWidth(id, 0);
+                const size = getNodeSize(this.getNode(id));
+                cursor -= HORIZONTAL_GAP + span;
+                idealX.set(id, cursor - size.width / 2);
+                cursor -= span;
+            }
+
+            // Place right siblings
+            cursor = focusCx + focusSpan;
+            for (const id of rightSibs) {
+                const span = subtreeHalfWidth(id, 0);
+                const size = getNodeSize(this.getNode(id));
+                cursor += HORIZONTAL_GAP + span;
+                idealX.set(id, cursor - size.width / 2);
+                cursor += span;
+            }
         }
 
         // Upward X (layer -1, -2, ... : centered relative to children at layer+1)
+        // Prioritize the focus-path child (discoverer) for straight edges along
+        // the navigation path. Other children are secondary.
         for (let l = -1; l >= minLayer; l--) {
             for (const nodeId of layerNodes.get(l) || []) {
                 const node = this.getNode(nodeId);
@@ -2274,13 +2298,25 @@ class CRDTGraph extends EventEmitter {
                 // Only children in the adjacent layer toward focus
                 const children = this.getChildren(nodeId).filter((c) => layers.get(c.id) === l + 1);
                 if (children.length === 0) continue;
+                const size = getNodeSize(node);
+
+                // If one child is on the focus path, center on it exclusively
+                const focusChildId = discoverer.get(nodeId);
+                const focusChild = focusChildId ? children.find((c) => c.id === focusChildId) : null;
+                if (focusChild) {
+                    const fcx = idealX.get(focusChild.id);
+                    const fSize = getNodeSize(focusChild);
+                    const center = fcx !== undefined ? fcx + fSize.width / 2 : focusX + focusSize.width / 2;
+                    idealX.set(nodeId, center - size.width / 2);
+                    continue;
+                }
+                // Fallback: average all children
                 const childCenters = children.map((c) => {
                     const cx = idealX.get(c.id);
                     const cSize = getNodeSize(c);
                     return cx !== undefined ? cx + cSize.width / 2 : focusX + focusSize.width / 2;
                 });
                 const avg = childCenters.reduce((s, x) => s + x, 0) / childCenters.length;
-                const size = getNodeSize(node);
                 idealX.set(nodeId, avg - size.width / 2);
             }
             // Resolve overlaps in this layer
