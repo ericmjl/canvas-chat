@@ -2189,9 +2189,9 @@ class CRDTGraph extends EventEmitter {
         const focusX = focusNode.position?.x ?? START_X;
         const blendWeight = (layer) => {
             const d = Math.abs(layer);
-            if (d <= 1) return 1.0;
-            if (d === 2) return 0.6;
-            return 0.2;
+            if (d <= 2) return 1.0;
+            if (d === 3) return 0.4;
+            return 0.15;
         };
 
         // Compute ideal X positions for each layer.
