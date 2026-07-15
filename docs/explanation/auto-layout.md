@@ -73,6 +73,54 @@ This prevents the bug where node creation forgot to create edges to selected par
 
 `scheduleAutoLayout()` in `app.js` is an intentional no-op. Running full `verticalTreeLayout` on every node creation was counterproductive — it moved established nodes off-center. `autoPosition` in `createLinkedNode` handles incremental placement correctly. Full re-layout is available via the Apply Layout button.
 
+## Focus-centric layout (on-navigation)
+
+When the user navigates with j/k (or selects a node), `focusCentricLayout(focusNodeId)` dynamically reorganizes the graph around the focused node. This is NOT a full re-layout — it adjusts positions relative to the focus, with distant nodes blending partially.
+
+### Key properties
+
+1. **Focus stays anchored** — the focused node does not move; it's already centered by the viewport
+2. **Parents above, children below** — direct parents are centered as a group above the focus; each child stays centered under its own parent for straight edges
+3. **Focus-path centering** — ancestors (grandparents etc.) center on their child that leads back to the focus (the "discoverer" from BFS), producing straight vertical edges along the entire navigation path
+4. **Sibling expansion** — siblings (other children of the same parent) join the layout at the same layer as the focus, with their subtrees included
+5. **Subtree-aware spacing** — siblings are spaced based on their subtree half-widths (widest descendant layer), preventing child overlaps that would bend edges
+6. **Distance-based blend** — layers 0-1 move fully (weight 1.0), layer 2 moves 60%, layer 3+ moves 20%. Distant nodes "subtily adjust"
+
+### Steps
+
+1. **BFS with sibling expansion** from focus node:
+   - Parents → layer -1, -2, ...
+   - Children → layer +1, +2, ...
+   - Siblings (other children of same parents) → same layer
+   - Track which child discovered each node (for focus-path centering)
+
+2. **Y positioning**: focus stays at current Y. Each layer offset by `max_height_in_layer + VERTICAL_GAP`.
+
+3. **X positioning**:
+   - Layer 0: focus pinned at current X. Siblings placed left/right using subtree half-widths.
+   - Upward (negative layers): each node centered on its focus-path child exclusively (if one exists), otherwise average of children.
+   - Downward (positive layers): each child centered under its parent.
+   - Per-layer overlap resolution via `resolveHorizontalOverlaps`.
+   - Direct parents of focus re-centered as a group so their centroid matches focus center.
+
+4. **Blend**: existing positions blended with ideal positions based on BFS distance.
+
+### Worked example
+
+Graph: `A → (B, C)`, `B → D`, `C → E`. Navigate `A → B → D`:
+
+```text
+Focus A:          Focus B:          Focus D:
+    A                 A                 A
+   / \                |                 |
+  B   C              C  B               B
+  |   |              |  |               |
+  D   E              E  D               D
+                     ^straight          ^straight
+```
+
+At each step, the navigated path has straight vertical edges. The non-navigated branch (C→E) also maintains straight edges because each child stays centered under its own parent.
+
 ## Alternatives considered
 
 ### Full Sugiyama framework

@@ -1,5 +1,5 @@
 /**
- * Tests for verticalTreeLayout() and vertical autoPosition().
+ * Tests for verticalTreeLayout(), vertical autoPosition(), and focusCentricLayout().
  * Tests the top-down tree layout algorithm (Sugiyama-lite for DAGs).
  */
 
@@ -308,6 +308,162 @@ test('verticalTreeLayout: all positions are positive', () => {
         assertTrue(node.position.x >= 100, `Node ${id} X should be >= 100, got ${node.position.x}`);
         assertTrue(node.position.y >= 100, `Node ${id} Y should be >= 100, got ${node.position.y}`);
     }
+});
+
+// ============================================================
+// focusCentricLayout tests
+// ============================================================
+
+test('focusCentricLayout: chain produces straight edges', () => {
+    const graph = new TestGraph();
+    graph.addNode(createTestNode('A', NodeType.NOTE));
+    graph.updateNode('A', { position: { x: 500, y: 100 } });
+    graph.addNode(createTestNode('B', NodeType.HUMAN));
+    graph.updateNode('B', { position: { x: 300, y: 500 } });
+    graph.addNode(createTestNode('C', NodeType.AI));
+    graph.updateNode('C', { position: { x: 700, y: 900 } });
+    graph.addEdge(createTestEdge('A', 'B'));
+    graph.addEdge(createTestEdge('B', 'C'));
+
+    graph.focusCentricLayout('B');
+
+    const cx = (id) => graph.getNode(id).position.x + (graph.getNode(id).width || 420) / 2;
+    const tolerance = 5;
+    assertTrue(Math.abs(cx('A') - cx('B')) < tolerance, 'A→B should be straight');
+    assertTrue(Math.abs(cx('B') - cx('C')) < tolerance, 'B→C should be straight');
+});
+
+test('focusCentricLayout: sibling expansion includes cousins', () => {
+    const graph = new TestGraph();
+    // A → (B, C), B → D, C → E
+    graph.addNode(createTestNode('A', NodeType.NOTE));
+    graph.updateNode('A', { position: { x: 500, y: 100 } });
+    graph.addNode(createTestNode('B', NodeType.HUMAN));
+    graph.updateNode('B', { position: { x: 300, y: 500 } });
+    graph.addNode(createTestNode('C', NodeType.HUMAN));
+    graph.updateNode('C', { position: { x: 700, y: 500 } });
+    graph.addNode(createTestNode('D', NodeType.AI));
+    graph.updateNode('D', { position: { x: 300, y: 900 } });
+    graph.addNode(createTestNode('E', NodeType.AI));
+    graph.updateNode('E', { position: { x: 700, y: 900 } });
+    graph.addEdge(createTestEdge('A', 'B'));
+    graph.addEdge(createTestEdge('A', 'C'));
+    graph.addEdge(createTestEdge('B', 'D'));
+    graph.addEdge(createTestEdge('C', 'E'));
+
+    graph.focusCentricLayout('B');
+
+    // C (sibling) and E (cousin) should be repositioned, not left behind
+    const bY = Math.round(graph.getNode('B').position.y);
+    const cY = Math.round(graph.getNode('C').position.y);
+    assertEqual(bY, cY, 'C should be at same Y as B (sibling)');
+
+    const dY = Math.round(graph.getNode('D').position.y);
+    const eY = Math.round(graph.getNode('E').position.y);
+    assertEqual(dY, eY, 'E should be at same Y as D (cousin)');
+});
+
+test('focusCentricLayout: focus path A→B→D has all straight edges', () => {
+    const graph = new TestGraph();
+    graph.addNode(createTestNode('A', NodeType.NOTE));
+    graph.updateNode('A', { position: { x: 500, y: 100 } });
+    graph.addNode(createTestNode('B', NodeType.HUMAN));
+    graph.updateNode('B', { position: { x: 300, y: 500 } });
+    graph.addNode(createTestNode('C', NodeType.HUMAN));
+    graph.updateNode('C', { position: { x: 700, y: 500 } });
+    graph.addNode(createTestNode('D', NodeType.AI));
+    graph.updateNode('D', { position: { x: 300, y: 900 } });
+    graph.addNode(createTestNode('E', NodeType.AI));
+    graph.updateNode('E', { position: { x: 700, y: 900 } });
+    graph.addEdge(createTestEdge('A', 'B'));
+    graph.addEdge(createTestEdge('A', 'C'));
+    graph.addEdge(createTestEdge('B', 'D'));
+    graph.addEdge(createTestEdge('C', 'E'));
+
+    // Navigate A → B → D
+    graph.focusCentricLayout('A');
+    graph.focusCentricLayout('B');
+    graph.focusCentricLayout('D');
+
+    const cx = (id) => Math.round(graph.getNode(id).position.x + (graph.getNode(id).width || 420) / 2);
+    const tol = 5;
+    assertTrue(Math.abs(cx('A') - cx('B')) < tol, `A→B straight: ${cx('A')} vs ${cx('B')}`);
+    assertTrue(Math.abs(cx('B') - cx('D')) < tol, `B→D straight: ${cx('B')} vs ${cx('D')}`);
+    assertTrue(Math.abs(cx('C') - cx('E')) < tol, `C→E straight: ${cx('C')} vs ${cx('E')}`);
+});
+
+test('focusCentricLayout: focus path A→C→E has all straight edges', () => {
+    const graph = new TestGraph();
+    graph.addNode(createTestNode('A', NodeType.NOTE));
+    graph.updateNode('A', { position: { x: 500, y: 100 } });
+    graph.addNode(createTestNode('B', NodeType.HUMAN));
+    graph.updateNode('B', { position: { x: 300, y: 500 } });
+    graph.addNode(createTestNode('C', NodeType.HUMAN));
+    graph.updateNode('C', { position: { x: 700, y: 500 } });
+    graph.addNode(createTestNode('D', NodeType.AI));
+    graph.updateNode('D', { position: { x: 300, y: 900 } });
+    graph.addNode(createTestNode('E', NodeType.AI));
+    graph.updateNode('E', { position: { x: 700, y: 900 } });
+    graph.addEdge(createTestEdge('A', 'B'));
+    graph.addEdge(createTestEdge('A', 'C'));
+    graph.addEdge(createTestEdge('B', 'D'));
+    graph.addEdge(createTestEdge('C', 'E'));
+
+    // Navigate A → C → E
+    graph.focusCentricLayout('A');
+    graph.focusCentricLayout('C');
+    graph.focusCentricLayout('E');
+
+    const cx = (id) => Math.round(graph.getNode(id).position.x + (graph.getNode(id).width || 420) / 2);
+    const tol = 5;
+    assertTrue(Math.abs(cx('A') - cx('C')) < tol, `A→C straight: ${cx('A')} vs ${cx('C')}`);
+    assertTrue(Math.abs(cx('C') - cx('E')) < tol, `C→E straight: ${cx('C')} vs ${cx('E')}`);
+    assertTrue(Math.abs(cx('B') - cx('D')) < tol, `B→D straight: ${cx('B')} vs ${cx('D')}`);
+});
+
+test('focusCentricLayout: multi-parent centroid matches focus', () => {
+    const graph = new TestGraph();
+    // A → B, C → B (B has 2 parents)
+    graph.addNode(createTestNode('A', NodeType.NOTE));
+    graph.updateNode('A', { position: { x: 200, y: 100 } });
+    graph.addNode(createTestNode('C', NodeType.NOTE));
+    graph.updateNode('C', { position: { x: 800, y: 100 } });
+    graph.addNode(createTestNode('B', NodeType.HUMAN));
+    graph.updateNode('B', { position: { x: 500, y: 500 } });
+    graph.addEdge(createTestEdge('A', 'B'));
+    graph.addEdge(createTestEdge('C', 'B'));
+
+    graph.focusCentricLayout('B');
+
+    const cx = (id) => Math.round(graph.getNode(id).position.x + (graph.getNode(id).width || 420) / 2);
+    const parentCentroid = Math.round((cx('A') + cx('C')) / 2);
+    assertTrue(Math.abs(parentCentroid - cx('B')) < 5, `Parent centroid (${parentCentroid}) should match B (${cx('B')})`);
+});
+
+test('focusCentricLayout: focus node position unchanged', () => {
+    const graph = new TestGraph();
+    graph.addNode(createTestNode('A', NodeType.NOTE));
+    graph.updateNode('A', { position: { x: 500, y: 300 } });
+    graph.addNode(createTestNode('B', NodeType.HUMAN));
+    graph.updateNode('B', { position: { x: 300, y: 700 } });
+    graph.addEdge(createTestEdge('A', 'B'));
+
+    const beforeX = graph.getNode('A').position.x;
+    const beforeY = graph.getNode('A').position.y;
+
+    graph.focusCentricLayout('A');
+
+    const after = graph.getNode('A').position;
+    assertEqual(Math.round(after.x), Math.round(beforeX), 'Focus X should not change');
+    assertEqual(Math.round(after.y), Math.round(beforeY), 'Focus Y should not change');
+});
+
+test('focusCentricLayout: single node is no-op', () => {
+    const graph = new TestGraph();
+    graph.addNode(createTestNode('A'));
+    // Should not throw
+    graph.focusCentricLayout('A');
+    assertTrue(graph.getNode('A') !== null);
 });
 
 // ============================================================
