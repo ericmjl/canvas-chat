@@ -2395,52 +2395,83 @@ class CRDTGraph extends EventEmitter {
             }
         }
 
-        // Step 4: Write ideal positions, then run a global AABB overlap check.
-        // The per-layer overlap resolution handles same-layer nodes, but nodes
-        // from different layers with different heights can still overlap
-        // vertically. This safety net catches any remaining overlaps.
-        const positionedNodes = [];
+        // Step 3d: Space orphan nodes (those without idealX) relative to
+        // positioned nodes at the same layer. Orphans are typically nodes
+        // discovered through sibling expansion whose children are at non-
+        // adjacent layers — the upward/downward passes couldn't position them.
+        // Without this, they keep their old positions and can collide with
+        // focus-path nodes. Uses subtree half-widths for sufficient repulsion.
+        for (let l = minLayer; l <= maxLayer; l++) {
+            const layerIds = layerNodes.get(l) || [];
+            const orphans = layerIds.filter((id) => !idealX.has(id));
+            if (orphans.length === 0) continue;
+
+            const positioned = layerIds.filter((id) => idealX.has(id));
+            if (positioned.length === 0) {
+                for (const id of orphans) {
+                    const node = this.getNode(id);
+                    idealX.set(id, node?.position?.x ?? START_X);
+                }
+                continue;
+            }
+
+            // Space each orphan relative to nearest positioned node
+            for (const orphanId of orphans) {
+                const orphan = this.getNode(orphanId);
+                const orphanSize = getNodeSize(orphan);
+                const orphanCx = (orphan?.position?.x ?? START_X) + orphanSize.width / 2;
+                const orphanSpan = subtreeHalfWidth(orphanId);
+
+                // Find nearest positioned node by center distance
+                let nearestCx = (idealX.get(positioned[0]) ?? START_X)
+                    + getNodeSize(this.getNode(positioned[0])).width / 2;
+                let nearestDist = Math.abs(nearestCx - orphanCx);
+                for (let i = 1; i < positioned.length; i++) {
+                    const cx = (idealX.get(positioned[i]) ?? START_X)
+                        + getNodeSize(this.getNode(positioned[i])).width / 2;
+                    const d = Math.abs(cx - orphanCx);
+                    if (d < nearestDist) { nearestDist = d; nearestCx = cx; }
+                }
+
+                const nearestSpan = subtreeHalfWidth(positioned.find((pid) => {
+                    const cx = (idealX.get(pid) ?? START_X)
+                        + getNodeSize(this.getNode(pid)).width / 2;
+                    return cx === nearestCx;
+                }) ?? positioned[0]);
+                const minDist = nearestSpan + orphanSpan + HORIZONTAL_GAP;
+
+                if (orphanCx < nearestCx) {
+                    idealX.set(orphanId, nearestCx - minDist - orphanSize.width / 2);
+                } else {
+                    idealX.set(orphanId, nearestCx + minDist - orphanSize.width / 2);
+                }
+            }
+
+            // Resolve any remaining overlaps in this layer
+            const layerWork = layerIds.map((id) => {
+                const node = this.getNode(id);
+                if (!node) return null;
+                return { position: { x: idealX.get(id) ?? START_X }, width: getNodeSize(node).width };
+            }).filter(Boolean);
+            resolveHorizontalOverlaps(layerWork, HORIZONTAL_GAP, dimensions);
+            layerIds.forEach((id, i) => { if (layerWork[i]) idealX.set(id, layerWork[i].position.x); });
+        }
+
+        // Step 4: Write ideal positions directly (no per-node blend).
+        // The entire neighborhood moves as a unit to its ideal layout.
+        // The animation (animateToLayout, ~300ms) provides the visual transition.
         for (const [nodeId, layer] of layers) {
             const node = this.getNode(nodeId);
             if (!node) continue;
 
-            const x = idealX.get(nodeId) ?? node.position?.x ?? START_X;
-            const y = layerY.get(layer) ?? node.position?.y ?? 100;
-            const size = getNodeSize(node);
-            positionedNodes.push({ id: nodeId, x, y, width: size.width, height: size.height });
-        }
+            const idealXVal = idealX.get(nodeId) ?? node.position?.x ?? START_X;
+            const idealYVal = layerY.get(layer) ?? node.position?.y ?? 100;
 
-        // Global AABB overlap resolution: push apart any two nodes that overlap
-        // in BOTH X and Y. Focus node stays pinned.
-        for (let i = 0; i < positionedNodes.length; i++) {
-            for (let j = i + 1; j < positionedNodes.length; j++) {
-                const a = positionedNodes[i];
-                const b = positionedNodes[j];
-                const aRight = a.x + a.width;
-                const bRight = b.x + b.width;
-                const aBottom = a.y + a.height;
-                const bBottom = b.y + b.height;
-                const xOverlap = Math.min(aRight, bRight) - Math.max(a.x, b.x);
-                const yOverlap = Math.min(aBottom, bBottom) - Math.max(a.y, b.y);
-                if (xOverlap > 0 && yOverlap > 0) {
-                    // Push apart on X axis (don't move focus)
-                    const aIsFocus = a.id === focusNodeId;
-                    const bIsFocus = b.id === focusNodeId;
-                    if (aIsFocus) {
-                        b.x += xOverlap + HORIZONTAL_GAP;
-                    } else if (bIsFocus) {
-                        a.x -= xOverlap + HORIZONTAL_GAP;
-                    } else {
-                        a.x -= xOverlap / 2 + 1;
-                        b.x += xOverlap / 2 + 1;
-                    }
-                }
-            }
-        }
-
-        for (const pn of positionedNodes) {
-            this.updateNode(pn.id, {
-                position: { x: pn.x, y: pn.y },
+            this.updateNode(nodeId, {
+                position: {
+                    x: idealXVal,
+                    y: idealYVal,
+                },
             });
         }
     }
