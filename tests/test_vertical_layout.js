@@ -756,6 +756,44 @@ test('focusCentricLayout: stable across repeated navigation', () => {
     }
 });
 
+test('focusCentricLayout: disconnected subgraphs do not overlap the focus component', () => {
+    // Navigating to a focus node must not leave disconnected subgraphs at stale
+    // positions that the rearranged focus component then overlaps.
+    const graph = new TestGraph();
+    const edges = [
+        ['A', 'B'], ['B', 'D'], ['A', 'C'], ['C', 'E'], ['E', 'F'],
+        ['F', 'G'], ['F', 'H'], ['H', 'I'], ['J', 'K'], // J->K is disconnected
+    ];
+    for (const id of ['A','B','C','D','E','F','G','H','I','J','K']) {
+        graph.addNode(createTestNode(id, NodeType.HUMAN));
+    }
+    for (const [s, t] of edges) graph.addEdge(createTestEdge(s, t));
+    graph.verticalTreeLayout();
+
+    // Simulate navigating A -> C.
+    graph.focusCentricLayout('C', new Map(), ['A', 'C']);
+
+    const ids = ['A','B','C','D','E','F','G','H','I','J','K'];
+    const sz = (n) => ({ w: n.width || 420, h: n.height || 200 });
+    const overlap = (a, b) => {
+        const sa = sz(a), sb = sz(b);
+        return !(a.position.x + sa.w < b.position.x || a.position.x > b.position.x + sb.w ||
+                 a.position.y + sa.h < b.position.y || a.position.y > b.position.y + sb.h);
+    };
+    for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+            const a = graph.getNode(ids[i]);
+            const b = graph.getNode(ids[j]);
+            assertFalse(overlap(a, b), `${ids[i]} must not overlap ${ids[j]} after focus layout`);
+        }
+    }
+    // Disconnected J->K must keep top-down orientation (parent J above child K).
+    assertTrue(
+        graph.getNode('J').position.y < graph.getNode('K').position.y,
+        'Disconnected parent J should be above child K',
+    );
+});
+
 // ============================================================
 // Runner (test_setup collects tests; run them here)
 // ============================================================
