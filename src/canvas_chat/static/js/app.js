@@ -1669,7 +1669,7 @@ class App {
         this.canvas.zoomToSelectionAnimated([aiNode.id], 0.8, 300);
         this.updateCollapseButtonForNode(humanNode.id);
 
-        const context = this.graph.resolveContext([humanNode.id]);
+        const context = this.graph.resolveContextWithSearchResults([humanNode.id]);
         const messages = buildMessagesForApi(context);
         const abortController = new AbortController();
 
@@ -1992,20 +1992,30 @@ class App {
     handleNodeCollapse(nodeId) {
         const node = this.graph.getNode(nodeId);
         if (!node) return;
+        this.setNodeCollapsed(nodeId, !node.collapsed);
+    }
 
-        // Toggle collapsed state
-        node.collapsed = !node.collapsed;
+    /**
+     * Explicitly set a node's collapsed state (non-toggling). This is the
+     * canonical, reusable collapse entry point — used by handleNodeCollapse
+     * and exposed to plugins via AppContext (collapseNode/expandNode) so any
+     * feature can collapse/expand nodes of any type.
+     * @param {string} nodeId
+     * @param {boolean} collapsed
+     */
+    setNodeCollapsed(nodeId, collapsed) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
 
-        // Persist the collapsed state to the graph
-        this.graph.updateNode(nodeId, { collapsed: node.collapsed });
+        this.graph.updateNode(nodeId, { collapsed });
 
         // Update visibility of all nodes
         this.updateAllNodeVisibility();
 
         // Update the collapse button for this node
         const children = this.graph.getChildren(nodeId);
-        const hiddenCount = node.collapsed ? this.graph.countHiddenDescendants(nodeId) : 0;
-        this.canvas.updateCollapseButton(nodeId, children.length > 0, node.collapsed, hiddenCount);
+        const hiddenCount = collapsed ? this.graph.countHiddenDescendants(nodeId) : 0;
+        this.canvas.updateCollapseButton(nodeId, children.length > 0, collapsed, hiddenCount);
 
         // Save session
         this.saveSession();
@@ -2609,7 +2619,7 @@ class App {
                 this.updateCollapseButtonForNode(humanNode.id);
 
                 // Build context and stream LLM response
-                const context = this.graph.resolveContext([humanNode.id]);
+                const context = this.graph.resolveContextWithSearchResults([humanNode.id]);
                 const messages = buildMessagesForApi(context);
 
                 // Create AbortController for this stream
@@ -2682,7 +2692,7 @@ class App {
         const parentNode = this.graph.getNode(nodeId);
 
         // Get context up to this node (includes the node itself and all ancestors)
-        const context = this.graph.resolveContext([nodeId]);
+        const context = this.graph.resolveContextWithSearchResults([nodeId]);
 
         if (context.length < 1) {
             alert('No content to summarize');

@@ -10,9 +10,17 @@ import { storage } from '../storage.js';
 import { readSSEStream, normalizeText } from '../sse.js';
 import { apiUrl } from '../utils.js';
 import { FeaturePlugin } from '../feature-plugin.js';
+import { fetchUrlContent } from '../web-grounding.js';
 
 /** @type {number} */
 const MAX_RESEARCH_ACTIVITY_LINES = 300;
+
+/**
+ * Max characters of a fetched page stored on a "View content" child node.
+ * Bounds per-result size for both display and reply-context injection.
+ * @type {number}
+ */
+const SEARCH_PAGE_BODY_MAX_CHARS = 8000;
 
 /**
  * Append a line to the research activity log, trimming oldest lines when over budget.
@@ -83,13 +91,198 @@ class ResearchFeature extends FeaturePlugin {
         this.canvas.ensureOutputPanelContent(nodeId, node);
     }
 
+    // ------------------------------------------------------------------------
+    // Search results carousel (drawer on the SEARCH node)
+    // ------------------------------------------------------------------------
+    // The SearchNode protocol renders the carousel and emits canvas events;
+    // ResearchFeature owns the logic below. Result state lives on the node as a
+    // JSON string (`searchResults`) plus `searchCarouselIndex`.
+
     /**
-     * Handle search command.
-     * @param {string} query - The user's search query
-     * @param {string} context - Optional context to help refine the query (e.g., selected text)
+     * Canvas event handlers for the search results carousel.
+     * @returns {Object}
      */
+    getCanvasEventHandlers() {
+        return {
+            searchPrevResult: (nodeId) => this._searchStep(nodeId, -1),
+            searchNextResult: (nodeId) => this._searchStep(nodeId, 1),
+            searchToggleSelect: (nodeId) => this._searchToggleSelect(nodeId),
+            searchViewContent: (nodeId) => this._searchViewContent(nodeId),
+        };
+    }
+
     /**
-     * Handle the /search command
+     * Refresh (or create) the SEARCH node's results drawer after a state change.
+     * @param {string} nodeId
+     */
+    _refreshSearchPanel(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+        this.canvas.ensureOutputPanelContent(nodeId, node);
+    }
+
+    /**
+     * Read this node's search results array (parsed from JSON; [] on failure).
+     * @param {string} nodeId
+     * @returns {Array<Object>}
+     */
+    _getSearchResults(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node || !node.searchResults) return [];
+        try {
+            const parsed = JSON.parse(node.searchResults);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Persist search results back to the node and refresh the drawer.
+     * @param {string} nodeId
+     * @param {Array<Object>} results
+     */
+    _setSearchResults(nodeId, results) {
+        this.graph.updateNode(nodeId, { searchResults: JSON.stringify(results) });
+        this._refreshSearchPanel(nodeId);
+        this.saveSession();
+    }
+
+    /**
+     * Move the carousel by `delta`, clamping to the result range.
+     * @param {string} nodeId
+     * @param {number} delta
+     */
+    _searchStep(nodeId, delta) {
+        const results = this._getSearchResults(nodeId);
+        if (results.length === 0) return;
+        const current = Number(this.graph.getNode(nodeId).searchCarouselIndex) || 0;
+        const next = Math.max(0, Math.min(results.length - 1, current + delta));
+        if (next === current) return;
+        this.graph.updateNode(nodeId, { searchCarouselIndex: next });
+        this._refreshSearchPanel(nodeId);
+        this.saveSession();
+    }
+
+    /**
+     * Toggle the current result's `selected` flag (include-in-context).
+     * @param {string} nodeId
+     */
+    _searchToggleSelect(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        const results = this._getSearchResults(nodeId);
+        const idx = Math.min(Number(node.searchCarouselIndex) || 0, results.length - 1);
+        if (idx < 0 || idx >= results.length) return;
+        results[idx] = { ...results[idx], selected: !results[idx].selected };
+        this._setSearchResults(nodeId, results);
+    }
+
+    /**
+     * Fetch the current result's page and create an opt-in child REFERENCE node
+     * showing the page text, linked to the SEARCH node. Marks the result
+     * `expanded` so the carousel reflects state and context uses the full text.
+     *
+     * Robustness: an in-flight `fetching` flag (stored on the result) guards
+     * against double-click duplicates; the latest results are re-read before
+     * writing back so concurrent checkbox toggles aren't clobbered; a failed
+     * fetch does not flip `expanded` (so the user can retry).
+     * @param {string} nodeId
+     */
+    async _searchViewContent(nodeId) {
+        const node = this.graph.getNode(nodeId);
+        if (!node) return;
+        const results = this._getSearchResults(nodeId);
+        const idx = Math.min(Number(node.searchCarouselIndex) || 0, results.length - 1);
+        const result = results[idx];
+        if (!result || !result.url) return;
+        if (result.fetching) return; // in-flight guard against duplicate child nodes
+
+        // Already expanded: focus the existing child. If the child was deleted,
+        // reset the stale flag and fall through to re-fetch.
+        if (result.expanded) {
+            const child = this._findExpandedChild(nodeId, result.url);
+            if (child) {
+                this.canvas.zoomToSelectionAnimated([child.id], 0.8, 300);
+                return;
+            }
+        }
+
+        // Mark in-flight and refresh the drawer (button shows "Fetching…").
+        this._updateResult(nodeId, idx, { fetching: true });
+
+        let pageText = '';
+        try {
+            const fetched = await fetchUrlContent(result.url);
+            pageText = (fetched && fetched.content) || '';
+        } catch (err) {
+            console.warn('[ResearchFeature] view-content fetch failed:', err);
+        } finally {
+            // Re-read the latest results so we don't clobber checkbox toggles
+            // made during the await, then clear the in-flight flag.
+            const latest = this._getSearchResults(nodeId);
+            if (latest[idx]) {
+                latest[idx] = { ...latest[idx], fetching: false, expanded: pageText.length > 0 };
+                this.graph.updateNode(nodeId, { searchResults: JSON.stringify(latest) });
+                this._refreshSearchPanel(nodeId);
+            }
+        }
+
+        // Nothing to show if the fetch failed — the result stays expandable.
+        if (!pageText) return;
+
+        if (pageText.length > SEARCH_PAGE_BODY_MAX_CHARS) {
+            pageText = pageText.slice(0, SEARCH_PAGE_BODY_MAX_CHARS);
+        }
+
+        // Create the child REFERENCE node carrying the page text (+ url for dedup).
+        // autoPosition stacks each new child instead of overlapping them.
+        const pos = this.graph.autoPosition([nodeId], NodeType.REFERENCE);
+        const childNode = createNode(
+            NodeType.REFERENCE,
+            `**[${result.title}](${result.url})**\n\n${pageText}`
+        );
+        childNode.url = result.url;
+        childNode.position = pos;
+        this.graph.addNode(childNode);
+        const edge = createEdge(nodeId, childNode.id, EdgeType.SEARCH_RESULT);
+        this.graph.addEdge(edge);
+        this.canvas.renderNode(childNode);
+        this.canvas.renderEdge(edge, this.graph.getNode(nodeId).position, childNode.position);
+        this.updateCollapseButtonForNode?.(nodeId);
+
+        this.canvas.zoomToSelectionAnimated([childNode.id], 0.8, 300);
+        this.saveSession();
+    }
+
+    /**
+     * Merge a patch into one result entry, re-reading the latest array first so
+     * concurrent edits to other entries are preserved.
+     * @param {string} nodeId
+     * @param {number} idx
+     * @param {Object} patch
+     */
+    _updateResult(nodeId, idx, patch) {
+        const latest = this._getSearchResults(nodeId);
+        if (!latest[idx]) return;
+        latest[idx] = { ...latest[idx], ...patch };
+        this.graph.updateNode(nodeId, { searchResults: JSON.stringify(latest) });
+        this._refreshSearchPanel(nodeId);
+    }
+
+    /**
+     * Find an existing expanded child REFERENCE node for a URL, if any.
+     * @param {string} parentId
+     * @param {string} url
+     * @returns {Object|undefined}
+     */
+    _findExpandedChild(parentId, url) {
+        return this.graph.getChildren(parentId).find((c) => c.type === NodeType.REFERENCE && c.url === url);
+    }
+
+    /**
+     * Handle the /search command: store results in a carousel drawer on a single
+     * SEARCH node (no REFERENCE-node fan-out). See getCanvasEventHandlers for the
+     * carousel interactions (prev/next, context checkbox, view content).
      * @param {string} command - The slash command (e.g., '/search')
      * @param {string} args - Text after the command
      * @param {Object} contextObj - Additional context (e.g., { text: selectedNodesContent })
@@ -209,26 +402,22 @@ class ResearchFeature extends FeaturePlugin {
             this.canvas.updateNodeContent(searchNode.id, searchContent, false);
             this.graph.updateNode(searchNode.id, { content: searchContent });
 
-            // Create reference nodes for each result
-            let offsetY = 0;
-            for (const result of data.results) {
-                const resultContent = `**[${result.title}](${result.url})**\n\n${result.snippet}${result.published_date ? `\n\n*${result.published_date}*` : ''}`;
-
-                const resultNode = createNode(NodeType.REFERENCE, resultContent, {
-                    position: {
-                        x: searchNode.position.x + 400,
-                        y: searchNode.position.y + offsetY,
-                    },
-                });
-
-                this.graph.addNode(resultNode);
-
-                // Edge from search to result
-                const edge = createEdge(searchNode.id, resultNode.id, EdgeType.SEARCH_RESULT);
-                this.graph.addEdge(edge);
-
-                offsetY += 200; // Space between result nodes
-            }
+            // Store results on the node as a JSON string (CRDT-safe primitive).
+            // All results default to selected=true so they feed reply context;
+            // the user curates via the drawer checkboxes. No fan-out nodes are
+            // created — results live in the SEARCH node's carousel drawer.
+            const searchResults = (data.results || []).map((r) => ({
+                title: r.title || '',
+                url: r.url || '',
+                snippet: r.snippet || '',
+                selected: true,
+                expanded: false,
+            }));
+            this.graph.updateNode(searchNode.id, {
+                searchResults: JSON.stringify(searchResults),
+                searchCarouselIndex: 0,
+            });
+            this._refreshSearchPanel(searchNode.id);
 
             this.saveSession();
         } catch (err) {

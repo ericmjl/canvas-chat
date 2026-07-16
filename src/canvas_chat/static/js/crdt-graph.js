@@ -15,6 +15,23 @@ import { EventEmitter } from './event-emitter.js';
 import { NodeType, TAG_COLORS, createNode, createEdge, EdgeType, getDefaultNodeSize } from './graph-types.js';
 import { resolveOverlaps, resolveHorizontalOverlaps, wouldOverlapNodes, getNodeSize as _getNodeSize, DEFAULT_WIDTH, DEFAULT_HEIGHT, LAYOUT_START_X as START_X, LAYOUT_START_Y as START_Y } from './layout.js';
 
+/**
+ * Max characters of a single search result injected into reply context.
+ * Bounds per-result cost so one large page cannot dominate the prompt.
+ * @type {number}
+ */
+const SEARCH_RESULT_CONTEXT_MAX_CHARS = 6000;
+
+/**
+ * Clip a string to the context budget, appending an ellipsis when truncated.
+ * @param {string} text
+ * @returns {string}
+ */
+function clipForContext(text) {
+    if (!text || text.length <= SEARCH_RESULT_CONTEXT_MAX_CHARS) return text || '';
+    return `${text.slice(0, SEARCH_RESULT_CONTEXT_MAX_CHARS - 1)}…`;
+}
+
 // =============================================================================
 // Type Imports (JSDoc)
 // =============================================================================
@@ -1487,6 +1504,63 @@ class CRDTGraph extends EventEmitter {
             }
             return msg;
         });
+    }
+
+    /**
+     * Resolve context like {@link resolveContext}, then enrich it with any SEARCH
+     * node's curated results: for each SEARCH node present in the ancestor
+     * context, append its `selected` results. If a result has an expanded child
+     * REFERENCE node (created via "View content"), the child's full page text
+     * replaces the snippet; otherwise the snippet is used. Child nodes already
+     * reached via the ancestor walk are not duplicated.
+     *
+     * Result state is stored on the SEARCH node as a JSON string in
+     * `searchResults` (`[{title,url,snippet,selected,expanded}]`).
+     * @param {string[]} nodeIds
+     * @returns {Array<{role:string,content:string,nodeId:string}>}
+     */
+    resolveContextWithSearchResults(nodeIds) {
+        const messages = this.resolveContext(nodeIds);
+        const seenNodeIds = new Set(messages.map((m) => m.nodeId));
+        const coveredUrls = new Set();
+        const extra = [];
+
+        for (const msg of [...messages]) {
+            const node = this.getNode(msg.nodeId);
+            if (!node || node.type !== NodeType.SEARCH) continue;
+
+            let results = [];
+            try {
+                const parsed = JSON.parse(node.searchResults || '[]');
+                if (Array.isArray(parsed)) results = parsed;
+            } catch {
+                results = [];
+            }
+
+            // Index expanded child REFERENCE nodes by url (full text wins).
+            const childByUrl = new Map();
+            for (const child of this.getChildren(node.id)) {
+                if (child.type === NodeType.REFERENCE && child.url) {
+                    childByUrl.set(child.url, child);
+                }
+            }
+
+            for (const r of results) {
+                if (r.selected === false || !r.url || coveredUrls.has(r.url)) continue;
+                coveredUrls.add(r.url);
+                const child = childByUrl.get(r.url);
+                if (child) {
+                    if (seenNodeIds.has(child.id)) continue;
+                    seenNodeIds.add(child.id);
+                    const body = clipForContext(child.content || '');
+                    extra.push({ role: 'user', content: body, nodeId: child.id });
+                } else {
+                    const content = `**[${r.title || ''}](${r.url})**\n\n${clipForContext(r.snippet || '')}`;
+                    extra.push({ role: 'user', content, nodeId: `${node.id}:search:${r.url}` });
+                }
+            }
+        }
+        return [...messages, ...extra];
     }
 
     /**

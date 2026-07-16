@@ -39,6 +39,9 @@ class AppContext {
         this.updateCollapseButtonForNode = app.updateCollapseButtonForNode
             ? app.updateCollapseButtonForNode.bind(app)
             : null;
+        // Reusable collapse/expand entry points (see App.setNodeCollapsed).
+        this.collapseNode = app.setNodeCollapsed ? app.setNodeCollapsed.bind(app) : null;
+        this.expandNode = app.setNodeCollapsed ? (nodeId) => app.setNodeCollapsed(nodeId, false) : null;
         this.buildLLMRequest = app.buildLLMRequest.bind(app);
         this.generateNodeSummary = app.generateNodeSummary ? app.generateNodeSummary.bind(app) : null;
 
@@ -152,6 +155,8 @@ class FeaturePlugin {
         this.saveSession = context.saveSession;
         this.updateEmptyState = context.updateEmptyState;
         this.updateCollapseButtonForNode = context.updateCollapseButtonForNode;
+        this.collapseNode = context.collapseNode;
+        this.expandNode = context.expandNode;
         this.buildLLMRequest = context.buildLLMRequest;
         this.generateNodeSummary = context.generateNodeSummary;
 

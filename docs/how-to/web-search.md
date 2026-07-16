@@ -36,16 +36,14 @@ Type `/search` followed by your query in the chat input:
 Press Enter. Canvas Chat will:
 
 1. Create a SEARCH node showing your query
-2. Call the Exa API to find relevant results
-3. Create REFERENCE nodes for each search result (up to 5)
-4. Connect them to the search node with dashed lines
+2. Call the search provider (Exa or DuckDuckGo) to find relevant results
+3. Show the results in a **carousel drawer** beneath the search node (no extra nodes cluttering the canvas)
 
-Each reference node shows:
+The search node body shows the query and the result count. The drawer hosts one result at a time. Each result shows:
 
 - The page title
 - The URL
 - A snippet of the content
-- Published date and author (when available)
 
 ## Context-aware search
 
@@ -63,38 +61,33 @@ The search node will show both your original query and the refined version.
 
 Without context, "how does this work?" is too vague to search. By providing context (the selected node), the AI resolves pronouns like "this" into specific technical terms, producing better search results.
 
-## Working with search results
+## Working with search results (carousel drawer)
 
-### Read a snippet
+Open the drawer beneath a SEARCH node (it appears automatically after a search) to browse and curate results.
 
-Click any REFERENCE node to see the title, URL, and preview text.
+### Navigate results
 
-### Fetch full content
+Use the **◀ / ▶** buttons (or step through) to move between results one at a time, PowerPoint-style. The counter shows e.g. `2 / 5`.
 
-Click the **"Fetch & Summarize"** button on a reference node to:
+### Choose what feeds your replies
 
-1. Fetch the full page content via Exa
-2. Create a FETCH_RESULT node with the complete text
-3. Generate an AI summary automatically
+Each result has a **Context** checkbox. Checked results are included as context when you reply to the SEARCH node. All results start checked; uncheck the ones you don't need to keep your prompts focused.
 
-This creates two new nodes connected to the reference:
+### Open a page's full text
 
-- **Fetch result** (full content as markdown)
-- **Summary** (concise AI-generated summary)
+Click **View content** on a result to fetch the page and open it as an opt-in child reference node showing the full page text. This is the only time a separate node is created — the canvas stays clean until you decide a result is worth reading in depth. The child node links back to the search node and can be collapsed like any other node.
 
 ### Reply to results
 
-Select one or more reference nodes and type in the chat input to ask questions about those specific results. The AI will use the snippets as context.
-
-For deeper analysis, fetch the full content first, then ask questions.
+Select the SEARCH node (or reply to it) and type your question. The AI automatically uses your **checked** results as context. For any result you've opened with **View content**, the full page text is used instead of the snippet — so expand the results you care about before asking for deeper analysis.
 
 ## Search positioning
 
 Search nodes are positioned automatically:
 
-- If you have nodes selected: search appears to the right of them
-- If nothing is selected: search appears to the right of the most recent leaf node
-- Reference nodes fan out to the right of the search node
+- If you have nodes selected: the search appears to the right of them
+- If nothing is selected: the search appears to the right of the most recent leaf node
+- Results stay inside the search node's drawer; a child node is only created when you use **View content**
 
 ## Tips
 
@@ -109,12 +102,12 @@ Search nodes are positioned automatically:
 2. Select the relevant nodes
 3. Type `/search what are alternatives?` — the AI resolves "alternatives" based on your conversation
 
-**Fetch selectively** - Don't fetch all results. Read the snippets first, then fetch only the most promising 1-2 pages to avoid clutter.
+**Curate before you ask** - Browse the carousel, uncheck irrelevant results, and use View content on the 1-2 best pages. Replies then draw on exactly the material you chose.
 
 **Use in research workflows:**
 
 1. Start with `/search` to find sources
-2. Fetch full content for 2-3 best results
+2. Open the best 2-3 results with View content
 3. Use `/research` for comprehensive synthesis (see [How to conduct deep research](deep-research.md))
 
 ## Limits
@@ -122,5 +115,5 @@ Search nodes are positioned automatically:
 - Maximum 5-10 search results per query
 - DuckDuckGo provides basic search (no API key needed)
 - Exa provides neural search with richer content (API key required)
-- Fetch & Summarize requires an LLM provider API key
+- View content fetches up to 8000 characters of page text per result
 - The `/research` command requires an Exa API key (no fallback)
