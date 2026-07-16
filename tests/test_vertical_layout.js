@@ -91,6 +91,54 @@ test('autoPosition: createLinkedNode centers AI under HUMAN correctly', () => {
     assertEqual(aiCenter, humanCenter);
 });
 
+// Regression: https://github.com/ericmjl/canvas-chat/issues — nodes overlapping
+// in the default (incremental) tree view. autoPosition's left-edge clamp used to
+// snap an off-canvas-left "clear" position back to START_X, landing a second
+// child (or a node from a different subgraph) on top of an existing node.
+function rectsOverlap(a, b) {
+    const aw = a.width || 420;
+    const ah = a.height || 200;
+    const bw = b.width || 420;
+    const bh = b.height || 200;
+    return !(
+        a.position.x + aw < b.position.x ||
+        a.position.x > b.position.x + bw ||
+        a.position.y + ah < b.position.y ||
+        a.position.y > b.position.y + bh
+    );
+}
+
+test('autoPosition: second child of left-edge parent does not overlap first', () => {
+    const graph = new TestGraph();
+    const root = graph.createLinkedNode(NodeType.HUMAN, 'root', []);
+    const first = graph.createLinkedNode(NodeType.AI, 'first', [root.id]);
+    const second = graph.createLinkedNode(NodeType.AI, 'second', [root.id]);
+    assertFalse(rectsOverlap(first, second), 'second child must not stack on the first');
+    // Second child should be shifted right of the first.
+    const firstRight = first.position.x + 640;
+    assertTrue(second.position.x >= firstRight, `second (${second.position.x}) should be right of first (${firstRight})`);
+});
+
+test('autoPosition: new subgraph child does not overlap an existing laid-out subgraph', () => {
+    const graph = new TestGraph();
+    // Subgraph A: root + 3 children, then Apply Layout spreads them into a row.
+    const a0 = createTestNode('A0', NodeType.HUMAN);
+    graph.addNode(a0);
+    for (let i = 1; i <= 3; i++) {
+        const c = createTestNode('A' + i, NodeType.AI);
+        graph.addNode(c);
+        graph.addEdge(createTestEdge('A0', 'A' + i));
+    }
+    graph.verticalTreeLayout();
+    // Start a disconnected subgraph B incrementally.
+    const b0 = graph.createLinkedNode(NodeType.HUMAN, 'B0', []);
+    const b1 = graph.createLinkedNode(NodeType.AI, 'B1', [b0.id]);
+    // B's child must not overlap ANY node of subgraph A.
+    for (const id of ['A0', 'A1', 'A2', 'A3']) {
+        assertFalse(rectsOverlap(b1, graph.getNode(id)), `B1 must not overlap ${id}`);
+    }
+});
+
 // ============================================================
 // verticalTreeLayout: basic structure tests
 // ============================================================
