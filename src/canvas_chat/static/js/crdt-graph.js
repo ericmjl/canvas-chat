@@ -2226,6 +2226,65 @@ class CRDTGraph extends EventEmitter {
             }
         }
 
+        // Disconnected subgraphs (not reached by the focus BFS) would otherwise
+        // keep stale positions and overlap the rearranged component. Assign each
+        // disconnected component its own block of layers BELOW the focus component,
+        // layered from the component's own roots (top-down orientation preserved),
+        // so the existing per-layer Y-separation and resolveHorizontalOverlaps
+        // position them without overlap.
+        let focusMaxLayer = -Infinity;
+        for (const l of layers.values()) focusMaxLayer = Math.max(focusMaxLayer, l);
+        const connected = new Set(layers.keys());
+        const handled = new Set(connected);
+        let nextLayer = focusMaxLayer + 1;
+        for (const start of allNodes) {
+            if (handled.has(start.id)) continue;
+            // Gather this disconnected component (undirected).
+            const compNodes = new Set([start.id]);
+            const gatherQ = [start.id];
+            while (gatherQ.length > 0) {
+                const id = gatherQ.shift();
+                for (const nb of [...this.getParents(id), ...this.getChildren(id)]) {
+                    if (connected.has(nb.id) || compNodes.has(nb.id)) continue;
+                    compNodes.add(nb.id);
+                    gatherQ.push(nb.id);
+                }
+            }
+            // Layer by topological depth from in-component roots.
+            const compParents = (id) => this.getParents(id).filter((p) => compNodes.has(p.id));
+            const rel = new Map();
+            const roots = [...compNodes].filter((id) => compParents(id).length === 0);
+            const seed = roots.length > 0 ? roots : [...compNodes];
+            const bfsQ = [];
+            for (const r of seed) {
+                rel.set(r, 0);
+                bfsQ.push(r);
+            }
+            let head = 0;
+            while (head < bfsQ.length) {
+                const id = bfsQ[head++];
+                const d = rel.get(id);
+                for (const c of this.getChildren(id)) {
+                    if (!compNodes.has(c.id) || rel.has(c.id)) continue;
+                    rel.set(c.id, d + 1);
+                    bfsQ.push(c.id);
+                }
+            }
+            // Cycles / multi-parent stragglers: fall back to max(parent depth) + 1.
+            let compMaxRel = 0;
+            for (const id of compNodes) {
+                let r = rel.get(id);
+                if (r === undefined) {
+                    const ps = compParents(id).filter((p) => rel.has(p.id));
+                    r = ps.length > 0 ? Math.max(...ps.map((p) => rel.get(p.id))) + 1 : 0;
+                }
+                layers.set(id, nextLayer + r);
+                handled.add(id);
+                compMaxRel = Math.max(compMaxRel, r);
+            }
+            nextLayer += compMaxRel + 1;
+        }
+
         // Step 2: Group nodes by layer, compute Y
         const layerNodes = new Map();
         for (const [nodeId, layer] of layers) {
