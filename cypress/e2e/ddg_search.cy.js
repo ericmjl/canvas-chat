@@ -10,7 +10,7 @@ describe('DDG Search', { tags: '@ai' }, () => {
         }).as('ddgSearch');
     });
 
-    it('creates search node and reference nodes when using /search without Exa key', () => {
+    it('creates a search node with a results carousel drawer (no fan-out nodes)', () => {
         cy.get('#chat-input').type('/search test query');
         cy.get('#send-btn').click();
 
@@ -21,8 +21,12 @@ describe('DDG Search', { tags: '@ai' }, () => {
             .and('contain', 'DuckDuckGo')
             .and('contain', 'Found 2 results');
 
-        cy.get('.node.reference').should('have.length', 2);
-        cy.get('.node.reference').first().should('contain', 'Example Result 1').and('contain', 'Snippet one.');
+        // Results live in the carousel drawer on the search node — no fan-out.
+        cy.get('.node.reference').should('have.length', 0);
+        cy.get('.search-carousel').should('be.visible');
+        cy.get('.search-carousel-counter').should('contain', '1 / 2');
+        cy.get('.search-carousel-title').should('contain', 'Example Result 1');
+        cy.get('.search-carousel-snippet').should('contain', 'Snippet one.');
     });
 
     it('shows error in search node when DDG search fails', () => {

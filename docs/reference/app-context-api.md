@@ -697,6 +697,32 @@ context.updateCollapseButtonForNode?.(nodeId);
 
 **Note:** Use optional chaining (`?.`) as it may be undefined in tests.
 
+### collapseNode() / expandNode()
+
+```javascript
+context.collapseNode(nodeId: string, collapsed: boolean = true): void
+context.expandNode(nodeId: string): void  // shorthand for collapseNode(nodeId, false)
+```
+
+Explicitly set a node's collapsed state (non-toggling). This is the canonical,
+reusable collapse entry point — it persists the state to the graph, refreshes
+all node/edge visibility, updates the collapse button, and saves the session.
+Works for any node type.
+
+**Usage:**
+
+```javascript
+// Collapse a node after creating child nodes that would clutter the canvas
+context.collapseNode?.(searchNodeId, true);
+
+// Expand again later
+context.expandNode?.(searchNodeId);
+```
+
+**Note:** Use optional chaining (`?.`) as they may be undefined in tests. Prefer
+these over re-implementing collapse logic; `handleNodeCollapse` (the header
+button / `-` keybinding handler) is a thin toggle around `collapseNode`.
+
 ## Design rationale
 
 ### Why AppContext?

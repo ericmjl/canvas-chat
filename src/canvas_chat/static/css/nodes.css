@@ -1687,6 +1687,105 @@
     font-style: italic;
 }
 
+/* Search node: results carousel inside the output-panel drawer */
+.search-carousel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.search-carousel-result {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: hidden;
+}
+
+.search-carousel-title {
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.search-carousel-url {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 0.7rem;
+    color: var(--color-text-tertiary, #888);
+    word-break: break-all;
+}
+
+.search-carousel-snippet {
+    color: var(--color-text-secondary, #555);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 7em;
+    overflow-y: auto;
+}
+
+.search-carousel-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.search-carousel-select {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.74rem;
+    color: var(--color-text-secondary, #555);
+}
+
+.search-view-content {
+    margin-left: auto;
+    padding: 3px 10px;
+    font-size: 0.74rem;
+    border: 1px solid var(--color-border, #e8e8e8);
+    border-radius: 6px;
+    background: var(--color-bg-secondary, #f8f8f8);
+    cursor: pointer;
+}
+
+.search-view-content:hover {
+    background: var(--color-accent-light, #eef4ff);
+}
+
+.search-view-content:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+.search-carousel-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding-top: 2px;
+}
+
+.search-carousel-nav button {
+    padding: 2px 8px;
+    font-size: 0.74rem;
+    border: 1px solid var(--color-border, #e8e8e8);
+    border-radius: 6px;
+    background: var(--color-bg-secondary, #f8f8f8);
+    cursor: pointer;
+}
+
+.search-carousel-nav button:hover {
+    background: var(--color-accent-light, #eef4ff);
+}
+
+.search-carousel-counter {
+    font-size: 0.72rem;
+    color: var(--color-text-tertiary, #888);
+    font-variant-numeric: tabular-nums;
+}
+
 .code-output-panel-content {
     min-height: 0;
 }

@@ -55,6 +55,7 @@ This includes:
 - 2026-07-14: **Reply-to-selected fix** — `handleSend()` captures `selectedIds` and passes them to `sendChatMessage(content, parentIds)` and `runAgent(message, parentIds)`. Both use `createLinkedNode` to create edges from selected nodes to the new human node. The `/agent` slash command handler also passes selection.
 - 2026-07-14: **Focus-centric layout** — `focusCentricLayout(focusNodeId, dimensions, navHistory)` in `crdt-graph.js` dynamically reorganizes the graph on j/k navigation using a **spine-based algorithm**. The spine (focus → parents → grandparents, focus → children → grandchildren) is pinned vertically at focus.cx for straight edges. When multiple parents/children exist, the **most recently visited** (from nav history, capped at 50) goes on the spine; fallback for first visit: oldest `created_at`. Other parents/children become branches spread by subtree half-widths. BFS with sibling expansion assigns layers. Triggered from `handleNodeNavigate` when layout algorithm is 'vertical'. Design docs: `docs/explanation/auto-layout.md`.
 - 2026-07-14: **Layout code consolidation** — `getNodeSize`, `DEFAULT_WIDTH`, `DEFAULT_HEIGHT`, `START_X`, `START_Y` are now imported from `layout.js` by all layout methods in `crdt-graph.js` (previously duplicated 4-5 times with drift). Each method still defines its own algorithm-specific `HORIZONTAL_GAP` and `VERTICAL_GAP` locally since these vary by algorithm (50/80/120 for horizontal, 40/60 for vertical). If adding a new layout method, import from `layout.js` — do NOT redeclare `getNodeSize` or dimension constants.
+- 2026-07-16: **Search results drawer + carousel (redesigned /search)** — `/search` no longer creates a REFERENCE-node fan-out. Results live in a carousel drawer (output panel) on the SEARCH node, stored as a JSON string in `node.searchResults` (`[{title,url,snippet,selected,expanded}]`) + `node.searchCarouselIndex`. `SearchNode` protocol (`plugins/search-node.js`) renders the carousel + emits canvas events; `ResearchFeature` (`plugins/research.js`) owns the logic via `getCanvasEventHandlers()` (`searchPrevResult`/`searchNextResult`/`searchToggleSelect`/`searchViewContent`). "View content" fetches the page (`fetchUrlContent` from `web-grounding.js`) and creates an opt-in child REFERENCE node (`url` field set for dedup). Reply context: `CRDTGraph.resolveContextWithSearchResults(nodeIds)` (in `crdt-graph.js`) — for each SEARCH node in the ancestor context, injects selected results (snippet) OR the expanded child's full page text (dedup by url); `App.sendChatMessage` calls it instead of `resolveContext`. Per-result context is clipped to `SEARCH_RESULT_CONTEXT_MAX_CHARS` (6000). Reusable collapse API: `App.setNodeCollapsed(nodeId, bool)` exposed on `AppContext` as `collapseNode`/`expandNode` (wraps the existing generic collapse mechanism; `handleNodeCollapse` is now a thin toggle around it).
 
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
@@ -112,7 +113,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/app.js`         | Main application, orchestrates everything                                 | Slash commands, keyboard shortcuts, App class methods, graph breadcrumb (`getNavigableParents` / `getNavigableChildren`, `#relationship-panel` / `#relationship-breadcrumb`) |
 | `src/canvas_chat/static/js/canvas.js`      | SVG canvas, pan/zoom, node/edge rendering with defensive edge deferral    | Node appearance, drag behavior, viewport logic, node event handlers, edge rendering, deferred edge queue |
 | `src/canvas_chat/static/js/graph-types.js` | Node/edge types, factory functions                                        | Node types, edge types, createNode/createEdge utilities                                                  |
-| `src/canvas_chat/static/js/crdt-graph.js`  | CRDT-backed graph (Yjs), graph traversal                                  | Graph data model, `createLinkedNode`, `autoPosition`, `verticalTreeLayout`, graph traversal                      |
+| `src/canvas_chat/static/js/crdt-graph.js`  | CRDT-backed graph (Yjs), graph traversal                                  | Graph data model, `createLinkedNode`, `autoPosition`, `verticalTreeLayout`, `resolveContext` / `resolveContextWithSearchResults`, graph traversal                      |
 | `src/canvas_chat/static/js/layout.js`      | Pure layout functions for overlap detection                               | Overlap detection, overlap resolution, `resolveHorizontalOverlaps`, node positioning algorithms                                       |
 | `src/canvas_chat/static/js/chat.js`        | LLM API calls, streaming                                                  | API integration, message formatting, token estimation                                                    |
 | `src/canvas_chat/static/js/storage.js`     | localStorage persistence                                                  | Session storage, API key storage, settings                                                               |
@@ -143,7 +144,7 @@ canvas-chat/
 | `src/canvas_chat/static/js/committee.js`               | CommitteeFeature class             | Multi-LLM consultation, synthesis                                                   |
 | `src/canvas_chat/static/js/matrix.js`                  | MatrixFeature class                | Comparison matrix creation, cell filling                                            |
 | `src/canvas_chat/static/js/factcheck.js`               | FactcheckFeature class             | Claim verification, web search integration                                          |
-| `src/canvas_chat/static/js/plugins/research.js`        | ResearchFeature class              | `/research`, `/search`; DDG/Exa SSE; activity log in ResearchNode output panel       |
+| `src/canvas_chat/static/js/plugins/research.js`        | ResearchFeature class              | `/research`, `/search`; DDG/Exa SSE; activity log in ResearchNode output panel; `/search` stores results in `node.searchResults` (carousel drawer) + carousel canvas-event handlers (`searchPrev/Next/ToggleSelect/ViewContent`) |
 | `src/canvas_chat/static/js/plugins/agent.js`           | AgentFeature class                 | `/agent` agentic mode; tool-using ReAct loop with viewport context; Plotly default   |
 | `src/canvas_chat/static/js/plugins/research-node.js`   | ResearchNode protocol              | Research node header/actions; bottom drawer shows streaming research activity lines  |
 | `src/canvas_chat/static/js/code-feature.js`            | CodeFeature class                  | Self-healing code execution                                                         |
@@ -232,6 +233,8 @@ canvas-chat/
 | Zoom wheel sensitivity                     | `storage.js` (`canvas-chat-zoom-wheel-sensitivity`), `utils.js` (`DEFAULT_ZOOM_WHEEL_SENSITIVITY` = 50) | Settings → Canvas; slider 50 = former “max” step, 100 = stronger; live `input` updates canvas |
 | CSS variables                              | `style.css:10-75`                                          | Colors, sizing, theming                                                         |
 | `DDG_PAGE_BODY_MAX_INPUT_TOKENS`           | `ddg_endpoints.py`                                         | Input token budget for fetched page markdown before per-page LLM summarize (clipped via `clip_page_markdown_to_input_token_budget`) |
+| `SEARCH_RESULT_CONTEXT_MAX_CHARS`          | `crdt-graph.js`                                            | Per-result char cap when injecting a search result into reply context via `resolveContextWithSearchResults` (default 6000) |
+| `SEARCH_PAGE_BODY_MAX_CHARS`               | `plugins/research.js`                                      | Max chars of a fetched page stored on a "View content" child REFERENCE node (default 8000) |
 
 ### Zoom levels (semantic zoom)
 
@@ -856,6 +859,7 @@ pixi run npx cypress run --browser electron --headless --spec cypress/e2e/matrix
 - `cypress/e2e/url_fetch_no_ui_break.cy.js` - URL fetch: dangerous HTML does not break UI
 - `cypress/e2e/html_slides.cy.js` - HTML slides node (/slides with pasted HTML, toolbar, blob URL iframe)
 - `cypress/e2e/reply_to_selected.cy.js` - Reply-to-selected edge creation (single + multi-parent merge)
+- `cypress/e2e/search_carousel.cy.js` - `/search` results carousel drawer (navigate, context checkbox, View content)
 
 ### Unit tests
 
@@ -878,6 +882,7 @@ Write unit tests for logic that does not require API calls:
 - `tests/test_vertical_layout.js` - Vertical tree layout algorithm and type-aware `autoPosition`
 - `tests/test_graph_types.js` - Node creation functions and default node sizes
 - `tests/test_crdt_graph.js` - Graph traversal and visibility functions
+- `tests/test_search_context.js` - `resolveContextWithSearchResults` (search results in reply context)
 - `tests/test_matrix.js` - Matrix rendering and concurrent cell updates
 - `tests/test_flashcards.js` - SM-2 algorithm and flashcard logic
 - `tests/test_storage.js` - localStorage functions
