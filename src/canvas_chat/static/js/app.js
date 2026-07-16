@@ -967,6 +967,16 @@ class App {
         document.getElementById('attach-btn').addEventListener('click', () => {
             document.getElementById('pdf-file-input').click();
         });
+
+        // Agent mode toggle
+        const agentModeBtn = document.getElementById('agent-mode-btn');
+        if (storage.getChatMode() === 'agent') {
+            agentModeBtn.classList.add('active');
+        }
+        agentModeBtn.addEventListener('click', () => {
+            const isAgent = agentModeBtn.classList.toggle('active');
+            storage.setChatMode(isAgent ? 'agent' : 'chat');
+        });
         document.getElementById('pdf-file-input').addEventListener('change', async (e) => {
             if (e.target.files.length > 0) {
                 const file = e.target.files[0];
@@ -1635,16 +1645,16 @@ class App {
         this.canvas.clearSelection();
 
         const agentFeature = this.featureRegistry?.getFeature('agent');
-        if (agentFeature) {
+        if (storage.getChatMode() === 'agent' && agentFeature) {
             await agentFeature.runAgent(content, selectedIds);
         } else {
-            // Fallback: single-turn chat if agent plugin unavailable
             this.sendChatMessage(content, selectedIds);
         }
     }
 
     /**
-     * Fallback single-turn chat flow (used when agent plugin is unavailable).
+     * Single-turn chat flow: creates a HUMAN node, streams an AI response.
+     * Used when chat mode is active (default) or agent plugin is unavailable.
      * @param {string} content - The user's message
      * @param {string[]} [parentIds=[]] - IDs of nodes the user is replying to
      */

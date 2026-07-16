@@ -117,3 +117,12 @@
 .attach-btn:active {
     transform: scale(0.95);
 }
+
+.agent-mode-btn.active {
+    background: var(--success);
+    color: white;
+}
+
+.agent-mode-btn.active:hover {
+    background: #2f9e44;
+}

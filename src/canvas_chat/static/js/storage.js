@@ -630,6 +630,20 @@ class Storage {
     }
 
     /**
+     * @returns {string} 'chat' or 'agent'
+     */
+    getChatMode() {
+        return localStorage.getItem('canvas-chat-chat-mode') || 'chat';
+    }
+
+    /**
+     * @param {string} value - 'chat' or 'agent'
+     */
+    setChatMode(value) {
+        localStorage.setItem('canvas-chat-chat-mode', value);
+    }
+
+    /**
      * Get Ctrl+scroll / pinch zoom sensitivity (Settings slider 0–100, default 50).
      * @returns {number}
      */

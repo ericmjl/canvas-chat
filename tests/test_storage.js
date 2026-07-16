@@ -920,6 +920,33 @@ test('setZoomWheelSensitivity: round-trip and clamping', () => {
     }
 });
 
+test('getChatMode: returns chat by default', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        assertEqual(storage.getChatMode(), 'chat');
+    } finally {
+        global.localStorage = original;
+    }
+});
+
+test('setChatMode: stores and retrieves agent mode', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        storage.setChatMode('agent');
+        assertEqual(storage.getChatMode(), 'agent');
+        storage.setChatMode('chat');
+        assertEqual(storage.getChatMode(), 'chat');
+    } finally {
+        global.localStorage = original;
+    }
+});
+
 // ============================================================
 // Keybindings storage (Storage class getKeybindings / setKeybindings)
 // ============================================================
