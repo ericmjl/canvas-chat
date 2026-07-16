@@ -28,6 +28,9 @@ jobs:
   deploy:
     name: Deploy Canvas Chat
     runs-on: ubuntu-latest
+    # Dependabot PRs cannot access repo secrets (MODAL_TOKEN_ID/SECRET are empty),
+    # which makes the deploy step fail. Skip the whole deploy pipeline for them.
+    if: github.actor != 'dependabot[bot]'
     env:
       MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
