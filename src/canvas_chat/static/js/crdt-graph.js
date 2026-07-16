@@ -1788,8 +1788,8 @@ class CRDTGraph extends EventEmitter {
         let initialX, initialY;
 
         if (parentIds.length === 0) {
-            initialX = 100;
-            initialY = 100;
+            initialX = START_X;
+            initialY = START_Y;
         } else {
             const parents = parentIds.map((id) => this.getNode(id)).filter(Boolean);
 
@@ -1815,22 +1815,28 @@ class CRDTGraph extends EventEmitter {
             }
         }
 
-        const candidatePos = { x: initialX, y: initialY };
         const allNodes = this.getAllNodes();
+        const shiftStep = NODE_WIDTH + HORIZONTAL_GAP;
+        // Clamp the ideal position on-screen first; this is also the base for any
+        // rightward shift. Rightward-only (not alternating): a leftward shift near
+        // the left edge would be clamped back to START_X and land on whatever node
+        // already sits there — reintroducing the overlap (this previously stacked
+        // siblings and even overlapped nodes across disconnected subgraphs). This
+        // mirrors the per-layer resolveHorizontalOverlaps rightward sweep.
+        const baseX = Math.max(START_X, initialX);
+        const candidatePos = { x: baseX, y: initialY };
 
         let attempts = 0;
         const maxAttempts = 20;
-        const shiftStep = NODE_WIDTH + HORIZONTAL_GAP;
-
-        while (attempts < maxAttempts && wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)) {
-            const direction = attempts % 2 === 0 ? 1 : -1;
-            const magnitude = Math.ceil((attempts + 1) / 2);
-            candidatePos.x = initialX + direction * magnitude * shiftStep;
+        while (
+            attempts < maxAttempts &&
+            wouldOverlapNodes(candidatePos, NODE_WIDTH, NODE_HEIGHT, allNodes)
+        ) {
+            candidatePos.x = baseX + (attempts + 1) * shiftStep;
             attempts++;
         }
 
-        if (candidatePos.x < 100) candidatePos.x = 100;
-        if (candidatePos.y < 100) candidatePos.y = 100;
+        if (candidatePos.y < START_Y) candidatePos.y = START_Y;
 
         return candidatePos;
     }
