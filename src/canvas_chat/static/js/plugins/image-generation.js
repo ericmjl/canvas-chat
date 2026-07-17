@@ -24,6 +24,7 @@ class ImageGenerationFeature extends FeaturePlugin {
 
         // Store current generation state
         this.parentNodeIds = [];
+        this._ollamaFetchId = 0;
     }
 
     /**
@@ -48,7 +49,9 @@ class ImageGenerationFeature extends FeaturePlugin {
                                 <option value="dall-e-3">DALL-E 3 (OpenAI) - Best quality</option>
                                 <option value="dall-e-2">DALL-E 2 (OpenAI) - Lower cost</option>
                                 <option value="gemini/imagen-4.0-generate-001">Imagen 4.0 (Google) - Fast</option>
-                                <option value="ollama_image/x/z-image-turbo:latest">Z Image Turbo (Ollama) - Local</option>
+                                <optgroup id="image-gen-ollama-group" label="Ollama (Local)">
+                                    <option value="" disabled>Loading...</option>
+                                </optgroup>
                             </select>
                         </div>
 
@@ -143,6 +146,9 @@ class ImageGenerationFeature extends FeaturePlugin {
         // Open modal
         this.modalManager.showPluginModal('image-generation', 'settings');
 
+        // Populate Ollama models dynamically (non-blocking)
+        this.populateOllamaModels();
+
         // Setup event listeners
         const generateBtn = document.getElementById('image-gen-generate');
         const cancelBtn = document.getElementById('image-gen-cancel');
@@ -153,6 +159,53 @@ class ImageGenerationFeature extends FeaturePlugin {
 
         if (cancelBtn) {
             cancelBtn.onclick = () => this.modalManager.hidePluginModal('image-generation', 'settings');
+        }
+    }
+
+    /**
+     * Fetch locally available Ollama models and populate the dropdown.
+     * Non-blocking: the modal opens immediately while models load.
+     */
+    async populateOllamaModels() {
+        const ollamaGroup = document.getElementById('image-gen-ollama-group');
+        if (!ollamaGroup) return;
+
+        const requestId = ++this._ollamaFetchId;
+
+        try {
+            const response = await fetch(apiUrl('/api/ollama/image-models'));
+            const models = response.ok ? await response.json() : [];
+
+            if (requestId !== this._ollamaFetchId) return;
+
+            ollamaGroup.innerHTML = '';
+
+            if (models.length === 0) {
+                ollamaGroup.label = 'Ollama (not running)';
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.disabled = true;
+                placeholder.textContent = 'Start Ollama to enable';
+                ollamaGroup.appendChild(placeholder);
+                return;
+            }
+
+            for (const model of models) {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.name;
+                ollamaGroup.appendChild(option);
+            }
+        } catch (err) {
+            if (requestId !== this._ollamaFetchId) return;
+            console.error('[ImageGeneration] Failed to fetch Ollama models:', err);
+            ollamaGroup.innerHTML = '';
+            ollamaGroup.label = 'Ollama (error)';
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.disabled = true;
+            placeholder.textContent = 'Failed to load models';
+            ollamaGroup.appendChild(placeholder);
         }
     }
 

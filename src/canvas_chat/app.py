@@ -1023,8 +1023,13 @@ async def fetch_copilot_api_key(access_token: str) -> dict[str, Any]:
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 
-async def fetch_ollama_models() -> list[dict]:
-    """Fetch available models from local Ollama instance."""
+async def fetch_ollama_models(prefix: str = "ollama_chat") -> list[dict]:
+    """Fetch available models from local Ollama instance.
+
+    Args:
+        prefix: ID prefix to apply (``ollama_chat`` for chat models,
+                ``ollama_image`` for image generation models).
+    """
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
             response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
@@ -1037,7 +1042,7 @@ async def fetch_ollama_models() -> list[dict]:
                     display_name = name.replace(":latest", "")
                     models.append(
                         {
-                            "id": f"ollama_chat/{name}",
+                            "id": f"{prefix}/{name}",
                             "name": display_name,
                             "provider": "Ollama",
                             "context_window": 128000,  # Default, varies by model
@@ -1046,6 +1051,63 @@ async def fetch_ollama_models() -> list[dict]:
                 return models
     except (httpx.RequestError, httpx.TimeoutException):
         # Ollama not running or not accessible
+        pass
+    return []
+
+
+async def fetch_ollama_image_models() -> list[dict]:
+    """Fetch image-capable models from local Ollama.
+
+    Queries ``/api/tags`` for all models, then ``/api/show`` for each to
+    filter by the ``image`` capability. The ``/api/show`` calls are
+    concurrent to minimize latency.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            tags_response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            if tags_response.status_code != 200:
+                return []
+
+            all_models = tags_response.json().get("models", [])
+            if not all_models:
+                return []
+
+            async def has_image_capability(model_entry: dict) -> str | None:
+                """Return model name if it has the ``image`` capability, else None."""
+                name = model_entry.get("name", "")
+                try:
+                    show_resp = await client.post(
+                        f"{OLLAMA_BASE_URL}/api/show",
+                        json={"name": name},
+                        timeout=5.0,
+                    )
+                    if show_resp.status_code == 200:
+                        caps = show_resp.json().get("capabilities", [])
+                        if "image" in caps:
+                            return name
+                except (httpx.RequestError, httpx.TimeoutException):
+                    pass
+                return None
+
+            results = await asyncio.gather(
+                *(has_image_capability(m) for m in all_models)
+            )
+
+            models = []
+            for name in results:
+                if name is None:
+                    continue
+                display_name = name.replace(":latest", "")
+                models.append(
+                    {
+                        "id": f"ollama_image/{name}",
+                        "name": display_name,
+                        "provider": "Ollama",
+                        "context_window": 128000,
+                    }
+                )
+            return models
+    except (httpx.RequestError, httpx.TimeoutException):
         pass
     return []
 
@@ -1556,6 +1618,18 @@ async def list_models() -> list[ModelInfo]:
     models.extend([ModelInfo(**m) for m in ollama_models])
 
     return models
+
+
+@app.get("/api/ollama/image-models")
+async def list_ollama_image_models() -> list[dict]:
+    """List locally available Ollama models for image generation.
+
+    Filters by the ``image`` capability via ``/api/show`` so that text/chat
+    models are excluded. Returns models with ``ollama_image/`` prefix so the
+    frontend can pass them directly as the ``model`` field to
+    ``/api/generate-image``. Returns an empty list if Ollama is not running.
+    """
+    return await fetch_ollama_image_models()
 
 
 @app.post("/api/provider-models")
