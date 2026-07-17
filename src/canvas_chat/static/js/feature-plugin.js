@@ -45,6 +45,11 @@ class AppContext {
         this.buildLLMRequest = app.buildLLMRequest.bind(app);
         this.generateNodeSummary = app.generateNodeSummary ? app.generateNodeSummary.bind(app) : null;
 
+        // Agent log (side drawer)
+        this.appendAgentLog = app.appendAgentLog ? app.appendAgentLog.bind(app) : null;
+        this.openTagDrawer = app.openTagDrawer ? app.openTagDrawer.bind(app) : null;
+        this.switchDrawerTab = app.switchDrawerTab ? app.switchDrawerTab.bind(app) : null;
+
         // Unified streaming manager (preferred)
         this.streamingManager = app.streamingManager;
 

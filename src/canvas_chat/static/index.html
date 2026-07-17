@@ -170,19 +170,31 @@
             <span class="hint-text"></span>
         </div>
 
-        <!-- Tag Drawer (Right Side) -->
-        <div id="tag-drawer" class="tag-drawer">
-            <div class="tag-drawer-header">
-                <h3>Tags</h3>
-                <button id="tag-drawer-close" class="icon-btn" title="Close">✕</button>
+        <!-- Side Drawer (Tags + Agent Log) -->
+        <div id="side-drawer" class="side-drawer">
+            <div class="side-drawer-tabs">
+                <button class="side-drawer-tab active" data-tab="tags">Tags</button>
+                <button class="side-drawer-tab" data-tab="agent-log">Agent Log</button>
+                <button id="side-drawer-close" class="icon-btn" title="Close">✕</button>
             </div>
-            <div class="tag-drawer-content">
-                <div id="tag-slots" class="tag-slots">
-                    <!-- Tag slots will be populated by JS -->
+            <div class="side-drawer-body">
+                <div id="tag-panel" class="side-drawer-panel active">
+                    <div class="side-drawer-content">
+                        <div id="tag-slots" class="tag-slots"></div>
+                    </div>
+                    <div class="side-drawer-footer" id="tag-drawer-footer">
+                        <span id="tag-selection-status">Select nodes to apply tags</span>
+                    </div>
                 </div>
-            </div>
-            <div class="tag-drawer-footer" id="tag-drawer-footer">
-                <span id="tag-selection-status">Select nodes to apply tags</span>
+                <div id="agent-log-panel" class="side-drawer-panel">
+                    <div class="agent-log-toolbar">
+                        <button id="agent-log-copy" class="small-btn" title="Copy full log to clipboard">Copy</button>
+                        <button id="agent-log-clear" class="small-btn" title="Clear log">Clear</button>
+                    </div>
+                    <div id="agent-log-content" class="agent-log-content" tabindex="0">
+                        <div class="agent-log-empty">Agent actions will appear here during /agent runs.</div>
+                    </div>
+                </div>
             </div>
         </div>
 

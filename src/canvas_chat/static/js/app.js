@@ -1016,12 +1016,23 @@ class App {
             await this.createNewSession();
         });
 
-        // Tag drawer
+        // Side drawer (tags + agent log)
         document.getElementById('tags-btn').addEventListener('click', () => {
             this.toggleTagDrawer();
         });
-        document.getElementById('tag-drawer-close').addEventListener('click', () => {
+        document.getElementById('side-drawer-close').addEventListener('click', () => {
             this.closeTagDrawer();
+        });
+        document.querySelectorAll('.side-drawer-tab').forEach((tab) => {
+            tab.addEventListener('click', () => {
+                this.switchDrawerTab(tab.dataset.tab);
+            });
+        });
+        document.getElementById('agent-log-copy')?.addEventListener('click', () => {
+            this.copyAgentLog();
+        });
+        document.getElementById('agent-log-clear')?.addEventListener('click', () => {
+            this.clearAgentLog();
         });
 
         // Keyboard shortcuts (keybinding layer: getActionForKey + actionId dispatch)
@@ -1779,7 +1790,7 @@ class App {
         }
 
         // Update tag drawer UI if it's open
-        const drawer = document.getElementById('tag-drawer');
+        const drawer = document.getElementById('side-drawer');
         if (drawer && drawer.classList.contains('open')) {
             this.renderTagSlots();
         }
@@ -1819,7 +1830,7 @@ class App {
         // Calling renderNode here with the old snapshot would overwrite the correct render.
 
         // Update tag drawer UI if it's open (selection state may have changed)
-        const drawer = document.getElementById('tag-drawer');
+        const drawer = document.getElementById('side-drawer');
         if (drawer && drawer.classList.contains('open')) {
             this.renderTagSlots();
         }
@@ -4501,7 +4512,7 @@ class App {
      *
      */
     toggleTagDrawer() {
-        const drawer = document.getElementById('tag-drawer');
+        const drawer = document.getElementById('side-drawer');
         const btn = document.getElementById('tags-btn');
         drawer.classList.toggle('open');
         btn.classList.toggle('active');
@@ -4515,7 +4526,7 @@ class App {
      *
      */
     openTagDrawer() {
-        const drawer = document.getElementById('tag-drawer');
+        const drawer = document.getElementById('side-drawer');
         const btn = document.getElementById('tags-btn');
         if (!drawer.classList.contains('open')) {
             drawer.classList.add('open');
@@ -4528,10 +4539,71 @@ class App {
      *
      */
     closeTagDrawer() {
-        const drawer = document.getElementById('tag-drawer');
+        const drawer = document.getElementById('side-drawer');
         const btn = document.getElementById('tags-btn');
         drawer.classList.remove('open');
         btn.classList.remove('active');
+    }
+
+    /**
+     *
+     * @param tabName
+     */
+    switchDrawerTab(tabName) {
+        document.querySelectorAll('.side-drawer-tab').forEach((t) => {
+            t.classList.toggle('active', t.dataset.tab === tabName);
+        });
+        document.querySelectorAll('.side-drawer-panel').forEach((p) => {
+            p.classList.toggle('active', p.id === (tabName === 'tags' ? 'tag-panel' : 'agent-log-panel'));
+        });
+        if (tabName === 'tags') this.renderTagSlots();
+    }
+
+    // ─── Agent Log ───────────────────────────────────────────
+
+    /**
+     *
+     * @param type
+     * @param label
+     * @param detail
+     */
+    appendAgentLog(type, label, detail) {
+        const content = document.getElementById('agent-log-content');
+        if (!content) return;
+
+        // Remove empty placeholder
+        const empty = content.querySelector('.agent-log-empty');
+        if (empty) empty.remove();
+
+        const time = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.className = `agent-log-entry ${type}`;
+        const detailStr = detail ? `\n  ${String(detail).substring(0, 500)}` : '';
+        entry.innerHTML = `<span class="agent-log-time">${time}</span> <span class="agent-log-label">${label}</span>${detailStr}`;
+
+        content.appendChild(entry);
+        content.scrollTop = content.scrollHeight;
+    }
+
+    /**
+     *
+     */
+    clearAgentLog() {
+        const content = document.getElementById('agent-log-content');
+        if (!content) return;
+        content.innerHTML = '<div class="agent-log-empty">Agent actions will appear here during /agent runs.</div>';
+    }
+
+    /**
+     *
+     */
+    copyAgentLog() {
+        const content = document.getElementById('agent-log-content');
+        if (!content) return;
+        const text = content.innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            this.showToast?.('Agent log copied to clipboard') ;
+        });
     }
 
     /**
@@ -4787,7 +4859,7 @@ class App {
      *
      */
     updateTagDrawer() {
-        const drawer = document.getElementById('tag-drawer');
+        const drawer = document.getElementById('side-drawer');
         if (!drawer.classList.contains('open')) return;
 
         const selectedIds = this.canvas.getSelectedNodeIds();
