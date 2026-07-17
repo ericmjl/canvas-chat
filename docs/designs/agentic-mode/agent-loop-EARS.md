@@ -3,6 +3,10 @@
 **Feature:** Agentic Mode — Agent Loop
 **Parent:** [Agentic Mode LLD](./LLD.md)
 
+> **⚠️ UPDATED 2026-07-16:** Specs referencing `link_from` and the ref system for
+> synthesis notes are **superseded**. Synthesis notes now auto-link to the search
+> node as a child (GENERATES edge). See AGENTS.md (2026-07-16) for details.
+
 ## Related Documents
 
 - [Agentic Mode LLD](./LLD.md)

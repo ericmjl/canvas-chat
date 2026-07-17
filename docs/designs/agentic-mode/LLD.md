@@ -5,6 +5,16 @@
 **Created:** 2026-06-02
 **Parent:** [High-Level Design](../../high-level-design.md) (Section 14)
 
+> **⚠️ MAJOR REWRITE 2026-07-16:** The agent loop has moved from the **backend**
+> (Python ReAct loop with SSE events) to the **frontend** (JavaScript loop calling
+> the same feature handlers as slash commands). The backend is now a stateless LLM
+> proxy (`/api/agent/completion`). This eliminates the structural decoupling that
+> caused display-model drift (agent search fan-out vs `/search` carousel). All
+> earlier sections describing the backend ReAct loop, `AGENT_TOOLS`,
+> `_agent_execute_tool`, SSE `node_create` events, and the ref/link_from system are
+> **superseded** by the architecture below. See AGENTS.md (2026-07-16 entries) for
+> the full rationale.
+
 ## Related Documents
 
 - [HLD Section 14: Agentic Mode](../../high-level-design.md#14-agentic-mode)
@@ -15,7 +25,72 @@
 
 ## 1. Overview
 
-Agentic mode replaces the single-turn "user types → one AI node streams back" flow with a ReAct-style agent loop. The LLM receives tool definitions, calls tools as needed, and the system executes them and feeds results back until the LLM produces a final text response.
+Agentic mode replaces the single-turn "user types → one AI node streams back" flow
+with a ReAct-style agent loop. The LLM receives tool definitions (auto-generated
+from the feature registry's slash commands), calls tools as needed, and the system
+executes them and feeds results back until the LLM produces a final response.
+
+### Architecture: Frontend Loop + Stateless Backend Proxy
+
+The agent loop runs **in JavaScript** (`agent.js`). The backend is a stateless LLM
+proxy that makes a single `litellm.acompletion` call per iteration and streams the
+response back. Tools are dispatched to the **same feature handlers** that slash
+commands use (`featureRegistry.handleSlashCommand`), eliminating parallel
+implementations.
+
+```text
+┌──────────────── FRONTEND (agent.js) ──────────────────┐
+│                                                        │
+│  1. Build tools from featureRegistry                   │
+│     .getSlashCommandsWithMetadata()                    │
+│                                                        │
+│  2. POST /api/agent/completion                         │
+│     (messages + tools → LLM proxy)                     │
+│                                                        │
+│  3. Process streamed response:                         │
+│     ├─ Text → stream into AI node                      │
+│     └─ Tool calls → dispatch to feature handlers:      │
+│         search → research.handleSearch()               │
+│         code → code.handleCommand()                    │
+│         committee → committee.handleCommittee()        │
+│         ...etc (same code as slash commands)            │
+│                                                        │
+│  4. Append tool result to messages, loop to step 2     │
+│                                                        │
+│  5. When model calls `respond` or returns final text:  │
+│     → finalize AI node, link to context nodes           │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+          │
+          ▼  (stateless proxy, no tool logic)
+┌──────────────── BACKEND (app.py) ─────────────────────┐
+│  POST /api/agent/completion                            │
+│  → litellm.acompletion(model, messages, tools, stream) │
+│  → stream text deltas + tool calls back                │
+│  → does NOT execute tools                              │
+└────────────────────────────────────────────────────────┘
+```
+
+### Design Principles
+
+1. **Every slash command is a tool.** Tools are auto-generated from
+   `featureRegistry.getSlashCommandsWithMetadata()`. When the agent calls `search`,
+   the frontend dispatches to `research.handleSearch()` — the exact same code path
+   as the user typing `/search`. No parallel implementations.
+
+2. **The model decides when to stop.** Standard ReAct: the loop continues while
+   the model returns tool calls. It stops when the model calls `respond` or returns
+   final text. `MAX_TOOL_CALLS` (30) is a safety net, not the primary mechanism.
+
+3. **The `respond` tool is the synthesis mechanism.** When the model calls
+   `respond(content="...", context_nodes=["node-1", "node-3"])`, the frontend
+   creates an AI node with the content and links it to the specified context nodes.
+   If the model returns final text without calling `respond`, the text goes into
+   the agent node as a fallback.
+
+4. **Agent tools carry display DATA, not display DECISIONS.** Because tools
+   dispatch to the same feature handlers as slash commands, display changes
+   propagate automatically. There is no backend tool layer to drift.
 
 ### Design Principle: Agent Mimics Human Behavior
 
@@ -33,12 +108,19 @@ Agentic mode replaces the single-turn "user types → one AI node streams back" 
 
 **Key components:**
 
-1. **AgentFeature** — Frontend plugin (`plugins/agent.js`) implementing FeaturePlugin with `/agent` slash command
-2. **Backend `/api/agent` endpoint** — Handles parent routing + tool-calling loop with LLM, returns streaming SSE events
-3. **Parent routing** — Fast LLM call that selects relevant canvas nodes as parents for the agent node
-4. **Viewport context gatherer** — Serializes visible nodes into the agent's context
-5. **Ref system** — LLM-controlled graph structure via stable ref labels
-6. **Plotly integration** — Updated Pyodide setup code for Plotly default
+1. **AgentFeature** (`plugins/agent.js`) — Frontend plugin implementing FeaturePlugin with `/agent` slash command. Owns the ReAct loop, tool building, tool execution, and synthesis.
+2. **Backend `/api/agent/completion`** (`app.py`) — Stateless LLM proxy. Takes messages + tools, makes one `litellm.acompletion` call with streaming, accumulates tool-call chunks, streams text deltas + tool calls back via SSE. Does NOT execute tools.
+3. **Tool building** (`buildAgentTools()`) — Auto-generates tools from `featureRegistry.getSlashCommandsWithMetadata()` (features with `getSlashCommands()`) plus `BUILTIN_SLASH_COMMANDS` (search, research, committee, factcheck). Excludes `/agent`, `/code`, `/matrix`, `/fetch`, `/git`, `/youtube`. Adds custom `code` tool (auto-executes Python, returns stdout) and `respond` tool (synthesis).
+4. **Tool execution** (`executeAgentTool()`) — Dispatches to `featureRegistry.handleSlashCommand()` — the **same code path** as the user typing the slash command. Tracks newly created nodes via before/after diffing. Extracts result content from the node (searchResults, outputStdout, or content).
+5. **Search enrichment** (`enrichSearchResults()`) — After a search, auto-fetches the top 2 results' full page content via `fetchUrlContent` (6000 chars each). Gives the LLM rich data instead of ~50-word snippets, preventing excessive re-searching.
+6. **Synthesis** (`createSynthesis()` / `respond` tool) — Creates a NEW AI node as a child of the specified tool nodes (via `createLinkedNode`). The agent "thinking" node shows inter-tool reasoning; the synthesis node has the final answer. If the model returns text without calling `respond`, the thinking node IS the synthesis (fallback).
+7. **Thinking-token stripping** (`stripThinking()`) — Removes `<think>...</think>` tags (reasoning models like Qwen) and markdown code fences (` ```python ... ``` `) from both streamed text and code before execution.
+8. **Canvas context** — When replying to nodes, the agent includes parent node content + code in the user message so it knows what "redo this" refers to.
+9. **Agent log** — Side drawer "Agent Log" tab shows tool calls, results, errors, and synthesis during agent runs. Copyable for auditing.
+10. **Rate-limit retry** — Backend retries up to 3 times on `RateLimitError` with progressive backoff (5s, 10s, 15s).
+11. **Legacy backend** (`/api/agent` SSE endpoint, `AGENT_TOOLS`, `_agent_execute_tool`) — Kept only for `realtime-agent.js` WebSocket compat. Not used by the text agent.
+
+**Edge semantics:** Edges are created ONLY via `createLinkedNode` (parent → child). The agent never calls `graph.addEdge` directly. Bidirectional edges are impossible by construction.
 
 ## 2. Architecture
 

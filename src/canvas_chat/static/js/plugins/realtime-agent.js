@@ -24,7 +24,6 @@ class RealtimeAgentPlugin extends FeaturePlugin {
         super(context);
         this.ws = null;
         this.sessionActive = false;
-        this.refToNodeId = new Map();
         this.agentNodeId = null;
         this.statusEl = null;
         this._reconnectAttempted = false;
@@ -213,8 +212,6 @@ class RealtimeAgentPlugin extends FeaturePlugin {
         this.refToNodeId = new Map();
         const fullContent = { value: '' };
         const lastToolParentId = { value: null };
-        const lastSearchNodeId = { value: null };
-        const referenceOffsetY = { value: 0 };
 
         const agentNode = createNode(NodeType.AI, 'Listening...', {
             position: this.graph.autoPosition([]),
@@ -243,7 +240,7 @@ class RealtimeAgentPlugin extends FeaturePlugin {
                 const msg = JSON.parse(event.data);
                 this.handleServerMessage(
                     msg, agentNode.id, fullContent,
-                    lastToolParentId, lastSearchNodeId, referenceOffsetY
+                    lastToolParentId
                 );
             } catch (e) {
                 console.warn('[RealtimeAgent] Failed to parse message:', e);
@@ -280,10 +277,8 @@ class RealtimeAgentPlugin extends FeaturePlugin {
      * @param {string} agentNodeId
      * @param {Object} fullContent - { value: string }
      * @param {Object} lastToolParentId - { value: string|null }
-     * @param {Object} lastSearchNodeId - { value: string|null }
-     * @param {Object} referenceOffsetY - { value: number }
      */
-    handleServerMessage(msg, agentNodeId, fullContent, lastToolParentId, lastSearchNodeId, referenceOffsetY) {
+    handleServerMessage(msg, agentNodeId, fullContent, lastToolParentId) {
         const { type, data } = msg;
 
         switch (type) {
@@ -302,27 +297,16 @@ class RealtimeAgentPlugin extends FeaturePlugin {
 
             case 'node_create': {
                 const instruction = typeof data === 'string' ? JSON.parse(data) : data;
-                if (instruction.type === 'search') {
-                    referenceOffsetY.value = 0;
-                }
                 const parentId = lastToolParentId.value || agentNodeId;
                 const newId = createNodeFromInstruction(
-                    instruction, parentId,
-                    lastSearchNodeId, referenceOffsetY.value, this.refToNodeId,
+                    instruction, parentId, this.refToNodeId,
                     this.graph, this.canvas, createNode, createEdge, NodeType, EdgeType,
                     () => this.saveSession(),
                     (nodeId, code) => this.executeCodeOnNode(nodeId, code)
                 );
                 if (newId) {
                     if (instruction.ref) this.refToNodeId.set(instruction.ref, newId);
-                    if (instruction.type === 'search') {
-                        lastToolParentId.value = newId;
-                        lastSearchNodeId.value = newId;
-                    } else if (instruction.type === 'reference') {
-                        referenceOffsetY.value += 200;
-                    } else {
-                        lastToolParentId.value = newId;
-                    }
+                    lastToolParentId.value = newId;
                 }
                 break;
             }

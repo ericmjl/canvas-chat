@@ -49,9 +49,7 @@ function gatherViewportContext(graph, canvas) {
  *
  * @param {Object} instruction - Node creation instruction from backend
  * @param {string} parentId - Default parent node ID to link from
- * @param {Object} lastSearchNodeId - { value: string|null } tracks last search node
- * @param {number} referenceOffsetY - Vertical offset for stacking reference nodes
- * @param {Map} refToNodeId - Map from backend ref labels to frontend node IDs
+ * @param {Map} refToNodeId - Map from backend ref labels (e.g. 'node-1') to frontend node IDs
  * @param {Object} graph - CRDTGraph instance
  * @param {Object} canvas - Canvas instance
  * @param {Function} _createNode - createNode factory (from graph-types.js)
@@ -65,8 +63,6 @@ function gatherViewportContext(graph, canvas) {
 function createNodeFromInstruction(
     instruction,
     parentId,
-    lastSearchNodeId,
-    referenceOffsetY,
     refToNodeId,
     graph,
     canvas,
@@ -80,7 +76,6 @@ function createNodeFromInstruction(
     let nodeType;
     let nodeData = {};
     let edgeType = _EdgeType.GENERATES;
-    let linkFromRefs = instruction.link_from_refs || null;
 
     switch (instruction.type) {
         case 'search': {
@@ -88,18 +83,25 @@ function createNodeFromInstruction(
             nodeData.content = instruction.content || '';
             nodeData.title = instruction.title || 'Search';
             nodeData.position = graph.autoPosition([parentId]);
+            // Carousel results from the backend (mirrors /search in
+            // research.js): stored as a JSON string so SearchNode protocol
+            // and resolveContextWithSearchResults read them identically.
+            if (instruction.search_results) {
+                nodeData.searchResults = JSON.stringify(instruction.search_results);
+                nodeData.searchCarouselIndex = instruction.search_carousel_index ?? 0;
+            }
             break;
         }
         case 'reference': {
+            // Retained for backward compatibility — the agent no longer
+            // emits reference fan-out for search (results live in the
+            // carousel). "View content" child REFERENCE nodes are created
+            // client-side by ResearchFeature, not through this path.
             nodeType = _NodeType.REFERENCE;
             nodeData.content = instruction.content || '';
             nodeData.title = instruction.title || '';
-            const searchId = lastSearchNodeId?.value || parentId;
-            const searchNode = graph.getNode(searchId);
-            nodeData.position = searchNode
-                ? { x: searchNode.position.x + 400, y: searchNode.position.y + referenceOffsetY }
-                : graph.autoPosition([parentId]);
-            parentId = searchId;
+            if (instruction.url) nodeData.url = instruction.url;
+            nodeData.position = graph.autoPosition([parentId]);
             edgeType = _EdgeType.SEARCH_RESULT;
             break;
         }
@@ -133,22 +135,22 @@ function createNodeFromInstruction(
     graph.addNode(newNode);
     canvas.zoomToSelectionAnimated([newNode.id], 0.8, 300);
 
+    // If the instruction specifies parent_nodes refs (e.g. ['node-1', 'node-3']),
+    // create GENERATES edges from those nodes. Otherwise, edge from default parent.
+    const linkFromRefs = instruction.link_from_refs || null;
     if (linkFromRefs && refToNodeId) {
         const resolvedIds = linkFromRefs
             .map((ref) => refToNodeId.get(ref))
             .filter((id) => id);
         if (resolvedIds.length > 0) {
             for (const srcId of resolvedIds) {
-                const edge = _createEdge(srcId, newNode.id, _EdgeType.MERGE);
-                graph.addEdge(edge);
+                graph.addEdge(_createEdge(srcId, newNode.id, _EdgeType.GENERATES));
             }
         } else {
-            const edge = _createEdge(parentId, newNode.id, edgeType);
-            graph.addEdge(edge);
+            graph.addEdge(_createEdge(parentId, newNode.id, edgeType));
         }
     } else {
-        const edge = _createEdge(parentId, newNode.id, edgeType);
-        graph.addEdge(edge);
+        graph.addEdge(_createEdge(parentId, newNode.id, edgeType));
     }
 
     canvas.renderNode(newNode);

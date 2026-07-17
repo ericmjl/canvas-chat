@@ -371,8 +371,8 @@ AGENT_TOOLS = [
             "description": (
                 "Create a note on the canvas. Use for saving "
                 "insights, summaries, or intermediate results. "
-                "Use link_from to specify which search result refs "
-                "this note synthesizes (creates merge edges)."
+                "Use parent_nodes to link the note to specific "
+                "search nodes it synthesizes from."
             ),
             "parameters": {
                 "type": "object",
@@ -382,14 +382,15 @@ AGENT_TOOLS = [
                         "type": "string",
                         "description": ("Note content (supports markdown)"),
                     },
-                    "link_from": {
+                    "parent_nodes": {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": (
-                            "Refs of search results this note synthesizes "
-                            "(e.g. ['ref-0', 'ref-2']). Creates merge edges "
-                            "from those nodes. Use this when synthesizing "
-                            "from specific search results."
+                            "Refs of nodes this note synthesizes "
+                            "from (e.g. ['node-1', 'node-3']). "
+                            "Creates edges from those nodes to this "
+                            "note. Omit to link to the most recent "
+                            "tool node automatically."
                         ),
                     },
                 },
@@ -438,36 +439,33 @@ AGENT_SYSTEM_PROMPT = (
     "canvas graph. The user sees your work as nodes and edges.\n"
     "\n"
     "Available tools:\n"
-    "- search_web: Creates a search node + reference result nodes. "
-    "Each result has a ref label (e.g. ref-0, ref-1).\n"
+    "- search_web: Creates a search node with a results carousel. "
+    "Results appear in the node's drawer (not as separate nodes).\n"
     "- execute_code: Creates a code node on the canvas. "
     "Plotly is the default plotting library.\n"
-    "- create_note: Creates a note node on the canvas. "
-    "Use link_from to specify which search result refs "
-    "this note synthesizes (e.g. link_from: ['ref-0', 'ref-2']).\n"
+    "- create_note: Creates a note node on the canvas. Notes created "
+    "after a search automatically link to the search node as a child "
+    "(the search results feed into the reply context).\n"
     "- generate_image: Creates an image node on the canvas.\n"
     "\n"
     "Canvas context: The user can see nodes on their canvas. "
     "Nodes visible in their viewport are provided as context.\n"
     "\n"
     "Workflow guidance:\n"
-    "- For research tasks: search first, then analyze results, "
-    "then create a summary note.\n"
-    "- CRITICAL: When creating a note that synthesizes search "
-    "results, you MUST use the link_from parameter with the "
-    "REFERENCE node refs (ref-0, ref-1, etc.) — NOT the search "
-    "node ref. This shows which specific sources you used.\n"
-    "  CORRECT: create_note(content='summary...', "
-    "link_from=['ref-0', 'ref-2'])\n"
-    "  WRONG: linking from the search node or omitting link_from\n"
-    "- The link_from refs come from the search results returned "
-    "by search_web. Each result has a [ref-N] label. Use these "
-    "exact labels in link_from.\n"
+    "- For research tasks, gather broadly BEFORE synthesizing:\n"
+    "  1. Do up to ~10 searches covering different facets of the "
+    "question (different subtopics, specific terms, comparisons).\n"
+    "  2. THEN create a synthesis note with create_note, using "
+    "parent_nodes to link it to the relevant search nodes.\n"
+    "  Do NOT create notes or run code after every single search — "
+    "search first, synthesize later.\n"
+    "- Each tool-created node gets a ref (node-1, node-2, ...). "
+    "Use these refs in parent_nodes to connect synthesis notes "
+    "to specific searches, e.g. "
+    "create_note(content='...', parent_nodes=['node-1', 'node-3']).\n"
     "- Combine related computation and plotting into a SINGLE "
     "execute_code call. Do NOT split calculation and "
     "visualization into separate calls.\n"
-    "- Each tool call creates a linked node. Use multiple calls "
-    "for genuinely independent tasks (e.g. different searches).\n"
     "- Your final text response appears in the main agent node. "
     "Keep it concise — the detail lives in the linked nodes.\n"
     "\n"
@@ -484,7 +482,7 @@ AGENT_SYSTEM_PROMPT = (
     "- If a package fails to import, try an alternative.\n"
 )
 
-MAX_AGENT_TOOL_CALLS = 10
+MAX_AGENT_TOOL_CALLS = 20
 
 
 _SUMMARIZE_DEFAULT_SYSTEM = (
@@ -1782,40 +1780,45 @@ async def _agent_execute_tool(
             f"*Found {len(search_results)} results*"
         )
 
-        search_ref = "search-latest"
+        # Attach carousel results directly to the search node — mirrors the
+        # redesigned /search (research.js): results live in the SEARCH node's
+        # carousel drawer, NOT as separate REFERENCE fan-out nodes.
+        # All results default to selected=true so they feed reply context
+        # via resolveContextWithSearchResults.
+        carousel_results = [
+            {
+                "title": r["title"],
+                "url": r["url"],
+                "snippet": r["snippet"],
+                "selected": True,
+                "expanded": False,
+            }
+            for r in search_results
+        ]
+
         nodes = [
             {
                 "type": "search",
-                "ref": search_ref,
                 "title": f"Search: {query}",
                 "content": search_content,
+                "search_results": carousel_results,
+                "search_carousel_index": 0,
             }
         ]
 
+        # Text returned to the LLM (not displayed on canvas) — the LLM
+        # reads results here and writes a synthesis note as a child of
+        # the search node.
         llm_lines = []
         for i, r in enumerate(search_results):
-            ref_id = f"ref-{i}"
-            ref_content = f"**[{r['title']}]({r['url']})**\n\n{r['snippet']}"
-            nodes.append(
-                {
-                    "type": "reference",
-                    "ref": ref_id,
-                    "title": r["title"],
-                    "content": ref_content,
-                    "url": r["url"],
-                }
-            )
-            llm_lines.append(
-                f"[{ref_id}] {r['title']}\n  URL: {r['url']}\n  {r['snippet']}"
-            )
-
+            llm_lines.append(f"[{i}] {r['title']}\n  URL: {r['url']}\n  {r['snippet']}")
         llm_content = "\n\n".join(llm_lines)
         if llm_lines:
             llm_content += (
-                "\n\nWhen you create a synthesis note based on these "
-                "results, use their ref labels in the link_from parameter. "
-                "Example: create_note(content='summary...', "
-                "link_from=['ref-0', 'ref-1'])"
+                "\n\nAfter analyzing these results, create a "
+                "synthesis note using create_note(content='your "
+                "summary'). The note will automatically link to "
+                "the search node."
             )
 
         return {
@@ -1885,14 +1888,14 @@ async def _agent_execute_tool(
     elif tool_name == "create_note":
         title = tool_args.get("title", "")
         content = tool_args.get("content", "")
-        link_from = tool_args.get("link_from") or []
+        parent_nodes = tool_args.get("parent_nodes") or []
         node_data = {
             "type": "note",
             "title": title,
             "content": content,
         }
-        if link_from:
-            node_data["link_from_refs"] = link_from
+        if parent_nodes:
+            node_data["link_from_refs"] = parent_nodes
         return {
             "type": "note",
             "content": f"Note created: {title or 'Untitled'}",
@@ -1924,6 +1927,119 @@ def _create_realtime_bridge(
     if gemini_api_key:
         return GeminiRealtimeBridge(), "gemini-3.1-flash-live-preview", "gemini"
     return None, None, None
+
+
+class AgentCompletionRequest(BaseModel):
+    messages: list[dict]
+    tools: list[dict]
+    model: str = "openai/gpt-4o-mini"
+    api_key: str | None = None
+    base_url: str | None = None
+    temperature: float = 0.7
+    max_tokens: int | None = None
+
+
+@app.post("/api/agent/completion")
+async def agent_completion(request: AgentCompletionRequest, http_request: Request):
+    """Stateless LLM proxy for the frontend-driven agent loop.
+
+    Makes a single litellm.acompletion call with streaming, streams text
+    deltas and accumulated tool calls back via SSE. Does NOT execute tools —
+    the frontend dispatches tool calls to feature handlers.
+
+    SSE events:
+    - text: streaming text delta
+    - tool_calls: JSON array of accumulated tool calls (when present)
+    - done: response complete
+    - error: error message
+    """
+    admin_config = get_admin_config()
+    api_key = request.api_key
+    if admin_config.admin_mode and admin_config.api_key:
+        api_key = admin_config.api_key
+
+    async def generate():
+        try:
+            kwargs = {
+                "model": request.model,
+                "messages": request.messages,
+                "tools": request.tools,
+                "api_key": api_key,
+                "stream": True,
+            }
+            if request.base_url:
+                kwargs["api_base"] = request.base_url
+            if request.temperature is not None:
+                kwargs["temperature"] = request.temperature
+            if request.max_tokens:
+                kwargs["max_tokens"] = request.max_tokens
+
+            # litellm.drop_params = True is set globally (line 85),
+            # so unsupported params are dropped automatically.
+            max_retries = 3
+            response = None
+            for attempt in range(max_retries):
+                try:
+                    response = await litellm.acompletion(**kwargs)
+                    break
+                except RateLimitError:
+                    if attempt < max_retries - 1:
+                        wait = (attempt + 1) * 5
+                        yield {
+                            "event": "text",
+                            "data": f"\n\n*(Rate limited, retrying in {wait}s…)*",
+                        }
+                        await asyncio.sleep(wait)
+                    else:
+                        raise
+
+            # Accumulate tool calls across streaming chunks
+            tool_calls_acc: dict[int, dict] = {}
+
+            async for chunk in response:
+                choice = chunk.choices[0]
+                delta = choice.delta
+
+                if delta and delta.content:
+                    yield {"event": "text", "data": delta.content}
+
+                if delta and hasattr(delta, "tool_calls") and delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        idx = tc.index if hasattr(tc, "index") else 0
+                        if idx not in tool_calls_acc:
+                            tool_calls_acc[idx] = {
+                                "id": "",
+                                "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            }
+                        if tc.id:
+                            tool_calls_acc[idx]["id"] = tc.id
+                        if tc.function:
+                            if tc.function.name:
+                                tool_calls_acc[idx]["function"]["name"] += (
+                                    tc.function.name
+                                )
+                            if tc.function.arguments:
+                                tool_calls_acc[idx]["function"]["arguments"] += (
+                                    tc.function.arguments
+                                )
+
+            if tool_calls_acc:
+                calls = [tool_calls_acc[i] for i in sorted(tool_calls_acc)]
+                yield {"event": "tool_calls", "data": json.dumps(calls)}
+
+            yield {"event": "done", "data": ""}
+
+        except AuthenticationError as e:
+            yield {"event": "error", "data": f"Authentication failed: {e}"}
+        except RateLimitError as e:
+            yield {"event": "error", "data": f"Rate limit exceeded: {e}"}
+        except APIError as e:
+            yield {"event": "error", "data": f"API error: {e}"}
+        except Exception as e:
+            yield {"event": "error", "data": f"Error: {e}"}
+
+    return EventSourceResponse(generate())
 
 
 @app.post("/api/agent")
@@ -1986,6 +2102,7 @@ async def agent(request: AgentRequest, http_request: Request):
                     pass
 
         tool_call_count = 0
+        node_counter = 0
         current_messages = list(litellm_messages)
 
         try:
@@ -2104,17 +2221,36 @@ async def agent(request: AgentRequest, http_request: Request):
                                 ),
                             }
 
+                        assigned_refs = []
                         if "nodes_create" in result and result.get("type") != "error":
                             for node_data in result["nodes_create"]:
+                                node_counter += 1
+                                ref = f"node-{node_counter}"
+                                node_data["ref"] = ref
+                                assigned_refs.append(ref)
                                 yield {
                                     "event": "node_create",
                                     "data": json.dumps(node_data),
                                 }
                         elif "node_create" in result and result.get("type") != "error":
+                            node_counter += 1
+                            ref = f"node-{node_counter}"
+                            result["node_create"]["ref"] = ref
+                            assigned_refs.append(ref)
                             yield {
                                 "event": "node_create",
                                 "data": json.dumps(result["node_create"]),
                             }
+
+                        # Tell the LLM what refs were assigned so it can
+                        # use them in parent_nodes when creating notes.
+                        if assigned_refs:
+                            ref_str = ", ".join(assigned_refs)
+                            label = "ref" if len(assigned_refs) == 1 else "refs"
+                            result["content"] = (
+                                result.get("content", "")
+                                + f"\n\n(Node {label}: {ref_str})"
+                            )
 
                         yield {
                             "event": "tool_result",

@@ -3,6 +3,12 @@
 **Feature:** Agentic Mode — Tool System
 **Parent:** [Agentic Mode LLD](./LLD.md)
 
+> **⚠️ UPDATED 2026-07-16:** Specs referencing `ref-N` labels, `link_from`, and
+> `link_from_refs` (TOOL-REQ-004, TOOL-REQ-006) are **superseded**. Agent search
+> now attaches `search_results` JSON to the SEARCH node instruction (carousel model,
+> matching `/search`). The `create_note` tool no longer accepts `link_from`. See
+> AGENTS.md (2026-07-16) for details.
+
 ## Related Documents
 
 - [Agentic Mode LLD](./LLD.md)
