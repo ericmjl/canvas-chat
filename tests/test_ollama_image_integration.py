@@ -6,7 +6,7 @@ These tests verify the end-to-end flow from API endpoint to Ollama response.
 # Add src to path
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -220,3 +220,93 @@ class Integration_OllamaImageGenerationTests:
         mock_litellm.aimage_generation.assert_called_once()
         call_kwargs = mock_litellm.aimage_generation.call_args.kwargs
         assert call_kwargs["model"] == "dall-e-3"
+
+
+def test_ollama_image_models_returns_only_image_capable():
+    """GET /api/ollama/image-models filters to models with image capability."""
+    mock_models = [
+        {
+            "id": "ollama_image/x/z-image-turbo:latest",
+            "name": "x/z-image-turbo",
+            "provider": "Ollama",
+            "context_window": 128000,
+        },
+        {
+            "id": "ollama_image/x/flux2-klein:latest",
+            "name": "x/flux2-klein",
+            "provider": "Ollama",
+            "context_window": 128000,
+        },
+    ]
+
+    with patch(
+        "src.canvas_chat.app.fetch_ollama_image_models",
+        new_callable=AsyncMock,
+        return_value=mock_models,
+    ):
+        client = TestClient(app)
+        response = client.get("/api/ollama/image-models")
+
+    assert response.status_code == 200
+    models = response.json()
+    assert len(models) == 2
+    assert models[0]["id"] == "ollama_image/x/z-image-turbo:latest"
+    assert models[1]["id"] == "ollama_image/x/flux2-klein:latest"
+    assert models[0]["name"] == "x/z-image-turbo"
+    assert models[1]["name"] == "x/flux2-klein"
+
+
+def test_ollama_image_models_returns_empty_when_not_running():
+    """GET /api/ollama/image-models returns [] when Ollama is not reachable."""
+    with patch(
+        "src.canvas_chat.app.fetch_ollama_image_models",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        client = TestClient(app)
+        response = client.get("/api/ollama/image-models")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.anyio
+async def test_fetch_ollama_image_models_filters_by_capability():
+    """fetch_ollama_image_models keeps only models with image capability."""
+    from src.canvas_chat.app import fetch_ollama_image_models
+
+    tags_response = MagicMock()
+    tags_response.status_code = 200
+    tags_response.json.return_value = {
+        "models": [
+            {"name": "x/z-image-turbo:latest"},
+            {"name": "qwen3.6:latest"},
+            {"name": "x/flux2-klein:latest"},
+        ]
+    }
+
+    async def fake_post(url, json=None, timeout=None):
+        name = (json or {}).get("name", "")
+        resp = MagicMock()
+        resp.status_code = 200
+        if "z-image" in name:
+            resp.json.return_value = {"capabilities": ["image"]}
+        elif "flux2" in name:
+            resp.json.return_value = {"capabilities": ["image"]}
+        else:
+            resp.json.return_value = {"capabilities": ["completion", "tools"]}
+        return resp
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.get.return_value = tags_response
+    mock_client.post.side_effect = fake_post
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await fetch_ollama_image_models()
+
+    assert len(result) == 2
+    ids = [m["id"] for m in result]
+    assert "ollama_image/x/z-image-turbo:latest" in ids
+    assert "ollama_image/x/flux2-klein:latest" in ids
+    assert all("qwen" not in i for i in ids)

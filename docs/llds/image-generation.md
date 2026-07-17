@@ -48,12 +48,13 @@ The ImageGeneration settings modal (`image-generation-settings-modal`) provides 
 
 **Model Selection** (dropdown):
 
-| Model ID                              | Provider | Description            |
-| ------------------------------------- | -------- | ---------------------- |
-| `dall-e-3`                            | OpenAI   | Best quality, slower   |
-| `dall-e-2`                            | OpenAI   | Lower cost, faster     |
-| `gemini/imagen-4.0-generate-001`      | Google   | Fast generation        |
-| `ollama_image/x/z-image-turbo:latest` | Ollama   | Local, privacy-focused |
+| Model ID                              | Provider | Description                |
+| ------------------------------------- | -------- | -------------------------- |
+| `dall-e-3`                            | OpenAI   | Best quality, slower       |
+| `dall-e-2`                            | OpenAI   | Lower cost, faster         |
+| `gemini/imagen-4.0-generate-001`      | Google   | Fast generation            |
+
+Ollama (local) models are **populated dynamically** from the local Ollama instance when the modal opens (see [Dynamic Ollama Model Discovery](#dynamic-ollama-model-discovery) below). Each model is assigned an `ollama_image/<name>` ID (e.g. `ollama_image/x/z-image-turbo:latest`, `ollama_image/x/flux2-klein:latest`). If Ollama is not running, a disabled placeholder option is shown.
 
 **Size Options** (dropdown):
 
@@ -86,7 +87,7 @@ if (model.startsWith('dall-e')) {
 } else if (model.startsWith('gemini')) {
     provider = 'google';
 } else {
-    provider = model.split('/')[0]; // e.g., 'ollama'
+    provider = model.split('/')[0]; // e.g., 'ollama_image' for Ollama models
 }
 
 const apiKey = this.storage.getApiKeyForProvider(provider);
@@ -94,6 +95,46 @@ const baseUrl = this.storage.getBaseUrlForModel(model);
 ```
 
 This enables the same settings modal to work with any LiteLLM-compatible image generation model.
+
+### Dynamic Ollama Model Discovery
+
+Ollama image models are discovered at runtime rather than hardcoded. When the settings modal opens, `populateOllamaModels()` fetches image-capable models from the backend endpoint `GET /api/ollama/image-models`.
+
+**Backend filtering:** The endpoint calls `fetch_ollama_image_models()`, which performs a two-step discovery:
+
+1. `GET /api/tags` — retrieve all model names (single batch call)
+2. `POST /api/show` for each model (concurrent via `asyncio.gather`) — check `capabilities`
+3. Filter to only models where `"image" in capabilities`
+
+Ollama's `/api/show` response includes a `capabilities` array that cleanly separates model types:
+
+| Capability | Meaning | Example models |
+| ---------- | ------- | -------------- |
+| `image` | Image generation | `x/z-image-turbo`, `x/flux2-klein` |
+| `completion` | Text/chat | `llama3.2`, `gemma2`, `qwen3.6` |
+| `vision` | Can see images (not generate) | `gemma4:12b`, `glm-ocr` |
+
+Vision-capable models have `"vision"` but not `"image"`, so there are no false positives.
+
+```text
+Ollama /api/tags     →  fetch_ollama_image_models()
+Ollama /api/show (N)  →    filter "image" in capabilities
+                      →  GET /api/ollama/image-models
+                      →  populateOllamaModels() fills <optgroup> in the dropdown
+```
+
+The `/api/show` calls are concurrent to minimize latency (~0.5s for ~10 models over localhost). Each call has a 5s timeout so a hung model doesn't block the entire endpoint. The `asyncio.gather` uses `return_exceptions=True` so a single model failure doesn't affect others.
+
+The dropdown uses an `<optgroup id="image-gen-ollama-group">` as the insertion point. On each modal open:
+
+1. The optgroup shows a "Loading..." placeholder
+2. `fetch('/api/ollama/image-models')` runs (non-blocking; modal is already visible)
+3. On success: each filtered model becomes an `<option>` inside the optgroup
+4. On failure or empty list (Ollama not running, or no image models): a disabled placeholder replaces the options
+
+**Non-blocking guarantee:** The image modal is opened on-demand via the `/image` slash command — it does NOT load on page startup. Canvas-chat loads normally; the filtering only runs when the user explicitly opens the image generation modal.
+
+Because the backend's `/api/generate-image` already handles any `ollama_image/*` model generically, no backend changes are needed to support new Ollama image models — they appear automatically once `ollama pull`-ed and Ollama tags them with the `image` capability.
 
 ## Node Types
 
@@ -245,6 +286,8 @@ class ImageGenerationRequest(BaseModel):
 
 **Ollama (Local)**:
 
+- Models discovered dynamically via `GET /api/ollama/image-models` (queries Ollama `/api/tags` + `/api/show`)
+- Filtered by `image` capability so text/chat models are excluded
 - Model prefix: `ollama_image/`
 - Converted to `ollama/` for API call
 - Direct HTTP to Ollama's `/api/generate` endpoint
