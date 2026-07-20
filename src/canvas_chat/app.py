@@ -226,6 +226,9 @@ def load_python_plugins(config: AppConfig) -> None:
                 sys.modules[plugin.plugin_id] = module
                 spec.loader.exec_module(module)
 
+                if hasattr(module, "register_endpoints"):
+                    module.register_endpoints(app)
+
                 logger.info(
                     f"Loaded Python plugin: {plugin.py_path.name} "
                     f"(id: {plugin.plugin_id})"
