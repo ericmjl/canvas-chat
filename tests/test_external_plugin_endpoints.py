@@ -96,9 +96,7 @@ def test_plugin_without_register_endpoints_still_loads(tmp_path, caplog):
         drop_module(plugin_id)
 
 
-def test_register_endpoints_error_is_logged_and_does_not_stop_startup(
-    tmp_path, caplog
-):
+def test_register_endpoints_error_is_logged_and_does_not_stop_startup(tmp_path, caplog):
     """A raising register_endpoints is logged and later plugins still load."""
     broken_id = "canvas_chat_test_external_broken"
     healthy_id = "canvas_chat_test_external_after_error"
