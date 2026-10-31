@@ -669,10 +669,14 @@ class Storage {
     // --- Custom Models (localStorage) ---
 
     /**
-     * Model ID validation pattern: provider/model-name or openrouter/provider/model-name
-     * Examples: openai/gpt-4.1-mini, ollama_chat/llama3.1, openrouter/minimax/minimax-m2.5
+     * Model ID sanity check: a non-empty provider prefix, a slash, and at least
+     * one more path segment. No whitespace. Segments may include characters
+     * providers use (`@`, `:`, `.`) and extra path segments, such as OpenRouter
+     * presets and routing suffixes.
+     * Examples: openai/gpt-4o, anthropic/claude-sonnet-4-5,
+     * openrouter/@preset/deepseek, openrouter/qwen/qwen3.6-plus-preview:free
      */
-    static MODEL_ID_PATTERN = /^(?:openrouter\/[a-z0-9_-]+\/[a-z0-9._-]+|[a-z0-9_-]+\/[a-z0-9._-]+)$/i;
+    static MODEL_ID_PATTERN = /^[^\s/]+(?:\/[^\s/]+)+$/;
 
     /**
      * Get user-defined custom models from localStorage
@@ -695,10 +699,11 @@ class Storage {
      * @throws {Error} - If model ID is invalid
      */
     saveCustomModel(model) {
-        // Validate model ID format (provider/model-name or openrouter/provider/model-name)
+        // Sanity check only: provider prefix, a slash, and no whitespace.
+        // Providers reject ids that are well-formed here but unknown to them.
         if (!model.id || !Storage.MODEL_ID_PATTERN.test(model.id)) {
             throw new Error(
-                'Model ID must be in format: provider/model-name (e.g. openai/gpt-4o) or openrouter/provider/model-name (e.g. openrouter/minimax/minimax-m2.5)'
+                'Model ID must be in format provider/model-name with no whitespace (e.g. openai/gpt-4o, openrouter/@preset/deepseek, openrouter/qwen/qwen3.6-plus-preview:free)'
             );
         }
 
