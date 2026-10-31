@@ -1003,6 +1003,25 @@ plugins:
     id: csv
 ```
 
+### Adding HTTP routes from an external Python plugin
+
+After the module loads, Canvas-Chat calls `register_endpoints(app)` when that function exists. Pass the FastAPI app and declare routes on it. Built-in handlers such as `ddg_endpoints` and `pptx_endpoints` use the same function. Listing the file under `py:` in `config.yaml` is enough.
+
+If `register_endpoints` raises, the error is logged and startup continues. The plugin module still loads, and later plugins still load.
+
+```python
+def register_endpoints(app):
+    @app.get("/api/my-plugin/ping")
+    async def ping():
+        return {"ok": True}
+```
+
+```yaml
+plugins:
+  - py: ./plugins/my_plugin.py
+    id: my-plugin
+```
+
 ### How to Request a Python-Only File Handler
 
 If you want to build a backend-only file handler (like the CSV handler), here's a detailed prompt:
@@ -1401,7 +1420,7 @@ The `id` field is optional. If not provided:
 
 ### Loading Order
 
-1. **Python plugins** are loaded at application startup (when config is loaded)
+1. **Python plugins** are loaded at application startup (when config is loaded). If the module defines `register_endpoints(app)`, Canvas-Chat calls it. See [Adding HTTP routes from an external Python plugin](#adding-http-routes-from-an-external-python-plugin).
 2. **JavaScript plugins** are injected into HTML and loaded by the browser
 3. **Registration** happens when JavaScript modules execute
 
