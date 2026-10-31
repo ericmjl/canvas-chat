@@ -38,12 +38,12 @@ For more models, browse [OpenRouter’s catalog](https://openrouter.ai/models) a
 OpenRouter supports [many models](https://openrouter.ai/docs#models). To use one that isn’t in the default list:
 
 1. Open **Settings** → **Custom Models**.
-2. In **Model ID**, enter the OpenRouter model id in the form:
-   - `openrouter/<provider>/<model-name>`
+2. In **Model ID**, paste the exact id from the OpenRouter catalog. It must start with `openrouter/` and contain no whitespace. Extra path segments and characters such as `@`, `:`, and `.` are allowed:
    - Examples:
      - `openrouter/anthropic/claude-sonnet-4.6`
-     - `openrouter/anthropic/claude-opus-4.6`
-     - `openrouter/openai/o3-pro`
+     - `openrouter/@preset/deepseek`
+     - `openrouter/qwen/qwen3.6-plus-preview:free`
+     - `openrouter/deepseek/deepseek-v3.1-terminus:exacto`
 3. Optionally set **Display Name** and **Context Window**.
 4. Leave **Base URL** empty (OpenRouter uses its own endpoint).
 5. Click **+ Add Model**, then **Save Settings**.
@@ -52,14 +52,16 @@ The new model appears in the model picker and uses your existing OpenRouter API 
 
 ## Model ID format
 
-OpenRouter model IDs always start with `openrouter/` and follow:
+Custom model IDs need a provider prefix, at least one `/`, and no whitespace. OpenRouter ids start with `openrouter/` and then the path from the catalog. That path may include extra segments and characters such as `@`, `:`, and `.`:
 
 ```text
 openrouter/<provider>/<model-name>
+openrouter/@preset/<preset-name>
+openrouter/<provider>/<model-name>:free
 ```
 
-- **provider** is the underlying provider (e.g. `anthropic`, `openai`, `google`, `meta-llama`).
-- **model-name** is the model slug on OpenRouter (see [OpenRouter models](https://openrouter.ai/docs#models)).
+- **provider** is the underlying provider (e.g. `anthropic`, `openai`, `google`, `meta-llama`), or `@preset` for a saved preset.
+- **model-name** is the model slug on OpenRouter (see [OpenRouter models](https://openrouter.ai/docs#models)). A colon suffix such as `:free` or `:exacto` is part of the id.
 
 The app uses the prefix `openrouter` to look up your OpenRouter API key; you don’t configure keys per provider when using OpenRouter.
 
@@ -93,5 +95,5 @@ Users then see these models in the picker without entering any key in the UI. Se
 ## Troubleshooting
 
 - **“Authentication failed”** — Check that the OpenRouter key in Settings is correct and has no extra spaces. Get a new key at [openrouter.ai/keys](https://openrouter.ai/keys) if needed.
-- **Model not in the list** — Add it under Settings → Custom Models with ID `openrouter/<provider>/<model-name>`. Use the exact id from [OpenRouter’s model list](https://openrouter.ai/docs#models).
+- **Model not in the list** — Add it under Settings → Custom Models using the exact id from [OpenRouter’s model list](https://openrouter.ai/docs#models), including preset paths (`openrouter/@preset/...`) and suffixes such as `:free` or `:exacto`.
 - **Wrong or missing key for OpenRouter** — Ensure you’re using the **OpenRouter API Key** field, not the OpenAI or Anthropic fields. OpenRouter uses a single key for all its models.

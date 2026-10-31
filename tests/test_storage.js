@@ -3,7 +3,7 @@
  * Tests localStorage functions: RecentModels, Provider mapping, Custom Models, etc.
  */
 
-import { test, assertEqual, assertTrue, assertFalse, assertNull, assertDeepEqual } from './test_setup.js';
+import { test, tests, assertEqual, assertTrue, assertFalse, assertNull, assertDeepEqual } from './test_setup.js';
 import { Storage } from '../src/canvas_chat/static/js/storage.js';
 
 const KEYBINDINGS_KEY = 'canvas-chat-keybindings';
@@ -70,7 +70,7 @@ test('getRecentModels: returns empty array when no data', () => {
     const mockStorage = new MockLocalStorage();
     const storage = createRecentModelsStorage(mockStorage);
 
-    assertEqual(storage.getRecentModels(), []);
+    assertDeepEqual(storage.getRecentModels(), []);
 });
 
 test('addRecentModel: adds model to empty list', () => {
@@ -79,7 +79,7 @@ test('addRecentModel: adds model to empty list', () => {
 
     storage.addRecentModel('openai/gpt-4o');
 
-    assertEqual(storage.getRecentModels(), ['openai/gpt-4o']);
+    assertDeepEqual(storage.getRecentModels(), ['openai/gpt-4o']);
 });
 
 test('addRecentModel: adds model to front of list', () => {
@@ -89,7 +89,7 @@ test('addRecentModel: adds model to front of list', () => {
     storage.addRecentModel('openai/gpt-4o');
     storage.addRecentModel('anthropic/claude-sonnet-4-20250514');
 
-    assertEqual(storage.getRecentModels(), ['anthropic/claude-sonnet-4-20250514', 'openai/gpt-4o']);
+    assertDeepEqual(storage.getRecentModels(), ['anthropic/claude-sonnet-4-20250514', 'openai/gpt-4o']);
 });
 
 test('addRecentModel: moves existing model to front', () => {
@@ -103,7 +103,7 @@ test('addRecentModel: moves existing model to front', () => {
     // Now add gpt-4o again - should move to front
     storage.addRecentModel('openai/gpt-4o');
 
-    assertEqual(storage.getRecentModels(), [
+    assertDeepEqual(storage.getRecentModels(), [
         'openai/gpt-4o',
         'groq/llama-3.1-70b-versatile',
         'anthropic/claude-sonnet-4-20250514',
@@ -141,7 +141,7 @@ test('addRecentModel: no duplicates in list', () => {
 
     // Should only have 2 unique models
     assertEqual(recent.length, 2);
-    assertEqual(recent, ['openai/gpt-4o', 'anthropic/claude-sonnet-4-20250514']);
+    assertDeepEqual(recent, ['openai/gpt-4o', 'anthropic/claude-sonnet-4-20250514']);
 });
 
 // ============================================================
@@ -383,15 +383,21 @@ test('getApiKeysForModels: empty array returns empty object', () => {
 // Custom Models storage tests
 // ============================================================
 
-test('Storage.MODEL_ID_PATTERN: accepts valid two-segment and OpenRouter three-segment IDs', () => {
+test('Storage.MODEL_ID_PATTERN: accepts provider/model ids including OpenRouter presets and suffixes', () => {
     const { MODEL_ID_PATTERN } = Storage;
     const valid = [
         'openai/gpt-4o',
         'openai/gpt-4.1-mini',
+        'anthropic/claude-sonnet-4-5',
         'anthropic/claude-sonnet-4-20250514',
         'ollama_chat/llama3.1',
         'openrouter/minimax/minimax-m2.5',
         'openrouter/google/palm-2-chat-bison',
+        'openrouter/@preset/deepseek',
+        'openrouter/qwen/qwen3.6-plus-preview:free',
+        'openrouter/deepseek/deepseek-v3.1-terminus:exacto',
+        'some/provider/model-name',
+        'a/b/c/d',
     ];
     for (const id of valid) {
         assertTrue(MODEL_ID_PATTERN.test(id), `Expected valid: ${id}`);
@@ -402,14 +408,18 @@ test('Storage.MODEL_ID_PATTERN: rejects invalid IDs', () => {
     const { MODEL_ID_PATTERN } = Storage;
     const invalid = [
         '',
+        '   ',
         'no-slash',
-        'some/provider/model-name', // three segments but not openrouter
-        'openrouter/', // missing provider/model
+        'openrouter/', // slash but no model segment
         '/model-only',
-        'a/b/c/d', // four segments
+        'openai/gpt 4o',
+        ' openai/gpt-4o',
+        'openai/gpt-4o ',
+        'a//b',
+        'a/',
     ];
     for (const id of invalid) {
-        assertFalse(MODEL_ID_PATTERN.test(id), `Expected invalid: ${id}`);
+        assertFalse(MODEL_ID_PATTERN.test(id), `Expected invalid: ${JSON.stringify(id)}`);
     }
 });
 
@@ -430,7 +440,7 @@ function createCustomModelsStorage(localStorage) {
         saveCustomModel(model) {
             if (!model.id || !Storage.MODEL_ID_PATTERN.test(model.id)) {
                 throw new Error(
-                    'Model ID must be in format: provider/model-name (e.g. openai/gpt-4o) or openrouter/provider/model-name (e.g. openrouter/minimax/minimax-m2.5)'
+                    'Model ID must be in format provider/model-name with no whitespace (e.g. openai/gpt-4o, openrouter/@preset/deepseek, openrouter/qwen/qwen3.6-plus-preview:free)'
                 );
             }
 
@@ -470,7 +480,7 @@ test('getCustomModels: returns empty array when no data', () => {
     const mockStorage = new MockLocalStorage();
     const storage = createCustomModelsStorage(mockStorage);
 
-    assertEqual(storage.getCustomModels(), []);
+    assertDeepEqual(storage.getCustomModels(), []);
 });
 
 test('saveCustomModel: adds model with all fields', () => {
@@ -590,17 +600,59 @@ test('saveCustomModel: rejects invalid model ID - missing slash', () => {
     assertTrue(threw, 'Should throw for invalid model ID');
 });
 
-test('saveCustomModel: rejects three-segment ID when not openrouter', () => {
+test('saveCustomModel: accepts extra path segments', () => {
     const mockStorage = new MockLocalStorage();
     const storage = createCustomModelsStorage(mockStorage);
 
-    let threw = false;
+    const model = storage.saveCustomModel({ id: 'some/provider/model-name' });
+
+    assertEqual(model.id, 'some/provider/model-name');
+});
+
+test('Storage.saveCustomModel: accepts OpenRouter presets, suffixes, and standard ids', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
     try {
-        storage.saveCustomModel({ id: 'some/provider/model-name' });
-    } catch (e) {
-        threw = true;
+        const storage = new Storage();
+        const ids = [
+            'openai/gpt-4o',
+            'anthropic/claude-sonnet-4-5',
+            'openrouter/@preset/deepseek',
+            'openrouter/qwen/qwen3.6-plus-preview:free',
+            'openrouter/deepseek/deepseek-v3.1-terminus:exacto',
+        ];
+        for (const id of ids) {
+            const saved = storage.saveCustomModel({ id });
+            assertEqual(saved.id, id);
+        }
+        assertEqual(storage.getCustomModels().length, ids.length);
+    } finally {
+        global.localStorage = original;
     }
-    assertTrue(threw, 'Should throw for three-segment ID that is not openrouter/...');
+});
+
+test('Storage.saveCustomModel: rejects empty, whitespace-only, and slash-less ids', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        const invalid = ['', '   ', 'no-slash', '/model-only'];
+        for (const id of invalid) {
+            let threw = false;
+            try {
+                storage.saveCustomModel({ id });
+            } catch (e) {
+                threw = true;
+                assertTrue(e.message.includes('provider/model-name'), 'Error should mention format');
+            }
+            assertTrue(threw, `Should throw for ${JSON.stringify(id)}`);
+        }
+        assertEqual(storage.getCustomModels().length, 0);
+    } finally {
+        global.localStorage = original;
+    }
 });
 
 test('saveCustomModel: rejects empty model ID', () => {
@@ -1004,3 +1056,25 @@ test('keybindings round-trip: second set overwrites', () => {
         global.localStorage = original;
     }
 });
+
+// ============================================================
+// Runner (test_setup collects tests; run them here)
+// ============================================================
+let passed = 0;
+let failed = 0;
+for (const { name, fn } of tests) {
+    try {
+        fn();
+        console.log(`✓ ${name}`);
+        passed++;
+    } catch (err) {
+        console.log(`✗ ${name}`);
+        console.error(`  ${err.message}`);
+        failed++;
+    }
+}
+console.log(`\n========================================`);
+console.log(`Tests passed: ${passed}`);
+console.log(`Tests failed: ${failed}`);
+console.log('========================================\n');
+process.exit(failed > 0 ? 1 : 0);
