@@ -60,6 +60,7 @@ The zero-config path uses:
 
 - **Jina Reader API** (`r.jina.ai`) — free service, no authentication required
 - **html2text** — Python library for HTML-to-markdown conversion (fallback)
+- **beautifulsoup4** — lifts math out of the HTML and rewrites relative URLs before html2text runs
 - **httpx** — async HTTP client (already a dependency)
 
 ## Markdown-only output (no raw HTML/CSS)
@@ -71,6 +72,15 @@ Both URL fetching paths **always return markdown**, never raw HTML or page CSS. 
 - **Direct-fetch path**: We convert the response with html2text before returning, so the frontend never receives raw HTML. That way we never inject page CSS into the canvas.
 
 Keeping fetched content as markdown-only ensures that third-party page styles and structure cannot interfere with Canvas Chat’s UI.
+
+## Math and relative URLs
+
+Direct HTML conversion (`convert_html_to_markdown` in `html_markdown.py`, called from `_parse_html_response`) keeps equations the canvas can render and fixes links before html2text runs:
+
+- Quarto/Pandoc elements with classes `math inline` or `math display`, MathJax `<script type="math/tex">` (including `mode=display`), and MathML `<annotation encoding="application/x-tex">` are replaced with placeholders and restored as ``\(...\)`` or ``\[...\]`` with a single backslash. That is the delimiter form `renderMarkdown` in `canvas.js` sends to KaTeX. html2text would otherwise escape those delimiter backslashes and drop MathJax script bodies.
+- Relative `img src` and `a href` values are resolved against the final page URL, or against `<base href>` when the page sets one. `data:` URIs and absolute `http`/`https` URLs are left unchanged.
+
+Jina Reader responses are already markdown and do not go through this converter.
 
 ## Future considerations
 

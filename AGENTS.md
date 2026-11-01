@@ -78,6 +78,7 @@ Quick reference for which files to edit for common tasks.
 canvas-chat/
 ├── src/canvas_chat/          # Main Python package
 │   ├── app.py                # FastAPI backend routes
+│   ├── html_markdown.py      # HTML→markdown: math placeholders, relative URLs
 │   ├── llm_messages.py       # OpenAI-style dicts → llamabot message tuples
 │   ├── config.py             # Configuration management
 │   ├── __main__.py           # CLI entry point
@@ -205,6 +206,7 @@ canvas-chat/
 | File                                            | Purpose                            | Edit for...                                                                     |
 | ----------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------- |
 | `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints; `/api/agent/completion` stateless streaming LLM proxy (frontend agent loop); `/api/agent` legacy SSE ReAct loop (kept for realtime-agent.js compat); `run_structured_summarize` / `run_structured_string_list` + Pydantic outputs; `AsyncSimpleBot` + `_stream_text_deltas_async_simple_bot` for streams; `/ws/agent` WebSocket endpoint for realtime voice; LiteLLM for `drop_params`, token count, Copilot models, `supports_response_schema`, `aimage_generation` |
+| `src/canvas_chat/html_markdown.py`              | Fetched HTML → markdown            | Preserve Quarto/MathJax/MathML math and resolve relative `img`/`a` URLs before html2text (`convert_html_to_markdown`) |
 | `src/canvas_chat/llm_messages.py`               | Message shape helpers              | Map OpenAI-style dicts / Pydantic messages to `(system_prompt, list[BaseMessage])` for llamabot |
 | `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode                                          |
 | `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server                                              |
