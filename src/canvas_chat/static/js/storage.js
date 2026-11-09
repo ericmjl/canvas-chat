@@ -2,6 +2,8 @@
  * Storage module - IndexedDB for sessions, localStorage for settings
  */
 
+import { fromJsonCanvas, isJsonCanvas, toJsonCanvas } from './canvas-format.js';
+
 // =============================================================================
 // Type Definitions (JSDoc)
 // =============================================================================
@@ -221,6 +223,25 @@ class Storage {
     // --- Export/Import ---
 
     /**
+     * Trigger a browser download of a JSON document.
+     * @param {Object} data - Data to serialize
+     * @param {string} filename - Download filename
+     * @returns {void}
+     */
+    downloadJson(data, filename) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    /**
      * Export session to JSON file (.canvaschat)
      * @param {Session} session
      * @returns {void}
@@ -231,21 +252,46 @@ class Storage {
             exported_at: new Date().toISOString(),
             ...session,
         };
-
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${session.name || 'session'}-${Date.now()}.canvaschat`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        this.downloadJson(exportData, `${session.name || 'session'}-${Date.now()}.canvaschat`);
     }
 
     /**
-     * Import session from .canvaschat file
+     * Export session as a plain JSON Canvas file (.canvas) for Obsidian and
+     * other JSON Canvas tools. Canvas-Chat-specific data is stripped, so the
+     * export is lossy; use exportSession for a full backup.
+     * @param {Session} session
+     * @returns {void}
+     */
+    exportSessionAsJsonCanvas(session) {
+        const doc = toJsonCanvas(session, { includeExtensions: false });
+        this.downloadJson(doc, `${session.name || 'session'}-${Date.now()}.canvas`);
+    }
+
+    /**
+     * Turn parsed import data into session fields, accepting both native
+     * .canvaschat files and JSON Canvas (.canvas) documents.
+     * @param {Object} data - Parsed JSON from an import file
+     * @param {string} [filename] - Original filename, used to name JSON Canvas imports
+     * @returns {Object} Session fields (nodes, edges, and any metadata)
+     * @throws {Error} If the data is neither format
+     */
+    parseImportData(data, filename = '') {
+        if (isJsonCanvas(data)) {
+            const session = fromJsonCanvas(data);
+            if (!session.name) {
+                session.name = filename.replace(/\.(canvas|json)$/i, '') || 'Imported canvas';
+            }
+            if (!session.created_at) session.created_at = Date.now();
+            return session;
+        }
+        if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
+            throw new Error('Invalid .canvaschat file format');
+        }
+        return data;
+    }
+
+    /**
+     * Import session from a .canvaschat or JSON Canvas (.canvas) file
      * @param {File} file
      * @returns {Promise<Session>}
      */
@@ -255,12 +301,7 @@ class Storage {
 
             reader.onload = async (event) => {
                 try {
-                    const data = JSON.parse(event.target.result);
-
-                    // Validate structure
-                    if (!data.nodes || !data.edges) {
-                        throw new Error('Invalid .canvaschat file format');
-                    }
+                    const data = this.parseImportData(JSON.parse(event.target.result), file.name);
 
                     // Generate new ID to avoid conflicts
                     const session = {
