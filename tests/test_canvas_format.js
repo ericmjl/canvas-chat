@@ -56,6 +56,17 @@ function buildSession() {
         position: { x: 900, y: 900 },
     });
     matrix.cells['0-0'] = { content: 'Yes', filled: true };
+    // Shapes produced by /fetch and /youtube: no `url` field on the node.
+    const fetched = createNode(NodeType.FETCH_RESULT, '**[Spec page](https://jsoncanvas.org/)**\n\nBody text', {
+        id: 'w1',
+        position: { x: 1600, y: 500 },
+        title: 'Spec page',
+    });
+    const video = createNode(NodeType.YOUTUBE, 'Transcript text', {
+        id: 'y1',
+        position: { x: 1600, y: 900 },
+        youtubeVideoId: 'abc123',
+    });
 
     return {
         id: 'sess-1',
@@ -63,7 +74,7 @@ function buildSession() {
         created_at: 1710000000000,
         updated_at: 1710000001000,
         tags: { '#a5d8ff': { name: 'Question', color: '#a5d8ff' } },
-        nodes: [human, ai, ref, card, matrix],
+        nodes: [human, ai, ref, card, matrix, fetched, video],
         edges: [
             createEdge('h1', 'a1', EdgeType.REPLY),
             createEdge('a1', 'r1', EdgeType.REFERENCE),
@@ -92,6 +103,33 @@ function canonical(value) {
 
 // ============================================================
 // Export (toJsonCanvas)
+// ============================================================
+
+test('toJsonCanvas: fetched pages and YouTube nodes export as links', () => {
+    const doc = toJsonCanvas(buildSession());
+    const byId = Object.fromEntries(doc.nodes.map((n) => [n.id, n]));
+    assertEqual(byId.w1.type, 'link');
+    assertEqual(byId.w1.url, 'https://jsoncanvas.org/');
+    assertEqual(byId.y1.type, 'link');
+    assertEqual(byId.y1.url, 'https://www.youtube.com/watch?v=abc123');
+});
+
+test('toJsonCanvas: document namespace carries format version 2 and session metadata', () => {
+    const doc = toJsonCanvas(buildSession());
+    assertEqual(doc.canvasChat.version, 2);
+    assertEqual(doc.canvasChat.sessionId, 'sess-1');
+    assertEqual(doc.canvasChat.sessionName, 'Interop test');
+    assertEqual(doc.canvasChat.created_at, 1710000000000);
+    assertDeepEqual(doc.canvasChat.tags, { '#a5d8ff': { name: 'Question', color: '#a5d8ff' } });
+});
+
+test('toJsonCanvas: edges end in an arrow', () => {
+    const doc = toJsonCanvas(buildSession(), { includeExtensions: false });
+    for (const edge of doc.edges) assertEqual(edge.toEnd, 'arrow');
+});
+
+// ============================================================
+// Export (toJsonCanvas), continued
 // ============================================================
 
 test('toJsonCanvas: nodes use flat integer x/y/width/height', () => {
@@ -220,6 +258,17 @@ test('round trip: generated flashcard text does not overwrite content', () => {
     assertEqual(card.answer, 'Nodes and edges');
 });
 
+test('round trip: node with fractional position moved in another tool keeps its new position', () => {
+    const doc = toJsonCanvas(buildSession());
+    const human = doc.nodes.find((n) => n.id === 'h1'); // exported from {100.4, 200.6}
+    human.x = 300;
+    human.y = 400;
+    human.width = 500;
+    const restored = fromJsonCanvas(doc).nodes.find((n) => n.id === 'h1');
+    assertDeepEqual(restored.position, { x: 300, y: 400 });
+    assertEqual(restored.width, 500);
+});
+
 test('round trip: node moved in another tool keeps its new position', () => {
     const doc = toJsonCanvas(buildSession());
     const ai = doc.nodes.find((n) => n.id === 'a1');
@@ -246,6 +295,25 @@ const obsidianCanvas = {
     ],
 };
 
+test('fromJsonCanvas: small Obsidian nodes are enlarged and the layout spread to match', () => {
+    const session = fromJsonCanvas(obsidianCanvas);
+    const byId = Object.fromEntries(session.nodes.map((n) => [n.id, n]));
+    // t1 is 250x60; it must grow to the 360x200 minimum (height factor 200/60).
+    assertEqual(byId.t1.width, 360);
+    assertEqual(byId.t1.height, 200);
+    // Positions scale by the same factor, so t1 (now 360 wide) still ends before l1.
+    assertEqual(byId.l1.position.x, Math.round((300 * 200) / 60));
+    assertTrue(byId.t1.position.x + byId.t1.width <= byId.l1.position.x);
+    // Nodes already large enough keep their size.
+    assertEqual(byId.l1.width, 400);
+    assertEqual(byId.l1.height, 400);
+});
+
+test('fromJsonCanvas: superset files keep their exact geometry', () => {
+    const restored = fromJsonCanvas(toJsonCanvas(buildSession()));
+    assertDeepEqual(restored.nodes.find((n) => n.id === 'a1').position, { x: 100, y: 500 });
+});
+
 test('fromJsonCanvas: maps plain JSON Canvas node types', () => {
     const session = fromJsonCanvas(obsidianCanvas);
     const byId = Object.fromEntries(session.nodes.map((n) => [n.id, n]));
@@ -253,7 +321,6 @@ test('fromJsonCanvas: maps plain JSON Canvas node types', () => {
     assertEqual(byId.t1.type, NodeType.NOTE);
     assertEqual(byId.t1.content, '# Hello\nFrom Obsidian');
     assertDeepEqual(byId.t1.position, { x: 0, y: 0 });
-    assertEqual(byId.t1.width, 250);
 
     assertEqual(byId.l1.type, NodeType.REFERENCE);
     assertEqual(byId.l1.url, 'https://obsidian.md');
@@ -327,7 +394,19 @@ test('Storage.parseImportData: keeps the session name from a superset export', (
     assertEqual(session.name, 'Interop test');
 });
 
-test('Storage.parseImportData: passes native .canvaschat data through', () => {
+test('Storage.parseImportData: v2 .canvaschat export restores the whole session', () => {
+    const doc = JSON.parse(JSON.stringify(toJsonCanvas(buildSession())));
+    doc.canvasChat.exported_at = '2026-11-10T00:00:00.000Z';
+    const session = new Storage().parseImportData(doc, 'Interop test-1.canvaschat');
+    const original = buildSession();
+    assertEqual(session.id, 'sess-1');
+    assertEqual(session.name, 'Interop test');
+    assertEqual(session.nodes.length, original.nodes.length);
+    assertEqual(session.edges.length, original.edges.length - 1); // dangling edge dropped
+    assertDeepEqual(session.tags, original.tags);
+});
+
+test('Storage.parseImportData: legacy v1 .canvaschat files still import (migration)', () => {
     const native = { version: 1, ...buildSession() };
     const session = new Storage().parseImportData(native, 'x.canvaschat');
     assertEqual(session, native);
