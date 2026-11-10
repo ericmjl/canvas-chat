@@ -17,9 +17,14 @@
  */
 
 import { EdgeType, NodeType, getDefaultNodeSize } from './graph-types.js';
+import { extractUrlFromReferenceNode } from './utils.js';
 
-/** Version of the `canvasChat` namespace written by toJsonCanvas */
-const CANVAS_CHAT_EXTENSION_VERSION = 1;
+/**
+ * `.canvaschat` file format version written by toJsonCanvas.
+ * Version 1 is the legacy native layout (`position`, `source`/`target`);
+ * version 2 is the JSON Canvas superset.
+ */
+const CANVAS_CHAT_EXTENSION_VERSION = 2;
 
 /** Key used for the Canvas-Chat namespace on nodes, edges, and the document */
 const EXTENSION_KEY = 'canvasChat';
@@ -45,10 +50,11 @@ const MAPPED_NODE_FIELDS = new Set(['id', 'position', 'width', 'height']);
 const MAPPED_EDGE_FIELDS = new Set(['id', 'source', 'target']);
 
 /**
- * Session fields that are not useful inside an exported file.
+ * Session fields that are mapped elsewhere in the document (nodes/edges) or
+ * renamed in the document-level namespace (id → sessionId, name → sessionName).
  * @type {Set<string>}
  */
-const SKIPPED_SESSION_FIELDS = new Set(['nodes', 'edges']);
+const SKIPPED_SESSION_FIELDS = new Set(['nodes', 'edges', 'id', 'name', 'version']);
 
 /**
  * A JSON Canvas node, optionally carrying the Canvas-Chat namespace.
@@ -170,6 +176,23 @@ function nodeToText(node) {
 }
 
 /**
+ * Find the web URL a link-like node points at. Different features store it
+ * differently: references set `url`, YouTube nodes keep `youtubeVideoId`, and
+ * fetched pages put a `**[title](url)**` heading in their content.
+ * @param {Object} node - Canvas-Chat node
+ * @returns {string|null} An http(s) URL, or null when none is known
+ */
+function getNodeUrl(node) {
+    const candidates = [
+        node.url,
+        node.metadata?.url,
+        node.youtubeVideoId ? `https://www.youtube.com/watch?v=${node.youtubeVideoId}` : null,
+        typeof node.content === 'string' ? extractUrlFromReferenceNode(node.content) : null,
+    ];
+    return candidates.find((u) => typeof u === 'string' && /^https?:\/\//i.test(u)) ?? null;
+}
+
+/**
  * Convert one Canvas-Chat node to a JSON Canvas node.
  * @param {Object} node - Canvas-Chat node
  * @param {Object} options - Conversion options
@@ -186,9 +209,10 @@ function nodeToJsonCanvas(node, { includeExtensions }) {
         height: toInt(node.height, defaults.height),
     };
 
+    const url = LINK_NODE_TYPES.has(node.type) ? getNodeUrl(node) : null;
     let out;
-    if (LINK_NODE_TYPES.has(node.type) && typeof node.url === 'string' && node.url) {
-        out = { ...base, type: 'link', url: node.url };
+    if (url) {
+        out = { ...base, type: 'link', url };
     } else {
         out = { ...base, type: 'text', text: nodeToText(node) };
     }
@@ -221,11 +245,11 @@ function nodeToJsonCanvas(node, { includeExtensions }) {
  * @returns {JsonCanvasEdge} JSON Canvas edge
  */
 function edgeToJsonCanvas(edge, { includeExtensions }) {
-    // JSON Canvas edges default to toEnd "arrow", which matches Canvas-Chat.
     const out = {
         id: edge.id,
         fromNode: edge.source,
         toNode: edge.target,
+        toEnd: 'arrow',
     };
     if (includeExtensions) {
         out[EXTENSION_KEY] = omit(edge, MAPPED_EDGE_FIELDS);
@@ -259,7 +283,9 @@ function toJsonCanvas(session, options = {}) {
     if (includeExtensions) {
         doc[EXTENSION_KEY] = {
             version: CANVAS_CHAT_EXTENSION_VERSION,
-            session: omit(session || {}, SKIPPED_SESSION_FIELDS),
+            sessionId: session?.id,
+            sessionName: session?.name,
+            ...omit(session || {}, SKIPPED_SESSION_FIELDS),
         };
     }
     return doc;
@@ -349,19 +375,24 @@ function nodeFromJsonCanvas(jcNode) {
     const ext = jcNode[EXTENSION_KEY];
     if (!ext || typeof ext !== 'object') return plainNodeFromJsonCanvas(jcNode);
 
+    // The namespace keeps exact fractional geometry, but only while it still
+    // matches the rounded JSON Canvas values. If another tool moved or resized
+    // the node, the JSON Canvas values win.
+    const sameInt = (exact, rounded) => Number.isFinite(exact) && Math.round(exact) === rounded;
+    const keepExactPosition = ext.position && sameInt(ext.position.x, jcNode.x) && sameInt(ext.position.y, jcNode.y);
     const node = {
         ...ext,
         id: jcNode.id,
-        position: ext.position ?? { x: jcNode.x, y: jcNode.y },
-        width: ext.width ?? jcNode.width,
-        height: ext.height ?? jcNode.height,
+        position: keepExactPosition ? ext.position : { x: jcNode.x, y: jcNode.y },
+        width: sameInt(ext.width, jcNode.width) ? ext.width : jcNode.width,
+        height: sameInt(ext.height, jcNode.height) ? ext.height : jcNode.height,
     };
     // If another tool edited the text, prefer the edited text.
     if (jcNode.type === 'text' && typeof jcNode.text === 'string') {
         const original = nodeToText({ ...ext, id: jcNode.id });
         if (jcNode.text !== original) node.content = jcNode.text;
     } else if (jcNode.type === 'link' && typeof jcNode.url === 'string' && jcNode.url) {
-        node.url = jcNode.url;
+        if (jcNode.url !== getNodeUrl(ext)) node.url = jcNode.url;
     }
     return node;
 }
@@ -385,6 +416,38 @@ function edgeFromJsonCanvas(jcEdge) {
 }
 
 /**
+ * Smallest node size that leaves room for content between a Canvas-Chat node's
+ * header and action bar. Obsidian's default text node (250x60) is far smaller.
+ */
+const MIN_IMPORTED_NODE_SIZE = { width: 360, height: 200 };
+
+/** Upper bound on how far a plain import's layout is spread out. */
+const MAX_IMPORT_LAYOUT_SCALE = 4;
+
+/**
+ * Make nodes from a plain JSON Canvas file readable in Canvas-Chat: grow
+ * small nodes to MIN_IMPORTED_NODE_SIZE and spread positions by the same
+ * uniform factor, so the grown nodes do not overlap their neighbours.
+ * Mutates the nodes in place.
+ * @param {Object[]} nodes - Canvas-Chat nodes built from plain JSON Canvas nodes
+ * @returns {void}
+ */
+function fitPlainLayout(nodes) {
+    let scale = 1;
+    for (const n of nodes) {
+        if (n.width > 0 && n.height > 0) {
+            scale = Math.max(scale, MIN_IMPORTED_NODE_SIZE.width / n.width, MIN_IMPORTED_NODE_SIZE.height / n.height);
+        }
+    }
+    scale = Math.min(scale, MAX_IMPORT_LAYOUT_SCALE);
+    for (const n of nodes) {
+        n.position = { x: Math.round(n.position.x * scale), y: Math.round(n.position.y * scale) };
+        n.width = Math.max(n.width, MIN_IMPORTED_NODE_SIZE.width);
+        n.height = Math.max(n.height, MIN_IMPORTED_NODE_SIZE.height);
+    }
+}
+
+/**
  * Convert a JSON Canvas document to a Canvas-Chat session.
  *
  * Documents written by toJsonCanvas restore all Canvas-Chat fields from the
@@ -402,17 +465,22 @@ function fromJsonCanvas(doc) {
 
     const jcNodes = (doc.nodes ?? []).filter((n) => n && typeof n.id === 'string');
     const nodes = jcNodes.map(nodeFromJsonCanvas);
+    if (!jcNodes.some((n) => n[EXTENSION_KEY])) fitPlainLayout(nodes);
     const nodeIds = new Set(nodes.map((n) => n.id));
     const edges = (doc.edges ?? [])
         .filter((e) => e && nodeIds.has(e.fromNode) && nodeIds.has(e.toNode))
         .map(edgeFromJsonCanvas);
 
-    const sessionMeta = doc[EXTENSION_KEY]?.session;
-    return {
-        ...(sessionMeta && typeof sessionMeta === 'object' ? sessionMeta : {}),
-        nodes,
-        edges,
-    };
+    const meta = doc[EXTENSION_KEY];
+    const session = {};
+    if (meta && typeof meta === 'object') {
+        // eslint-disable-next-line no-unused-vars
+        const { version, sessionId, sessionName, ...rest } = meta;
+        Object.assign(session, rest);
+        if (sessionId !== undefined) session.id = sessionId;
+        if (sessionName !== undefined) session.name = sessionName;
+    }
+    return { ...session, nodes, edges };
 }
 
 export { CANVAS_CHAT_EXTENSION_VERSION, fromJsonCanvas, isJsonCanvas, toJsonCanvas };

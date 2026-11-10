@@ -22,7 +22,9 @@ import { fromJsonCanvas, isJsonCanvas, toJsonCanvas } from './canvas-format.js';
  */
 
 /**
- * Exported session file format (.canvaschat)
+ * Legacy (v1) exported session file format (.canvaschat).
+ * New exports use format v2, a JSON Canvas superset (see canvas-format.js);
+ * v1 files are still accepted on import.
  * @typedef {Object} ExportedSession
  * @property {string} id - Session UUID
  * @property {string} name - Session display name
@@ -242,17 +244,15 @@ class Storage {
     }
 
     /**
-     * Export session to JSON file (.canvaschat)
+     * Export session to a .canvaschat file (format v2: a JSON Canvas superset
+     * that Obsidian can open and Canvas-Chat can restore without loss).
      * @param {Session} session
      * @returns {void}
      */
     exportSession(session) {
-        const exportData = {
-            version: 1,
-            exported_at: new Date().toISOString(),
-            ...session,
-        };
-        this.downloadJson(exportData, `${session.name || 'session'}-${Date.now()}.canvaschat`);
+        const doc = toJsonCanvas(session);
+        doc.canvasChat.exported_at = new Date().toISOString();
+        this.downloadJson(doc, `${session.name || 'session'}-${Date.now()}.canvaschat`);
     }
 
     /**
@@ -268,8 +268,10 @@ class Storage {
     }
 
     /**
-     * Turn parsed import data into session fields, accepting both native
-     * .canvaschat files and JSON Canvas (.canvas) documents.
+     * Turn parsed import data into session fields. Accepts .canvaschat v2
+     * (JSON Canvas superset), plain JSON Canvas (.canvas, e.g. from Obsidian),
+     * and legacy .canvaschat v1 files, which already use the internal layout
+     * and are migrated by loading them as-is.
      * @param {Object} data - Parsed JSON from an import file
      * @param {string} [filename] - Original filename, used to name JSON Canvas imports
      * @returns {Object} Session fields (nodes, edges, and any metadata)
