@@ -133,7 +133,7 @@ content_type = response.headers.get("content-type", "").lower()
 The content type drives the remaining flow:
 
 - **`application/pdf`**: Return PDF metadata; frontend handles rendering
-- **`text/html` or `text/*`**: Convert to markdown using html2text
+- **`text/html` or `text/*`**: Convert to markdown with `convert_html_to_markdown` (math preserved, relative URLs resolved, then html2text)
 - **Other**: Fall back to Jina Reader API
 
 #### Stage 3: Markdown Conversion
@@ -143,15 +143,14 @@ Two strategies exist for HTML-to-markdown conversion:
 **Strategy A: Direct fetch + html2text** (primary fallback)
 
 ```python
-def _parse_html_response(response: httpx.Response) -> tuple[str, str]:
+def _parse_html_response(response: httpx.Response, base_url: str = "") -> tuple[str, str]:
     html = response.text
     title = extract_title_from_html(html)
-    h2t = html2text.HTML2Text()
-    h2t.ignore_links = False
-    h2t.body_width = 0
-    content = h2t.handle(html)
+    content = convert_html_to_markdown(html, base_url)
     return title, content
 ```
+
+`convert_html_to_markdown` (`src/canvas_chat/html_markdown.py`) resolves relative `img`/`a` URLs, lifts Quarto/Pandoc, MathJax, and MathML math into placeholders so html2text cannot escape or drop it, then restores single-backslash `\(...\)` and `\[...\]` delimiters for KaTeX.
 
 **Strategy B: Jina Reader API** (preferred when available)
 
@@ -283,7 +282,7 @@ The URL fetch system deliberately converts all content to markdown before sendin
 | Source      | Strategy               | Notes                                          |
 | ----------- | ---------------------- | ---------------------------------------------- |
 | Jina Reader | Native markdown        | `Accept: text/markdown` returns clean markdown |
-| Direct HTML | html2text              | Python library, configurable options           |
+| Direct HTML | html2text after a math/URL pre-pass | `html_markdown.convert_html_to_markdown` |
 | PDF         | PDF.js text extraction | Per-page extraction with "## Page N" markers   |
 | YouTube     | youtube-transcript-api | Server-side, language fallback                 |
 

@@ -39,6 +39,7 @@ image = (
         "python-slugify",
         "python-multipart>=0.0.9",
         "html2text>=2024.0.0",
+        "beautifulsoup4>=4.14.3,<5",
         "ruamel.yaml>=0.18.0",
         "youtube-transcript-api>=1.2.3,<2",
         "websockets>=12.0",
