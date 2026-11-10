@@ -205,6 +205,11 @@ def load_python_plugins(config: AppConfig) -> None:
     Python plugins are imported as modules, which triggers their registration
     with registries (e.g., FileUploadRegistry) via side-effect imports.
 
+    If a loaded module defines ``register_endpoints``, that function is called
+    with the FastAPI app so the plugin can add routes. An exception from
+    ``register_endpoints`` is logged and does not stop the remaining plugins
+    from loading.
+
     Args:
         config: AppConfig with plugins to load
     """
@@ -225,6 +230,16 @@ def load_python_plugins(config: AppConfig) -> None:
                 # Add to sys.modules so imports within the plugin work correctly
                 sys.modules[plugin.plugin_id] = module
                 spec.loader.exec_module(module)
+
+                if hasattr(module, "register_endpoints"):
+                    try:
+                        module.register_endpoints(app)
+                    except Exception as exc:
+                        logger.error(
+                            "Failed to register endpoints for Python plugin "
+                            f"{plugin.py_path}: {exc}",
+                            exc_info=True,
+                        )
 
                 logger.info(
                     f"Loaded Python plugin: {plugin.py_path.name} "

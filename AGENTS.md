@@ -550,7 +550,7 @@ Plugins can be configured in `config.yaml` with three formats:
 - **Python-only**: `- py: ./plugins/my_handler.py`
 - **Paired (JS + Python)**: `- js: ./plugins/my-plugin.js, py: ./plugins/my_handler.py, id: my-plugin`
 
-Python plugins are loaded dynamically at startup via `importlib`. JavaScript plugins are served via `/api/plugins/{name}` and injected into HTML. Python endpoint plugins (e.g. `pptx_endpoints`, `ddg_endpoints`) register routes via `register_endpoints(app)` in `app.py`.
+Python plugins are loaded dynamically at startup via `importlib`. If the module defines `register_endpoints(app)`, Canvas-Chat calls it so an external plugin can add FastAPI routes (same function built-in handlers such as `pptx_endpoints` and `ddg_endpoints` use). A failure inside `register_endpoints` is logged and does not stop startup. JavaScript plugins are served via `/api/plugins/{name}` and injected into HTML.
 
 #### When to use each level
 
