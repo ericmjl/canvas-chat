@@ -30,7 +30,12 @@ import { FeaturePlugin } from '../feature-plugin.js';
 import { EdgeType, NodeType, createNode, createEdge } from '../graph-types.js';
 import { apiUrl } from '../utils.js';
 import { readSSEStream } from '../sse.js';
-import { executeCodeOnNode as _executeCodeOnNode, gatherViewportContext as _gatherViewportContext } from '../agent-utils.js';
+import {
+    applyTagUpdate,
+    executeCodeOnNode as _executeCodeOnNode,
+    formatViewportForPrompt,
+    gatherViewportContext as _gatherViewportContext,
+} from '../agent-utils.js';
 import { fetchUrlContent } from '../web-grounding.js';
 
 const MAX_AGENT_TOOL_CALLS = 30;
@@ -199,6 +204,42 @@ class AgentFeature extends FeaturePlugin {
         tools.push({
             type: 'function',
             function: {
+                name: 'tag_node',
+                description:
+                    'Add, remove, create, or rename color tags on canvas nodes. ' +
+                    'Use action add or remove with node_ids from the visible canvas list. ' +
+                    'Use action create to make a new tag (optionally applying it). ' +
+                    'Use action rename with tag_color_name (red, green, blue, ...) to name a color slot.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        action: {
+                            type: 'string',
+                            enum: ['add', 'remove', 'create', 'rename'],
+                            description: 'Tag operation',
+                        },
+                        tag_name: {
+                            type: 'string',
+                            description: 'Tag display name. Must match an existing tag for add/remove.',
+                        },
+                        tag_color_name: {
+                            type: 'string',
+                            description: "Color name for rename, e.g. 'green'.",
+                        },
+                        node_ids: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            description: 'Node ids to tag. Required for add and remove.',
+                        },
+                    },
+                    required: ['action', 'tag_name'],
+                },
+            },
+        });
+
+        tools.push({
+            type: 'function',
+            function: {
                 name: 'respond',
                 description:
                     'Provide your final response/synthesis. Call this when you have enough information to answer.',
@@ -254,6 +295,8 @@ class AgentFeature extends FeaturePlugin {
             '  Returns real web results. This is ALWAYS your first step.\n' +
             '- code: Python code. Use ONLY to visualize/analyze data you found\n' +
             '  via search. NEVER put fabricated/hallucinated data in code.\n' +
+            '- tag_node: Add, remove, create, or rename tags on existing nodes.\n' +
+            '  Use node ids from the visible canvas list. Do not invent ids.\n' +
             '- respond: Your final answer. Include real findings from searches.\n\n' +
             '## Rules\n' +
             '- NEVER fabricate data. If you need numbers, search for them first.\n' +
@@ -316,11 +359,20 @@ class AgentFeature extends FeaturePlugin {
                     const label = n.title || n.type || 'node';
                     const body = (n.content || '').substring(0, 4000);
                     const code = n.code ? `\n\nCode:\n\`\`\`python\n${n.code.substring(0, 4000)}\n\`\`\`` : '';
-                    return `--- ${label} ---\n${body}${code}`;
+                    const tagNames = (n.tags || [])
+                        .map((color) => this.graph.getTag?.(color)?.name)
+                        .filter(Boolean);
+                    const tagStr = tagNames.length ? ` [tags: ${tagNames.join(', ')}]` : '';
+                    return `--- ${label} (id: ${n.id})${tagStr} ---\n${body}${code}`;
                 });
             if (contextParts.length > 0) {
                 userContent = `The user is replying to the following canvas node(s):\n\n${contextParts.join('\n\n')}\n\n---\n\nUser message: ${message}`;
             }
+        }
+
+        const viewportCatalog = formatViewportForPrompt(this.gatherViewportContext());
+        if (viewportCatalog) {
+            userContent += `\n\n${viewportCatalog}`;
         }
 
         let messages = [
@@ -485,6 +537,22 @@ class AgentFeature extends FeaturePlugin {
     async executeAgentTool(toolName, args, agentNode) {
         if (toolName === 'code') {
             return this.executeCodeTool(args.code || '', agentNode);
+        }
+
+        if (toolName === 'tag_node') {
+            const message = applyTagUpdate(
+                {
+                    action: args.action,
+                    tag_name: args.tag_name,
+                    tag_color_name: args.tag_color_name,
+                    node_ids: args.node_ids,
+                },
+                this.graph,
+                this.canvas,
+                () => this.saveSession?.(),
+                (msg) => this.showToast?.(msg)
+            );
+            return { content: message, nodeId: null };
         }
 
         const slashCommand = '/' + toolName;
