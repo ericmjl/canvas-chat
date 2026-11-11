@@ -283,15 +283,19 @@ Settings (API keys, model selection, keybinding overrides) MUST be stored in loc
 
 ### [x] STOR-REQ-003: Export Session
 
-**Location**: `storage.js`
+**Location**: `storage.js` (`exportSession`, `exportSessionAsJsonCanvas`), `canvas-format.js` (`toJsonCanvas`)
 
-The system MUST allow exporting a session as a `.canvaschat` JSON file containing all nodes, edges, and metadata.
+The system MUST allow exporting a session as a `.canvaschat` JSON file containing all nodes, edges, and metadata. The file MUST use format version 2: a valid [JSON Canvas 1.0](https://jsoncanvas.org/spec/1.0/) document whose Canvas-Chat-specific fields live in a `canvasChat` namespace on each node, edge, and the document, so the session can be restored without loss.
+
+The system MUST also allow exporting a plain JSON Canvas `.canvas` file containing only spec fields, for Obsidian and other JSON Canvas tools.
 
 ### [x] STOR-REQ-004: Import Session
 
-**Location**: `storage.js`
+**Location**: `storage.js` (`importSession`, `parseImportData`), `canvas-format.js` (`fromJsonCanvas`, `isJsonCanvas`)
 
-The system MUST allow importing a session from a `.canvaschat` file. Imported sessions MUST get a new UUID.
+The system MUST allow importing a session from a `.canvaschat` file (format v1 or v2) or a plain JSON Canvas `.canvas` file, detecting the format automatically. Imported sessions MUST get a new UUID.
+
+When importing JSON Canvas, the system MUST only turn http(s) link URLs into links (any other URL is kept as plain text), and MUST give a fresh id to a node whose id repeats an earlier node's and to an edge whose id is missing or repeated.
 
 ## Search Specifications
 

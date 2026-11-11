@@ -176,6 +176,17 @@ function nodeToText(node) {
 }
 
 /**
+ * Check whether a value is an http(s) URL. Only these are turned into
+ * clickable links, so a `javascript:` or `data:` URL in an imported file
+ * cannot become a link.
+ * @param {*} url - Value to check
+ * @returns {boolean} True for a string starting with http:// or https://
+ */
+function isHttpUrl(url) {
+    return typeof url === 'string' && /^https?:\/\//i.test(url);
+}
+
+/**
  * Find the web URL a link-like node points at. Different features store it
  * differently: references set `url`, YouTube nodes keep `youtubeVideoId`, and
  * fetched pages put a `**[title](url)**` heading in their content.
@@ -189,7 +200,7 @@ function getNodeUrl(node) {
         node.youtubeVideoId ? `https://www.youtube.com/watch?v=${node.youtubeVideoId}` : null,
         typeof node.content === 'string' ? extractUrlFromReferenceNode(node.content) : null,
     ];
-    return candidates.find((u) => typeof u === 'string' && /^https?:\/\//i.test(u)) ?? null;
+    return candidates.find(isHttpUrl) ?? null;
 }
 
 /**
@@ -330,9 +341,14 @@ function plainNodeFromJsonCanvas(jcNode) {
 
     switch (jcNode.type) {
         case 'link':
-            type = NodeType.REFERENCE;
-            content = jcNode.url ? `[${jcNode.url}](${jcNode.url})` : '';
-            if (jcNode.url) extra.url = jcNode.url;
+            if (isHttpUrl(jcNode.url)) {
+                type = NodeType.REFERENCE;
+                content = `[${jcNode.url}](${jcNode.url})`;
+                extra.url = jcNode.url;
+            } else {
+                // Not a web URL (e.g. `javascript:`): keep it as plain text, never a link.
+                content = typeof jcNode.url === 'string' ? jcNode.url : '';
+            }
             break;
         case 'file': {
             const target = jcNode.subpath ? `${jcNode.file}${jcNode.subpath}` : jcNode.file;
@@ -391,7 +407,7 @@ function nodeFromJsonCanvas(jcNode) {
     if (jcNode.type === 'text' && typeof jcNode.text === 'string') {
         const original = nodeToText({ ...ext, id: jcNode.id });
         if (jcNode.text !== original) node.content = jcNode.text;
-    } else if (jcNode.type === 'link' && typeof jcNode.url === 'string' && jcNode.url) {
+    } else if (jcNode.type === 'link' && isHttpUrl(jcNode.url)) {
         if (jcNode.url !== getNodeUrl(ext)) node.url = jcNode.url;
     }
     return node;
@@ -399,7 +415,7 @@ function nodeFromJsonCanvas(jcNode) {
 
 /**
  * Build a Canvas-Chat edge from a JSON Canvas edge.
- * @param {JsonCanvasEdge} jcEdge - JSON Canvas edge
+ * @param {JsonCanvasEdge} jcEdge - JSON Canvas edge (with a unique `id`, see withUniqueIds)
  * @returns {Object} Canvas-Chat edge
  */
 function edgeFromJsonCanvas(jcEdge) {
@@ -413,6 +429,27 @@ function edgeFromJsonCanvas(jcEdge) {
     };
     if (!ext && typeof jcEdge.label === 'string' && jcEdge.label) edge.label = jcEdge.label;
     return edge;
+}
+
+/**
+ * Give every item a unique string id. The first item with a given id keeps
+ * it; later duplicates, and items with no string id, get a fresh UUID.
+ * Items are copied, never mutated.
+ * @param {Object[]} items - JSON Canvas nodes or edges
+ * @returns {Object[]} Items with unique ids
+ */
+function withUniqueIds(items) {
+    const seen = new Set();
+    return items.map((item) => {
+        if (typeof item.id === 'string' && item.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            return item;
+        }
+        let id = crypto.randomUUID();
+        while (seen.has(id)) id = crypto.randomUUID();
+        seen.add(id);
+        return { ...item, id };
+    });
 }
 
 /**
@@ -452,8 +489,12 @@ function fitPlainLayout(nodes) {
  *
  * Documents written by toJsonCanvas restore all Canvas-Chat fields from the
  * `canvasChat` namespace. Plain JSON Canvas files (e.g. from Obsidian) are
- * mapped as: text → note, link → reference, file and group → note.
- * Edges pointing at unknown nodes are dropped.
+ * mapped as: text → note, link → reference (http(s) URLs only; other
+ * URLs become a plain-text note), file and group → note.
+ * Edges pointing at unknown nodes are dropped. Nodes without a string id
+ * are dropped; a node whose id repeats an earlier node's gets a fresh id
+ * (edges keep pointing at the first one). Edges with a missing or repeated
+ * id get a fresh id.
  * @param {JsonCanvasDocument} doc - JSON Canvas document
  * @returns {{nodes: Object[], edges: Object[], name?: string, tags?: Object}} Session fields
  * @throws {Error} If the document has no usable nodes/edges arrays
@@ -463,13 +504,12 @@ function fromJsonCanvas(doc) {
         throw new Error('Not a JSON Canvas document');
     }
 
-    const jcNodes = (doc.nodes ?? []).filter((n) => n && typeof n.id === 'string');
+    const jcNodes = withUniqueIds((doc.nodes ?? []).filter((n) => n && typeof n.id === 'string' && n.id));
     const nodes = jcNodes.map(nodeFromJsonCanvas);
     if (!jcNodes.some((n) => n[EXTENSION_KEY])) fitPlainLayout(nodes);
     const nodeIds = new Set(nodes.map((n) => n.id));
-    const edges = (doc.edges ?? [])
-        .filter((e) => e && nodeIds.has(e.fromNode) && nodeIds.has(e.toNode))
-        .map(edgeFromJsonCanvas);
+    const jcEdges = (doc.edges ?? []).filter((e) => e && nodeIds.has(e.fromNode) && nodeIds.has(e.toNode));
+    const edges = withUniqueIds(jcEdges).map(edgeFromJsonCanvas);
 
     const meta = doc[EXTENSION_KEY];
     const session = {};
