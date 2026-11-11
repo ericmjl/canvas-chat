@@ -293,7 +293,7 @@ The system MUST also allow exporting a plain JSON Canvas `.canvas` file containi
 
 **Location**: `storage.js` (`importSession`, `parseImportData`), `canvas-format.js` (`fromJsonCanvas`, `isJsonCanvas`)
 
-The system MUST allow importing a session from a `.canvaschat` file (format v1 or v2) or a plain JSON Canvas `.canvas` file, detecting the format automatically. Imported sessions MUST get a new UUID.
+The system MUST allow importing a session from a `.canvaschat` file (format v1 or v2) or a plain JSON Canvas `.canvas` file, detecting the format automatically. Imported sessions MUST get a new UUID. Files larger than 50 MB MUST be rejected before they are read, with an error that states the file size and the limit.
 
 When importing JSON Canvas, the system MUST only turn http(s) link URLs into links (any other URL is kept as plain text), and MUST give a fresh id to a node whose id repeats an earlier node's and to an edge whose id is missing or repeated.
 

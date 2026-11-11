@@ -20,7 +20,7 @@ import {
     createNode,
 } from '../src/canvas_chat/static/js/graph-types.js';
 import { fromJsonCanvas, isJsonCanvas, toJsonCanvas } from '../src/canvas_chat/static/js/canvas-format.js';
-import { Storage } from '../src/canvas_chat/static/js/storage.js';
+import { MAX_IMPORT_FILE_BYTES, Storage } from '../src/canvas_chat/static/js/storage.js';
 
 // ============================================================
 // Fixtures
@@ -337,6 +337,33 @@ test('fromJsonCanvas: maps plain JSON Canvas node types', () => {
     }
 });
 
+test('fromJsonCanvas: a group becomes a small label note just above its top-left corner', () => {
+    const session = fromJsonCanvas(obsidianCanvas);
+    const g1 = session.nodes.find((n) => n.id === 'g1');
+    assertEqual(g1.content, '## Research');
+    // Small, not the 900x900 frame that would cover the group's children.
+    assertEqual(g1.width, 360);
+    assertEqual(g1.height, 200);
+    // Same scaled x as the group; bottom edge sits 20px above the group's scaled top.
+    const groupCorner = Math.round((-50 * 200) / 60);
+    assertEqual(g1.position.x, groupCorner);
+    assertEqual(g1.position.y + g1.height + 20, groupCorner);
+    // It no longer covers the nodes inside the group.
+    for (const child of session.nodes.filter((n) => n.id !== 'g1')) {
+        assertTrue(g1.position.y + g1.height <= child.position.y);
+    }
+});
+
+test('fromJsonCanvas: an unlabelled group still gets a label note', () => {
+    const session = fromJsonCanvas({
+        nodes: [{ id: 'g', type: 'group', x: 0, y: 0, width: 800, height: 600 }],
+        edges: [],
+    });
+    assertEqual(session.nodes[0].content, '## Group');
+    assertEqual(session.nodes[0].width, 360);
+    assertEqual(session.nodes[0].position.y, -220);
+});
+
 test('fromJsonCanvas: maps edges and drops ones pointing at unknown nodes', () => {
     const session = fromJsonCanvas(obsidianCanvas);
     assertEqual(session.edges.length, 1);
@@ -488,6 +515,23 @@ test('Storage.parseImportData: legacy v1 .canvaschat files still import (migrati
     const native = { version: 1, ...buildSession() };
     const session = new Storage().parseImportData(native, 'x.canvaschat');
     assertEqual(session, native);
+});
+
+test('Storage.checkImportFileSize: allows files up to 50 MB', () => {
+    assertEqual(MAX_IMPORT_FILE_BYTES, 50 * 1024 * 1024);
+    new Storage().checkImportFileSize({ size: MAX_IMPORT_FILE_BYTES });
+    new Storage().checkImportFileSize({ size: 1024 });
+});
+
+test('Storage.checkImportFileSize: rejects larger files with a friendly message', () => {
+    let message = '';
+    try {
+        new Storage().checkImportFileSize({ size: 120 * 1024 * 1024 });
+    } catch (err) {
+        message = err.message;
+    }
+    assertTrue(message.includes('120 MB'));
+    assertTrue(message.includes('50 MB import limit'));
 });
 
 test('Storage.parseImportData: rejects invalid files', () => {

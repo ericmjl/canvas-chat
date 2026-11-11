@@ -124,7 +124,7 @@ Plain JSON Canvas files are mapped as follows:
 | `text`      | `note` with the same markdown               |
 | `link`      | `reference` with `url` set (http(s) only)   |
 | `file`      | `note` showing the file path (and subpath)  |
-| `group`     | `note` titled with the group label          |
+| `group`     | small label `note` above the group          |
 | Edge        | `reply` edge; a `label` is kept on the edge |
 
 Only `http://` and `https://` URLs become links. A `link` node with any other
@@ -141,6 +141,15 @@ node's header and action bar (Obsidian's default text node is 250×60). On a
 plain import, nodes smaller than 360×200 are enlarged to that size, and all
 positions are spread by the same factor (at most 4×) so the enlarged nodes do
 not overlap. Files with the `canvasChat` namespace keep their exact geometry.
+
+A group becomes a 360×200 note titled with the group label (or "Group" when
+it has none), placed just above the group's top-left corner where JSON Canvas
+apps draw the label. It does not cover the nodes inside the group; the group's
+frame itself is not kept.
+
+Files larger than 50 MB are rejected before they are read, with a message
+that names the file size and the limit (`MAX_IMPORT_FILE_BYTES` in
+`storage.js`).
 
 A plain `.canvas` import is named after the file. Detection is automatic:
 `isJsonCanvas(data)` looks for the `canvasChat` namespace, `fromNode`/`toNode`
