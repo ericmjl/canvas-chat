@@ -122,10 +122,19 @@ Plain JSON Canvas files are mapped as follows:
 | JSON Canvas | Canvas-Chat                                 |
 | ----------- | ------------------------------------------- |
 | `text`      | `note` with the same markdown               |
-| `link`      | `reference` with `url` set                  |
+| `link`      | `reference` with `url` set (http(s) only)   |
 | `file`      | `note` showing the file path (and subpath)  |
 | `group`     | `note` titled with the group label          |
 | Edge        | `reply` edge; a `label` is kept on the edge |
+
+Only `http://` and `https://` URLs become links. A `link` node with any other
+URL (for example `javascript:` or `data:`) is imported as a `note` showing the
+URL as plain text, and a non-http(s) `url` edited into a superset file is
+ignored.
+
+Node ids must be unique. If a node repeats an earlier node's id, it gets a
+fresh id and edges that use that id stay on the first node. Nodes without an
+id are dropped. Edges with a missing or repeated id get a fresh id.
 
 Obsidian nodes are often too small to show content between a Canvas-Chat
 node's header and action bar (Obsidian's default text node is 250×60). On a

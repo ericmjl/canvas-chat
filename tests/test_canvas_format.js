@@ -347,6 +347,84 @@ test('fromJsonCanvas: maps edges and drops ones pointing at unknown nodes', () =
     assertEqual(edge.label, 'cites');
 });
 
+test('fromJsonCanvas: only http(s) link URLs become links', () => {
+    const doc = {
+        nodes: [
+            { id: 'js', type: 'link', x: 0, y: 0, width: 400, height: 400, url: 'javascript:alert(1)' },
+            { id: 'data', type: 'link', x: 500, y: 0, width: 400, height: 400, url: 'data:text/html,<b>x</b>' },
+            { id: 'none', type: 'link', x: 1000, y: 0, width: 400, height: 400 },
+            { id: 'ok', type: 'link', x: 1500, y: 0, width: 400, height: 400, url: 'HTTPS://example.com' },
+        ],
+        edges: [],
+    };
+    const byId = Object.fromEntries(fromJsonCanvas(doc).nodes.map((n) => [n.id, n]));
+
+    for (const id of ['js', 'data']) {
+        assertEqual(byId[id].type, NodeType.NOTE);
+        assertEqual(byId[id].url, undefined);
+        assertEqual(byId[id].content, doc.nodes.find((n) => n.id === id).url);
+        assertFalse(byId[id].content.includes(']('), 'unsafe URL must not become a markdown link');
+    }
+    assertEqual(byId.none.type, NodeType.NOTE);
+    assertEqual(byId.none.content, '');
+
+    assertEqual(byId.ok.type, NodeType.REFERENCE);
+    assertEqual(byId.ok.url, 'HTTPS://example.com');
+});
+
+test('fromJsonCanvas: superset files ignore a non-http(s) link URL set by another tool', () => {
+    const doc = JSON.parse(JSON.stringify(toJsonCanvas(buildSession())));
+    const link = doc.nodes.find((n) => n.type === 'link');
+    const originalUrl = link.url;
+    link.url = 'javascript:alert(1)';
+    const restored = fromJsonCanvas(doc).nodes.find((n) => n.id === link.id);
+    assertEqual(restored.url, originalUrl);
+});
+
+test('fromJsonCanvas: duplicate node ids are renamed and edges keep the first node', () => {
+    const doc = {
+        nodes: [
+            { id: 'a', type: 'text', x: 0, y: 0, width: 400, height: 400, text: 'first' },
+            { id: 'a', type: 'text', x: 500, y: 0, width: 400, height: 400, text: 'second' },
+            { id: 'b', type: 'text', x: 1000, y: 0, width: 400, height: 400, text: 'third' },
+        ],
+        edges: [{ id: 'e1', fromNode: 'a', toNode: 'b' }],
+    };
+    const session = fromJsonCanvas(doc);
+    assertEqual(session.nodes.length, 3);
+    const ids = session.nodes.map((n) => n.id);
+    assertEqual(new Set(ids).size, 3, 'node ids should be unique');
+    assertEqual(session.nodes[0].id, 'a');
+    assertEqual(session.nodes[0].content, 'first');
+    assertTrue(session.nodes[1].id !== 'a');
+    assertEqual(session.nodes[1].content, 'second');
+    assertEqual(session.edges[0].source, 'a');
+    // The input document is not mutated.
+    assertEqual(doc.nodes[1].id, 'a');
+});
+
+test('fromJsonCanvas: edges with missing or duplicate ids get fresh ids', () => {
+    const doc = {
+        nodes: [
+            { id: 'a', type: 'text', x: 0, y: 0, width: 400, height: 400, text: 'A' },
+            { id: 'b', type: 'text', x: 500, y: 0, width: 400, height: 400, text: 'B' },
+            { id: 'c', type: 'text', x: 1000, y: 0, width: 400, height: 400, text: 'C' },
+        ],
+        edges: [
+            { fromNode: 'a', toNode: 'b' },
+            { id: 'e1', fromNode: 'b', toNode: 'c' },
+            { id: 'e1', fromNode: 'a', toNode: 'c' },
+        ],
+    };
+    const { edges } = fromJsonCanvas(doc);
+    assertEqual(edges.length, 3);
+    for (const edge of edges) {
+        assertTrue(typeof edge.id === 'string' && edge.id.length > 0, 'every edge needs an id');
+    }
+    assertEqual(new Set(edges.map((e) => e.id)).size, 3, 'edge ids should be unique');
+    assertEqual(edges[1].id, 'e1');
+});
+
 test('fromJsonCanvas: empty document', () => {
     const session = fromJsonCanvas({});
     assertDeepEqual(session.nodes, []);
