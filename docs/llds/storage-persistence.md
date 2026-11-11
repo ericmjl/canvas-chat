@@ -74,14 +74,26 @@ For small key-value settings:
 
 ### Export
 
-1. Serialize session to JSON
-2. Add version metadata
+File layouts and field mapping are described in the
+[JSON Canvas format reference](../reference/json-canvas-format.md).
+
+**💾 Export (`exportSession`)**
+
+1. Convert the session with `toJsonCanvas(session)` (`canvas-format.js`): JSON Canvas nodes and edges plus a `canvasChat` namespace on each node, edge, and the document
+2. Stamp format version 2 and `exported_at` in the document-level `canvasChat` namespace
 3. Download as `.canvaschat` file
+
+**🗺️ Export as JSON Canvas (`exportSessionAsJsonCanvas`)**
+
+1. Convert with `toJsonCanvas(session, { includeExtensions: false })`: spec fields only, no `canvasChat` namespace (lossy)
+2. Download as `.canvas` file
 
 ### Import
 
-1. Parse JSON file
-2. Validate structure
+1. Reject files over 50 MB (`checkImportFileSize`), then parse the JSON file (`.canvaschat`, `.canvas`, or `.json`)
+2. Detect the format in `parseImportData`:
+    - **JSON Canvas** (v2 `.canvaschat` or plain `.canvas`, detected by `isJsonCanvas`): convert with `fromJsonCanvas`. The `canvasChat` namespace restores every field; plain files are mapped to note/reference nodes. Only http(s) link URLs become links, duplicate node ids and missing or duplicate edge ids get fresh ids, and plain files are named after the file
+    - **Legacy v1 `.canvaschat`** (internal session layout): validate that `nodes` and `edges` are arrays and load as-is
 3. Generate new UUID (avoid conflicts)
 4. Store in IndexedDB
 

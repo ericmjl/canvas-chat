@@ -37,7 +37,7 @@ Your browser will open automatically to the local server.
 - **Multiple LLM Providers**: Support for OpenAI, Anthropic, Google, Groq, GitHub Models, OpenRouter, and local models via Ollama
 - **Extensible Plugin System**: Create custom node types and features with the three-level plugin architecture
 - **Local-First**: All data stored in your browser (IndexedDB)
-- **Export/Import**: Save sessions as `.canvaschat` files
+- **Export/Import**: Save sessions as `.canvaschat` files (a [JSON Canvas](reference/json-canvas-format.md) superset), export plain `.canvas` files for Obsidian, and import `.canvas` files made elsewhere
 
 ## Configuration
 
@@ -79,7 +79,8 @@ See [Admin Mode Setup](how-to/admin-mode.md) for details.
 10. **Add images**: Upload, paste (Ctrl/Cmd+V), or drag-and-drop images for AI analysis
 11. **Create a matrix**: Select one or more context nodes, type `/matrix <context>` to create an evaluation table
 12. **Navigate**: Drag the handle (⋮⋮) to move nodes, scroll to zoom, double-click canvas to fit content
-13. **Export**: Click 💾 to save your session as a `.canvaschat` file
+13. **Export**: Click 💾 to save your session as a `.canvaschat` file, or 🗺️ to export a plain JSON Canvas (`.canvas`) file for Obsidian
+14. **Import**: Click 📂 to open a `.canvaschat` file or a JSON Canvas (`.canvas`) file, such as one from Obsidian
 
 ## Presentations
 

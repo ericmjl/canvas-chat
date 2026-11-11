@@ -2,6 +2,11 @@
  * Storage module - IndexedDB for sessions, localStorage for settings
  */
 
+import { fromJsonCanvas, isJsonCanvas, toJsonCanvas } from './canvas-format.js';
+
+/** Largest file importSession accepts (50 MB), checked before the file is read. */
+const MAX_IMPORT_FILE_BYTES = 50 * 1024 * 1024;
+
 // =============================================================================
 // Type Definitions (JSDoc)
 // =============================================================================
@@ -20,7 +25,9 @@
  */
 
 /**
- * Exported session file format (.canvaschat)
+ * Legacy (v1) exported session file format (.canvaschat).
+ * New exports use format v2, a JSON Canvas superset (see canvas-format.js);
+ * v1 files are still accepted on import.
  * @typedef {Object} ExportedSession
  * @property {string} id - Session UUID
  * @property {string} name - Session display name
@@ -221,23 +228,18 @@ class Storage {
     // --- Export/Import ---
 
     /**
-     * Export session to JSON file (.canvaschat)
-     * @param {Session} session
+     * Trigger a browser download of a JSON document.
+     * @param {Object} data - Data to serialize
+     * @param {string} filename - Download filename
      * @returns {void}
      */
-    exportSession(session) {
-        const exportData = {
-            version: 1,
-            exported_at: new Date().toISOString(),
-            ...session,
-        };
-
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    downloadJson(data, filename) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
 
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${session.name || 'session'}-${Date.now()}.canvaschat`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -245,22 +247,83 @@ class Storage {
     }
 
     /**
-     * Import session from .canvaschat file
+     * Export session to a .canvaschat file (format v2: a JSON Canvas superset
+     * that Obsidian can open and Canvas-Chat can restore without loss).
+     * @param {Session} session
+     * @returns {void}
+     */
+    exportSession(session) {
+        const doc = toJsonCanvas(session);
+        doc.canvasChat.exported_at = new Date().toISOString();
+        this.downloadJson(doc, `${session.name || 'session'}-${Date.now()}.canvaschat`);
+    }
+
+    /**
+     * Export session as a plain JSON Canvas file (.canvas) for Obsidian and
+     * other JSON Canvas tools. Canvas-Chat-specific data is stripped, so the
+     * export is lossy; use exportSession for a full backup.
+     * @param {Session} session
+     * @returns {void}
+     */
+    exportSessionAsJsonCanvas(session) {
+        const doc = toJsonCanvas(session, { includeExtensions: false });
+        this.downloadJson(doc, `${session.name || 'session'}-${Date.now()}.canvas`);
+    }
+
+    /**
+     * Turn parsed import data into session fields. Accepts .canvaschat v2
+     * (JSON Canvas superset), plain JSON Canvas (.canvas, e.g. from Obsidian),
+     * and legacy .canvaschat v1 files, which already use the internal layout
+     * and are migrated by loading them as-is.
+     * @param {Object} data - Parsed JSON from an import file
+     * @param {string} [filename] - Original filename, used to name JSON Canvas imports
+     * @returns {Object} Session fields (nodes, edges, and any metadata)
+     * @throws {Error} If the data is neither format
+     */
+    parseImportData(data, filename = '') {
+        if (isJsonCanvas(data)) {
+            const session = fromJsonCanvas(data);
+            if (!session.name) {
+                session.name = filename.replace(/\.(canvas|json)$/i, '') || 'Imported canvas';
+            }
+            if (!session.created_at) session.created_at = Date.now();
+            return session;
+        }
+        if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
+            throw new Error('Invalid .canvaschat file format');
+        }
+        return data;
+    }
+
+    /**
+     * Reject files too large to import, before reading them into memory.
+     * @param {{size: number}} file - File (or anything with a byte size)
+     * @returns {void}
+     * @throws {Error} If the file is larger than MAX_IMPORT_FILE_BYTES
+     */
+    checkImportFileSize(file) {
+        if (file && file.size > MAX_IMPORT_FILE_BYTES) {
+            const toMb = (bytes) => Math.round(bytes / (1024 * 1024));
+            throw new Error(
+                `This file is ${toMb(file.size)} MB, which is larger than the ${toMb(MAX_IMPORT_FILE_BYTES)} MB import limit. ` +
+                    'Please choose a smaller .canvaschat or .canvas file.'
+            );
+        }
+    }
+
+    /**
+     * Import session from a .canvaschat or JSON Canvas (.canvas) file
      * @param {File} file
      * @returns {Promise<Session>}
      */
     async importSession(file) {
+        this.checkImportFileSize(file);
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
 
             reader.onload = async (event) => {
                 try {
-                    const data = JSON.parse(event.target.result);
-
-                    // Validate structure
-                    if (!data.nodes || !data.edges) {
-                        throw new Error('Invalid .canvaschat file format');
-                    }
+                    const data = this.parseImportData(JSON.parse(event.target.result), file.name);
 
                     // Generate new ID to avoid conflicts
                     const session = {
@@ -787,4 +850,4 @@ class Storage {
 // Export class and singleton instance
 const storage = new Storage();
 
-export { Storage, storage };
+export { Storage, storage, MAX_IMPORT_FILE_BYTES };

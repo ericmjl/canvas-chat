@@ -953,6 +953,9 @@ class App {
         document.getElementById('export-btn').addEventListener('click', () => {
             this.exportSession();
         });
+        document.getElementById('export-canvas-btn').addEventListener('click', () => {
+            this.exportSessionAsJsonCanvas();
+        });
         document.getElementById('import-btn').addEventListener('click', () => {
             document.getElementById('import-file-input').click();
         });
@@ -3836,6 +3839,14 @@ class App {
      */
     exportSession() {
         storage.exportSession(this.session);
+    }
+
+    /**
+     * Export the current session as a JSON Canvas (.canvas) file for
+     * Obsidian and other JSON Canvas tools.
+     */
+    exportSessionAsJsonCanvas() {
+        storage.exportSessionAsJsonCanvas(this.session);
     }
 
     /**

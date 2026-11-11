@@ -99,7 +99,8 @@
                 <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
                 <button id="help-btn" class="icon-btn" title="Help (?)">❓</button>
                 <button id="export-btn" class="icon-btn" title="Export">💾</button>
-                <button id="import-btn" class="icon-btn" title="Import">📂</button>
+                <button id="export-canvas-btn" class="icon-btn" title="Export as JSON Canvas (.canvas, for Obsidian)">🗺️</button>
+                <button id="import-btn" class="icon-btn" title="Import (.canvaschat or .canvas)">📂</button>
             </div>
         </div>
 
@@ -492,7 +493,7 @@
         </div>
 
         <!-- Hidden file input for import -->
-        <input type="file" id="import-file-input" accept=".canvaschat" style="display: none" />
+        <input type="file" id="import-file-input" accept=".canvaschat,.canvas,.json" style="display: none" />
 
         <!-- Hidden file input for PDF, image, and CSV upload -->
         <input
