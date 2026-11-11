@@ -4,6 +4,9 @@
 
 import { fromJsonCanvas, isJsonCanvas, toJsonCanvas } from './canvas-format.js';
 
+/** Largest file importSession accepts (50 MB), checked before the file is read. */
+const MAX_IMPORT_FILE_BYTES = 50 * 1024 * 1024;
+
 // =============================================================================
 // Type Definitions (JSDoc)
 // =============================================================================
@@ -293,11 +296,28 @@ class Storage {
     }
 
     /**
+     * Reject files too large to import, before reading them into memory.
+     * @param {{size: number}} file - File (or anything with a byte size)
+     * @returns {void}
+     * @throws {Error} If the file is larger than MAX_IMPORT_FILE_BYTES
+     */
+    checkImportFileSize(file) {
+        if (file && file.size > MAX_IMPORT_FILE_BYTES) {
+            const toMb = (bytes) => Math.round(bytes / (1024 * 1024));
+            throw new Error(
+                `This file is ${toMb(file.size)} MB, which is larger than the ${toMb(MAX_IMPORT_FILE_BYTES)} MB import limit. ` +
+                    'Please choose a smaller .canvaschat or .canvas file.'
+            );
+        }
+    }
+
+    /**
      * Import session from a .canvaschat or JSON Canvas (.canvas) file
      * @param {File} file
      * @returns {Promise<Session>}
      */
     async importSession(file) {
+        this.checkImportFileSize(file);
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
 
@@ -830,4 +850,4 @@ class Storage {
 // Export class and singleton instance
 const storage = new Storage();
 
-export { Storage, storage };
+export { Storage, storage, MAX_IMPORT_FILE_BYTES };

@@ -90,7 +90,7 @@ File layouts and field mapping are described in the
 
 ### Import
 
-1. Parse JSON file (`.canvaschat`, `.canvas`, or `.json`)
+1. Reject files over 50 MB (`checkImportFileSize`), then parse the JSON file (`.canvaschat`, `.canvas`, or `.json`)
 2. Detect the format in `parseImportData`:
     - **JSON Canvas** (v2 `.canvaschat` or plain `.canvas`, detected by `isJsonCanvas`): convert with `fromJsonCanvas`. The `canvasChat` namespace restores every field; plain files are mapped to note/reference nodes. Only http(s) link URLs become links, duplicate node ids and missing or duplicate edge ids get fresh ids, and plain files are named after the file
     - **Legacy v1 `.canvaschat`** (internal session layout): validate that `nodes` and `edges` are arrays and load as-is

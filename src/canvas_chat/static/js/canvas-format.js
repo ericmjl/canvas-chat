@@ -355,10 +355,16 @@ function plainNodeFromJsonCanvas(jcNode) {
             content = `📎 \`${target ?? ''}\``;
             break;
         }
-        case 'group':
-            content = jcNode.label ? `## ${jcNode.label}` : '';
-            if (jcNode.label) extra.title = jcNode.label;
+        case 'group': {
+            // A group becomes a small label note, not a note the size of the
+            // group that would sit over its children (see placeGroupLabel).
+            const label = typeof jcNode.label === 'string' && jcNode.label.trim() ? jcNode.label : 'Group';
+            content = `## ${label}`;
+            extra.title = label;
+            extra.width = MIN_IMPORTED_NODE_SIZE.width;
+            extra.height = MIN_IMPORTED_NODE_SIZE.height;
             break;
+        }
         default:
             content = typeof jcNode.text === 'string' ? jcNode.text : '';
     }
@@ -484,13 +490,28 @@ function fitPlainLayout(nodes) {
     }
 }
 
+/** Vertical space between a group's label note and the group's top edge. */
+const GROUP_LABEL_GAP = 20;
+
+/**
+ * Move a group's label note so it sits just above the group's top-left
+ * corner, where JSON Canvas apps draw the group label, instead of covering
+ * the nodes inside the group. Call after fitPlainLayout. Mutates the node.
+ * @param {Object} node - Canvas-Chat note built from a plain JSON Canvas group
+ * @returns {void}
+ */
+function placeGroupLabel(node) {
+    node.position = { x: node.position.x, y: node.position.y - node.height - GROUP_LABEL_GAP };
+}
+
 /**
  * Convert a JSON Canvas document to a Canvas-Chat session.
  *
  * Documents written by toJsonCanvas restore all Canvas-Chat fields from the
  * `canvasChat` namespace. Plain JSON Canvas files (e.g. from Obsidian) are
  * mapped as: text → note, link → reference (http(s) URLs only; other
- * URLs become a plain-text note), file and group → note.
+ * URLs become a plain-text note), file → note, group → small label note
+ * just above the group's top-left corner.
  * Edges pointing at unknown nodes are dropped. Nodes without a string id
  * are dropped; a node whose id repeats an earlier node's gets a fresh id
  * (edges keep pointing at the first one). Edges with a missing or repeated
@@ -507,6 +528,9 @@ function fromJsonCanvas(doc) {
     const jcNodes = withUniqueIds((doc.nodes ?? []).filter((n) => n && typeof n.id === 'string' && n.id));
     const nodes = jcNodes.map(nodeFromJsonCanvas);
     if (!jcNodes.some((n) => n[EXTENSION_KEY])) fitPlainLayout(nodes);
+    jcNodes.forEach((jcNode, i) => {
+        if (jcNode.type === 'group' && !jcNode[EXTENSION_KEY]) placeGroupLabel(nodes[i]);
+    });
     const nodeIds = new Set(nodes.map((n) => n.id));
     const jcEdges = (doc.edges ?? []).filter((e) => e && nodeIds.has(e.fromNode) && nodeIds.has(e.toNode));
     const edges = withUniqueIds(jcEdges).map(edgeFromJsonCanvas);
