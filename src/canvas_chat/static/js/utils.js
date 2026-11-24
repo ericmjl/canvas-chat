@@ -236,6 +236,31 @@ function formatMatrixAsText(matrixNode) {
 // =============================================================================
 
 /**
+ * Backend and Settings default when no custom system prompt is configured.
+ * Keep in sync with ``DEFAULT_SYSTEM_PROMPT`` in ``llm_messages.py``.
+ */
+const DEFAULT_SYSTEM_PROMPT = 'You are a helpful assistant.';
+
+/**
+ * Prepend the user-configured global system prompt unless messages already
+ * start with a system message (task-specific prompts must stay intact).
+ * Blank or whitespace-only prompts fall back to {@link DEFAULT_SYSTEM_PROMPT}.
+ *
+ * @param {Array<{role: string, content: *}>} messages
+ * @param {string} [prompt]
+ * @returns {Array<{role: string, content: *}>}
+ */
+function withGlobalSystemPrompt(messages, prompt) {
+    const resolved = typeof prompt === 'string' ? prompt.trim() : '';
+    const content = resolved || DEFAULT_SYSTEM_PROMPT;
+    const list = Array.isArray(messages) ? messages : [];
+    if (list.length > 0 && list[0].role === 'system') {
+        return list;
+    }
+    return [{ role: 'system', content }, ...list];
+}
+
+/**
  * Build messages for LLM API from resolved context.
  * Handles multimodal content (images + text).
  *
@@ -559,6 +584,7 @@ export function semanticBandToCssClass(band) {
 // =============================================================================
 
 export {
-    apiUrl, applySM2, buildMessagesForApi, escapeHtmlText, extractUrlFromReferenceNode,
-    formatUserError, getBasePath, getDueFlashcards, isFlashcardDue, isUrlContent, resizeImage, truncateText
+    apiUrl, applySM2, buildMessagesForApi, DEFAULT_SYSTEM_PROMPT, escapeHtmlText, extractUrlFromReferenceNode,
+    formatUserError, getBasePath, getDueFlashcards, isFlashcardDue, isUrlContent, resizeImage, truncateText,
+    withGlobalSystemPrompt
 };

@@ -12,6 +12,8 @@ from llamabot.components.messages import (
     ToolMessage,
 )
 
+DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
+
 
 def message_content_to_str(content: str | list[Any]) -> str:
     """Normalize multimodal or string content to a single string for the LLM."""
@@ -45,7 +47,7 @@ def dict_messages_to_system_and_rest(
         else:
             rest.append(HumanMessage(content=content))
     system_prompt = (
-        "\n\n".join(system_chunks) if system_chunks else "You are a helpful assistant."
+        "\n\n".join(system_chunks) if system_chunks else DEFAULT_SYSTEM_PROMPT
     )
     return system_prompt, rest
 
@@ -69,6 +71,6 @@ def pydantic_messages_to_system_and_rest(
         else:
             rest.append(HumanMessage(content=content))
     system_prompt = (
-        "\n\n".join(system_chunks) if system_chunks else "You are a helpful assistant."
+        "\n\n".join(system_chunks) if system_chunks else DEFAULT_SYSTEM_PROMPT
     )
     return system_prompt, rest

@@ -53,6 +53,13 @@ Click the ⚙️ Settings button to add your API keys:
 
 Keys are stored locally in your browser's localStorage.
 
+**System prompt:** Settings → Features → System prompt. This text is sent as
+the system message for main chat (including retries and continue) and is
+prepended to `/agent` instructions. Leave it blank to restore the default
+(`You are a helpful assistant.`). Structured features such as fact-check,
+flashcards, matrix, committee personas, and slides keep their own
+task-specific prompts.
+
 ### Admin mode (enterprise)
 
 For enterprise deployments where administrators control API keys server-side:

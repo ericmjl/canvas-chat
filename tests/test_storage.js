@@ -5,6 +5,7 @@
 
 import { test, tests, assertEqual, assertTrue, assertFalse, assertNull, assertDeepEqual } from './test_setup.js';
 import { Storage } from '../src/canvas_chat/static/js/storage.js';
+import { DEFAULT_SYSTEM_PROMPT } from '../src/canvas_chat/static/js/utils.js';
 
 const KEYBINDINGS_KEY = 'canvas-chat-keybindings';
 
@@ -21,7 +22,7 @@ class MockLocalStorage {
     }
 
     getItem(key) {
-        return this.store[key] || null;
+        return Object.prototype.hasOwnProperty.call(this.store, key) ? this.store[key] : null;
     }
 
     setItem(key, value) {
@@ -967,6 +968,47 @@ test('setZoomWheelSensitivity: round-trip and clamping', () => {
         assertEqual(storage.getZoomWheelSensitivity(), 100);
         storage.setZoomWheelSensitivity(-5);
         assertEqual(storage.getZoomWheelSensitivity(), 0);
+    } finally {
+        global.localStorage = original;
+    }
+});
+
+test('getSystemPrompt: returns default when unset', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        assertEqual(storage.getSystemPrompt(), DEFAULT_SYSTEM_PROMPT);
+        assertEqual(storage.getSystemPromptForEditor(), DEFAULT_SYSTEM_PROMPT);
+    } finally {
+        global.localStorage = original;
+    }
+});
+
+test('getSystemPrompt: blank stored value falls back at send time', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        storage.setSystemPrompt('   ');
+        assertEqual(storage.getSystemPrompt(), DEFAULT_SYSTEM_PROMPT);
+        assertEqual(storage.getSystemPromptForEditor(), DEFAULT_SYSTEM_PROMPT);
+    } finally {
+        global.localStorage = original;
+    }
+});
+
+test('setSystemPrompt: round-trips custom text', () => {
+    const mock = new MockLocalStorage();
+    const original = global.localStorage;
+    global.localStorage = mock;
+    try {
+        const storage = new Storage();
+        storage.setSystemPrompt('Prefer concise answers.');
+        assertEqual(storage.getSystemPrompt(), 'Prefer concise answers.');
+        assertEqual(storage.getSystemPromptForEditor(), 'Prefer concise answers.');
     } finally {
         global.localStorage = original;
     }
