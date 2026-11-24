@@ -9,6 +9,7 @@ import {
     assertTrue,
     buildMessagesForApi
 } from './test_setup.js';
+import { DEFAULT_SYSTEM_PROMPT, withGlobalSystemPrompt } from '../src/canvas_chat/static/js/utils.js';
 
 // ============================================================
 // buildMessagesForApi tests
@@ -332,4 +333,41 @@ test('buildMessagesForApi: assistant message with content between user images', 
     assertEqual(result[2].role, 'user');
     assertTrue(Array.isArray(result[2].content));
     assertEqual(result[2].content.length, 2);
+});
+
+// ============================================================
+// withGlobalSystemPrompt
+// ============================================================
+
+test('withGlobalSystemPrompt: prepends custom prompt', () => {
+    const result = withGlobalSystemPrompt(
+        [{ role: 'user', content: 'Hello' }],
+        'Be terse.'
+    );
+    assertEqual(result.length, 2);
+    assertEqual(result[0].role, 'system');
+    assertEqual(result[0].content, 'Be terse.');
+    assertEqual(result[1].role, 'user');
+    assertEqual(result[1].content, 'Hello');
+});
+
+test('withGlobalSystemPrompt: blank prompt falls back to default', () => {
+    const result = withGlobalSystemPrompt([{ role: 'user', content: 'Hi' }], '   ');
+    assertEqual(result[0].role, 'system');
+    assertEqual(result[0].content, DEFAULT_SYSTEM_PROMPT);
+});
+
+test('withGlobalSystemPrompt: missing prompt falls back to default', () => {
+    const result = withGlobalSystemPrompt([{ role: 'user', content: 'Hi' }]);
+    assertEqual(result[0].content, DEFAULT_SYSTEM_PROMPT);
+});
+
+test('withGlobalSystemPrompt: does not replace existing system message', () => {
+    const messages = [
+        { role: 'system', content: 'You are a fact-checking assistant.' },
+        { role: 'user', content: 'Check this' },
+    ];
+    const result = withGlobalSystemPrompt(messages, 'Be terse.');
+    assertEqual(result[0].content, 'You are a fact-checking assistant.');
+    assertEqual(result.length, 2);
 });

@@ -419,6 +419,20 @@
                             <h3>Features</h3>
                             <p class="settings-note">Configure feature behavior.</p>
                             <div class="api-key-group">
+                                <label for="system-prompt">System prompt</label>
+                                <textarea
+                                    id="system-prompt"
+                                    class="settings-textarea"
+                                    rows="5"
+                                    placeholder="You are a helpful assistant."
+                                ></textarea>
+                                <small class="key-hint"
+                                    >Included as the system message for main chat and prepended to the /agent
+                                    instructions. Leave blank to use the default. Structured features (fact-check,
+                                    flashcards, matrix, committee personas, slides) keep their own prompts.</small
+                                >
+                            </div>
+                            <div class="api-key-group">
                                 <label for="flashcard-strictness">Flashcard grading strictness</label>
                                 <select id="flashcard-strictness" class="settings-select">
                                     <option value="lenient">Lenient (gist is enough)</option>

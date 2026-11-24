@@ -232,6 +232,7 @@ canvas-chat/
 | `CANVAS_CHAT_ENABLE_GITHUB_COPILOT`        | `config.py:is_github_copilot_enabled()`                    | Enable/disable GitHub Copilot (default: true)                                   |
 | `DEFAULT_KEYBINDINGS` / keybinding storage | `keybindings.js`, `storage.js` (`canvas-chat-keybindings`) | Default shortcuts; user overrides in Settings → Shortcuts                       |
 | Zoom wheel sensitivity                     | `storage.js` (`canvas-chat-zoom-wheel-sensitivity`), `utils.js` (`DEFAULT_ZOOM_WHEEL_SENSITIVITY` = 50) | Settings → Canvas; slider 50 = former “max” step, 100 = stronger; live `input` updates canvas |
+| `DEFAULT_SYSTEM_PROMPT` / system prompt storage | `utils.js`, `llm_messages.py`, `storage.js` (`canvas-chat-system-prompt`) | Settings → Features; main chat + `/agent` prefix. Blank falls back to `"You are a helpful assistant."` |
 | CSS variables                              | `style.css:10-75`                                          | Colors, sizing, theming                                                         |
 | `DDG_PAGE_BODY_MAX_INPUT_TOKENS`           | `ddg_endpoints.py`                                         | Input token budget for fetched page markdown before per-page LLM summarize (clipped via `clip_page_markdown_to_input_token_budget`) |
 | `SEARCH_RESULT_CONTEXT_MAX_CHARS`          | `crdt-graph.js`                                            | Per-result char cap when injecting a search result into reply context via `resolveContextWithSearchResults` (default 6000) |

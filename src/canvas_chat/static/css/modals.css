@@ -218,6 +218,28 @@
     box-shadow: 0 0 0 2px var(--selection-bg);
 }
 
+.api-key-group textarea,
+.settings-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans, inherit);
+    font-size: 13px;
+    line-height: 1.45;
+    outline: none;
+    resize: vertical;
+    min-height: 6.5em;
+}
+
+.api-key-group textarea:focus,
+.settings-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--selection-bg);
+}
+
 .api-key-group select,
 .settings-select {
     width: 100%;

@@ -443,6 +443,11 @@ class ModalManager {
         // Load flashcard strictness
         document.getElementById('flashcard-strictness').value = storage.getFlashcardStrictness();
 
+        const systemPromptEl = document.getElementById('system-prompt');
+        if (systemPromptEl) {
+            systemPromptEl.value = storage.getSystemPromptForEditor();
+        }
+
         const voiceProviderEl = document.getElementById('voice-provider');
         if (voiceProviderEl) {
             voiceProviderEl.value = storage.getVoiceProvider();

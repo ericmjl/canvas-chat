@@ -28,12 +28,26 @@
 
 import { FeaturePlugin } from '../feature-plugin.js';
 import { EdgeType, NodeType, createNode, createEdge } from '../graph-types.js';
-import { apiUrl } from '../utils.js';
+import { apiUrl, DEFAULT_SYSTEM_PROMPT } from '../utils.js';
 import { readSSEStream } from '../sse.js';
 import { executeCodeOnNode as _executeCodeOnNode, gatherViewportContext as _gatherViewportContext } from '../agent-utils.js';
 import { fetchUrlContent } from '../web-grounding.js';
 
 const MAX_AGENT_TOOL_CALLS = 30;
+
+/**
+ * Combine the user-configured system prompt with agent tool instructions.
+ * Agent instructions always remain intact; the user prompt is prepended.
+ *
+ * @param {string} userPrompt
+ * @param {string} agentInstructions
+ * @returns {string}
+ */
+function combineAgentSystemPrompt(userPrompt, agentInstructions) {
+    const resolved = typeof userPrompt === 'string' ? userPrompt.trim() : '';
+    const prefix = resolved || DEFAULT_SYSTEM_PROMPT;
+    return `## User instructions\n${prefix}\n\n## Agent instructions\n${agentInstructions}`;
+}
 
 // Commands excluded from agent tools:
 // - /agent: prevents recursion
@@ -231,7 +245,7 @@ class AgentFeature extends FeaturePlugin {
             .map((t) => `- ${t.function.name}: ${t.function.description}`)
             .join('\n');
 
-        return (
+        const agentInstructions = (
             'You are a research assistant on a visual canvas.\n' +
             'Every tool call creates a visible node. The user sees your work.\n\n' +
             '## WORKFLOW\n' +
@@ -268,6 +282,19 @@ class AgentFeature extends FeaturePlugin {
             '  scikit-learn, sympy, networkx\n' +
             '- Runs in Pyodide (browser WASM). No file I/O, no network.'
         );
+
+        return combineAgentSystemPrompt(this._userSystemPrompt(), agentInstructions);
+    }
+
+    /**
+     * Settings system prompt, or the shared default if storage is unavailable.
+     * @returns {string}
+     */
+    _userSystemPrompt() {
+        if (this.storage && typeof this.storage.getSystemPrompt === 'function') {
+            return this.storage.getSystemPrompt();
+        }
+        return DEFAULT_SYSTEM_PROMPT;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -691,4 +718,4 @@ class AgentFeature extends FeaturePlugin {
     }
 }
 
-export { AgentFeature };
+export { AgentFeature, combineAgentSystemPrompt };

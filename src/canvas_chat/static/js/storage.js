@@ -2,6 +2,8 @@
  * Storage module - IndexedDB for sessions, localStorage for settings
  */
 
+import { DEFAULT_SYSTEM_PROMPT } from './utils.js';
+
 // =============================================================================
 // Type Definitions (JSDoc)
 // =============================================================================
@@ -613,6 +615,42 @@ class Storage {
      */
     setFlashcardStrictness(value) {
         localStorage.setItem('canvas-chat-flashcard-strictness', value);
+    }
+
+    /**
+     * Effective system prompt for main chat (and agent prefix).
+     * Blank stored values fall back to {@link DEFAULT_SYSTEM_PROMPT}.
+     * @returns {string}
+     */
+    getSystemPrompt() {
+        const raw = localStorage.getItem('canvas-chat-system-prompt');
+        if (raw === null) {
+            return DEFAULT_SYSTEM_PROMPT;
+        }
+        const trimmed = raw.trim();
+        return trimmed || DEFAULT_SYSTEM_PROMPT;
+    }
+
+    /**
+     * Text to show in the Settings textarea (effective prompt, including default).
+     * @returns {string}
+     */
+    getSystemPromptForEditor() {
+        return this.getSystemPrompt();
+    }
+
+    /**
+     * Persist the Settings system prompt. Whitespace-only values clear storage
+     * so {@link getSystemPrompt} falls back to the default at send time.
+     * @param {string} value
+     */
+    setSystemPrompt(value) {
+        const text = typeof value === 'string' ? value.trim() : '';
+        if (!text) {
+            localStorage.removeItem('canvas-chat-system-prompt');
+            return;
+        }
+        localStorage.setItem('canvas-chat-system-prompt', text);
     }
 
     /**

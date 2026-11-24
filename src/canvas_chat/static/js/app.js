@@ -68,6 +68,7 @@ import {
     extractUrlFromReferenceNode,
     formatUserError,
     truncateText,
+    withGlobalSystemPrompt,
 } from './utils.js';
 // Plugin system
 import { AppContext } from './feature-plugin.js';
@@ -1681,7 +1682,7 @@ class App {
         this.updateCollapseButtonForNode(humanNode.id);
 
         const context = this.graph.resolveContextWithSearchResults([humanNode.id]);
-        const messages = buildMessagesForApi(context);
+        const messages = withGlobalSystemPrompt(buildMessagesForApi(context), storage.getSystemPrompt());
         const abortController = new AbortController();
 
         this.streamingManager.register(aiNode.id, {
@@ -2631,7 +2632,7 @@ class App {
 
                 // Build context and stream LLM response
                 const context = this.graph.resolveContextWithSearchResults([humanNode.id]);
-                const messages = buildMessagesForApi(context);
+                const messages = withGlobalSystemPrompt(buildMessagesForApi(context), storage.getSystemPrompt());
 
                 // Create AbortController for this stream
                 const abortController = new AbortController();
@@ -3392,10 +3393,11 @@ class App {
         const edge = createEdge(nodeId, summaryNode.id, EdgeType.REFERENCE);
         this.graph.addEdge(edge);
 
-        // Build messages for summarization
-        const messages = [
-            { role: 'user', content: `Please summarize the following content from ${url}:\n\n${fetchNode.content}` },
-        ];
+        // Build messages for summarization (general chat path — include global system prompt)
+        const messages = withGlobalSystemPrompt(
+            [{ role: 'user', content: `Please summarize the following content from ${url}:\n\n${fetchNode.content}` }],
+            storage.getSystemPrompt()
+        );
 
         // Create AbortController for this stream
         const abortController = new AbortController();
@@ -4478,6 +4480,11 @@ class App {
         // Save flashcard strictness
         const strictness = document.getElementById('flashcard-strictness').value;
         storage.setFlashcardStrictness(strictness);
+
+        const systemPromptEl = document.getElementById('system-prompt');
+        if (systemPromptEl) {
+            storage.setSystemPrompt(systemPromptEl.value);
+        }
 
         const voiceProviderEl = document.getElementById('voice-provider');
         if (voiceProviderEl) {

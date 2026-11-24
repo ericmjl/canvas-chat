@@ -50,6 +50,26 @@ describe('Settings Modal', () => {
         cy.get('#settings-panel-plugins h3').should('contain', 'Plugins');
     });
 
+    it('save and re-open persists system prompt', () => {
+        const customPrompt = 'Prefer concise answers and tables.';
+        cy.get('#settings-btn').click();
+        cy.get('#settings-modal').should('be.visible');
+
+        cy.get('.settings-sidebar-item[data-category="features"]').click();
+        cy.get('#settings-panel-features').should('have.class', 'active');
+        cy.get('#system-prompt').should('have.value', 'You are a helpful assistant.');
+        cy.get('#system-prompt').clear().type(customPrompt);
+        cy.get('#save-settings-btn').click();
+        cy.get('#settings-modal').should('not.be.visible');
+
+        cy.get('#settings-btn').click();
+        cy.get('.settings-sidebar-item[data-category="features"]').click();
+        cy.get('#system-prompt').should('have.value', customPrompt);
+
+        cy.get('#system-prompt').clear();
+        cy.get('#save-settings-btn').click();
+    });
+
     it('save and re-open persists flashcard strictness', () => {
         cy.get('#settings-btn').click();
         cy.get('#settings-modal').should('be.visible');

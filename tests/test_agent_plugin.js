@@ -38,8 +38,9 @@ if (!global.indexedDB) {
 
 import { PluginTestHarness } from '../src/canvas_chat/static/js/plugin-test-harness.js';
 import { assertTrue, assertFalse } from './test_helpers/assertions.js';
+import { DEFAULT_SYSTEM_PROMPT } from '../src/canvas_chat/static/js/utils.js';
 
-const { AgentFeature } = await import('../src/canvas_chat/static/js/plugins/agent.js');
+const { AgentFeature, combineAgentSystemPrompt } = await import('../src/canvas_chat/static/js/plugins/agent.js');
 
 async function asyncTest(description, fn) {
     try {
@@ -145,6 +146,46 @@ await asyncTest('AgentFeature has correct plugin id', async () => {
     });
     const feature = harness.registry.getFeature('agent');
     assertTrue(feature.id === 'agent', 'Plugin id should be "agent"');
+});
+
+await asyncTest('combineAgentSystemPrompt prepends user prompt and keeps agent instructions', async () => {
+    const combined = combineAgentSystemPrompt('Be terse.', 'You are a research assistant.');
+    assertTrue(combined.startsWith('## User instructions\nBe terse.\n\n## Agent instructions\n'), 'Should prepend user section');
+    assertTrue(combined.includes('You are a research assistant.'), 'Should keep agent instructions');
+});
+
+await asyncTest('combineAgentSystemPrompt falls back to default for blank user prompt', async () => {
+    const combined = combineAgentSystemPrompt('  ', 'Agent body');
+    assertTrue(combined.includes(DEFAULT_SYSTEM_PROMPT), 'Blank user prompt should use default');
+    assertTrue(combined.includes('## Agent instructions\nAgent body'), 'Agent body should remain');
+});
+
+await asyncTest('AgentFeature.buildSystemPrompt includes user system prompt', async () => {
+    const feature = new AgentFeature({
+        canvas: {},
+        chat: {},
+        storage: { getSystemPrompt: () => 'Prefer tables.' },
+        modalManager: {},
+        undoManager: {},
+        featureRegistry: { getSlashCommandsWithMetadata: () => [] },
+        streamingManager: {},
+        modelPicker: {},
+        chatInput: {},
+        showToast: () => {},
+        saveSession: () => {},
+        updateEmptyState: () => {},
+        updateCollapseButtonForNode: () => {},
+        buildLLMRequest: () => ({ model: 'test' }),
+        generateNodeSummary: () => {},
+        pyodideRunner: null,
+        streamingNodes: new Map(),
+        apiUrl: '/api',
+        adminMode: false,
+        adminModels: [],
+    });
+    const prompt = feature.buildSystemPrompt(feature.buildAgentTools());
+    assertTrue(prompt.includes('Prefer tables.'), 'Should include configured system prompt');
+    assertTrue(prompt.includes('You are a research assistant on a visual canvas.'), 'Should keep agent instructions');
 });
 
 await asyncTest('AgentFeature.gatherViewportContext returns empty with no canvas viewBox', async () => {
