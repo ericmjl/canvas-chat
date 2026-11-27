@@ -10,8 +10,8 @@
         "lint:fix": "eslint src/canvas_chat/static/js/*.js --fix",
         "format": "prettier --write src/canvas_chat/static/js/*.js src/canvas_chat/static/css/*.css",
         "format:check": "prettier --check src/canvas_chat/static/js/*.js src/canvas_chat/static/css/*.css",
-        "cy:open": "cypress open",
-        "cy:run": "cypress run"
+        "cy:open": "pixi run cypress open",
+        "cy:run": "pixi run cypress run"
     },
     "devDependencies": {
         "cypress": "^15.16.0",
