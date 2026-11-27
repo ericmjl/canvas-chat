@@ -11,6 +11,7 @@ import { EdgeType, NodeType, TAG_COLORS, createEdge, createNode, getDefaultNodeS
 import { ModalManager } from './modal-manager.js';
 import { NodeRegistry } from './node-registry.js';
 import { SlashCommandMenu, setFeatureRegistry } from './slash-command-menu.js';
+import { runLoopbackNormalization } from './loopback-migration.js';
 import { storage } from './storage.js';
 import { UndoManager } from './undo-manager.js';
 // CodeFeature is now in code.js (consolidated plugin)
@@ -5116,7 +5117,29 @@ export { App };
 
 // Initialize app when DOM is ready
 // Wait for Yjs to load before initializing (Yjs loads as an ES module which is async)
-document.addEventListener('DOMContentLoaded', () => {
+//
+// Loopback origin normalization (#293 Part A) runs FIRST, before any code reads
+// the URL or storage: `127.0.0.1` / `0.0.0.0` / `[::1]` are separate origins with
+// separate localStorage + IndexedDB, so they redirect to `localhost`. When the
+// flow handles the page (redirecting, or waiting on the migration modal) the App
+// must not boot here.
+document.addEventListener('DOMContentLoaded', async () => {
+    const normalized = await runLoopbackNormalization({
+        href: window.location.href,
+        sessionStore: window.sessionStorage,
+        storage,
+        indexedDB: typeof indexedDB !== 'undefined' ? indexedDB : undefined,
+        document,
+        redirect: (url) => {
+            window.location.href = url;
+        },
+        onExport: async () => {
+            const sessions = await storage.listSessions();
+            storage.exportSessionsBundle(sessions);
+        },
+    });
+    if (normalized.handled) return;
+
     const initWithYjs = () => {
         console.log('%c[App] Yjs ready, initializing app', 'color: #4CAF50');
         window.app = new App();

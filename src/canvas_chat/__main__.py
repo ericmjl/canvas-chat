@@ -35,11 +35,38 @@ def wait_for_server(host: str, port: int, timeout: float = 10.0) -> bool:
     return False
 
 
+# Hostnames that denote this machine. localStorage/IndexedDB are partitioned
+# per browser origin, so http://127.0.0.1:7865 and http://localhost:7865 hold
+# two separate sets of sessions and settings. The browser is therefore opened at
+# `localhost` whichever loopback literal the server binds to (#293 Part A).
+LOOPBACK_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1"})
+CANONICAL_LOOPBACK_HOST = "localhost"
+
+
+def browser_url_for(host: str, port: int) -> str:
+    """URL to open in the browser for a server bound to ``host:port``.
+
+    Loopback bind addresses map to ``http://localhost:<port>`` so the browser
+    always lands on the same origin. Any other host (LAN IP, tailnet IP, custom
+    hostname) is used as given and never rewritten.
+
+    Args:
+        host: host the server binds to
+        port: port the server listens on
+
+    Returns:
+        The URL to open.
+    """
+    normalized = host.strip("[]").lower()
+    if normalized in LOOPBACK_HOSTNAMES:
+        return f"http://{CANONICAL_LOOPBACK_HOST}:{port}"
+    return f"http://{host}:{port}"
+
+
 def open_browser_when_ready(host: str, port: int) -> None:
     """Open browser once the server is ready."""
     if wait_for_server(host, port):
-        url = f"http://{host}:{port}"
-        webbrowser.open(url)
+        webbrowser.open(browser_url_for(host, port))
 
 
 @app.command()
@@ -107,7 +134,7 @@ def launch(
         os.environ.pop("CANVAS_CHAT_CONFIG_PATH", None)
         os.environ.pop("CANVAS_CHAT_ADMIN_MODE", None)
 
-    url = f"http://{host}:{port}"
+    url = browser_url_for(host, port)
     typer.echo(f"Starting Canvas Chat at {url}")
 
     if not no_browser:
