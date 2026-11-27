@@ -29,7 +29,6 @@ from pathlib import Path
 from typing import Any, TypeVar
 from uuid import uuid4
 
-import html2text
 import httpx
 import litellm
 from exa_py import Exa
@@ -58,6 +57,7 @@ from sse_starlette.sse import EventSourceResponse
 from canvas_chat import __version__
 from canvas_chat.config import AppConfig, is_github_copilot_enabled
 from canvas_chat.file_upload_registry import FileUploadRegistry
+from canvas_chat.html_markdown import convert_html_to_markdown
 from canvas_chat.llm_messages import (
     dict_messages_to_system_and_rest,
     pydantic_messages_to_system_and_rest,
@@ -3517,10 +3517,33 @@ def _title_from_url(url: str) -> str:
     return filename.rsplit(".", 1)[0] if "." in filename else filename
 
 
-def _parse_html_response(response: httpx.Response) -> tuple[str, str]:
+def response_page_url(response: httpx.Response, fallback: str) -> str:
+    """Return the final page URL for relative-link resolution.
+
+    :param response: HTTP response from the fetch.
+    :param fallback: URL to use when the response has no concrete URL.
+    :returns: Absolute page URL when known, otherwise ``fallback``.
     """
-    Parse an HTTP response as HTML: extract title and convert body to markdown.
+    url = getattr(response, "url", None)
+    if isinstance(url, httpx.URL):
+        return str(url)
+    if isinstance(url, str) and url:
+        return url
+    return fallback
+
+
+def _parse_html_response(
+    response: httpx.Response, base_url: str = ""
+) -> tuple[str, str]:
+    """Parse an HTTP response as HTML and convert the body to markdown.
+
+    Math from Quarto/Pandoc, MathJax, and MathML is kept as KaTeX delimiters.
+    Relative image and link URLs are resolved against ``base_url`` when set.
     Used when the response is HTML (not PDF). Never send raw HTML to the frontend.
+
+    :param response: HTTP response whose body is HTML.
+    :param base_url: Page URL used to resolve relative image and link URLs.
+    :returns: Title and markdown content.
     """
     import re
 
@@ -3531,10 +3554,7 @@ def _parse_html_response(response: httpx.Response) -> tuple[str, str]:
     )
     if title_match:
         title = re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
-    h2t = html2text.HTML2Text()
-    h2t.ignore_links = False
-    h2t.body_width = 0
-    content = h2t.handle(html)
+    content = convert_html_to_markdown(html, base_url)
     return title, content
 
 
@@ -3553,7 +3573,7 @@ async def fetch_url_directly(url: str, client: httpx.AsyncClient) -> tuple[str, 
     if "pdf" in content_type or url.lower().endswith(".pdf"):
         raise Exception("Response is PDF; frontend will load and extract")
 
-    return _parse_html_response(response)
+    return _parse_html_response(response, response_page_url(response, url))
 
 
 @app.post("/api/fetch-url")
@@ -3622,7 +3642,7 @@ async def fetch_url(request: FetchUrlRequest):
 
             if "html" in content_type or content_type.startswith("text/"):
                 # Parse as HTML and return markdown
-                title, content = _parse_html_response(response)
+                title, content = _parse_html_response(response, final_url)
                 logger.info(f"Successfully fetched URL directly: {title}")
                 return FetchUrlResult(url=final_url, title=title, content=content)
 
@@ -3633,7 +3653,7 @@ async def fetch_url(request: FetchUrlRequest):
                 return FetchUrlResult(url=request.url, title=title, content=content)
             except Exception as jina_error:
                 logger.warning(f"Jina Reader failed: {jina_error}")
-            title, content = _parse_html_response(response)
+            title, content = _parse_html_response(response, final_url)
             return FetchUrlResult(url=final_url, title=title, content=content)
 
     except httpx.TimeoutException:
