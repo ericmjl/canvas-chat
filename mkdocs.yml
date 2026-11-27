@@ -80,6 +80,7 @@ nav:
           - Extension hooks: reference/extension-hooks.md
           - FeaturePlugin API: reference/feature-plugin-api.md
           - FeatureRegistry API: reference/feature-registry-api.md
+          - JSON Canvas format: reference/json-canvas-format.md
           - Keyboard shortcuts: reference/keyboard-shortcuts.md
           - Search API: reference/search-api.md
     - Blog: releases/
