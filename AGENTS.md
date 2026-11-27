@@ -58,6 +58,9 @@ This includes:
 - 2026-07-16: **Search results drawer + carousel (redesigned /search)** — `/search` no longer creates a REFERENCE-node fan-out. Results live in a carousel drawer (output panel) on the SEARCH node, stored as a JSON string in `node.searchResults` (`[{title,url,snippet,selected,expanded}]`) + `node.searchCarouselIndex`. `SearchNode` protocol (`plugins/search-node.js`) renders the carousel + emits canvas events; `ResearchFeature` (`plugins/research.js`) owns the logic via `getCanvasEventHandlers()` (`searchPrevResult`/`searchNextResult`/`searchToggleSelect`/`searchViewContent`). "View content" fetches the page (`fetchUrlContent` from `web-grounding.js`) and creates an opt-in child REFERENCE node (`url` field set for dedup). Reply context: `CRDTGraph.resolveContextWithSearchResults(nodeIds)` (in `crdt-graph.js`) — for each SEARCH node in the ancestor context, injects selected results (snippet) OR the expanded child's full page text (dedup by url); `App.sendChatMessage` calls it instead of `resolveContext`. Per-result context is clipped to `SEARCH_RESULT_CONTEXT_MAX_CHARS` (6000). Reusable collapse API: `App.setNodeCollapsed(nodeId, bool)` exposed on `AppContext` as `collapseNode`/`expandNode` (wraps the existing generic collapse mechanism; `handleNodeCollapse` is now a thin toggle around it).
 - 2026-07-16: **Agent loop moved to frontend** — The agent ReAct loop now runs in JavaScript (`agent.js`), not Python. The backend is a stateless LLM proxy (`/api/agent/completion`). Tools are auto-generated from `featureRegistry.getSlashCommandsWithMetadata()` + `BUILTIN_SLASH_COMMANDS` and dispatched to the SAME feature handlers as slash commands (via `featureRegistry.handleSlashCommand`). This eliminates the structural decoupling that caused display-model drift (the root cause of the search fan-out bug). A `respond` tool handles synthesis — the model calls `respond(content="...", context_nodes=["node-1"])` to finalize. The old backend ReAct loop (`/api/agent` SSE endpoint, `AGENT_TOOLS`, `_agent_execute_tool`, `AGENT_SYSTEM_PROMPT`) is kept only for realtime-agent.js WebSocket compat. Design docs: `docs/designs/agentic-mode/LLD.md` (rewritten). **Additional features in this PR:** thinking-token stripping (`<think>` + markdown fences), search enrichment (auto-fetch top 2 pages per search), canvas context for replies, rate-limit retry (3x backoff), agent log side drawer, edge-only-via-`createLinkedNode` (bidirectional edges impossible by construction), `MAX_AGENT_TOOL_CALLS=30`.
 
+- 2026-11-17: **Loopback origin normalization (#293 Part A)** — `127.0.0.1` / `0.0.0.0` / `[::1]` are separate browser origins with separate localStorage + IndexedDB. `runLoopbackNormalization()` (`loopback-migration.js`) is the FIRST statement of the `DOMContentLoaded` handler in `app.js`, before `new App()`. It redirects to `localhost` (scheme/port/path/query preserved; LAN/tailnet/public hosts never touched; once per tab via `sessionStorage` guard). If sessions exist under the old origin it shows `#loopback-migration-modal` first (Export sessions → one `.canvaschat` bundle via `storage.exportSessionsBundle()`; `storage.importSession()` accepts bundles). Pure helpers in `origin-normalization.js`; `storage.isLocalhost()` shares `LOOPBACK_HOSTNAMES`. `__main__.py` opens the browser at `http://localhost:<port>` via `browser_url_for()`. **Cypress `baseUrl` is now `http://localhost:7865`** so E2E tests never hit the redirect mid-test. Part B (sync backend) is NOT implemented — it is blocked on the HLD decision in #293. Docs: `docs/how-to/local-addresses.md`.
+- 2026-11-17: **Cypress under Electron hosts** — `ELECTRON_RUN_AS_NODE=1` is exported by T3 / VS Code / Cursor to every child shell and makes Cypress's Electron binary run as plain Node (`bad option: --no-sandbox`, "Cypress failed to start"). It cannot be fixed in `cypress.config.js` (the binary is spawned before config loads) or in dotfiles (agent shells are `bash -c`). Fix: `scripts/run-cypress.mjs` deletes the variable and spawns the CLI; exposed as `pixi run cypress <args>` (`package.json` `cy:open`/`cy:run` delegate to it). Use it instead of `npx cypress`. Known pre-existing flake: `html_slides.cy.js` "shows placeholder when slides node has no content" types into `#chat-input` before the app finishes booting (fails on `main` too; not in the CI spec list).
+
 **Python commands:** Use `pixi run python` when running project Python commands so the pixi environment and dependencies are active.
 
 ## Codebase map
@@ -92,6 +95,8 @@ canvas-chat/
 │           ├── feature-*.js # Feature plugins
 │           └── example-plugins/ # Example plugins (test, smart-fix, poll node)
 ├── tests/                    # Test files
+├── scripts/
+│   └── run-cypress.mjs      # Cypress CLI wrapper (drops ELECTRON_RUN_AS_NODE; use `pixi run cypress`)
 ├── docs/                     # Documentation (Diataxis)
 ├── modal_app.py              # Modal deployment config
 └── pyproject.toml            # Project config (pixi)
@@ -122,6 +127,8 @@ canvas-chat/
 | `src/canvas_chat/static/js/sse.js`         | Server-sent events utilities                                              | Streaming connection handling                                                                            |
 | `src/canvas_chat/static/js/utils.js`       | Pure utility functions                                                    | Image resizing, error formatting, text processing, wheel zoom + semantic-zoom band helpers              |
 | `src/canvas_chat/static/js/model-utils.js` | Model utility functions                                                   | Model-related utilities                                                                                  |
+| `src/canvas_chat/static/js/origin-normalization.js` | Loopback origin normalization (pure functions)                          | `LOOPBACK_HOSTNAMES`, `normalizeLoopbackUrl`, `planLoopbackRedirect` (once-per-tab guard)               |
+| `src/canvas_chat/static/js/loopback-migration.js` | Boot-time loopback redirect flow + migration modal                      | `runLoopbackNormalization` (first statement of `DOMContentLoaded` in `app.js`), `countLocalData`, modal wiring |
 | `src/canvas_chat/static/js/keybindings.js` | Default shortcuts, merge, lookup; user overrides via Settings → Shortcuts | Adding/remapping keyboard shortcut actions                                                               |
 
 #### Plugin architecture modules
@@ -207,7 +214,7 @@ canvas-chat/
 | `src/canvas_chat/app.py`                        | FastAPI routes, LLM proxy          | API endpoints; `/api/agent/completion` stateless streaming LLM proxy (frontend agent loop); `/api/agent` legacy SSE ReAct loop (kept for realtime-agent.js compat); `run_structured_summarize` / `run_structured_string_list` + Pydantic outputs; `AsyncSimpleBot` + `_stream_text_deltas_async_simple_bot` for streams; `/ws/agent` WebSocket endpoint for realtime voice; LiteLLM for `drop_params`, token count, Copilot models, `supports_response_schema`, `aimage_generation` |
 | `src/canvas_chat/llm_messages.py`               | Message shape helpers              | Map OpenAI-style dicts / Pydantic messages to `(system_prompt, list[BaseMessage])` for llamabot |
 | `src/canvas_chat/config.py`                     | Configuration management           | Model definitions, plugins, admin mode                                          |
-| `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server                                              |
+| `src/canvas_chat/__main__.py`                   | CLI entry point                    | Command-line interface, dev server; `browser_url_for()` maps loopback binds to `http://localhost:<port>` (#293 Part A) |
 | `src/canvas_chat/__init__.py`                   | Package initialization             | Package metadata, version                                                       |
 | `src/canvas_chat/file_upload_registry.py`       | File upload handler registration   | Registering Python file upload handlers                                         |
 | `src/canvas_chat/file_upload_handler_plugin.py` | FileUploadHandlerPlugin base class | File upload handler plugin base class                                           |
@@ -237,6 +244,8 @@ canvas-chat/
 | `DDG_PAGE_BODY_MAX_INPUT_TOKENS`           | `ddg_endpoints.py`                                         | Input token budget for fetched page markdown before per-page LLM summarize (clipped via `clip_page_markdown_to_input_token_budget`) |
 | `SEARCH_RESULT_CONTEXT_MAX_CHARS`          | `crdt-graph.js`                                            | Per-result char cap when injecting a search result into reply context via `resolveContextWithSearchResults` (default 6000) |
 | `SEARCH_PAGE_BODY_MAX_CHARS`               | `plugins/research.js`                                      | Max chars of a fetched page stored on a "View content" child REFERENCE node (default 8000) |
+| `LOOPBACK_HOSTNAMES` / `CANONICAL_LOOPBACK_HOST` | `origin-normalization.js` (JS), `__main__.py` (Python mirror)      | Loopback literals collapsed to `localhost` at boot (#293 Part A); LAN/tailnet/public hosts never redirected |
+| `LOOPBACK_REDIRECT_GUARD_KEY`              | `origin-normalization.js`                                  | `sessionStorage` key (`canvas-chat-loopback-redirected`) enforcing one redirect per tab |
 
 ### Zoom levels (semantic zoom)
 
@@ -282,6 +291,7 @@ Quick reference guide for finding the right documentation based on what you need
 | ------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------- |
 | **How does deep research work?**                 | [deep-research.md](docs/how-to/deep-research.md)                 | Using the /research command for deep research     |
 | **How does web search work?**                    | [web-search.md](docs/how-to/web-search.md)                       | Using the /search command for web searches        |
+| **Why does 127.0.0.1 redirect to localhost? How do I move sessions?** | [local-addresses.md](docs/how-to/local-addresses.md) | Loopback origin normalization, migration modal, what the export carries |
 | **How does the committee feature work?**         | [llm-committee.md](docs/how-to/llm-committee.md)                 | Multi-LLM consultation and synthesis              |
 | **How does fact-checking work?**                 | [factcheck.md](docs/how-to/factcheck.md)                         | Claim verification with web search                |
 | **How do I use the matrix evaluation?**          | [use-matrix-evaluation.md](docs/how-to/use-matrix-evaluation.md) | Creating and using comparison matrices            |
@@ -844,13 +854,15 @@ so code changes are automatically picked up. Just make your edits and the server
 
 ```bash
 # Run a specific Cypress test file (use --spec)
-pixi run npx cypress run --browser chrome --headless --spec cypress/e2e/matrix.cy.js
+pixi run cypress run --browser electron --headless --spec cypress/e2e/matrix.cy.js
 
-# Run with Electron instead of Chrome
-pixi run npx cypress run --browser electron --headless --spec cypress/e2e/matrix.cy.js
+# Sanity-check that the Cypress binary installs and launches
+pixi run cypress verify
 ```
 
-**Test pattern:** `pixi run npx cypress run --browser [chrome|electron] --headless --spec cypress/e2e/<file>.cy.js`
+**Test pattern:** `pixi run cypress run --browser [chrome|electron] --headless --spec cypress/e2e/<file>.cy.js`
+
+**Always go through `pixi run cypress`** (→ `scripts/run-cypress.mjs`), never bare `npx cypress`. Electron-based hosts (T3, VS Code, Cursor) export `ELECTRON_RUN_AS_NODE=1` to every child shell; Cypress is an Electron app, so under that variable it starts as plain Node and dies with `bad option: --no-sandbox` / "Cypress failed to start" before `cypress.config.js` is even loaded. The wrapper deletes the variable in the process that spawns the CLI. `cypress.config.js` `baseUrl` is `http://localhost:7865` (the canonical loopback origin, see #293 Part A).
 
 **E2E test files:**
 
@@ -890,6 +902,8 @@ Write unit tests for logic that does not require API calls:
 - `tests/test_utils.js` - Concurrent state management tests
 - `tests/test_utils_basic.js` - Basic utility functions (extractUrlFromReferenceNode, formatMatrixAsText, formatUserError, etc.)
 - `tests/test_wheel_zoom.js` - Ctrl+scroll zoom math (`normalizeWheelDeltaY`, `scaleAfterWheelZoom`)
+- `tests/test_origin_normalization.js` - `normalizeLoopbackUrl` / `planLoopbackRedirect` (which hosts redirect, scheme+query preserved, once-per-tab guard)
+- `tests/test_loopback_migration.js` - `runLoopbackNormalization` under JSDOM (no-data → redirect; data → modal; Export/Continue wiring)
 - `tests/test_web_grounding.js` - Web grounding helper (appendWebContextToMessages)
 - `tests/test_utils_messages.js` - buildMessagesForApi edge cases
 - `tests/test_layout.js` - Layout, overlap resolution, and `resolveHorizontalOverlaps` functions
@@ -923,6 +937,7 @@ Write unit tests for logic that does not require API calls:
 - `tests/test_matrix_plugin.js` - MatrixFeature plugin tests
 - `tests/test_research_plugin.js` - ResearchFeature plugin tests
 - `tests/test_realtime_providers.py` - Realtime provider bridges (ProviderEvent, OpenAI/Gemini event parsing, tool format conversion, routing)
+- `tests/test_main_cli.py` - CLI `browser_url_for()` loopback → `localhost` mapping and `open_browser_when_ready`
 
 Do not write tests that require external API calls (LLM, Exa, etc.) - these are tested manually.
 

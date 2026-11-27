@@ -757,6 +757,37 @@
             </div>
         </div>
 
+        <!-- Loopback origin migration (#293 Part A): shown on 127.0.0.1 / 0.0.0.0 / [::1]
+             when sessions exist under that origin, before redirecting to localhost. -->
+        <div id="loopback-migration-modal" class="modal" style="display: none">
+            <div class="modal-content modal-narrow">
+                <div class="modal-header">
+                    <h2>Move to <code>localhost</code>?</h2>
+                    <button class="modal-close" id="loopback-migration-close" title="Continue to localhost">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        Canvas-Chat now uses <code>localhost</code> for local addresses. You opened it as
+                        <code id="loopback-migration-origin">127.0.0.1</code>, which the browser treats as a
+                        <em>different</em> site with its own storage.
+                    </p>
+                    <p>
+                        Found <strong id="loopback-migration-count">0 sessions</strong> saved under this address.
+                        They stay in this browser but will not appear under <code>localhost</code>.
+                        Export them as one file, then import it after the move.
+                    </p>
+                    <p class="loopback-migration-note">
+                        Export contains session content, not live collaborative state. Settings and API keys
+                        are not included.
+                    </p>
+                </div>
+                <div class="modal-actions">
+                    <button class="secondary-btn" id="loopback-migration-export">Export sessions</button>
+                    <button class="primary-btn" id="loopback-migration-continue">Continue to localhost</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Yjs CRDT library for collaborative editing -->
         <!-- Use import map to ensure single Yjs instance (y-indexeddb must use same Yjs) -->
         <script type="importmap">

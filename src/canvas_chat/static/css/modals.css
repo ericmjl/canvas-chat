@@ -1662,3 +1662,10 @@ kbd {
     overflow-y: auto;
     white-space: pre-wrap;
 }
+
+/* Loopback migration modal (#293) */
+.loopback-migration-note {
+    margin-top: 12px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}

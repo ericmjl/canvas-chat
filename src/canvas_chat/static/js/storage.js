@@ -2,6 +2,7 @@
  * Storage module - IndexedDB for sessions, localStorage for settings
  */
 
+import { isLoopbackHostname } from './origin-normalization.js';
 import { DEFAULT_SYSTEM_PROMPT } from './utils.js';
 
 // =============================================================================
@@ -79,6 +80,8 @@ const DB_NAME = 'canvas-chat';
 const DB_VERSION = 1;
 const SESSIONS_STORE = 'sessions';
 const COPILOT_AUTH_KEY = 'canvas-chat-copilot-auth';
+/** `kind` marker for a multi-session `.canvaschat` bundle file. */
+const SESSION_BUNDLE_KIND = 'canvaschat-bundle';
 
 /**
  *
@@ -234,12 +237,44 @@ class Storage {
             ...session,
         };
 
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        this._downloadJson(exportData, `${session.name || 'session'}-${Date.now()}.canvaschat`);
+    }
+
+    /**
+     * Export several sessions as one `.canvaschat` bundle file.
+     *
+     * Used by the loopback migration modal (#293) so a user leaving an old
+     * origin can carry every session across in a single download. The file keeps
+     * the `.canvaschat` extension so `importSession` accepts it.
+     *
+     * @param {Session[]} sessions
+     * @returns {void}
+     */
+    exportSessionsBundle(sessions) {
+        const exportData = {
+            version: 1,
+            kind: SESSION_BUNDLE_KIND,
+            exported_at: new Date().toISOString(),
+            sessions,
+        };
+
+        this._downloadJson(exportData, `canvas-chat-sessions-${Date.now()}.canvaschat`);
+    }
+
+    /**
+     * Write a JSON object to a downloaded file.
+     *
+     * @param {object} data
+     * @param {string} filename
+     * @returns {void}
+     */
+    _downloadJson(data, filename) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
 
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${session.name || 'session'}-${Date.now()}.canvaschat`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -247,7 +282,12 @@ class Storage {
     }
 
     /**
-     * Import session from .canvaschat file
+     * Import a `.canvaschat` file: one session, or a bundle of sessions.
+     *
+     * A bundle (from `exportSessionsBundle`) saves every session under a fresh
+     * ID and resolves with the most recently updated one so the caller can load
+     * it. Each imported session gets a new ID to avoid conflicts.
+     *
      * @param {File} file
      * @returns {Promise<Session>}
      */
@@ -259,21 +299,26 @@ class Storage {
                 try {
                     const data = JSON.parse(event.target.result);
 
+                    if (data && data.kind === SESSION_BUNDLE_KIND && Array.isArray(data.sessions)) {
+                        const imported = [];
+                        for (const raw of data.sessions) {
+                            if (!raw || !raw.nodes || !raw.edges) {
+                                throw new Error('Invalid session inside .canvaschat bundle');
+                            }
+                            const session = await this._importOneSession(raw);
+                            imported.push(session);
+                        }
+                        imported.sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0));
+                        resolve(imported[0]);
+                        return;
+                    }
+
                     // Validate structure
                     if (!data.nodes || !data.edges) {
                         throw new Error('Invalid .canvaschat file format');
                     }
 
-                    // Generate new ID to avoid conflicts
-                    const session = {
-                        ...data,
-                        id: crypto.randomUUID(),
-                        imported_at: Date.now(),
-                        updated_at: Date.now(),
-                    };
-
-                    await this.saveSession(session);
-                    resolve(session);
+                    resolve(await this._importOneSession(data));
                 } catch (err) {
                     reject(new Error(`Failed to import: ${err.message}`));
                 }
@@ -282,6 +327,25 @@ class Storage {
             reader.onerror = () => reject(new Error('Failed to read file'));
             reader.readAsText(file);
         });
+    }
+
+    /**
+     * Save one validated session object under a fresh ID.
+     *
+     * @param {object} data - session fields (`nodes`, `edges`, ...)
+     * @returns {Promise<Session>}
+     */
+    async _importOneSession(data) {
+        // Generate new ID to avoid conflicts
+        const session = {
+            ...data,
+            id: crypto.randomUUID(),
+            imported_at: Date.now(),
+            updated_at: Date.now(),
+        };
+
+        await this.saveSession(session);
+        return session;
     }
 
     // --- Settings (localStorage) ---
@@ -473,8 +537,7 @@ class Storage {
      * @returns {boolean} - True if running locally
      */
     isLocalhost() {
-        const hostname = window.location.hostname;
-        return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '[::1]';
+        return isLoopbackHostname(window.location.hostname);
     }
 
     /**
