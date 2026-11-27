@@ -6,18 +6,53 @@
  * and code execution logic without duplicating code.
  */
 
-import { getDefaultNodeSize } from './graph-types.js';
+import { getDefaultNodeSize, TAG_COLORS } from './graph-types.js';
+
+const COLOR_NAME_MAP = {
+    red: '#ffc9c9',
+    orange: '#ffd8a8',
+    yellow: '#fff3bf',
+    green: '#c0eb75',
+    blue: '#a5d8ff',
+    purple: '#d0bfff',
+    pink: '#fcc2d7',
+    gray: '#e9ecef',
+    grey: '#e9ecef',
+};
+
+/**
+ * Read the canvas tag catalog.
+ *
+ * @param {Object} graph - CRDTGraph instance
+ * @returns {{ allTags: Object, availableTags: Array, availableColors: Array }}
+ */
+function tagCatalog(graph) {
+    const allTags = graph.getAllTags ? graph.getAllTags() : {};
+    const availableTags = Object.values(allTags).map((tag) => ({
+        name: tag.name,
+        color: tag.color,
+    }));
+    const usedColors = new Set(Object.keys(allTags));
+    const availableColors = TAG_COLORS.filter((color) => !usedColors.has(color));
+    return { allTags, availableTags, availableColors };
+}
 
 /**
  * Gather visible viewport context for LLM awareness.
  *
+ * Tag catalog is included even when the viewport is unavailable so voice
+ * and text agents can still create and rename tags.
+ *
  * @param {Object} graph - CRDTGraph instance
  * @param {Object} canvas - Canvas instance
- * @returns {Array<Object>} Array of visible node summaries
+ * @returns {Object} { nodes: Array, available_tags: Array, available_colors: Array }
  */
 function gatherViewportContext(graph, canvas) {
+    const { allTags, availableTags, availableColors } = tagCatalog(graph);
     const viewBox = canvas.viewBox;
-    if (!viewBox) return [];
+    if (!viewBox) {
+        return { nodes: [], available_tags: availableTags, available_colors: availableColors };
+    }
 
     const allNodes = graph.getAllNodes();
     const visible = allNodes.filter((node) => {
@@ -33,12 +68,67 @@ function gatherViewportContext(graph, canvas) {
         );
     });
 
-    return visible.map((node) => ({
-        id: node.id,
-        type: node.type,
-        title: node.title || '',
-        content: (node.content || '').substring(0, 2000),
-    }));
+    const nodes = visible.map((node) => {
+        const nodeTagColors = node.tags || [];
+        const nodeTagNames = nodeTagColors
+            .map((color) => {
+                const tag = allTags[color];
+                return tag ? tag.name : null;
+            })
+            .filter(Boolean);
+        return {
+            id: node.id,
+            type: node.type,
+            title: node.title || '',
+            content: (node.content || '').substring(0, 2000),
+            tags: nodeTagNames,
+        };
+    });
+
+    return { nodes, available_tags: availableTags, available_colors: availableColors };
+}
+
+/**
+ * Format viewport context for the text agent's prompt.
+ *
+ * Mirrors the voice-session system prompt: visible nodes (with tag names),
+ * the tag catalog, and how many color slots are free.
+ *
+ * @param {Object} viewport - Result of gatherViewportContext
+ * @returns {string} Prompt section, or '' when the canvas has nothing to show
+ */
+function formatViewportForPrompt(viewport) {
+    const nodes = viewport.nodes || [];
+    const tags = viewport.available_tags || [];
+    const freeColors = viewport.available_colors || [];
+    if (nodes.length === 0 && tags.length === 0) return '';
+
+    const lines = [];
+    if (nodes.length > 0) {
+        lines.push('## Visible canvas nodes');
+        for (const node of nodes) {
+            const label = node.title || node.type;
+            const tagStr = node.tags && node.tags.length ? ` [tags: ${node.tags.join(', ')}]` : '';
+            const preview = (node.content || '').substring(0, 500) || '(empty)';
+            lines.push(`[${node.type}] ${label} (id: ${node.id})${tagStr}:\n${preview}`);
+        }
+    }
+    if (tags.length > 0) {
+        lines.push('## Available tags');
+        for (const tag of tags) {
+            lines.push(`- ${tag.name} (color: ${tag.color})`);
+        }
+    }
+    if (freeColors.length > 0) {
+        lines.push(`Free tag colors for creating new tags: ${freeColors.length} available`);
+    } else if (tags.length > 0) {
+        lines.push('All 8 tag slots are in use. Remove a tag before creating a new one.');
+    }
+    lines.push(
+        "Tag color names: red, orange, yellow, green, blue, purple, pink, gray. " +
+            "When the user says 'the green tag', use tag_color_name='green'."
+    );
+    return lines.join('\n\n');
 }
 
 /**
@@ -273,4 +363,153 @@ async function executeCodeOnNode(
     }
 }
 
-export { createNodeFromInstruction, executeCodeOnNode, gatherViewportContext };
+/**
+ * Notify the user and return the same message for the agent tool result.
+ *
+ * @param {Function} showToast - Toast notification callback
+ * @param {string} message
+ * @returns {string}
+ */
+function tagResult(showToast, message) {
+    if (showToast) showToast(message);
+    return message;
+}
+
+/**
+ * Refresh tag chips and the tag drawer without clearing the selection.
+ *
+ * canvas.renderGraph() wipes selection. Node tag chips already repaint from
+ * nodeUpdated for add/remove; rename only emits tagUpdated, which nothing
+ * listens for, so renamed tags are repainted here. The drawer slots live on
+ * App.renderTagSlots.
+ *
+ * @param {Object} graph - CRDTGraph instance
+ * @param {Object} canvas - Canvas instance
+ * @param {string[]} nodeIds - Nodes to repaint; empty repaints every node
+ */
+function refreshTagDisplay(graph, canvas, nodeIds) {
+    let ids = nodeIds || [];
+    if (ids.length === 0 && typeof graph.getAllNodes === 'function') {
+        ids = graph.getAllNodes().map((node) => node.id);
+    }
+    if (typeof canvas.renderNode === 'function') {
+        for (const nodeId of ids) {
+            const node = graph.getNode(nodeId);
+            if (node) canvas.renderNode(node);
+        }
+    }
+    const app = typeof window !== 'undefined' ? window.app : null;
+    if (app && typeof app.renderTagSlots === 'function') {
+        app.renderTagSlots();
+    }
+}
+
+/**
+ * Apply a tag update instruction from the agent tag_node tool.
+ *
+ * Handles add, remove, create, and rename by resolving tag names to colors
+ * and mutating the client-side graph. Tags are not stored on the server.
+ *
+ * @param {Object} instruction - { action, tag_name, tag_color_name, node_ids }
+ * @param {Object} graph - CRDTGraph instance
+ * @param {Object} canvas - Canvas instance
+ * @param {Function} saveSession - Save session callback
+ * @param {Function} showToast - Toast notification callback
+ * @returns {string} Result message for the agent loop
+ */
+function applyTagUpdate(instruction, graph, canvas, saveSession, showToast) {
+    const action = instruction.action;
+    const tagName = instruction.tag_name;
+    const tagColorName = instruction.tag_color_name || '';
+    const nodeIds = instruction.node_ids || [];
+
+    if (!tagName) {
+        return tagResult(showToast, 'tag_name is required');
+    }
+
+    if ((action === 'add' || action === 'remove') && nodeIds.length === 0) {
+        return tagResult(showToast, 'node_ids is required for add/remove actions');
+    }
+
+    if (action === 'rename') {
+        const color = COLOR_NAME_MAP[tagColorName.toLowerCase()] || tagColorName;
+        if (!TAG_COLORS.includes(color)) {
+            return tagResult(showToast, `Unknown tag color "${tagColorName}"`);
+        }
+        const existingTag = graph.getTag ? graph.getTag(color) : null;
+        if (existingTag) {
+            graph.updateTag(color, tagName);
+        } else {
+            graph.createTag(color, tagName);
+        }
+        refreshTagDisplay(graph, canvas, []);
+        if (typeof saveSession === 'function') saveSession();
+        return `Renamed the ${tagColorName || color} tag to "${tagName}"`;
+    }
+
+    if (action === 'create') {
+        const { availableColors } = tagCatalog(graph);
+        const freeColor = availableColors[0];
+
+        if (!freeColor) {
+            return tagResult(showToast, 'All 8 tag slots are in use');
+        }
+
+        graph.createTag(freeColor, tagName);
+
+        if (nodeIds.length > 0) {
+            for (const nodeId of nodeIds) {
+                graph.addTagToNode(nodeId, freeColor);
+            }
+        }
+
+        refreshTagDisplay(graph, canvas, nodeIds);
+        if (typeof saveSession === 'function') saveSession();
+        const applied = nodeIds.length > 0 ? ` and applied it to ${nodeIds.length} node(s)` : '';
+        return `Created tag "${tagName}"${applied}`;
+    }
+
+    if (action !== 'add' && action !== 'remove') {
+        return tagResult(showToast, `Unknown tag action "${action}"`);
+    }
+
+    const { allTags } = tagCatalog(graph);
+    const tagEntry = Object.entries(allTags).find((entry) => {
+        const tag = entry[1];
+        return typeof tag.name === 'string' && tag.name.toLowerCase() === tagName.toLowerCase();
+    });
+
+    if (!tagEntry) {
+        const available = Object.values(allTags)
+            .map((tag) => tag.name)
+            .join(', ');
+        return tagResult(showToast, `Tag "${tagName}" not found. Available: ${available}`);
+    }
+
+    const [color] = tagEntry;
+
+    for (const nodeId of nodeIds) {
+        const node = graph.getNode(nodeId);
+        if (!node) continue;
+
+        if (action === 'add') {
+            graph.addTagToNode(nodeId, color);
+        } else if (action === 'remove') {
+            graph.removeTagFromNode(nodeId, color);
+        }
+    }
+
+    refreshTagDisplay(graph, canvas, nodeIds);
+    if (typeof saveSession === 'function') saveSession();
+    const verb = action === 'remove' ? 'Removed' : 'Added';
+    return `${verb} tag "${tagName}" on ${nodeIds.length} node(s)`;
+}
+
+export {
+    applyTagUpdate,
+    COLOR_NAME_MAP,
+    createNodeFromInstruction,
+    executeCodeOnNode,
+    formatViewportForPrompt,
+    gatherViewportContext,
+};
